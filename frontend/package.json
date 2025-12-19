@@ -1,0 +1,9 @@
+{
+  "name": "werkstatt-terminplaner-frontend",
+  "version": "1.0.0",
+  "description": "Frontend für Werkstatt Terminplaner",
+  "scripts": {
+    "start": "python3 -m http.server 3000",
+    "dev": "python3 -m http.server 3000"
+  }
+}
