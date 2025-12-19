@@ -2,19 +2,40 @@
   "name": "werkstatt-terminplaner-backend",
   "version": "1.0.0",
   "description": "Backend API für Werkstatt Terminplaner",
-  "main": "src/server.js",
+  "main": "electron-main.js",
   "scripts": {
-    "start": "node src/server.js",
-    "dev": "nodemon src/server.js"
+    "start": "electron .",
+    "dev": "nodemon src/server.js",
+    "build:exe": "electron-builder"
   },
   "dependencies": {
-    "express": "^4.18.2",
-    "sqlite3": "^5.1.6",
     "body-parser": "^1.20.2",
     "cors": "^2.8.5",
-    "dotenv": "^16.3.1"
+    "dotenv": "^16.3.1",
+    "express": "^4.18.2",
+    "sqlite3": "^5.1.6",
+    "ws": "^8.18.3"
   },
   "devDependencies": {
-    "nodemon": "^3.0.1"
+    "electron": "^39.2.7",
+    "electron-builder": "^26.0.12",
+    "nodemon": "^3.0.1",
+    "pkg": "^5.8.1"
+  },
+  "build": {
+    "appId": "com.example.werkstatt-terminplaner-server",
+    "productName": "Werkstatt Terminplaner Server",
+    "files": [
+      "electron-main.js",
+      "electron-preload.js",
+      "status.html",
+      "status.js",
+      "src/",
+      "database/",
+      ".env"
+    ],
+    "win": {
+      "target": "portable"
+    }
   }
 }

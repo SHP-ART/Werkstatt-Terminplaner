@@ -12,6 +12,37 @@ class App {
     this.setupEventListeners();
     this.loadInitialData();
     this.setTodayDate();
+    this.setupWebSocket();
+  }
+
+  setupWebSocket() {
+    const serverConfig = CONFIG.getServerConfig();
+    if (!serverConfig || !serverConfig.ip || !serverConfig.port) {
+        console.error("Server-Konfiguration nicht gefunden. WebSocket kann nicht gestartet werden.");
+        return;
+    }
+    
+    const wsUrl = `ws://${serverConfig.ip}:${serverConfig.port}`;
+    console.log(`Connecting WebSocket to ${wsUrl}`);
+
+    const connect = () => {
+        const ws = new WebSocket(wsUrl);
+
+        ws.addEventListener('open', () => {
+            console.log('WebSocket-Verbindung hergestellt.');
+        });
+
+        ws.addEventListener('close', (event) => {
+            console.log(`WebSocket-Verbindung getrennt. Code: ${event.code}, Grund: '${event.reason}'. Erneuter Verbindungsversuch in 5 Sekunden...`);
+            setTimeout(connect, 5000);
+        });
+
+        ws.addEventListener('error', (err) => {
+            console.error('WebSocket-Fehler:', err);
+        });
+    }
+
+    connect();
   }
 
   setupEventListeners() {
@@ -1338,8 +1369,13 @@ class App {
     statusDiv.style.color = 'blue';
 
     try {
-      const response = await fetch(CONFIG.API_URL);
-      if (response.ok || response.status === 404) {
+      // Use the /health endpoint for a clean 200 OK
+      const healthCheckUrl = CONFIG.API_URL.endsWith('/api') 
+        ? CONFIG.API_URL.slice(0, -4) + '/api/health' 
+        : CONFIG.API_URL + '/health';
+      const response = await fetch(healthCheckUrl);
+      
+      if (response.ok) {
         statusDiv.textContent = '✓ Verbindung erfolgreich!';
         statusDiv.style.color = 'green';
       } else {

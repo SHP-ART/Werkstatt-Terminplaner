@@ -6,3 +6,11 @@ logs/
 *.pid
 .DS_Store
 .env
+
+# Build artifacts (will be distributed via GitHub Releases)
+/backend/dist/
+/frontend/dist/
+*.exe
+
+# Ignore exe files in node_modules
+node_modules/**/*.exe
