@@ -216,6 +216,43 @@ class App {
     this.loadAuslastung();
   }
 
+  resetTerminForm() {
+    // Formular komplett zurücksetzen
+    const form = document.getElementById('terminForm');
+    if (form) {
+      form.reset();
+    }
+
+    // Datum auf heute setzen
+    this.setTodayDate();
+
+    // KM-Stand Placeholder und Styling zurücksetzen
+    const kmStandInput = document.getElementById('kilometerstand');
+    if (kmStandInput) {
+      kmStandInput.classList.remove('has-previous-value');
+      kmStandInput.placeholder = 'z.B. 128000';
+      kmStandInput.value = '';
+    }
+
+    // Schnellsuche leeren
+    const schnellsuche = document.getElementById('terminSchnellsuche');
+    if (schnellsuche) {
+      schnellsuche.value = '';
+    }
+
+    // Versteckte Felder zurücksetzen
+    const kundeId = document.getElementById('kunde_id');
+    if (kundeId) {
+      kundeId.value = '';
+    }
+
+    // Warnung verstecken
+    this.hideTerminWarnung();
+
+    // Abholung-Details korrekt anzeigen
+    this.toggleAbholungDetails();
+  }
+
   handleTabChange(e) {
     const tabName = e.target.dataset.tab;
 
@@ -230,7 +267,10 @@ class App {
     document.getElementById(tabName).classList.add('active');
     e.target.classList.add('active');
 
-    if (tabName === 'auslastung') {
+    if (tabName === 'termine') {
+      // Formular komplett zurücksetzen beim Öffnen des Termine-Tabs
+      this.resetTerminForm();
+    } else if (tabName === 'auslastung') {
       this.loadAuslastung();
     } else if (tabName === 'dashboard') {
       this.loadDashboard();
@@ -752,10 +792,10 @@ class App {
       await this.ensureArbeitenExistieren(arbeitenListe, termin.geschaetzte_zeit);
       await TermineService.create(termin);
       alert('Termin erfolgreich erstellt!');
-      document.getElementById('terminForm').reset();
 
-      this.toggleAbholungDetails();
-      this.setTodayDate();
+      // Formular komplett zurücksetzen
+      this.resetTerminForm();
+
       this.loadTermine();
       this.loadDashboard();
       this.loadArbeitszeiten();
