@@ -100,6 +100,17 @@ class App {
       datumInput.addEventListener('change', () => this.validateTerminEchtzeit());
     }
 
+    // Entferne Placeholder-Styling wenn Benutzer KM-Stand eingibt
+    const kmStandInput = document.getElementById('kilometerstand');
+    if (kmStandInput) {
+      kmStandInput.addEventListener('input', () => {
+        if (kmStandInput.value) {
+          kmStandInput.classList.remove('has-previous-value');
+          kmStandInput.placeholder = 'z.B. 128000';
+        }
+      });
+    }
+
     const createBackupBtn = document.getElementById('createBackupBtn');
     if (createBackupBtn) {
       createBackupBtn.addEventListener('click', () => this.handleCreateBackup());
@@ -1523,6 +1534,15 @@ class App {
       const letztesKennzeichen = this.findLetztesKennzeichen(kundeMatch.id, kundeMatch.name);
       if (letztesKennzeichen) {
         document.getElementById('kennzeichen').value = letztesKennzeichen;
+
+        // Finde und zeige letzten KM-Stand als Hinweis (grau)
+        const letzterKmStand = this.findLetztenKmStand(kundeMatch.id, kundeMatch.name, letztesKennzeichen);
+        const kmStandInput = document.getElementById('kilometerstand');
+        if (letzterKmStand && kmStandInput) {
+          kmStandInput.value = ''; // Leeres value - wird nicht submitted
+          kmStandInput.placeholder = `Letzter KM-Stand: ${letzterKmStand.toLocaleString('de-DE')} km`;
+          kmStandInput.classList.add('has-previous-value');
+        }
       }
       return;
     }
@@ -1537,6 +1557,15 @@ class App {
         if (kunde) {
           document.getElementById('kunde_id').value = kunde.id;
           document.getElementById('neuer_kunde_telefon').value = kunde.telefon || '';
+
+          // Finde und zeige letzten KM-Stand als Hinweis (grau)
+          const letzterKmStand = this.findLetztenKmStand(kunde.id, kunde.name, terminMatch.kennzeichen);
+          const kmStandInput = document.getElementById('kilometerstand');
+          if (letzterKmStand && kmStandInput) {
+            kmStandInput.value = ''; // Leeres value - wird nicht submitted
+            kmStandInput.placeholder = `Letzter KM-Stand: ${letzterKmStand.toLocaleString('de-DE')} km`;
+            kmStandInput.classList.add('has-previous-value');
+          }
         }
       } else if (terminMatch.kunde_name) {
         document.getElementById('kunde_id').value = '';
@@ -1573,6 +1602,30 @@ class App {
       }
     });
     return letztes.kennzeichen;
+  }
+
+  findLetztenKmStand(kundeId, kundeName, kennzeichen) {
+    const termine = (this.termineCache || []).filter(t => {
+      // Filter nach Kunde UND Kennzeichen für präzisere Ergebnisse
+      const kundeMatch = (kundeId && t.kunde_id === kundeId) ||
+                         (kundeName && t.kunde_name === kundeName);
+      const kennzeichenMatch = kennzeichen && t.kennzeichen &&
+                               t.kennzeichen.toLowerCase() === kennzeichen.toLowerCase();
+
+      return kundeMatch && kennzeichenMatch && t.kilometerstand;
+    });
+
+    if (termine.length === 0) return null;
+
+    // Finde den neuesten Termin mit KM-Stand
+    let letztes = termine[0];
+    termine.forEach(t => {
+      if (new Date(t.datum) > new Date(letztes.datum)) {
+        letztes = t;
+      }
+    });
+
+    return letztes.kilometerstand;
   }
 
   async ensureArbeitenExistieren(arbeitenListe, totalMinuten) {

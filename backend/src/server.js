@@ -73,7 +73,7 @@ function startServer(clientCountCallback) {
         });
     });
 
-    server.listen(PORT, '127.0.0.1', () => {
+    server.listen(PORT, '0.0.0.0', () => {
         console.log(`Backend-Server läuft auf http://0.0.0.0:${PORT}`);
         console.log(`API-Endpoint: http://0.0.0.0:${PORT}/api`);
         console.log(`Zugriff im Netzwerk: http://<IP-ADRESSE>:${PORT}`);

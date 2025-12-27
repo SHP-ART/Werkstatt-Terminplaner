@@ -1059,3 +1059,20 @@ tr:hover {
         min-width: 100px;
     }
 }
+
+/* KM-Stand Placeholder Styling */
+#kilometerstand.has-previous-value::placeholder {
+    color: #888;
+    font-style: italic;
+    font-weight: 500;
+}
+
+#kilometerstand.has-previous-value {
+    border-color: #4a90e2;
+    background: #f8fbff;
+}
+
+#kilometerstand.has-previous-value:focus {
+    border-color: var(--accent);
+    background: white;
+}
