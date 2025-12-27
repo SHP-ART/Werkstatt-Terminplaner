@@ -59,6 +59,26 @@ class AbwesenheitenModel {
     db.all(query, [bisDatum, vonDatum, vonDatum, bisDatum], callback);
   }
 
+  static getForDate(datum, callback) {
+    const query = `
+      SELECT
+        ma.id,
+        ma.mitarbeiter_id,
+        ma.lehrling_id,
+        ma.typ,
+        ma.von_datum,
+        ma.bis_datum,
+        m.name as mitarbeiter_name,
+        l.name as lehrling_name
+      FROM mitarbeiter_abwesenheiten ma
+      LEFT JOIN mitarbeiter m ON ma.mitarbeiter_id = m.id
+      LEFT JOIN lehrlinge l ON ma.lehrling_id = l.id
+      WHERE ma.von_datum <= ? AND ma.bis_datum >= ?
+      ORDER BY ma.von_datum
+    `;
+    db.all(query, [datum, datum], callback);
+  }
+
   static create(data, callback) {
     const { mitarbeiter_id, lehrling_id, typ, von_datum, bis_datum } = data;
 

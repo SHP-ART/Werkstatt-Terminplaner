@@ -1600,7 +1600,7 @@ class App {
             const prozentColor = ma.auslastung_prozent > 100 ? '#c62828' :
                                 ma.auslastung_prozent > 80 ? '#f57c00' : '#2e7d32';
             const nurServiceBadge = ma.nur_service ? '<span style="background: #2196f3; color: white; padding: 2px 8px; border-radius: 12px; font-size: 0.8em; margin-left: 10px;">Nur Service</span>' : '';
-            const verfuegbarText = ma.nur_service ? 'Nur Service' : this.formatMinutesToHours(ma.verfuegbar_minuten);
+            const verfuegbarText = this.formatMinutesToHours(ma.verfuegbar_minuten);
             return `
               <div style="margin-bottom: 20px; padding: 15px; background: #f8f9fa; border-radius: 8px; border-left: 4px solid ${prozentColor};">
                 <h4 style="margin: 0 0 10px 0;">${ma.mitarbeiter_name}${nurServiceBadge}</h4>
