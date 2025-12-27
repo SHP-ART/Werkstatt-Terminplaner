@@ -969,4 +969,93 @@ tr:hover {
     .card-value {
         font-size: 2em;
     }
+
+    .heute-karten-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+/* Heute-Tab Kartenansicht Styles */
+.heute-karten-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+    gap: 20px;
+    margin-top: 20px;
+}
+
+.heute-karte {
+    background: white;
+    border-radius: 8px;
+    padding: 20px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    border: 1px solid #e0e0e0;
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.heute-karte:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.heute-karte-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 15px;
+    padding-bottom: 15px;
+    border-bottom: 2px solid #f0f0f0;
+}
+
+.heute-karte-nr {
+    font-size: 1.2em;
+    color: var(--accent);
+}
+
+.heute-karte-body {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
+
+.heute-karte-section {
+    padding: 10px;
+    background: #f9f9f9;
+    border-radius: 5px;
+    border-left: 3px solid var(--accent);
+}
+
+.heute-karte-section h4 {
+    margin: 0 0 10px 0;
+    color: var(--steel);
+    font-size: 1em;
+    font-weight: 600;
+}
+
+.heute-karte-section p {
+    margin: 5px 0;
+    font-size: 0.9em;
+    line-height: 1.5;
+}
+
+.heute-karte-section strong {
+    color: var(--steel);
+    min-width: 120px;
+    display: inline-block;
+}
+
+.heute-karte-footer {
+    margin-top: 15px;
+    padding-top: 15px;
+    border-top: 1px solid #e0e0e0;
+    text-align: right;
+}
+
+@media (max-width: 768px) {
+    .heute-karten-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .heute-karte-section strong {
+        min-width: 100px;
+    }
 }

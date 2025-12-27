@@ -14,6 +14,7 @@
 
         <div class="tabs">
             <button class="tab-button active" data-tab="dashboard">Dashboard</button>
+            <button class="tab-button" data-tab="heute">Heute</button>
             <button class="tab-button" data-tab="termine">Termine</button>
             <button class="tab-button" data-tab="zeitverwaltung">Zeitverwaltung</button>
             <button class="tab-button" data-tab="auslastung">Auslastung</button>
@@ -175,6 +176,54 @@
                 <h3>Monatsübersicht (nächste 30 Tage)</h3>
                 <div class="monats-uebersicht" id="monatsUebersicht">
                     <div class="loading">Monatsübersicht wird geladen...</div>
+                </div>
+            </div>
+        </div>
+
+        <div id="heute" class="tab-content">
+            <h2>Termine Heute</h2>
+            <div style="margin-bottom: 20px;">
+                <p style="font-size: 16px; color: #666;">
+                    <strong>Datum:</strong> <span id="heuteDatum"></span>
+                </p>
+                <div style="margin-top: 15px; display: flex; gap: 10px;">
+                    <button id="heuteTabellenAnsicht" class="btn btn-primary">📊 Tabellenansicht</button>
+                    <button id="heuteKartenAnsicht" class="btn btn-secondary">🃏 Kartenansicht</button>
+                </div>
+            </div>
+
+            <div id="heuteTabellenContainer" style="display: block;">
+                <table id="heuteTermineTable">
+                    <thead>
+                        <tr>
+                            <th>Termin-Nr</th>
+                            <th>Kunde</th>
+                            <th>Telefon</th>
+                            <th>Kennzeichen</th>
+                            <th>Arbeit</th>
+                            <th>Umfang/Details</th>
+                            <th>Abholung</th>
+                            <th>Bringzeit</th>
+                            <th>Abholzeit</th>
+                            <th>Kontakt</th>
+                            <th>KM</th>
+                            <th>Ersatzauto</th>
+                            <th>Zeit</th>
+                            <th>Status</th>
+                            <th>Aktionen</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td colspan="15" class="loading">Termine werden geladen...</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <div id="heuteKartenContainer" style="display: none;">
+                <div id="heuteKartenGrid" class="heute-karten-grid">
+                    <div class="loading">Termine werden geladen...</div>
                 </div>
             </div>
         </div>

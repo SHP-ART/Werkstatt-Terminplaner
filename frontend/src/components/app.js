@@ -85,6 +85,15 @@ class App {
     });
     document.getElementById('abholung_typ').addEventListener('change', () => this.toggleAbholungDetails());
 
+    const heuteTabellenBtn = document.getElementById('heuteTabellenAnsicht');
+    if (heuteTabellenBtn) {
+      heuteTabellenBtn.addEventListener('click', () => this.handleHeuteViewSwitch('tabelle'));
+    }
+    const heuteKartenBtn = document.getElementById('heuteKartenAnsicht');
+    if (heuteKartenBtn) {
+      heuteKartenBtn.addEventListener('click', () => this.handleHeuteViewSwitch('karten'));
+    }
+
     // Echtzeit-Validierung für Termin-Formular
     const datumInput = document.getElementById('datum');
     if (datumInput) {
@@ -214,6 +223,8 @@ class App {
       this.loadAuslastung();
     } else if (tabName === 'dashboard') {
       this.loadDashboard();
+    } else if (tabName === 'heute') {
+      this.loadHeuteTermine();
     } else if (tabName === 'einstellungen') {
       this.loadWerkstattSettings();
       this.loadAbwesenheit();
@@ -279,6 +290,7 @@ class App {
     this.loadWerkstattSettings();
     this.loadAbwesenheit();
     this.loadTermineZeiten();
+    this.heuteTermine = [];
   }
 
   async loadKunden() {
@@ -1185,6 +1197,179 @@ class App {
       });
     } catch (error) {
       console.error('Fehler beim Laden der heutigen Termine:', error);
+    }
+  }
+
+  async loadHeuteTermine() {
+    try {
+      const today = new Date().toISOString().split('T')[0];
+      const heuteDatumEl = document.getElementById('heuteDatum');
+      if (heuteDatumEl) {
+        const date = new Date(today);
+        heuteDatumEl.textContent = date.toLocaleDateString('de-DE', {
+          weekday: 'long',
+          year: 'numeric',
+          month: 'long',
+          day: 'numeric'
+        });
+      }
+
+      const termine = await TermineService.getAll(today);
+      termine.forEach(t => {
+        this.termineById[t.id] = t;
+      });
+
+      this.heuteTermine = termine;
+      this.renderHeuteTabelle(termine);
+      this.renderHeuteKarten(termine);
+    } catch (error) {
+      console.error('Fehler beim Laden der heutigen Termine:', error);
+      const tbody = document.querySelector('#heuteTermineTable tbody');
+      if (tbody) {
+        tbody.innerHTML = '<tr><td colspan="15" class="loading">Fehler beim Laden der Termine</td></tr>';
+      }
+      const kartenGrid = document.getElementById('heuteKartenGrid');
+      if (kartenGrid) {
+        kartenGrid.innerHTML = '<div class="loading">Fehler beim Laden der Termine</div>';
+      }
+    }
+  }
+
+  renderHeuteTabelle(termine) {
+    const tbody = document.querySelector('#heuteTermineTable tbody');
+    if (!tbody) return;
+
+    tbody.innerHTML = '';
+
+    if (termine.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="15" class="loading">Keine Termine für heute</td></tr>';
+      return;
+    }
+
+    termine.forEach(termin => {
+      const row = tbody.insertRow();
+      const statusClass = `status-${termin.status || 'geplant'}`;
+      const zeitAnzeige = termin.tatsaechliche_zeit || termin.geschaetzte_zeit || '-';
+      const abholungTypText = {
+        'bringen': 'Kunde bringt/holt selbst',
+        'hol_bring': 'Hol- und Bringservice',
+        'ruecksprache': 'Telefonische Rücksprache',
+        'warten': 'Kunde wartet'
+      }[termin.abholung_typ] || termin.abholung_typ || '-';
+
+      row.innerHTML = `
+        <td><strong>${termin.termin_nr || '-'}</strong></td>
+        <td>${termin.kunde_name || '-'}</td>
+        <td>${termin.kunde_telefon || '-'}</td>
+        <td>${termin.kennzeichen || '-'}</td>
+        <td>${termin.arbeit || '-'}</td>
+        <td>${termin.umfang || '-'}</td>
+        <td>${abholungTypText}</td>
+        <td>${termin.bring_zeit || '-'}</td>
+        <td>${termin.abholung_zeit || '-'}</td>
+        <td>${termin.kontakt_option || '-'}</td>
+        <td>${termin.kilometerstand || '-'}</td>
+        <td>${termin.ersatzauto ? 'Ja' : 'Nein'}</td>
+        <td>${zeitAnzeige} ${zeitAnzeige !== '-' ? 'Min' : ''}</td>
+        <td><span class="status-badge ${statusClass}">${termin.status || 'geplant'}</span></td>
+        <td>
+          <button class="btn btn-edit" onclick="app.showTerminDetails(${termin.id})">Details</button>
+        </td>
+      `;
+    });
+  }
+
+  renderHeuteKarten(termine) {
+    const kartenGrid = document.getElementById('heuteKartenGrid');
+    if (!kartenGrid) return;
+
+    kartenGrid.innerHTML = '';
+
+    if (termine.length === 0) {
+      kartenGrid.innerHTML = '<div class="loading">Keine Termine für heute</div>';
+      return;
+    }
+
+    termine.forEach(termin => {
+      const statusClass = `status-${termin.status || 'geplant'}`;
+      const zeitAnzeige = termin.tatsaechliche_zeit || termin.geschaetzte_zeit || '-';
+      const abholungTypText = {
+        'bringen': 'Kunde bringt/holt selbst',
+        'hol_bring': 'Hol- und Bringservice',
+        'ruecksprache': 'Telefonische Rücksprache',
+        'warten': 'Kunde wartet'
+      }[termin.abholung_typ] || termin.abholung_typ || '-';
+
+      const karte = document.createElement('div');
+      karte.className = 'heute-karte';
+      karte.innerHTML = `
+        <div class="heute-karte-header">
+          <div class="heute-karte-nr"><strong>${termin.termin_nr || '-'}</strong></div>
+          <span class="status-badge ${statusClass}">${termin.status || 'geplant'}</span>
+        </div>
+        <div class="heute-karte-body">
+          <div class="heute-karte-section">
+            <h4>Kunde</h4>
+            <p><strong>Name:</strong> ${termin.kunde_name || '-'}</p>
+            <p><strong>Telefon:</strong> ${termin.kunde_telefon || '-'}</p>
+          </div>
+          <div class="heute-karte-section">
+            <h4>Fahrzeug</h4>
+            <p><strong>Kennzeichen:</strong> ${termin.kennzeichen || '-'}</p>
+            <p><strong>Kilometerstand:</strong> ${termin.kilometerstand || '-'}</p>
+            <p><strong>Ersatzauto:</strong> ${termin.ersatzauto ? 'Ja' : 'Nein'}</p>
+          </div>
+          <div class="heute-karte-section">
+            <h4>Reparatur</h4>
+            <p><strong>Arbeit(en):</strong> ${termin.arbeit || '-'}</p>
+            <p><strong>Umfang/Details:</strong> ${termin.umfang || '-'}</p>
+            <p><strong>Zeit:</strong> ${zeitAnzeige} ${zeitAnzeige !== '-' ? 'Min' : ''}</p>
+          </div>
+          <div class="heute-karte-section">
+            <h4>Abholung/Bringservice</h4>
+            <p><strong>Typ:</strong> ${abholungTypText}</p>
+            ${termin.abholung_details ? `<p><strong>Details:</strong> ${termin.abholung_details}</p>` : ''}
+            ${termin.bring_zeit ? `<p><strong>Bringzeit:</strong> ${termin.bring_zeit}</p>` : ''}
+            ${termin.abholung_zeit ? `<p><strong>Abholzeit:</strong> ${termin.abholung_zeit}</p>` : ''}
+            ${termin.kontakt_option ? `<p><strong>Kontakt:</strong> ${termin.kontakt_option}</p>` : ''}
+          </div>
+        </div>
+        <div class="heute-karte-footer">
+          <button class="btn btn-edit" onclick="app.showTerminDetails(${termin.id})">Details anzeigen</button>
+        </div>
+      `;
+      kartenGrid.appendChild(karte);
+    });
+  }
+
+  handleHeuteViewSwitch(viewType) {
+    const tabellenContainer = document.getElementById('heuteTabellenContainer');
+    const kartenContainer = document.getElementById('heuteKartenContainer');
+    const tabellenBtn = document.getElementById('heuteTabellenAnsicht');
+    const kartenBtn = document.getElementById('heuteKartenAnsicht');
+
+    if (viewType === 'tabelle') {
+      if (tabellenContainer) tabellenContainer.style.display = 'block';
+      if (kartenContainer) kartenContainer.style.display = 'none';
+      if (tabellenBtn) {
+        tabellenBtn.classList.remove('btn-secondary');
+        tabellenBtn.classList.add('btn-primary');
+      }
+      if (kartenBtn) {
+        kartenBtn.classList.remove('btn-primary');
+        kartenBtn.classList.add('btn-secondary');
+      }
+    } else {
+      if (tabellenContainer) tabellenContainer.style.display = 'none';
+      if (kartenContainer) kartenContainer.style.display = 'block';
+      if (tabellenBtn) {
+        tabellenBtn.classList.remove('btn-primary');
+        tabellenBtn.classList.add('btn-secondary');
+      }
+      if (kartenBtn) {
+        kartenBtn.classList.remove('btn-secondary');
+        kartenBtn.classList.add('btn-primary');
+      }
     }
   }
 

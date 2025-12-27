@@ -13,16 +13,25 @@ function startServer(clientCountCallback) {
     const app = express();
     const PORT = process.env.PORT || 3001;
 
-    const whitelist = [
-        process.env.CORS_ORIGIN,
-        'http://localhost:3000',
-        'http://127.0.0.1:3000',
-    ].filter(Boolean); // Filter out undefined/null values
+    const corsOrigin = process.env.CORS_ORIGIN || '*';
 
     const corsOptions = {
         origin: function (origin, callback) {
             // Allow requests with no origin (like mobile apps, curl, or file://)
             if (!origin) return callback(null, true);
+
+            // If CORS_ORIGIN is *, allow all origins
+            if (corsOrigin === '*') {
+                return callback(null, true);
+            }
+
+            // Otherwise check whitelist
+            const whitelist = [
+                corsOrigin,
+                'http://localhost:3000',
+                'http://127.0.0.1:3000',
+            ];
+
             if (whitelist.indexOf(origin) !== -1) {
                 callback(null, true);
             } else {
