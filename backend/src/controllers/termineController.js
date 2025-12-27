@@ -114,15 +114,15 @@ class TermineController {
           invalidateAuslastungCache(termin.datum);
         }
 
-        // Lernfunktion: Passe Standardzeiten an, wenn tatsächliche Zeit gesetzt wurde
-        if (sollteLernen && termin && termin.arbeit) {
-          TermineController.lerneAusTatsaechlicherZeit(termin.arbeit, tatsaechliche_zeit, (lernErr) => {
-            if (lernErr) {
-              console.error('Fehler bei Lernfunktion:', lernErr);
-              // Fehler nicht an Client weitergeben, da Termin bereits aktualisiert wurde
-            }
-          });
-        }
+        // Lernfunktion deaktiviert - überschreibt sonst manuelle Einstellungen
+        // TODO: Später optional als Opt-In Feature mit Zeitstempel-Check implementieren
+        // if (sollteLernen && termin && termin.arbeit) {
+        //   TermineController.lerneAusTatsaechlicherZeit(termin.arbeit, tatsaechliche_zeit, (lernErr) => {
+        //     if (lernErr) {
+        //       console.error('Fehler bei Lernfunktion:', lernErr);
+        //     }
+        //   });
+        // }
 
         res.json({ changes: (result && result.changes) || 0, message: 'Termin aktualisiert' });
       });
