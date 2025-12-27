@@ -171,6 +171,16 @@
                             </div>
                         </div>
                     </div>
+                    <div class="wochentag-card" id="samstag">
+                        <div class="wochentag-header">Samstag</div>
+                        <div class="wochentag-datum"></div>
+                        <div class="wochentag-termine">0 Termine</div>
+                        <div class="wochentag-auslastung">
+                            <div class="mini-progress-bar">
+                                <div class="mini-progress-fill" style="width: 0%"></div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
 
@@ -314,6 +324,15 @@
                             <textarea id="arbeitEingabe" rows="3" placeholder="z.B.&#10;Ölwechsel&#10;Bremsen vorne" required autocomplete="off"></textarea>
                             <div id="arbeitAutocomplete" class="autocomplete-dropdown"></div>
                             <datalist id="arbeitListe"></datalist>
+                            
+                            <!-- Geschätzte Zeit Anzeige -->
+                            <div id="zeitschaetzungAnzeige" style="margin-top: 10px; padding: 12px; background: linear-gradient(135deg, #e8f4fd 0%, #f0f7ff 100%); border-radius: 8px; border-left: 4px solid #4a90e2; display: none;">
+                                <div style="display: flex; justify-content: space-between; align-items: center;">
+                                    <span style="font-weight: 600; color: #333;">⏱️ Geschätzte Gesamtzeit:</span>
+                                    <span id="zeitschaetzungWert" style="font-size: 1.3em; font-weight: bold; color: #4a90e2;">0 h</span>
+                                </div>
+                                <div id="zeitschaetzungDetails" style="margin-top: 8px; font-size: 0.9em; color: #666;"></div>
+                            </div>
                         </div>
                         <div class="form-group checkbox-group">
                             <label>Ersatzauto gewünscht?</label>
@@ -461,9 +480,25 @@
                     <strong>💡 Tipp:</strong> Klicken Sie auf eine Zeile, um Zeiten für einzelne Arbeiten zu bearbeiten!
                 </p>
 
-                <div style="margin-bottom: 15px;">
-                    <input type="date" id="filterDatum">
-                    <button id="alleTermineBtn" class="btn btn-secondary">Alle anzeigen</button>
+                <!-- Navigation und Aktionen -->
+                <div style="margin-bottom: 15px; display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: space-between;">
+                    <div style="display: flex; gap: 5px; align-items: center;">
+                        <button id="prevWeekBtn" class="btn btn-secondary" title="Vorherige Woche">⏪ Woche</button>
+                        <button id="prevDayBtn" class="btn btn-secondary" title="Vorheriger Tag">◀ Tag</button>
+                        <input type="date" id="filterDatum" style="padding: 8px 12px;">
+                        <button id="nextDayBtn" class="btn btn-secondary" title="Nächster Tag">Tag ▶</button>
+                        <button id="nextWeekBtn" class="btn btn-secondary" title="Nächste Woche">Woche ⏩</button>
+                        <button id="todayBtn" class="btn btn-primary" title="Zum heutigen Tag">📅 Heute</button>
+                        <button id="alleTermineBtn" class="btn btn-secondary">📋 Alle anzeigen</button>
+                    </div>
+                    <div>
+                        <button id="offeneTermineBtn" class="btn btn-warning" style="background: #e67e22; color: white;">🔴 Offene Termine</button>
+                    </div>
+                </div>
+
+                <!-- Datum-Anzeige -->
+                <div id="zeitverwaltungDatumAnzeige" style="margin-bottom: 15px; padding: 10px 15px; background: linear-gradient(135deg, #e8f4fd 0%, #f0f7ff 100%); border-radius: 8px; border-left: 4px solid #4a90e2;">
+                    <span style="font-size: 1.1em; font-weight: 600;" id="zeitverwaltungDatumText">Alle Termine</span>
                 </div>
 
                 <table id="termineTable">

@@ -77,9 +77,20 @@ class App {
       });
       arbeitEingabe.addEventListener('keydown', (e) => this.handleArbeitKeydown(e));
     }
-    document.getElementById('filterDatum').addEventListener('change', () => this.loadTermine());
+    document.getElementById('filterDatum').addEventListener('change', () => {
+      this.loadTermine();
+      this.updateZeitverwaltungDatumAnzeige();
+    });
     document.getElementById('alleTermineBtn').addEventListener('click', () => this.showAllTermine());
     document.getElementById('auslastungDatum').addEventListener('change', () => this.loadAuslastung());
+
+    // Zeitverwaltung Navigation Buttons
+    document.getElementById('prevDayBtn').addEventListener('click', () => this.navigateZeitverwaltung(-1, 'day'));
+    document.getElementById('nextDayBtn').addEventListener('click', () => this.navigateZeitverwaltung(1, 'day'));
+    document.getElementById('prevWeekBtn').addEventListener('click', () => this.navigateZeitverwaltung(-7, 'week'));
+    document.getElementById('nextWeekBtn').addEventListener('click', () => this.navigateZeitverwaltung(7, 'week'));
+    document.getElementById('todayBtn').addEventListener('click', () => this.goToToday());
+    document.getElementById('offeneTermineBtn').addEventListener('click', () => this.showOffeneTermine());
 
     // Event-Listener für 7-Tage-Limit bei Krankmeldungen
     document.getElementById('krankVonDatum').addEventListener('change', () => this.validateKrankDatum());
@@ -669,8 +680,99 @@ class App {
   }
 
   updateZeitschaetzung() {
-    // Diese Funktion wird nicht mehr benötigt, da die Zeitschätzung
-    // direkt aus den Standardzeiten berechnet wird
+    const arbeitEingabe = document.getElementById('arbeitEingabe');
+    const zeitschaetzungAnzeige = document.getElementById('zeitschaetzungAnzeige');
+    const zeitschaetzungWert = document.getElementById('zeitschaetzungWert');
+    const zeitschaetzungDetails = document.getElementById('zeitschaetzungDetails');
+    
+    if (!arbeitEingabe || !zeitschaetzungAnzeige) return;
+    
+    const eingabe = arbeitEingabe.value.trim();
+    
+    // Wenn keine Eingabe, verstecke die Anzeige
+    if (!eingabe) {
+      zeitschaetzungAnzeige.style.display = 'none';
+      return;
+    }
+    
+    // Teile die Eingabe in einzelne Arbeiten auf (nach Zeilenumbruch oder Komma)
+    const arbeiten = eingabe
+      .split(/[\r\n,]+/)
+      .map(a => a.trim())
+      .filter(a => a.length > 0);
+    
+    if (arbeiten.length === 0) {
+      zeitschaetzungAnzeige.style.display = 'none';
+      return;
+    }
+    
+    // Berechne die Zeiten für jede Arbeit
+    let gesamtMinuten = 0;
+    const details = [];
+    const nichtGefunden = [];
+    
+    arbeiten.forEach(arbeit => {
+      // Suche nach der Arbeit in den Standardzeiten (case-insensitive)
+      const gefunden = this.arbeitszeiten.find(
+        az => az.bezeichnung.toLowerCase() === arbeit.toLowerCase()
+      );
+      
+      if (gefunden) {
+        const minuten = gefunden.standard_minuten || 0;
+        gesamtMinuten += minuten;
+        
+        // Formatiere die Zeit
+        const stundenAnteil = Math.floor(minuten / 60);
+        const minutenAnteil = minuten % 60;
+        let zeitStr = '';
+        if (stundenAnteil > 0) {
+          zeitStr = `${stundenAnteil} h`;
+          if (minutenAnteil > 0) zeitStr += ` ${minutenAnteil} min`;
+        } else {
+          zeitStr = `${minutenAnteil} min`;
+        }
+        
+        details.push(`✓ ${arbeit}: <strong>${zeitStr}</strong>`);
+      } else {
+        nichtGefunden.push(arbeit);
+        details.push(`⚠️ ${arbeit}: <em>keine Standardzeit hinterlegt</em>`);
+      }
+    });
+    
+    // Formatiere die Gesamtzeit in Stunden und Minuten
+    const gesamtStunden = Math.floor(gesamtMinuten / 60);
+    const gesamtRestMinuten = gesamtMinuten % 60;
+    let gesamtZeitStr = '';
+    
+    if (gesamtMinuten === 0) {
+      gesamtZeitStr = '0 min';
+    } else if (gesamtStunden === 0) {
+      gesamtZeitStr = `${gesamtRestMinuten} min`;
+    } else if (gesamtRestMinuten === 0) {
+      gesamtZeitStr = `${gesamtStunden} h`;
+    } else {
+      gesamtZeitStr = `${gesamtStunden} h ${gesamtRestMinuten} min`;
+    }
+    
+    // Zeige auch Dezimalstunden für bessere Übersicht
+    const dezimalStunden = (gesamtMinuten / 60).toFixed(2);
+    gesamtZeitStr += ` (${dezimalStunden} h)`;
+    
+    // Aktualisiere die Anzeige
+    zeitschaetzungAnzeige.style.display = 'block';
+    zeitschaetzungWert.textContent = gesamtZeitStr;
+    zeitschaetzungDetails.innerHTML = details.join('<br>');
+    
+    // Färbe die Gesamtzeit je nach Dauer
+    if (gesamtMinuten === 0) {
+      zeitschaetzungWert.style.color = '#999';
+    } else if (gesamtMinuten <= 60) {
+      zeitschaetzungWert.style.color = '#27ae60'; // Grün - kurz
+    } else if (gesamtMinuten <= 180) {
+      zeitschaetzungWert.style.color = '#4a90e2'; // Blau - mittel
+    } else {
+      zeitschaetzungWert.style.color = '#e67e22'; // Orange - lang
+    }
   }
 
   updateGesamtzeit() {
@@ -1308,6 +1410,9 @@ class App {
           this.openArbeitszeitenModal(termin.id);
         };
       });
+      
+      // Aktualisiere die Datum-Anzeige
+      this.updateZeitverwaltungDatumAnzeige();
     } catch (error) {
       console.error('Fehler beim Laden der Termine:', error);
     }
@@ -1316,6 +1421,165 @@ class App {
   showAllTermine() {
     document.getElementById('filterDatum').value = '';
     this.loadTermine();
+    this.updateZeitverwaltungDatumAnzeige();
+  }
+
+  // Navigation für Zeitverwaltung (überspringt Sonntage)
+  navigateZeitverwaltung(days, type) {
+    const filterDatum = document.getElementById('filterDatum');
+    let currentDate;
+    
+    if (filterDatum.value) {
+      currentDate = new Date(filterDatum.value);
+    } else {
+      currentDate = new Date();
+    }
+    
+    currentDate.setDate(currentDate.getDate() + days);
+    
+    // Überspringe Sonntage (0 = Sonntag)
+    if (currentDate.getDay() === 0) {
+      // Bei Vorwärts-Navigation: gehe zum Montag
+      // Bei Rückwärts-Navigation: gehe zum Samstag
+      if (days > 0) {
+        currentDate.setDate(currentDate.getDate() + 1); // Montag
+      } else {
+        currentDate.setDate(currentDate.getDate() - 1); // Samstag
+      }
+    }
+    
+    filterDatum.value = currentDate.toISOString().split('T')[0];
+    this.loadTermine();
+    this.updateZeitverwaltungDatumAnzeige();
+  }
+
+  goToToday() {
+    const filterDatum = document.getElementById('filterDatum');
+    let today = new Date();
+    
+    // Falls heute Sonntag ist, zeige Montag
+    if (today.getDay() === 0) {
+      today.setDate(today.getDate() + 1);
+    }
+    
+    filterDatum.value = today.toISOString().split('T')[0];
+    this.loadTermine();
+    this.updateZeitverwaltungDatumAnzeige();
+  }
+
+  async showOffeneTermine() {
+    // Zeige alle Termine ohne tatsächliche Zeit (offene Termine)
+    document.getElementById('filterDatum').value = '';
+    
+    try {
+      const termine = await TermineService.getAll(null);
+      
+      // Filtere nur Termine ohne tatsächliche Zeit
+      const offeneTermine = termine.filter(t => !t.tatsaechliche_zeit || t.tatsaechliche_zeit <= 0);
+      
+      this.termineCache = termine;
+      this.updateTerminSuchliste();
+      this.termineById = {};
+
+      const tbody = document.getElementById('termineTable').getElementsByTagName('tbody')[0];
+      tbody.innerHTML = '';
+
+      if (offeneTermine.length === 0) {
+        const row = tbody.insertRow();
+        row.innerHTML = '<td colspan="12" style="text-align: center; padding: 30px; color: #27ae60;">✅ Keine offenen Termine - alle Zeiten sind erfasst!</td>';
+      } else {
+        offeneTermine.forEach(termin => {
+          this.termineById[termin.id] = termin;
+          const row = tbody.insertRow();
+          const statusClass = `status-${termin.status}`;
+          const zeitAnzeige = termin.tatsaechliche_zeit || termin.geschaetzte_zeit;
+
+          const zeitStatusIcon = '🔴';
+
+          row.innerHTML = `
+            <td style="text-align: center; font-size: 20px;">${zeitStatusIcon}</td>
+            <td><strong>${termin.termin_nr || '-'}</strong></td>
+            <td>${termin.datum}</td>
+            <td>${termin.kunde_name}</td>
+            <td>${termin.kennzeichen}</td>
+            <td>${termin.kilometerstand || '-'}</td>
+            <td>${termin.ersatzauto ? 'Ja' : 'Nein'}</td>
+            <td>${termin.arbeit}</td>
+            <td>${this.formatZeit(zeitAnzeige)}</td>
+            <td>${termin.mitarbeiter_name || '-'}</td>
+            <td><span class="status-badge ${statusClass}">${termin.status}</span></td>
+            <td class="action-buttons">
+              <button class="btn btn-edit" onclick="event.stopPropagation(); app.showTerminDetails(${termin.id})">
+                📄 Details
+              </button>
+              <button class="btn btn-delete" onclick="event.stopPropagation(); app.deleteTermin(${termin.id})" style="margin-left: 5px;">
+                🗑️ Löschen
+              </button>
+            </td>
+          `;
+
+          row.style.cursor = 'pointer';
+          row.onclick = (e) => {
+            if (e.target.tagName === 'BUTTON' || e.target.closest('button')) {
+              return;
+            }
+            this.openArbeitszeitenModal(termin.id);
+          };
+        });
+      }
+      
+      // Aktualisiere die Datum-Anzeige
+      const datumAnzeige = document.getElementById('zeitverwaltungDatumText');
+      if (datumAnzeige) {
+        datumAnzeige.textContent = `🔴 Offene Termine (${offeneTermine.length})`;
+        datumAnzeige.parentElement.style.borderLeftColor = '#e67e22';
+      }
+    } catch (error) {
+      console.error('Fehler beim Laden der offenen Termine:', error);
+    }
+  }
+
+  updateZeitverwaltungDatumAnzeige() {
+    const filterDatum = document.getElementById('filterDatum');
+    const datumAnzeige = document.getElementById('zeitverwaltungDatumText');
+    
+    if (!datumAnzeige) return;
+    
+    if (!filterDatum.value) {
+      datumAnzeige.textContent = '📋 Alle Termine';
+      datumAnzeige.parentElement.style.borderLeftColor = '#4a90e2';
+    } else {
+      const datum = new Date(filterDatum.value);
+      const heute = new Date();
+      heute.setHours(0, 0, 0, 0);
+      datum.setHours(0, 0, 0, 0);
+      
+      const wochentage = ['Sonntag', 'Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag', 'Samstag'];
+      const wochentag = wochentage[datum.getDay()];
+      
+      const formatiertesDatum = datum.toLocaleDateString('de-DE', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric'
+      });
+      
+      let prefix = '';
+      let color = '#4a90e2';
+      
+      if (datum.getTime() === heute.getTime()) {
+        prefix = '📅 Heute - ';
+        color = '#27ae60';
+      } else if (datum.getTime() === heute.getTime() - 86400000) {
+        prefix = '⏪ Gestern - ';
+        color = '#95a5a6';
+      } else if (datum.getTime() === heute.getTime() + 86400000) {
+        prefix = '⏩ Morgen - ';
+        color = '#3498db';
+      }
+      
+      datumAnzeige.textContent = `${prefix}${wochentag}, ${formatiertesDatum}`;
+      datumAnzeige.parentElement.style.borderLeftColor = color;
+    }
   }
 
   openZeitModal(terminId, aktuelleZeit, status) {
@@ -1597,17 +1861,26 @@ class App {
         // Mitarbeiter-Auslastung
         if (data.mitarbeiter_auslastung && Array.isArray(data.mitarbeiter_auslastung) && data.mitarbeiter_auslastung.length > 0) {
           html += data.mitarbeiter_auslastung.map(ma => {
-            const prozentColor = ma.auslastung_prozent > 100 ? '#c62828' :
+            // Abwesende Mitarbeiter rot markieren
+            const istAbwesend = ma.ist_abwesend === true;
+            const abwesendStyle = istAbwesend ? 'background: linear-gradient(135deg, #ffebee 0%, #ffcdd2 100%); border-left: 4px solid #c62828;' : '';
+            const abwesendBadge = istAbwesend ? '<span style="background: #c62828; color: white; padding: 2px 8px; border-radius: 12px; font-size: 0.8em; margin-left: 10px;">🏥 Abwesend</span>' : '';
+            
+            const prozentColor = istAbwesend ? '#c62828' :
+                                ma.auslastung_prozent > 100 ? '#c62828' :
                                 ma.auslastung_prozent > 80 ? '#f57c00' : '#2e7d32';
             const nurServiceBadge = ma.nur_service ? '<span style="background: #2196f3; color: white; padding: 2px 8px; border-radius: 12px; font-size: 0.8em; margin-left: 10px;">Nur Service</span>' : '';
-            const verfuegbarText = this.formatMinutesToHours(ma.verfuegbar_minuten);
+            const verfuegbarText = istAbwesend ? '<span style="color: #c62828;">0 h (abwesend)</span>' : this.formatMinutesToHours(ma.verfuegbar_minuten);
+            const cardStyle = istAbwesend 
+              ? 'margin-bottom: 20px; padding: 15px; background: linear-gradient(135deg, #ffebee 0%, #ffcdd2 100%); border-radius: 8px; border-left: 4px solid #c62828;'
+              : `margin-bottom: 20px; padding: 15px; background: #f8f9fa; border-radius: 8px; border-left: 4px solid ${prozentColor};`;
             return `
-              <div style="margin-bottom: 20px; padding: 15px; background: #f8f9fa; border-radius: 8px; border-left: 4px solid ${prozentColor};">
-                <h4 style="margin: 0 0 10px 0;">${ma.mitarbeiter_name}${nurServiceBadge}</h4>
+              <div style="${cardStyle}">
+                <h4 style="margin: 0 0 10px 0;">${ma.mitarbeiter_name}${abwesendBadge}${nurServiceBadge}</h4>
                 <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin-bottom: 10px;">
                   <div><strong>Verfügbar:</strong> ${verfuegbarText}</div>
                   <div><strong>Belegt:</strong> ${this.formatMinutesToHours(ma.belegt_minuten)}</div>
-                  <div><strong>Auslastung:</strong> <span style="color: ${prozentColor}; font-weight: bold;">${ma.auslastung_prozent}%</span></div>
+                  <div><strong>Auslastung:</strong> <span style="color: ${prozentColor}; font-weight: bold;">${istAbwesend ? '-' : ma.auslastung_prozent + '%'}</span></div>
                 </div>
                 <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 5px; font-size: 0.9em; color: #666; margin-bottom: 5px;">
                   <div>Geplant: ${this.formatMinutesToHours(ma.geplant_minuten)}</div>
@@ -1616,7 +1889,7 @@ class App {
                   <div>Servicezeit: ${this.formatMinutesToHours(ma.servicezeit_minuten || 0)}</div>
                 </div>
                 <div style="margin-top: 10px; height: 20px; background: #e0e0e0; border-radius: 4px; overflow: hidden; position: relative;">
-                  <div style="height: 100%; width: ${Math.min(ma.auslastung_prozent, 100)}%; background: ${prozentColor}; transition: width 0.3s;"></div>
+                  <div style="height: 100%; width: ${istAbwesend ? 0 : Math.min(ma.auslastung_prozent, 100)}%; background: ${prozentColor}; transition: width 0.3s;"></div>
                 </div>
               </div>
             `;
@@ -1628,16 +1901,25 @@ class App {
         const lehrlingeAuslastung = data.lehrlinge_auslastung || [];
         if (Array.isArray(lehrlingeAuslastung) && lehrlingeAuslastung.length > 0) {
           html += lehrlingeAuslastung.map(la => {
-            const prozentColor = la.auslastung_prozent > 100 ? '#c62828' :
+            // Abwesende Lehrlinge rot markieren
+            const istAbwesend = la.ist_abwesend === true;
+            const abwesendBadge = istAbwesend ? '<span style="background: #c62828; color: white; padding: 2px 8px; border-radius: 12px; font-size: 0.8em; margin-left: 10px;">🏥 Abwesend</span>' : '';
+            
+            const prozentColor = istAbwesend ? '#c62828' :
+                                la.auslastung_prozent > 100 ? '#c62828' :
                                 la.auslastung_prozent > 80 ? '#f57c00' : '#2e7d32';
             const lehrlingBadge = '<span style="background: #9c27b0; color: white; padding: 2px 8px; border-radius: 12px; font-size: 0.8em; margin-left: 10px;">Lehrling</span>';
+            const verfuegbarText = istAbwesend ? '<span style="color: #c62828;">0 h (abwesend)</span>' : this.formatMinutesToHours(la.verfuegbar_minuten || 0);
+            const cardStyle = istAbwesend 
+              ? 'margin-bottom: 20px; padding: 15px; background: linear-gradient(135deg, #ffebee 0%, #ffcdd2 100%); border-radius: 8px; border-left: 4px solid #c62828;'
+              : `margin-bottom: 20px; padding: 15px; background: #f8f9fa; border-radius: 8px; border-left: 4px solid ${prozentColor};`;
             return `
-              <div style="margin-bottom: 20px; padding: 15px; background: #f8f9fa; border-radius: 8px; border-left: 4px solid ${prozentColor};">
-                <h4 style="margin: 0 0 10px 0;">${la.lehrling_name || la.name || 'Unbekannt'}${lehrlingBadge}</h4>
+              <div style="${cardStyle}">
+                <h4 style="margin: 0 0 10px 0;">${la.lehrling_name || la.name || 'Unbekannt'}${abwesendBadge}${lehrlingBadge}</h4>
                 <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin-bottom: 10px;">
-                  <div><strong>Verfügbar:</strong> ${this.formatMinutesToHours(la.verfuegbar_minuten || 0)}</div>
+                  <div><strong>Verfügbar:</strong> ${verfuegbarText}</div>
                   <div><strong>Belegt:</strong> ${this.formatMinutesToHours(la.belegt_minuten || 0)}</div>
-                  <div><strong>Auslastung:</strong> <span style="color: ${prozentColor}; font-weight: bold;">${la.auslastung_prozent || 0}%</span></div>
+                  <div><strong>Auslastung:</strong> <span style="color: ${prozentColor}; font-weight: bold;">${istAbwesend ? '-' : (la.auslastung_prozent || 0) + '%'}</span></div>
                 </div>
                 <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 5px; font-size: 0.9em; color: #666; margin-bottom: 5px;">
                   <div>Geplant: ${this.formatMinutesToHours(la.geplant_minuten || 0)}</div>
@@ -1646,7 +1928,7 @@ class App {
                   <div>Servicezeit: ${this.formatMinutesToHours(la.servicezeit_minuten || 0)}</div>
                 </div>
                 <div style="margin-top: 10px; height: 20px; background: #e0e0e0; border-radius: 4px; overflow: hidden; position: relative;">
-                  <div style="height: 100%; width: ${Math.min(la.auslastung_prozent || 0, 100)}%; background: ${prozentColor}; transition: width 0.3s;"></div>
+                  <div style="height: 100%; width: ${istAbwesend ? 0 : Math.min(la.auslastung_prozent || 0, 100)}%; background: ${prozentColor}; transition: width 0.3s;"></div>
                 </div>
               </div>
             `;
@@ -2307,7 +2589,7 @@ class App {
       const today = new Date().toISOString().split('T')[0];
 
       for (const [index, day] of weekDays.entries()) {
-        const dayName = ['montag', 'dienstag', 'mittwoch', 'donnerstag', 'freitag'][index];
+        const dayName = ['montag', 'dienstag', 'mittwoch', 'donnerstag', 'freitag', 'samstag'][index];
         const card = document.getElementById(dayName);
 
         if (!card) continue;
@@ -4021,7 +4303,8 @@ class App {
     const weekStart = new Date(this.getWeekStart());
     const days = [];
 
-    for (let i = 0; i < 5; i++) {
+    // Montag bis Samstag (6 Tage)
+    for (let i = 0; i < 6; i++) {
       const day = new Date(weekStart);
       day.setDate(weekStart.getDate() + i);
       days.push({

@@ -342,6 +342,28 @@ textarea:focus {
     background: #c82333;
 }
 
+.btn-success {
+    background: linear-gradient(135deg, #27ae60 0%, #219a52 100%);
+    color: white;
+    box-shadow: 0 4px 10px rgba(39, 174, 96, 0.25);
+}
+
+.btn-success:hover {
+    background: linear-gradient(135deg, #219a52 0%, #1e8449 100%);
+    box-shadow: 0 6px 14px rgba(39, 174, 96, 0.35);
+}
+
+.btn-warning {
+    background: linear-gradient(135deg, #e67e22 0%, #d35400 100%);
+    color: white;
+    box-shadow: 0 4px 10px rgba(230, 126, 34, 0.25);
+}
+
+.btn-warning:hover {
+    background: linear-gradient(135deg, #d35400 0%, #ba4a00 100%);
+    box-shadow: 0 6px 14px rgba(230, 126, 34, 0.35);
+}
+
 .btn-edit {
     background: linear-gradient(135deg, var(--accent) 0%, var(--accent-strong) 100%);
     color: #1b1b1b;

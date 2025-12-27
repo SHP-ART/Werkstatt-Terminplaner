@@ -11,3 +11,4 @@ router.delete('/:id', LehrlingeController.delete);
 
 module.exports = router;
 
+
