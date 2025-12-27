@@ -44,12 +44,24 @@ class ArbeitszeitenController {
   }
 
   static delete(req, res) {
-    ArbeitszeitenModel.delete(req.params.id, (err, result) => {
+    const id = req.params.id;
+    
+    if (!id) {
+      return res.status(400).json({ error: 'ID fehlt' });
+    }
+
+    ArbeitszeitenModel.delete(id, (err, result) => {
       if (err) {
-        res.status(500).json({ error: err.message });
-      } else {
-        res.json({ changes: (result && result.changes) || 0, message: 'Arbeitszeit gelöscht' });
+        return res.status(500).json({ error: err.message });
       }
+      
+      const changes = (result && result.changes) || 0;
+      
+      if (changes === 0) {
+        return res.status(404).json({ error: 'Arbeitszeit nicht gefunden', changes: 0 });
+      }
+      
+      res.json({ changes: changes, message: 'Arbeitszeit gelöscht' });
     });
   }
 }

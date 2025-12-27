@@ -14,8 +14,16 @@ class ApiService {
       const response = await fetch(url, config);
 
       if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || 'API-Fehler');
+        let errorData;
+        try {
+          errorData = await response.json();
+        } catch (e) {
+          errorData = { error: `HTTP ${response.status}: ${response.statusText}` };
+        }
+        const error = new Error(errorData.error || 'API-Fehler');
+        error.status = response.status;
+        error.data = errorData;
+        throw error;
       }
 
       return await response.json();
@@ -72,6 +80,10 @@ class KundenService {
   static async delete(id) {
     return ApiService.delete(`/kunden/${id}`);
   }
+
+  static async search(searchTerm) {
+    return ApiService.get(`/kunden/search?search=${encodeURIComponent(searchTerm)}`);
+  }
 }
 
 class TermineService {
@@ -90,6 +102,19 @@ class TermineService {
 
   static async delete(id) {
     return ApiService.delete(`/termine/${id}`);
+  }
+
+  // Papierkorb-Funktionen
+  static async getDeleted() {
+    return ApiService.get('/termine/papierkorb');
+  }
+
+  static async restore(id) {
+    return ApiService.post(`/termine/${id}/restore`, {});
+  }
+
+  static async permanentDelete(id) {
+    return ApiService.delete(`/termine/${id}/permanent`);
   }
 
   static async checkAvailability(datum, dauer) {
@@ -144,6 +169,79 @@ class EinstellungenService {
 
   static async updateAbwesenheit(datum, data) {
     return ApiService.put(`/abwesenheiten/${datum}`, data);
+  }
+
+  // Neue Methoden für individuelle Mitarbeiter-/Lehrlinge-Abwesenheiten
+  static async getAllAbwesenheiten() {
+    return ApiService.get('/abwesenheiten/liste');
+  }
+
+  static async getAbwesenheitenByDateRange(vonDatum, bisDatum) {
+    return ApiService.get(`/abwesenheiten/range?von_datum=${vonDatum}&bis_datum=${bisDatum}`);
+  }
+
+  static async createAbwesenheit(data) {
+    return ApiService.post('/abwesenheiten', data);
+  }
+
+  static async deleteAbwesenheit(id) {
+    return ApiService.delete(`/abwesenheiten/item/${id}`);
+  }
+
+  static async getAbwesenheitById(id) {
+    return ApiService.get(`/abwesenheiten/item/${id}`);
+  }
+}
+
+class MitarbeiterService {
+  static async getAll() {
+    return ApiService.get('/mitarbeiter');
+  }
+
+  static async getAktive() {
+    return ApiService.get('/mitarbeiter/aktive');
+  }
+
+  static async getById(id) {
+    return ApiService.get(`/mitarbeiter/${id}`);
+  }
+
+  static async create(mitarbeiter) {
+    return ApiService.post('/mitarbeiter', mitarbeiter);
+  }
+
+  static async update(id, mitarbeiter) {
+    return ApiService.put(`/mitarbeiter/${id}`, mitarbeiter);
+  }
+
+  static async delete(id) {
+    return ApiService.delete(`/mitarbeiter/${id}`);
+  }
+}
+
+class LehrlingeService {
+  static async getAll() {
+    return ApiService.get('/lehrlinge');
+  }
+
+  static async getAktive() {
+    return ApiService.get('/lehrlinge/aktive');
+  }
+
+  static async getById(id) {
+    return ApiService.get(`/lehrlinge/${id}`);
+  }
+
+  static async create(lehrling) {
+    return ApiService.post('/lehrlinge', lehrling);
+  }
+
+  static async update(id, lehrling) {
+    return ApiService.put(`/lehrlinge/${id}`, lehrling);
+  }
+
+  static async delete(id) {
+    return ApiService.delete(`/lehrlinge/${id}`);
   }
 }
 

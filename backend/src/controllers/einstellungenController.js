@@ -6,15 +6,15 @@ class EinstellungenController {
       if (err) {
         res.status(500).json({ error: err.message });
       } else {
-        res.json(row || { mitarbeiter_anzahl: 1, arbeitsstunden_pro_tag: 8 });
+        res.json(row || { pufferzeit_minuten: 15, servicezeit_minuten: 10 });
       }
     });
   }
 
   static updateWerkstatt(req, res) {
     const payload = {
-      mitarbeiter_anzahl: parseInt(req.body.mitarbeiter_anzahl, 10) || 1,
-      arbeitsstunden_pro_tag: parseInt(req.body.arbeitsstunden_pro_tag, 10) || 8
+      pufferzeit_minuten: parseInt(req.body.pufferzeit_minuten, 10) || 15,
+      servicezeit_minuten: parseInt(req.body.servicezeit_minuten, 10) || 10
     };
 
     EinstellungenModel.updateWerkstatt(payload, (err, result) => {

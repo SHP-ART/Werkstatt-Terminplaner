@@ -38,6 +38,11 @@ class KundenController {
   }
 
   static getById(req, res) {
+    // Verhindere, dass "search" als ID interpretiert wird
+    if (req.params.id === 'search') {
+      return res.status(404).json({ error: 'Route nicht gefunden' });
+    }
+    
     KundenModel.getById(req.params.id, (err, row) => {
       if (err) {
         res.status(500).json({ error: err.message });
@@ -65,6 +70,26 @@ class KundenController {
         res.status(500).json({ error: err.message });
       } else {
         res.json({ changes: (result && result.changes) || 0, message: 'Kunde gelöscht' });
+      }
+    });
+  }
+
+  static search(req, res) {
+    const searchTerm = req.query.search;
+
+    console.log('Search endpoint called with searchTerm:', searchTerm);
+
+    if (!searchTerm || searchTerm.trim().length === 0) {
+      return res.status(400).json({ error: 'Suchbegriff darf nicht leer sein' });
+    }
+
+    KundenModel.searchWithTermine(searchTerm, (err, results) => {
+      if (err) {
+        console.error('Search error:', err);
+        res.status(500).json({ error: err.message });
+      } else {
+        console.log('Search results:', results.length, 'customers found');
+        res.json(results);
       }
     });
   }

@@ -1,5 +1,6 @@
 const { app, BrowserWindow, ipcMain } = require('electron');
 const path = require('path');
+const os = require('os');
 const { startServer } = require('./src/server');
 
 let mainWindow;
@@ -43,11 +44,27 @@ app.on('window-all-closed', function () {
   }
 });
 
+// Function to get the actual IP address of the machine
+function getLocalIPAddress() {
+  const interfaces = os.networkInterfaces();
+  for (const name of Object.keys(interfaces)) {
+    for (const iface of interfaces[name]) {
+      // Skip internal (loopback) and non-IPv4 addresses
+      if (iface.family === 'IPv4' && !iface.internal) {
+        return iface.address;
+      }
+    }
+  }
+  return 'localhost';
+}
+
 // IPC listener to get the server URL
 ipcMain.handle('get-server-url', async (event) => {
   const address = server.address();
   if (address) {
-    return `http://${address.address}:${address.port}`;
+    const port = address.port;
+    const ipAddress = address.address === '0.0.0.0' ? getLocalIPAddress() : address.address;
+    return `http://${ipAddress}:${port}`;
   }
   return 'Server starting...';
 });

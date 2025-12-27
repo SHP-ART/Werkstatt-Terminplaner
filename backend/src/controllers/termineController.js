@@ -2,6 +2,8 @@ const TermineModel = require('../models/termineModel');
 const EinstellungenModel = require('../models/einstellungenModel');
 const AbwesenheitenModel = require('../models/abwesenheitenModel');
 const ArbeitszeitenModel = require('../models/arbeitszeitenModel');
+const MitarbeiterModel = require('../models/mitarbeiterModel');
+const LehrlingeModel = require('../models/lehrlingeModel');
 
 // Einfacher In-Memory-Cache für Auslastungsdaten
 const auslastungCache = new Map();
@@ -68,13 +70,19 @@ class TermineController {
       : null;
     const kilometerstandWert = Number.isFinite(kilometerstand) ? kilometerstand : null;
 
+    const mitarbeiter_id = req.body.mitarbeiter_id !== undefined && req.body.mitarbeiter_id !== null && req.body.mitarbeiter_id !== ''
+      ? parseInt(req.body.mitarbeiter_id, 10)
+      : null;
+    const mitarbeiter_id_wert = Number.isFinite(mitarbeiter_id) ? mitarbeiter_id : null;
+
     const payload = {
       ...req.body,
       kilometerstand: kilometerstandWert,
       ersatzauto: req.body.ersatzauto ? 1 : 0,
       abholung_zeit: req.body.abholung_zeit || null,
       bring_zeit: req.body.bring_zeit || null,
-      kontakt_option: req.body.kontakt_option || null
+      kontakt_option: req.body.kontakt_option || null,
+      mitarbeiter_id: mitarbeiter_id_wert
     };
 
     TermineModel.create(payload, function(err, result) {
@@ -93,8 +101,18 @@ class TermineController {
   }
 
   static update(req, res) {
-    const { tatsaechliche_zeit } = req.body;
+    const { tatsaechliche_zeit, mitarbeiter_id } = req.body;
     const sollteLernen = tatsaechliche_zeit && tatsaechliche_zeit > 0;
+
+    // Parse mitarbeiter_id
+    const mitarbeiter_id_wert = mitarbeiter_id !== undefined && mitarbeiter_id !== null && mitarbeiter_id !== ''
+      ? (Number.isFinite(parseInt(mitarbeiter_id, 10)) ? parseInt(mitarbeiter_id, 10) : null)
+      : undefined;
+
+    const updateData = { ...req.body };
+    if (mitarbeiter_id_wert !== undefined) {
+      updateData.mitarbeiter_id = mitarbeiter_id_wert;
+    }
 
     // Hole erst das Datum des Termins, um Cache zu invalidierten
     TermineModel.getById(req.params.id, (err, termin) => {
@@ -103,7 +121,7 @@ class TermineController {
         return;
       }
 
-      TermineModel.update(req.params.id, req.body, (updateErr, result) => {
+      TermineModel.update(req.params.id, updateData, (updateErr, result) => {
         if (updateErr) {
           res.status(500).json({ error: updateErr.message });
           return;
@@ -194,12 +212,17 @@ class TermineController {
   static getAuslastung(req, res) {
     const { datum } = req.params;
     const { mitPuffer } = req.query; // Optional: ?mitPuffer=true
-    const fallbackSettings = { mitarbeiter_anzahl: 1, arbeitsstunden_pro_tag: 8, pufferzeit_minuten: 15 };
+    const fallbackSettings = { pufferzeit_minuten: 15 };
 
-    // Prüfe Cache
+    // Prüfe Cache - aber nur wenn lehrlinge_auslastung vorhanden ist
+    // (für Kompatibilität mit alten Cache-Einträgen)
     const cached = getCachedAuslastung(datum, mitPuffer);
-    if (cached) {
+    if (cached && cached.lehrlinge_auslastung !== undefined) {
       return res.json(cached);
+    }
+    // Wenn Cache vorhanden, aber lehrlinge_auslastung fehlt, Cache invalidieren
+    if (cached && cached.lehrlinge_auslastung === undefined) {
+      invalidateAuslastungCache(datum);
     }
 
     EinstellungenModel.getWerkstatt((settingsErr, einstellungen) => {
@@ -208,10 +231,22 @@ class TermineController {
         return;
       }
 
-      const mitarbeiter = einstellungen?.mitarbeiter_anzahl || fallbackSettings.mitarbeiter_anzahl;
-      const arbeitsstunden = einstellungen?.arbeitsstunden_pro_tag || fallbackSettings.arbeitsstunden_pro_tag;
       const pufferzeit = einstellungen?.pufferzeit_minuten || fallbackSettings.pufferzeit_minuten;
-      const arbeitszeit_pro_mitarbeiter = arbeitsstunden * 60;
+      const servicezeit = einstellungen?.servicezeit_minuten || 10;
+
+      // Lade alle aktiven Mitarbeiter
+      MitarbeiterModel.getAktive((mitErr, mitarbeiter) => {
+        if (mitErr) {
+          res.status(500).json({ error: mitErr.message });
+          return;
+        }
+
+        // Lade alle aktiven Lehrlinge
+        LehrlingeModel.getAktive((lehrErr, lehrlinge) => {
+          if (lehrErr) {
+            res.status(500).json({ error: lehrErr.message });
+            return;
+          }
 
       AbwesenheitenModel.getByDatum(datum, (absErr, abwesenheit) => {
         if (absErr) {
@@ -221,12 +256,106 @@ class TermineController {
 
         const urlaub = abwesenheit?.urlaub || 0;
         const krank = abwesenheit?.krank || 0;
-        const verfuegbareMitarbeiter = Math.max(mitarbeiter - urlaub - krank, 0);
-        const arbeitszeit_pro_tag = Math.max(verfuegbareMitarbeiter * arbeitszeit_pro_mitarbeiter, 1);
 
-        // Verwende verbesserte Berechnung mit Pufferzeiten wenn gewünscht
-        const auslastungCallback = mitPuffer === 'true' 
-          ? (err, row) => {
+            // Berechne Auslastung pro Mitarbeiter
+            // servicezeit muss hier verfügbar sein für die Callback-Funktionen
+            const servicezeitWert = servicezeit;
+            
+            // Lade alle Termine für das Datum, um arbeitszeiten_details zu prüfen (für Lehrlinge Aufgabenbewältigung)
+            TermineModel.getTermineByDatum(datum, (termineErr, alleTermine) => {
+              if (termineErr) {
+                res.status(500).json({ error: termineErr.message });
+                return;
+              }
+
+              // Berechne zusätzliche Zeit durch Lehrlinge (Aufgabenbewältigung)
+              let lehrlingeZusaetzlicheZeit = 0;
+              (alleTermine || []).forEach(termin => {
+                if (termin.arbeitszeiten_details) {
+                  try {
+                    const details = JSON.parse(termin.arbeitszeiten_details);
+                    Object.keys(details).forEach(arbeit => {
+                      if (arbeit === '_gesamt_mitarbeiter_id') return; // Überspringe Metadaten
+                      
+                      const arbeitDetail = details[arbeit];
+                      let zeitMinuten = 0;
+                      let zugeordnetId = null;
+                      let zugeordnetTyp = null;
+                      
+                      if (typeof arbeitDetail === 'object') {
+                        zeitMinuten = arbeitDetail.zeit || 0;
+                        if (arbeitDetail.type === 'lehrling' && arbeitDetail.lehrling_id) {
+                          zugeordnetId = arbeitDetail.lehrling_id;
+                          zugeordnetTyp = 'lehrling';
+                        } else if (arbeitDetail.mitarbeiter_id) {
+                          zugeordnetId = arbeitDetail.mitarbeiter_id;
+                          zugeordnetTyp = arbeitDetail.type || 'mitarbeiter';
+                        }
+                      } else {
+                        zeitMinuten = arbeitDetail || 0;
+                      }
+                      
+                      // Prüfe Gesamt-Zuordnung, wenn keine individuelle Zuordnung
+                      if (!zugeordnetId && details._gesamt_mitarbeiter_id) {
+                        const gesamt = details._gesamt_mitarbeiter_id;
+                        if (typeof gesamt === 'object' && gesamt.type === 'lehrling') {
+                          zugeordnetId = gesamt.id;
+                          zugeordnetTyp = 'lehrling';
+                        }
+                      }
+                      
+                      // Wenn Lehrling zugeordnet, berechne zusätzliche Zeit durch Aufgabenbewältigung
+                      if (zugeordnetTyp === 'lehrling' && zugeordnetId && zeitMinuten > 0) {
+                        const lehrling = (lehrlinge || []).find(l => l.id === zugeordnetId);
+                        if (lehrling) {
+                          const aufgabenbewaeltigung = lehrling.aufgabenbewaeltigung_prozent || 100;
+                          const zusaetzlicheZeit = zeitMinuten * ((aufgabenbewaeltigung / 100) - 1);
+                          lehrlingeZusaetzlicheZeit += zusaetzlicheZeit;
+                        }
+                      }
+                    });
+                  } catch (e) {
+                    // Ignoriere Parsing-Fehler
+                  }
+                }
+              });
+
+              TermineModel.getAuslastungProMitarbeiter(datum, (ausErr, auslastungProMitarbeiter) => {
+                if (ausErr) {
+                  res.status(500).json({ error: ausErr.message });
+                  return;
+                }
+
+                // Berechne Auslastung pro Lehrling
+                TermineModel.getAuslastungProLehrling(datum, (lehrErr, auslastungProLehrling) => {
+                  if (lehrErr) {
+                    res.status(500).json({ error: lehrErr.message });
+                    return;
+                  }
+
+                  // Konvertiere Lehrlings-Auslastung in das gleiche Format wie Mitarbeiter-Auslastung
+                  // WICHTIG: Stelle sicher, dass immer ein Array zurückgegeben wird
+                  const lehrlingeAuslastung = Array.isArray(auslastungProLehrling) 
+                    ? auslastungProLehrling.map(la => ({
+                        lehrling_id: la.lehrling_id,
+                        lehrling_name: la.lehrling_name,
+                        arbeitsstunden_pro_tag: la.arbeitsstunden_pro_tag,
+                        nebenzeit_prozent: la.nebenzeit_prozent,
+                        aufgabenbewaeltigung_prozent: la.aufgabenbewaeltigung_prozent,
+                        verfuegbar_minuten: la.verfuegbar_minuten,
+                        belegt_minuten: la.belegt_minuten,
+                        servicezeit_minuten: la.servicezeit_minuten,
+                        auslastung_prozent: la.auslastung_prozent,
+                        geplant_minuten: la.geplant_minuten,
+                        in_arbeit_minuten: la.in_arbeit_minuten,
+                        abgeschlossen_minuten: la.abgeschlossen_minuten,
+                        termin_anzahl: la.termin_anzahl
+                      }))
+                    : [];
+
+                  // Berechne Gesamtauslastung (auch für Termine ohne Mitarbeiterzuordnung)
+                  const auslastungCallback = mitPuffer === 'true' 
+                    ? (err, row) => {
               if (err) {
                 res.status(500).json({ error: err.message });
                 return;
@@ -239,75 +368,367 @@ class TermineController {
               const abgeschlossen = (row && row.abgeschlossen_minuten) ? row.abgeschlossen_minuten : 0;
               const pufferMinuten = (row && row.puffer_minuten) ? row.puffer_minuten : 0;
               
-              // Verwende belegtMitPuffer für Auslastungsberechnung
-              const verfuegbar = Math.max(arbeitszeit_pro_tag - belegtMitPuffer, 0);
-              const prozent = (belegtMitPuffer / arbeitszeit_pro_tag) * 100;
+                      // Berechne verfügbare Zeit: Summe aller Mitarbeiter (mit Nebenzeit) - NUR Werkstatt-Mitarbeiter
+                      // WICHTIG: Verwende die vollständige Liste aller aktiven Mitarbeiter, nicht nur die mit Terminen
+                      let gesamtVerfuegbar = 0;
+                      let gesamtTerminAnzahl = 0;
+                      
+                      // Gesamtanzahl aller Termine für Servicezeit-Berechnung (nur_service Mitarbeiter bekommen Servicezeit für ALLE Termine)
+                      const gesamtTerminAnzahlFuerService = (row && row.termin_anzahl) ? row.termin_anzahl : 0;
+                      
+                      // Erstelle eine Map für schnellen Zugriff auf Termin-Daten pro Mitarbeiter
+                      const terminDatenMap = {};
+                      (auslastungProMitarbeiter || []).forEach(ma => {
+                        terminDatenMap[ma.mitarbeiter_id] = ma;
+                        gesamtTerminAnzahl += ma.termin_anzahl || 0;
+                      });
+                      
+                      // Berechne für ALLE aktiven Mitarbeiter (nicht nur die mit Terminen)
+                      const mitarbeiterAuslastung = (mitarbeiter || []).map(m => {
+                        // Hole Termin-Daten für diesen Mitarbeiter (falls vorhanden)
+                        const ma = terminDatenMap[m.id] || {
+                          mitarbeiter_id: m.id,
+                          belegt_minuten: 0,
+                          geplant_minuten: 0,
+                          in_arbeit_minuten: 0,
+                          abgeschlossen_minuten: 0,
+                          termin_anzahl: 0
+                        };
+                        const arbeitszeitMinuten = (m.arbeitsstunden_pro_tag || 8) * 60;
+                        const nebenzeitMinuten = arbeitszeitMinuten * ((m.nebenzeit_prozent || 0) / 100);
+                        const verfuegbar = arbeitszeitMinuten - nebenzeitMinuten;
+                        const terminAnzahl = ma.termin_anzahl || 0;
+                        // Prüfe nur_service: kann 1, true, "1" oder "true" sein
+                        const nurService = m.nur_service === 1 || m.nur_service === true || m.nur_service === '1' || m.nur_service === 'true';
+                        
+                        let servicezeitFuerMitarbeiter = 0;
+                        let belegt = ma.belegt_minuten || 0;
+                        let belegtMitService = belegt;
+                        let verfuegbarNachService = verfuegbar;
+                        
+                        if (nurService) {
+                          // Mitarbeiter macht nur Service - seine Zeit zählt NICHT zur Werkstattkapazität
+                          // Servicezeit wird basierend auf ALLEN Terminen des Tages berechnet (NUR für nur_service Mitarbeiter)
+                          servicezeitFuerMitarbeiter = gesamtTerminAnzahlFuerService * servicezeitWert;
+                          belegtMitService = servicezeitFuerMitarbeiter;
+                          // Für nur_service Mitarbeiter: verfuegbar_minuten = 0 (keine Werkstattkapazität)
+                          verfuegbarNachService = 0;
+                          // NICHT zu gesamtVerfuegbar hinzufügen!
+                        } else {
+                          // Mitarbeiter macht Werkstattaufgaben - zählt zur Werkstattkapazität
+                          // Servicezeit wird NICHT zu normalen Mitarbeitern hinzugefügt
+                          servicezeitFuerMitarbeiter = 0;
+                          belegtMitService = belegt;
+                          verfuegbarNachService = verfuegbar;
+                          gesamtVerfuegbar += verfuegbar; // Nur Werkstatt-Mitarbeiter zählen
+                        }
+                        
+                        const prozent = verfuegbarNachService > 0 ? (belegtMitService / verfuegbarNachService) * 100 : (nurService ? 0 : 100);
+
+                        return {
+                          mitarbeiter_id: m.id,
+                          mitarbeiter_name: m.name,
+                          arbeitsstunden_pro_tag: m.arbeitsstunden_pro_tag,
+                          nebenzeit_prozent: m.nebenzeit_prozent,
+                          nur_service: nurService,
+                          verfuegbar_minuten: verfuegbarNachService,
+                          belegt_minuten: belegtMitService,
+                          servicezeit_minuten: servicezeitFuerMitarbeiter,
+                          auslastung_prozent: Math.round(prozent),
+                          geplant_minuten: ma.geplant_minuten || 0,
+                          in_arbeit_minuten: ma.in_arbeit_minuten || 0,
+                          abgeschlossen_minuten: ma.abgeschlossen_minuten || 0,
+                          termin_anzahl: terminAnzahl
+                        };
+                      });
+
+                      // Lehrlinge erhöhen verfügbare Zeit (ihre Arbeitszeit minus Nebenzeit, reduziert durch Aufgabenbewältigung)
+                      const lehrlingeVerfuegbar = (lehrlinge || []).reduce((sum, l) => {
+                        const arbeitszeitMinuten = (l.arbeitsstunden_pro_tag || 8) * 60;
+                        const nebenzeitMinuten = arbeitszeitMinuten * ((l.nebenzeit_prozent || 0) / 100);
+                        const nettoArbeitszeitMinuten = arbeitszeitMinuten - nebenzeitMinuten;
+                        // Aufgabenbewältigung reduziert die effektive verfügbare Zeit
+                        // 150% = braucht 1.5× länger → effektive Zeit = Arbeitszeit / 1.5
+                        const aufgabenbewaeltigung = (l.aufgabenbewaeltigung_prozent || 100) / 100;
+                        const effektiveVerfuegbar = nettoArbeitszeitMinuten / aufgabenbewaeltigung;
+                        return sum + effektiveVerfuegbar;
+                      }, 0);
+                      gesamtVerfuegbar = Math.max(gesamtVerfuegbar + lehrlingeVerfuegbar, 1);
+
+                    // Servicezeit wird NUR den nur_service Mitarbeitern zugerechnet
+                    // Für die Gesamtauslastung wird keine Servicezeit mehr hinzugefügt,
+                    // da sie bereits in der individuellen Auslastung der nur_service Mitarbeiter enthalten ist
+                    const verbleibendeServicezeit = 0; // Nicht mehr verwendet, da Servicezeit nur bei nur_service Mitarbeitern
+
+                    // Belegte Zeit = Termine + Puffer + zusätzliche Zeit durch Lehrlinge (Aufgabenbewältigung)
+                    // Servicezeit wird NICHT hinzugefügt, da sie nur den nur_service Mitarbeitern zugerechnet wird
+                    const belegtMitService = belegtMitPuffer + lehrlingeZusaetzlicheZeit;
+                    // Verfügbar = Gesamt verfügbar - Belegt (zeigt RESTLICHE verfügbare Zeit)
+                    const verfuegbar = Math.max(gesamtVerfuegbar - belegtMitService, 0);
+                    // Auslastung = (Belegt + Servicezeit + Lehrlinge-Zusatzzeit) / Gesamt verfügbar * 100
+                    const prozent = (belegtMitService / gesamtVerfuegbar) * 100;
 
               const result = {
                 belegt_minuten: belegt,
                 belegt_minuten_mit_puffer: belegtMitPuffer,
+                      belegt_minuten_mit_service: belegtMitService,
+                      servicezeit_minuten: verbleibendeServicezeit,
                 puffer_minuten: pufferMinuten,
                 verfuegbar_minuten: verfuegbar,
-                gesamt_minuten: arbeitszeit_pro_tag,
+                      gesamt_minuten: gesamtVerfuegbar,
                 auslastung_prozent: Math.round(prozent),
                 geplant_minuten: geplant,
                 in_arbeit_minuten: inArbeit,
                 abgeschlossen_minuten: abgeschlossen,
+                      mitarbeiter_auslastung: mitarbeiterAuslastung,
+                      lehrlinge_auslastung: lehrlingeAuslastung,
+                      lehrlinge: (lehrlinge || []).map(l => ({
+                        id: l.id,
+                        name: l.name,
+                        nebenzeit_prozent: l.nebenzeit_prozent,
+                        aufgabenbewaeltigung_prozent: l.aufgabenbewaeltigung_prozent
+                      })),
                 einstellungen: {
-                  mitarbeiter_anzahl: mitarbeiter,
-                  arbeitsstunden_pro_tag: arbeitsstunden,
-                  pufferzeit_minuten: pufferzeit
+                        pufferzeit_minuten: pufferzeit,
+                        servicezeit_minuten: servicezeitWert
                 },
                 abwesenheit: {
                   urlaub,
-                  krank,
-                  verfuegbare_mitarbeiter: verfuegbareMitarbeiter
+                        krank
                 }
               };
-              setCachedAuslastung(datum, mitPuffer, result);
-              res.json(result);
-            }
-          : (err, row) => {
-              if (err) {
-                res.status(500).json({ error: err.message });
-                return;
-              }
+                      setCachedAuslastung(datum, mitPuffer, result);
+                      res.json(result);
+                    }
+                    : (err, row) => {
+                      if (err) {
+                        res.status(500).json({ error: err.message });
+                        return;
+                      }
 
-              const belegt = (row && row.gesamt_minuten) ? row.gesamt_minuten : 0;
-              const geplant = (row && row.geplant_minuten) ? row.geplant_minuten : 0;
-              const inArbeit = (row && row.in_arbeit_minuten) ? row.in_arbeit_minuten : 0;
-              const abgeschlossen = (row && row.abgeschlossen_minuten) ? row.abgeschlossen_minuten : 0;
-              const verfuegbar = Math.max(arbeitszeit_pro_tag - belegt, 0);
-              const prozent = (belegt / arbeitszeit_pro_tag) * 100;
+                      // Berechne Auslastung pro Lehrling auch für diesen Callback
+                      TermineModel.getAuslastungProLehrling(datum, (lehrErr2, auslastungProLehrling2) => {
+                        if (lehrErr2) {
+                          res.status(500).json({ error: lehrErr2.message });
+                          return;
+                        }
 
-              const result = {
-                belegt_minuten: belegt,
-                verfuegbar_minuten: verfuegbar,
-                gesamt_minuten: arbeitszeit_pro_tag,
-                auslastung_prozent: Math.round(prozent),
-                geplant_minuten: geplant,
-                in_arbeit_minuten: inArbeit,
-                abgeschlossen_minuten: abgeschlossen,
-                einstellungen: {
-                  mitarbeiter_anzahl: mitarbeiter,
-                  arbeitsstunden_pro_tag: arbeitsstunden,
-                  pufferzeit_minuten: pufferzeit
-                },
-                abwesenheit: {
-                  urlaub,
-                  krank,
-                  verfuegbare_mitarbeiter: verfuegbareMitarbeiter
-                }
-              };
-              setCachedAuslastung(datum, mitPuffer, result);
-              res.json(result);
-            };
+                        // Konvertiere Lehrlings-Auslastung in das gleiche Format wie Mitarbeiter-Auslastung
+                        // WICHTIG: Stelle sicher, dass immer ein Array zurückgegeben wird
+                        const lehrlingeAuslastung2 = Array.isArray(auslastungProLehrling2)
+                          ? auslastungProLehrling2.map(la => ({
+                              lehrling_id: la.lehrling_id,
+                              lehrling_name: la.lehrling_name,
+                              arbeitsstunden_pro_tag: la.arbeitsstunden_pro_tag,
+                              nebenzeit_prozent: la.nebenzeit_prozent,
+                              aufgabenbewaeltigung_prozent: la.aufgabenbewaeltigung_prozent,
+                              verfuegbar_minuten: la.verfuegbar_minuten,
+                              belegt_minuten: la.belegt_minuten,
+                              servicezeit_minuten: la.servicezeit_minuten,
+                              auslastung_prozent: la.auslastung_prozent,
+                              geplant_minuten: la.geplant_minuten,
+                              in_arbeit_minuten: la.in_arbeit_minuten,
+                              abgeschlossen_minuten: la.abgeschlossen_minuten,
+                              termin_anzahl: la.termin_anzahl
+                            }))
+                          : [];
 
-        if (mitPuffer === 'true') {
-          TermineModel.getAuslastungMitPuffer(datum, pufferzeit, auslastungCallback);
-        } else {
-          TermineModel.getAuslastung(datum, auslastungCallback);
-        }
+                        const belegt = (row && row.gesamt_minuten) ? row.gesamt_minuten : 0;
+                        const geplant = (row && row.geplant_minuten) ? row.geplant_minuten : 0;
+                        const inArbeit = (row && row.in_arbeit_minuten) ? row.in_arbeit_minuten : 0;
+                        const abgeschlossen = (row && row.abgeschlossen_minuten) ? row.abgeschlossen_minuten : 0;
+
+                    // Berechne zusätzliche Zeit durch Lehrlinge (Aufgabenbewältigung) - verwende bereits geladene Termine
+                    let lehrlingeZusaetzlicheZeit = 0;
+                    (alleTermine || []).forEach(termin => {
+                      if (termin.arbeitszeiten_details) {
+                        try {
+                          const details = JSON.parse(termin.arbeitszeiten_details);
+                          Object.keys(details).forEach(arbeit => {
+                            if (arbeit === '_gesamt_mitarbeiter_id') return;
+                            
+                            const arbeitDetail = details[arbeit];
+                            let zeitMinuten = 0;
+                            let zugeordnetId = null;
+                            let zugeordnetTyp = null;
+                            
+                            if (typeof arbeitDetail === 'object') {
+                              zeitMinuten = arbeitDetail.zeit || 0;
+                              if (arbeitDetail.type === 'lehrling' && arbeitDetail.lehrling_id) {
+                                zugeordnetId = arbeitDetail.lehrling_id;
+                                zugeordnetTyp = 'lehrling';
+                              } else if (arbeitDetail.mitarbeiter_id) {
+                                zugeordnetId = arbeitDetail.mitarbeiter_id;
+                                zugeordnetTyp = arbeitDetail.type || 'mitarbeiter';
+                              }
+                            } else {
+                              zeitMinuten = arbeitDetail || 0;
+                            }
+                            
+                            if (!zugeordnetId && details._gesamt_mitarbeiter_id) {
+                              const gesamt = details._gesamt_mitarbeiter_id;
+                              if (typeof gesamt === 'object' && gesamt.type === 'lehrling') {
+                                zugeordnetId = gesamt.id;
+                                zugeordnetTyp = 'lehrling';
+                              }
+                            }
+                            
+                            if (zugeordnetTyp === 'lehrling' && zugeordnetId && zeitMinuten > 0) {
+                              const lehrling = (lehrlinge || []).find(l => l.id === zugeordnetId);
+                              if (lehrling) {
+                                const aufgabenbewaeltigung = lehrling.aufgabenbewaeltigung_prozent || 100;
+                                const zusaetzlicheZeit = zeitMinuten * ((aufgabenbewaeltigung / 100) - 1);
+                                lehrlingeZusaetzlicheZeit += zusaetzlicheZeit;
+                              }
+                            }
+                          });
+                        } catch (e) {
+                          // Ignoriere Parsing-Fehler
+                        }
+                      }
+                    });
+
+                    // Berechne verfügbare Zeit: Summe aller Mitarbeiter (mit Nebenzeit) - NUR Werkstatt-Mitarbeiter
+                    // WICHTIG: Verwende die vollständige Liste aller aktiven Mitarbeiter, nicht nur die mit Terminen
+                    let gesamtVerfuegbar = 0;
+                    let gesamtTerminAnzahl = 0;
+                    
+                    // Gesamtanzahl aller Termine für Servicezeit-Berechnung (nur_service Mitarbeiter bekommen Servicezeit für ALLE Termine)
+                    const gesamtTerminAnzahlFuerService = (row && row.termin_anzahl) ? row.termin_anzahl : 0;
+                    
+                    // Erstelle eine Map für schnellen Zugriff auf Termin-Daten pro Mitarbeiter
+                    const terminDatenMap2 = {};
+                    (auslastungProMitarbeiter || []).forEach(ma => {
+                      terminDatenMap2[ma.mitarbeiter_id] = ma;
+                      gesamtTerminAnzahl += ma.termin_anzahl || 0;
+                    });
+                    
+                    // Berechne für ALLE aktiven Mitarbeiter (nicht nur die mit Terminen)
+                    const mitarbeiterAuslastung = (mitarbeiter || []).map(m => {
+                      // Hole Termin-Daten für diesen Mitarbeiter (falls vorhanden)
+                      const ma = terminDatenMap2[m.id] || {
+                        mitarbeiter_id: m.id,
+                        belegt_minuten: 0,
+                        geplant_minuten: 0,
+                        in_arbeit_minuten: 0,
+                        abgeschlossen_minuten: 0,
+                        termin_anzahl: 0
+                      };
+                      
+                      const arbeitszeitMinuten = (m.arbeitsstunden_pro_tag || 8) * 60;
+                      const nebenzeitMinuten = arbeitszeitMinuten * ((m.nebenzeit_prozent || 0) / 100);
+                      const verfuegbar = arbeitszeitMinuten - nebenzeitMinuten;
+                      const terminAnzahl = ma.termin_anzahl || 0;
+                      // Prüfe nur_service: kann 1, true, "1" oder "true" sein
+                      const nurService = m.nur_service === 1 || m.nur_service === true || m.nur_service === '1' || m.nur_service === 'true';
+                      
+                      let servicezeitFuerMitarbeiter = 0;
+                      let belegt = ma.belegt_minuten || 0;
+                      let belegtMitService = belegt;
+                      let verfuegbarNachService = verfuegbar;
+                      
+                      if (nurService) {
+                        // Mitarbeiter macht nur Service - seine Zeit zählt NICHT zur Werkstattkapazität
+                        // Servicezeit wird basierend auf ALLEN Terminen des Tages berechnet (NUR für nur_service Mitarbeiter)
+                        servicezeitFuerMitarbeiter = gesamtTerminAnzahlFuerService * servicezeitWert;
+                        belegtMitService = servicezeitFuerMitarbeiter;
+                        // Für nur_service Mitarbeiter: verfuegbar_minuten = 0 (keine Werkstattkapazität)
+                        verfuegbarNachService = 0;
+                        // NICHT zu gesamtVerfuegbar hinzufügen!
+                      } else {
+                        // Mitarbeiter macht Werkstattaufgaben - zählt zur Werkstattkapazität
+                        // Servicezeit wird NICHT zu normalen Mitarbeitern hinzugefügt
+                        servicezeitFuerMitarbeiter = 0;
+                        belegtMitService = belegt;
+                        verfuegbarNachService = verfuegbar;
+                        gesamtVerfuegbar += verfuegbar; // Nur Werkstatt-Mitarbeiter zählen
+                      }
+                      
+                      const prozent = verfuegbarNachService > 0 ? (belegtMitService / verfuegbarNachService) * 100 : (nurService ? 0 : 100);
+
+                      return {
+                        mitarbeiter_id: m.id,
+                        mitarbeiter_name: m.name,
+                        arbeitsstunden_pro_tag: m.arbeitsstunden_pro_tag,
+                        nebenzeit_prozent: m.nebenzeit_prozent,
+                        nur_service: nurService,
+                        verfuegbar_minuten: verfuegbarNachService,
+                        belegt_minuten: belegtMitService,
+                        servicezeit_minuten: servicezeitFuerMitarbeiter,
+                        auslastung_prozent: Math.round(prozent),
+                        geplant_minuten: ma.geplant_minuten || 0,
+                        in_arbeit_minuten: ma.in_arbeit_minuten || 0,
+                        abgeschlossen_minuten: ma.abgeschlossen_minuten || 0,
+                        termin_anzahl: terminAnzahl
+                      };
+                    });
+
+                    // Lehrlinge erhöhen verfügbare Zeit (ihre Arbeitszeit minus Nebenzeit, reduziert durch Aufgabenbewältigung)
+                    const lehrlingeVerfuegbar = (lehrlinge || []).reduce((sum, l) => {
+                      const arbeitszeitMinuten = (l.arbeitsstunden_pro_tag || 8) * 60;
+                      const nebenzeitMinuten = arbeitszeitMinuten * ((l.nebenzeit_prozent || 0) / 100);
+                      const nettoArbeitszeitMinuten = arbeitszeitMinuten - nebenzeitMinuten;
+                      // Aufgabenbewältigung reduziert die effektive verfügbare Zeit
+                      // 150% = braucht 1.5× länger → effektive Zeit = Arbeitszeit / 1.5
+                      const aufgabenbewaeltigung = (l.aufgabenbewaeltigung_prozent || 100) / 100;
+                      const effektiveVerfuegbar = nettoArbeitszeitMinuten / aufgabenbewaeltigung;
+                      return sum + effektiveVerfuegbar;
+                    }, 0);
+                    gesamtVerfuegbar = Math.max(gesamtVerfuegbar + lehrlingeVerfuegbar, 1);
+
+                    // Servicezeit wird NUR den nur_service Mitarbeitern zugerechnet
+                    // Für die Gesamtauslastung wird keine Servicezeit mehr hinzugefügt,
+                    // da sie bereits in der individuellen Auslastung der nur_service Mitarbeiter enthalten ist
+                    const verbleibendeServicezeit = 0; // Nicht mehr verwendet, da Servicezeit nur bei nur_service Mitarbeitern
+
+                    // Belegte Zeit = Termine + zusätzliche Zeit durch Lehrlinge (Aufgabenbewältigung)
+                    // Servicezeit wird NICHT hinzugefügt, da sie nur den nur_service Mitarbeitern zugerechnet wird
+                    const belegtMitService = belegt + lehrlingeZusaetzlicheZeit;
+                    const verfuegbar = Math.max(gesamtVerfuegbar - belegtMitService, 0);
+                    const prozent = (belegtMitService / gesamtVerfuegbar) * 100;
+
+                        const result = {
+                          belegt_minuten: belegt,
+                          belegt_minuten_mit_service: belegtMitService,
+                          servicezeit_minuten: verbleibendeServicezeit,
+                          verfuegbar_minuten: verfuegbar,
+                          gesamt_minuten: gesamtVerfuegbar,
+                          auslastung_prozent: Math.round(prozent),
+                          geplant_minuten: geplant,
+                          in_arbeit_minuten: inArbeit,
+                          abgeschlossen_minuten: abgeschlossen,
+                          mitarbeiter_auslastung: mitarbeiterAuslastung,
+                          lehrlinge_auslastung: lehrlingeAuslastung2,
+                          lehrlinge: (lehrlinge || []).map(l => ({
+                            id: l.id,
+                            name: l.name,
+                            nebenzeit_prozent: l.nebenzeit_prozent,
+                            aufgabenbewaeltigung_prozent: l.aufgabenbewaeltigung_prozent
+                          })),
+                          einstellungen: {
+                            pufferzeit_minuten: pufferzeit,
+                            servicezeit_minuten: servicezeitWert
+                          },
+                          abwesenheit: {
+                            urlaub,
+                            krank
+                          }
+                        };
+                        setCachedAuslastung(datum, mitPuffer, result);
+                        res.json(result);
+                      });
+                    };
+
+                  if (mitPuffer === 'true') {
+                    TermineModel.getAuslastungMitPuffer(datum, pufferzeit, auslastungCallback);
+                  } else {
+                    TermineModel.getAuslastung(datum, auslastungCallback);
+                  }
+                });
+              });
+            });
+          });
+        });
       });
     });
   }
@@ -324,7 +745,7 @@ class TermineController {
       return res.status(400).json({ error: 'Gültige Dauer ist erforderlich' });
     }
 
-    const fallbackSettings = { mitarbeiter_anzahl: 1, arbeitsstunden_pro_tag: 8, pufferzeit_minuten: 15 };
+    const fallbackSettings = { pufferzeit_minuten: 15 };
 
     EinstellungenModel.getWerkstatt((settingsErr, einstellungen) => {
       if (settingsErr) {
@@ -332,10 +753,15 @@ class TermineController {
         return;
       }
 
-      const mitarbeiter = einstellungen?.mitarbeiter_anzahl || fallbackSettings.mitarbeiter_anzahl;
-      const arbeitsstunden = einstellungen?.arbeitsstunden_pro_tag || fallbackSettings.arbeitsstunden_pro_tag;
       const pufferzeit = einstellungen?.pufferzeit_minuten || fallbackSettings.pufferzeit_minuten;
-      const arbeitszeit_pro_mitarbeiter = arbeitsstunden * 60;
+      const servicezeit = einstellungen?.servicezeit_minuten || 10;
+
+      // Lade aktive Mitarbeiter und berechne verfügbare Zeit
+      MitarbeiterModel.getAktive((mitErr, mitarbeiter) => {
+        if (mitErr) {
+          res.status(500).json({ error: mitErr.message });
+          return;
+        }
 
       AbwesenheitenModel.getByDatum(datum, (absErr, abwesenheit) => {
         if (absErr) {
@@ -345,8 +771,17 @@ class TermineController {
 
         const urlaub = abwesenheit?.urlaub || 0;
         const krank = abwesenheit?.krank || 0;
-        const verfuegbareMitarbeiter = Math.max(mitarbeiter - urlaub - krank, 0);
-        const arbeitszeit_pro_tag = Math.max(verfuegbareMitarbeiter * arbeitszeit_pro_mitarbeiter, 1);
+          const mitarbeiterAnzahl = (mitarbeiter || []).length;
+          const verfuegbareMitarbeiter = Math.max(mitarbeiterAnzahl - urlaub - krank, 0);
+          
+          // Berechne verfügbare Zeit aus allen Mitarbeitern
+          let arbeitszeit_pro_tag = 0;
+          (mitarbeiter || []).forEach(ma => {
+            const arbeitszeitMinuten = (ma.arbeitsstunden_pro_tag || 8) * 60;
+            const nebenzeitMinuten = arbeitszeitMinuten * ((ma.nebenzeit_prozent || 0) / 100);
+            arbeitszeit_pro_tag += arbeitszeitMinuten - nebenzeitMinuten;
+          });
+          arbeitszeit_pro_tag = Math.max(arbeitszeit_pro_tag, 1);
 
         // Hole aktuelle Auslastung mit Pufferzeiten
         TermineModel.getAuslastungMitPuffer(datum, pufferzeit, (err, row) => {
@@ -359,10 +794,12 @@ class TermineController {
           const aktiveTermine = (row && row.aktive_termine) ? row.aktive_termine : 0;
           // Neuer Termin würde zusätzliche Pufferzeit benötigen (wenn es bereits aktive Termine gibt)
           const zusaetzlichePufferzeit = aktiveTermine > 0 ? pufferzeit : 0;
+          // Servicezeit wird NICHT berücksichtigt, da sie nur den nur_service Mitarbeitern zugerechnet wird
           const neueBelegung = aktuellBelegt + geschaetzteZeit + zusaetzlichePufferzeit;
+          const verfuegbarNachService = arbeitszeit_pro_tag;
           
           const aktuelleAuslastung = (aktuellBelegt / arbeitszeit_pro_tag) * 100;
-          const neueAuslastung = (neueBelegung / arbeitszeit_pro_tag) * 100;
+            const neueAuslastung = (neueBelegung / verfuegbarNachService) * 100;
 
           let warnung = null;
           let blockiert = false;
@@ -382,14 +819,15 @@ class TermineController {
             neue_auslastung_prozent: Math.round(neueAuslastung),
             aktuell_belegt_minuten: aktuellBelegt,
             neue_belegung_minuten: neueBelegung,
-            verfuegbar_minuten: arbeitszeit_pro_tag,
+              verfuegbar_minuten: verfuegbarNachService,
             geschaetzte_zeit: geschaetzteZeit,
             einstellungen: {
-              mitarbeiter_anzahl: mitarbeiter,
-              arbeitsstunden_pro_tag: arbeitsstunden,
+                mitarbeiter_anzahl: mitarbeiterAnzahl,
               pufferzeit_minuten: pufferzeit,
+                servicezeit_minuten: servicezeit,
               verfuegbare_mitarbeiter: verfuegbareMitarbeiter
             }
+            });
           });
         });
       });
@@ -408,7 +846,7 @@ class TermineController {
     }
 
     // Verwende die gleiche Logik wie checkAvailability
-    const fallbackSettings = { mitarbeiter_anzahl: 1, arbeitsstunden_pro_tag: 8, pufferzeit_minuten: 15 };
+    const fallbackSettings = { pufferzeit_minuten: 15 };
 
     EinstellungenModel.getWerkstatt((settingsErr, einstellungen) => {
       if (settingsErr) {
@@ -416,10 +854,15 @@ class TermineController {
         return;
       }
 
-      const mitarbeiter = einstellungen?.mitarbeiter_anzahl || fallbackSettings.mitarbeiter_anzahl;
-      const arbeitsstunden = einstellungen?.arbeitsstunden_pro_tag || fallbackSettings.arbeitsstunden_pro_tag;
       const pufferzeit = einstellungen?.pufferzeit_minuten || fallbackSettings.pufferzeit_minuten;
-      const arbeitszeit_pro_mitarbeiter = arbeitsstunden * 60;
+      const servicezeit = einstellungen?.servicezeit_minuten || 10;
+
+      // Lade aktive Mitarbeiter und berechne verfügbare Zeit
+      MitarbeiterModel.getAktive((mitErr, mitarbeiter) => {
+        if (mitErr) {
+          res.status(500).json({ error: mitErr.message });
+          return;
+        }
 
       AbwesenheitenModel.getByDatum(datum, (absErr, abwesenheit) => {
         if (absErr) {
@@ -429,8 +872,17 @@ class TermineController {
 
         const urlaub = abwesenheit?.urlaub || 0;
         const krank = abwesenheit?.krank || 0;
-        const verfuegbareMitarbeiter = Math.max(mitarbeiter - urlaub - krank, 0);
-        const arbeitszeit_pro_tag = Math.max(verfuegbareMitarbeiter * arbeitszeit_pro_mitarbeiter, 1);
+          const mitarbeiterAnzahl = (mitarbeiter || []).length;
+          const verfuegbareMitarbeiter = Math.max(mitarbeiterAnzahl - urlaub - krank, 0);
+          
+          // Berechne verfügbare Zeit aus allen Mitarbeitern
+          let arbeitszeit_pro_tag = 0;
+          (mitarbeiter || []).forEach(ma => {
+            const arbeitszeitMinuten = (ma.arbeitsstunden_pro_tag || 8) * 60;
+            const nebenzeitMinuten = arbeitszeitMinuten * ((ma.nebenzeit_prozent || 0) / 100);
+            arbeitszeit_pro_tag += arbeitszeitMinuten - nebenzeitMinuten;
+          });
+          arbeitszeit_pro_tag = Math.max(arbeitszeit_pro_tag, 1);
 
         // Hole aktuelle Auslastung mit Pufferzeiten
         TermineModel.getAuslastungMitPuffer(datum, pufferzeit, (err, row) => {
@@ -443,8 +895,10 @@ class TermineController {
           const aktiveTermine = (row && row.aktive_termine) ? row.aktive_termine : 0;
           // Neuer Termin würde zusätzliche Pufferzeit benötigen
           const zusaetzlichePufferzeit = aktiveTermine > 0 ? pufferzeit : 0;
+          // Servicezeit wird NICHT berücksichtigt, da sie nur den nur_service Mitarbeitern zugerechnet wird
           const neueBelegung = aktuellBelegt + geschaetzte_zeit + zusaetzlichePufferzeit;
-          const neueAuslastung = (neueBelegung / arbeitszeit_pro_tag) * 100;
+          const verfuegbarNachService = arbeitszeit_pro_tag;
+          const neueAuslastung = (neueBelegung / verfuegbarNachService) * 100;
 
           let warnung = null;
           let blockiert = false;
@@ -461,8 +915,9 @@ class TermineController {
             blockiert: blockiert,
             warnung: warnung,
             neue_auslastung_prozent: Math.round(neueAuslastung),
-            verfuegbar_minuten: arbeitszeit_pro_tag,
+              verfuegbar_minuten: verfuegbarNachService,
             belegt_minuten: neueBelegung
+            });
           });
         });
       });
@@ -481,7 +936,7 @@ class TermineController {
       return res.status(400).json({ error: 'Gültige Dauer ist erforderlich' });
     }
 
-    const fallbackSettings = { mitarbeiter_anzahl: 1, arbeitsstunden_pro_tag: 8, pufferzeit_minuten: 15 };
+    const fallbackSettings = { pufferzeit_minuten: 15 };
 
     EinstellungenModel.getWerkstatt((settingsErr, einstellungen) => {
       if (settingsErr) {
@@ -489,10 +944,26 @@ class TermineController {
         return;
       }
 
-      const mitarbeiter = einstellungen?.mitarbeiter_anzahl || fallbackSettings.mitarbeiter_anzahl;
-      const arbeitsstunden = einstellungen?.arbeitsstunden_pro_tag || fallbackSettings.arbeitsstunden_pro_tag;
       const pufferzeit = einstellungen?.pufferzeit_minuten || fallbackSettings.pufferzeit_minuten;
-      const arbeitszeit_pro_mitarbeiter = arbeitsstunden * 60;
+      const servicezeit = einstellungen?.servicezeit_minuten || 10;
+
+      // Lade aktive Mitarbeiter und berechne verfügbare Zeit
+      MitarbeiterModel.getAktive((mitErr, mitarbeiter) => {
+        if (mitErr) {
+          res.status(500).json({ error: mitErr.message });
+          return;
+        }
+
+        const mitarbeiterAnzahl = (mitarbeiter || []).length;
+        
+        // Berechne verfügbare Zeit aus allen Mitarbeitern
+        let arbeitszeit_pro_tag = 0;
+        (mitarbeiter || []).forEach(ma => {
+          const arbeitszeitMinuten = (ma.arbeitsstunden_pro_tag || 8) * 60;
+          const nebenzeitMinuten = arbeitszeitMinuten * ((ma.nebenzeit_prozent || 0) / 100);
+          arbeitszeit_pro_tag += arbeitszeitMinuten - nebenzeitMinuten;
+        });
+        arbeitszeit_pro_tag = Math.max(arbeitszeit_pro_tag, 1);
 
       AbwesenheitenModel.getByDatum(datum, (absErr, abwesenheit) => {
         if (absErr) {
@@ -502,8 +973,7 @@ class TermineController {
 
         const urlaub = abwesenheit?.urlaub || 0;
         const krank = abwesenheit?.krank || 0;
-        const verfuegbareMitarbeiter = Math.max(mitarbeiter - urlaub - krank, 0);
-        const arbeitszeit_pro_tag = Math.max(verfuegbareMitarbeiter * arbeitszeit_pro_mitarbeiter, 1);
+          const verfuegbareMitarbeiter = Math.max(mitarbeiterAnzahl - urlaub - krank, 0);
 
         // Hole aktuelle Termine für das Datum
         TermineModel.getTermineByDatum(datum, (err, termine) => {
@@ -523,12 +993,13 @@ class TermineController {
             }
           });
 
-          // Füge Pufferzeiten hinzu
+          // Füge Pufferzeiten hinzu (Servicezeit wird NICHT berücksichtigt, da sie nur den nur_service Mitarbeitern zugerechnet wird)
           const pufferZeitGesamt = Math.max((aktiveTermine - 1) * pufferzeit, 0);
           aktuelleBelegung += pufferZeitGesamt;
 
           // Berechne verfügbare Kapazität
-          const verfuegbar = arbeitszeit_pro_tag - aktuelleBelegung;
+          const verfuegbarNachService = arbeitszeit_pro_tag;
+          const verfuegbar = verfuegbarNachService - aktuelleBelegung;
           const benoetigteZeit = geschaetzteZeit + (aktiveTermine > 0 ? pufferzeit : 0);
 
           // Prüfe ob am gewünschten Datum Platz ist
@@ -537,7 +1008,7 @@ class TermineController {
             vorschlaege.push({
               datum: datum,
               verfuegbar_minuten: verfuegbar,
-              auslastung_nach_termin: Math.round(((aktuelleBelegung + benoetigteZeit) / arbeitszeit_pro_tag) * 100),
+              auslastung_nach_termin: Math.round(((aktuelleBelegung + benoetigteZeit) / verfuegbarNachService) * 100),
               empfohlen: true,
               grund: 'Verfügbar am gewünschten Datum'
             });
@@ -571,8 +1042,9 @@ class TermineController {
             AbwesenheitenModel.getByDatum(altDatum, (altAbsErr, altAbwesenheit) => {
               const altUrlaub = altAbwesenheit?.urlaub || 0;
               const altKrank = altAbwesenheit?.krank || 0;
-              const altVerfuegbareMitarbeiter = Math.max(mitarbeiter - altUrlaub - altKrank, 0);
-              const altArbeitszeit_pro_tag = Math.max(altVerfuegbareMitarbeiter * arbeitszeit_pro_mitarbeiter, 1);
+              const altVerfuegbareMitarbeiter = Math.max(mitarbeiterAnzahl - altUrlaub - altKrank, 0);
+              // Verwende die gleiche arbeitszeit_pro_tag wie für das Hauptdatum
+              const altArbeitszeit_pro_tag = arbeitszeit_pro_tag;
 
               TermineModel.getTermineByDatum(altDatum, (altErr, altTermine) => {
                 if (altErr) {
@@ -590,16 +1062,18 @@ class TermineController {
                 });
 
                 const altPufferZeitGesamt = Math.max((altAktiveTermine - 1) * pufferzeit, 0);
+                // Servicezeit wird NICHT berücksichtigt, da sie nur den nur_service Mitarbeitern zugerechnet wird
                 altBelegung += altPufferZeitGesamt;
 
-                const altVerfuegbar = altArbeitszeit_pro_tag - altBelegung;
+                const altVerfuegbarNachService = altArbeitszeit_pro_tag;
+                const altVerfuegbar = altVerfuegbarNachService - altBelegung;
                 const altBenoetigteZeit = geschaetzteZeit + (altAktiveTermine > 0 ? pufferzeit : 0);
 
                 if (altVerfuegbar >= altBenoetigteZeit && vorschlaege.length < maxAlternativen + 1) {
                   vorschlaege.push({
                     datum: altDatum,
                     verfuegbar_minuten: altVerfuegbar,
-                    auslastung_nach_termin: Math.round(((altBelegung + altBenoetigteZeit) / altArbeitszeit_pro_tag) * 100),
+                    auslastung_nach_termin: Math.round(((altBelegung + altBenoetigteZeit) / altVerfuegbarNachService) * 100),
                     empfohlen: false,
                     grund: `Alternative: ${altVerfuegbar} Minuten verfügbar`
                   });
@@ -619,10 +1093,75 @@ class TermineController {
               benoetigte_zeit_minuten: geschaetzteZeit
             });
           }
+          });
         });
       });
     });
   }
+
+  // Papierkorb-Funktionen
+  static getDeleted(req, res) {
+    TermineModel.getDeleted((err, rows) => {
+      if (err) {
+        res.status(500).json({ error: err.message });
+      } else {
+        res.json(rows || []);
+      }
+    });
+  }
+
+  static restore(req, res) {
+    const { id } = req.params;
+
+    // Hole den Termin zuerst, um das Datum für Cache-Invalidierung zu bekommen
+    TermineModel.getById(id, (err, termin) => {
+      if (err) {
+        return res.status(500).json({ error: err.message });
+      }
+
+      if (!termin) {
+        return res.status(404).json({ error: 'Termin nicht gefunden' });
+      }
+
+      TermineModel.restore(id, (restoreErr, result) => {
+        if (restoreErr) {
+          res.status(500).json({ error: restoreErr.message });
+        } else {
+          // Cache invalidierten
+          invalidateAuslastungCache(termin.datum);
+          res.json({ message: 'Termin wiederhergestellt', changes: result.changes });
+        }
+      });
+    });
+  }
+
+  static permanentDelete(req, res) {
+    const { id } = req.params;
+
+    // Hole den Termin zuerst, um das Datum für Cache-Invalidierung zu bekommen
+    TermineModel.getById(id, (err, termin) => {
+      if (err) {
+        return res.status(500).json({ error: err.message });
+      }
+
+      if (!termin) {
+        return res.status(404).json({ error: 'Termin nicht gefunden' });
+      }
+
+      TermineModel.permanentDelete(id, (deleteErr, result) => {
+        if (deleteErr) {
+          res.status(500).json({ error: deleteErr.message });
+        } else {
+          // Cache invalidierten
+          invalidateAuslastungCache(termin.datum);
+          res.json({ message: 'Termin permanent gelöscht', changes: result.changes });
+        }
+      });
+    });
+  }
 }
+
+// Exportiere auch die Cache-Invalidierungsfunktion für andere Controller
+TermineController.invalidateAuslastungCache = invalidateAuslastungCache;
 
 module.exports = TermineController;
