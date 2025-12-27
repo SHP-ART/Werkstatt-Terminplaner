@@ -91,6 +91,18 @@ class TermineService {
   static async delete(id) {
     return ApiService.delete(`/termine/${id}`);
   }
+
+  static async checkAvailability(datum, dauer) {
+    return ApiService.get(`/termine/verfuegbarkeit?datum=${datum}&dauer=${dauer}`);
+  }
+
+  static async validate(termin) {
+    return ApiService.post('/termine/validate', termin);
+  }
+
+  static async getVorschlaege(datum, dauer) {
+    return ApiService.get(`/termine/vorschlaege?datum=${datum}&dauer=${dauer}`);
+  }
 }
 
 class ArbeitszeitenService {

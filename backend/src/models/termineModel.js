@@ -54,6 +54,18 @@ class TermineModel {
     db.all(query, [datum], callback);
   }
 
+  static getById(id, callback) {
+    const query = `
+      SELECT t.*,
+             COALESCE(k.name, t.kunde_name) as kunde_name,
+             COALESCE(k.telefon, t.kunde_telefon) as kunde_telefon
+      FROM termine t
+      LEFT JOIN kunden k ON t.kunde_id = k.id
+      WHERE t.id = ?
+    `;
+    db.get(query, [id], callback);
+  }
+
   static create(termin, callback) {
     const {
       kunde_id,
@@ -122,12 +134,22 @@ class TermineModel {
            arbeit = COALESCE(?, arbeit)
        WHERE id = ?`,
       [tatsaechliche_zeit, status, geschaetzte_zeit, arbeit, id],
-      callback
+      function(err) {
+        if (err) {
+          return callback(err);
+        }
+        callback(null, { changes: this.changes });
+      }
     );
   }
 
   static delete(id, callback) {
-    db.run('DELETE FROM termine WHERE id = ?', [id], callback);
+    db.run('DELETE FROM termine WHERE id = ?', [id], function(err) {
+      if (err) {
+        return callback(err);
+      }
+      callback(null, { changes: this.changes });
+    });
   }
 
   static getAuslastung(datum, callback) {
@@ -136,11 +158,79 @@ class TermineModel {
         SUM(COALESCE(tatsaechliche_zeit, geschaetzte_zeit)) as gesamt_minuten,
         SUM(CASE WHEN COALESCE(status, 'geplant') = 'geplant' THEN COALESCE(tatsaechliche_zeit, geschaetzte_zeit) ELSE 0 END) as geplant_minuten,
         SUM(CASE WHEN status = 'in_arbeit' THEN COALESCE(tatsaechliche_zeit, geschaetzte_zeit) ELSE 0 END) as in_arbeit_minuten,
-        SUM(CASE WHEN status = 'abgeschlossen' THEN COALESCE(tatsaechliche_zeit, geschaetzte_zeit) ELSE 0 END) as abgeschlossen_minuten
+        SUM(CASE WHEN status = 'abgeschlossen' THEN COALESCE(tatsaechliche_zeit, geschaetzte_zeit) ELSE 0 END) as abgeschlossen_minuten,
+        COUNT(*) as termin_anzahl
       FROM termine
       WHERE datum = ?
     `;
     db.get(query, [datum], callback);
+  }
+
+  static getAuslastungMitPuffer(datum, pufferzeitMinuten, callback) {
+    // Berechnet Auslastung mit Pufferzeiten zwischen Terminen
+    // Pufferzeit wird nur für aktive Termine (nicht abgeschlossen) berücksichtigt
+    const query = `
+      SELECT
+        SUM(COALESCE(tatsaechliche_zeit, geschaetzte_zeit)) as gesamt_minuten,
+        SUM(CASE WHEN COALESCE(status, 'geplant') = 'geplant' THEN COALESCE(tatsaechliche_zeit, geschaetzte_zeit) ELSE 0 END) as geplant_minuten,
+        SUM(CASE WHEN status = 'in_arbeit' THEN COALESCE(tatsaechliche_zeit, geschaetzte_zeit) ELSE 0 END) as in_arbeit_minuten,
+        SUM(CASE WHEN status = 'abgeschlossen' THEN COALESCE(tatsaechliche_zeit, geschaetzte_zeit) ELSE 0 END) as abgeschlossen_minuten,
+        COUNT(*) as termin_anzahl,
+        SUM(CASE WHEN COALESCE(status, 'geplant') != 'abgeschlossen' THEN 1 ELSE 0 END) as aktive_termine
+      FROM termine
+      WHERE datum = ?
+    `;
+    db.get(query, [datum], (err, row) => {
+      if (err) {
+        return callback(err);
+      }
+
+      const pufferzeit = pufferzeitMinuten || 15;
+      const aktiveTermine = (row && row.aktive_termine) ? row.aktive_termine : 0;
+      // Pufferzeit wird zwischen Terminen hinzugefügt (n-1 Pufferzeiten für n Termine)
+      const pufferZeitGesamt = Math.max((aktiveTermine - 1) * pufferzeit, 0);
+
+      const gesamtMinuten = (row && row.gesamt_minuten) ? row.gesamt_minuten : 0;
+      const gesamtMitPuffer = gesamtMinuten + pufferZeitGesamt;
+
+      callback(null, {
+        ...row,
+        gesamt_minuten: gesamtMinuten,
+        gesamt_minuten_mit_puffer: gesamtMitPuffer,
+        puffer_minuten: pufferZeitGesamt,
+        aktive_termine: aktiveTermine
+      });
+    });
+  }
+
+  static checkAvailability(datum, geschaetzteZeit, callback) {
+    // Diese Methode prüft die Verfügbarkeit für einen neuen Termin
+    // Sie verwendet die gleiche Logik wie getAuslastung, aber berechnet
+    // die Auslastung mit dem neuen Termin
+    this.getAuslastung(datum, (err, row) => {
+      if (err) {
+        return callback(err);
+      }
+      
+      const aktuellBelegt = (row && row.gesamt_minuten) ? row.gesamt_minuten : 0;
+      const neueBelegung = aktuellBelegt + (geschaetzteZeit || 0);
+      
+      callback(null, {
+        aktuell_belegt: aktuellBelegt,
+        neue_belegung: neueBelegung,
+        geschaetzte_zeit: geschaetzteZeit
+      });
+    });
+  }
+
+  static getTermineByDatum(datum, callback) {
+    const query = `
+      SELECT id, geschaetzte_zeit, tatsaechliche_zeit, status, datum
+      FROM termine
+      WHERE datum = ?
+      ORDER BY erstellt_am
+    `;
+    db.all(query, [datum], callback);
   }
 }
 

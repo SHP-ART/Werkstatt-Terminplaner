@@ -145,19 +145,44 @@ function initializeDatabase() {
     db.run(`CREATE TABLE IF NOT EXISTS werkstatt_einstellungen (
       id INTEGER PRIMARY KEY CHECK (id = 1),
       mitarbeiter_anzahl INTEGER DEFAULT 1,
-      arbeitsstunden_pro_tag INTEGER DEFAULT 8
+      arbeitsstunden_pro_tag INTEGER DEFAULT 8,
+      pufferzeit_minuten INTEGER DEFAULT 15
     )`);
 
     db.run(
-      `INSERT OR IGNORE INTO werkstatt_einstellungen (id, mitarbeiter_anzahl, arbeitsstunden_pro_tag)
-       VALUES (1, 1, 8)`
+      `INSERT OR IGNORE INTO werkstatt_einstellungen (id, mitarbeiter_anzahl, arbeitsstunden_pro_tag, pufferzeit_minuten)
+       VALUES (1, 1, 8, 15)`
     );
+
+    // Füge Pufferzeit-Spalte hinzu falls sie nicht existiert
+    db.run(`ALTER TABLE werkstatt_einstellungen ADD COLUMN pufferzeit_minuten INTEGER DEFAULT 15`, (err) => {
+      if (err && !err.message.includes('duplicate column')) {
+        console.error('Fehler beim Hinzufügen von pufferzeit_minuten:', err);
+      }
+    });
 
     db.run(`CREATE TABLE IF NOT EXISTS abwesenheiten (
       datum TEXT PRIMARY KEY,
       urlaub INTEGER DEFAULT 0,
       krank INTEGER DEFAULT 0
     )`);
+
+    // Erstelle Indizes für bessere Performance
+    db.run(`CREATE INDEX IF NOT EXISTS idx_termine_datum ON termine(datum)`, (err) => {
+      if (err) console.error('Fehler beim Erstellen des Index idx_termine_datum:', err);
+    });
+
+    db.run(`CREATE INDEX IF NOT EXISTS idx_termine_status ON termine(status)`, (err) => {
+      if (err) console.error('Fehler beim Erstellen des Index idx_termine_status:', err);
+    });
+
+    db.run(`CREATE INDEX IF NOT EXISTS idx_termine_kunde_id ON termine(kunde_id)`, (err) => {
+      if (err) console.error('Fehler beim Erstellen des Index idx_termine_kunde_id:', err);
+    });
+
+    db.run(`CREATE INDEX IF NOT EXISTS idx_termine_datum_status ON termine(datum, status)`, (err) => {
+      if (err) console.error('Fehler beim Erstellen des Index idx_termine_datum_status:', err);
+    });
   });
 }
 

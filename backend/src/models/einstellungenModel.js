@@ -6,13 +6,14 @@ class EinstellungenModel {
   }
 
   static updateWerkstatt(data, callback) {
-    const { mitarbeiter_anzahl, arbeitsstunden_pro_tag } = data;
+    const { mitarbeiter_anzahl, arbeitsstunden_pro_tag, pufferzeit_minuten } = data;
+    const pufferzeit = pufferzeit_minuten !== undefined ? pufferzeit_minuten : 15;
 
     db.run(
       `UPDATE werkstatt_einstellungen
-       SET mitarbeiter_anzahl = ?, arbeitsstunden_pro_tag = ?
+       SET mitarbeiter_anzahl = ?, arbeitsstunden_pro_tag = ?, pufferzeit_minuten = ?
        WHERE id = 1`,
-      [mitarbeiter_anzahl, arbeitsstunden_pro_tag],
+      [mitarbeiter_anzahl, arbeitsstunden_pro_tag, pufferzeit],
       function(err) {
         if (err) {
           callback(err);
@@ -23,9 +24,9 @@ class EinstellungenModel {
         if (this.changes === 0) {
           db.run(
             `INSERT OR REPLACE INTO werkstatt_einstellungen
-             (id, mitarbeiter_anzahl, arbeitsstunden_pro_tag)
-             VALUES (1, ?, ?)`,
-            [mitarbeiter_anzahl, arbeitsstunden_pro_tag],
+             (id, mitarbeiter_anzahl, arbeitsstunden_pro_tag, pufferzeit_minuten)
+             VALUES (1, ?, ?, ?)`,
+            [mitarbeiter_anzahl, arbeitsstunden_pro_tag, pufferzeit],
             callback
           );
         } else {

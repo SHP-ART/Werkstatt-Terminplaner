@@ -36,12 +36,22 @@ class KundenModel {
     db.run(
       'UPDATE kunden SET name = ?, telefon = ?, email = ?, adresse = ?, locosoft_id = ? WHERE id = ?',
       [name, telefon, email, adresse, locosoft_id, id],
-      callback
+      function(err) {
+        if (err) {
+          return callback(err);
+        }
+        callback(null, { changes: this.changes });
+      }
     );
   }
 
   static delete(id, callback) {
-    db.run('DELETE FROM kunden WHERE id = ?', [id], callback);
+    db.run('DELETE FROM kunden WHERE id = ?', [id], function(err) {
+      if (err) {
+        return callback(err);
+      }
+      callback(null, { changes: this.changes });
+    });
   }
 }
 

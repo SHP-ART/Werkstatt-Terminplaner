@@ -61,11 +61,15 @@ class App {
     document.getElementById('werkstattSettingsForm').addEventListener('submit', (e) => this.handleWerkstattSettingsSubmit(e));
     document.getElementById('abwesenheitForm').addEventListener('submit', (e) => this.handleAbwesenheitSubmit(e));
 
-    document.getElementById('arbeitEingabe').addEventListener('input', (e) => {
-      this.updateZeitschaetzung();
-      this.handleArbeitAutocomplete(e);
-    });
-    document.getElementById('arbeitEingabe').addEventListener('keydown', (e) => this.handleArbeitKeydown(e));
+    const arbeitEingabe = document.getElementById('arbeitEingabe');
+    if (arbeitEingabe) {
+      arbeitEingabe.addEventListener('input', (e) => {
+        this.updateZeitschaetzung();
+        this.handleArbeitAutocomplete(e);
+        this.validateTerminEchtzeit();
+      });
+      arbeitEingabe.addEventListener('keydown', (e) => this.handleArbeitKeydown(e));
+    }
     document.getElementById('filterDatum').addEventListener('change', () => this.loadTermine());
     document.getElementById('alleTermineBtn').addEventListener('click', () => this.showAllTermine());
     document.getElementById('auslastungDatum').addEventListener('change', () => this.loadAuslastung());
@@ -80,6 +84,12 @@ class App {
       }
     });
     document.getElementById('abholung_typ').addEventListener('change', () => this.toggleAbholungDetails());
+
+    // Echtzeit-Validierung für Termin-Formular
+    const datumInput = document.getElementById('datum');
+    if (datumInput) {
+      datumInput.addEventListener('change', () => this.validateTerminEchtzeit());
+    }
 
     const createBackupBtn = document.getElementById('createBackupBtn');
     if (createBackupBtn) {
@@ -473,6 +483,138 @@ class App {
     }
   }
 
+  async validateTerminEchtzeit() {
+    const datum = document.getElementById('datum')?.value;
+    const arbeitText = document.getElementById('arbeitEingabe')?.value.trim();
+
+    if (!datum || !arbeitText) {
+      this.hideTerminWarnung();
+      return;
+    }
+
+    const arbeitenListe = this.parseArbeiten(arbeitText);
+    if (arbeitenListe.length === 0) {
+      this.hideTerminWarnung();
+      return;
+    }
+
+    const geschaetzteZeit = this.getGeschaetzteZeit(arbeitenListe);
+    if (!geschaetzteZeit || geschaetzteZeit <= 0) {
+      this.hideTerminWarnung();
+      return;
+    }
+
+    try {
+      const validation = await TermineService.checkAvailability(datum, geschaetzteZeit);
+      this.showTerminWarnung(validation);
+    } catch (error) {
+      console.error('Fehler bei Echtzeit-Validierung:', error);
+      this.hideTerminWarnung();
+    }
+  }
+
+  async showTerminVorschlaege() {
+    const datum = document.getElementById('datum')?.value;
+    const arbeitText = document.getElementById('arbeitEingabe')?.value.trim();
+
+    if (!datum) {
+      alert('Bitte wählen Sie zuerst ein Datum.');
+      return;
+    }
+
+    if (!arbeitText) {
+      alert('Bitte geben Sie zuerst die Arbeiten ein.');
+      return;
+    }
+
+    const arbeitenListe = this.parseArbeiten(arbeitText);
+    if (arbeitenListe.length === 0) {
+      alert('Bitte geben Sie mindestens eine Arbeit ein.');
+      return;
+    }
+
+    const geschaetzteZeit = this.getGeschaetzteZeit(arbeitenListe);
+    if (!geschaetzteZeit || geschaetzteZeit <= 0) {
+      alert('Bitte geben Sie gültige Arbeiten ein.');
+      return;
+    }
+
+    try {
+      const vorschlaege = await TermineService.getVorschlaege(datum, geschaetzteZeit);
+      this.displayTerminVorschlaege(vorschlaege);
+    } catch (error) {
+      console.error('Fehler beim Laden der Vorschläge:', error);
+      alert('Fehler beim Laden der Terminvorschläge: ' + (error.message || 'Unbekannter Fehler'));
+    }
+  }
+
+  displayTerminVorschlaege(vorschlaege) {
+    const vorschlaegeListe = vorschlaege.vorschlaege || [];
+    
+    if (vorschlaegeListe.length === 0) {
+      alert('Keine verfügbaren Termine gefunden für die nächsten 7 Tage.');
+      return;
+    }
+
+    let message = 'Verfügbare Termine:\n\n';
+    vorschlaegeListe.forEach((vorschlag, index) => {
+      const datumFormatiert = new Date(vorschlag.datum + 'T00:00:00').toLocaleDateString('de-DE', {
+        weekday: 'long',
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric'
+      });
+      const stunden = (vorschlag.verfuegbar_minuten / 60).toFixed(1);
+      const empfehlung = vorschlag.empfohlen ? '⭐ EMPFOHLEN' : '';
+      message += `${index + 1}. ${datumFormatiert}\n`;
+      message += `   Verfügbar: ${stunden} Stunden (${vorschlag.auslastung_nach_termin}% Auslastung)\n`;
+      message += `   ${empfehlung}\n\n`;
+    });
+
+    const auswahl = prompt(message + '\nGeben Sie die Nummer des gewünschten Termins ein (oder 0 zum Abbrechen):');
+    const nummer = parseInt(auswahl, 10);
+
+    if (nummer > 0 && nummer <= vorschlaegeListe.length) {
+      const gewaehlterVorschlag = vorschlaegeListe[nummer - 1];
+      document.getElementById('datum').value = gewaehlterVorschlag.datum;
+      this.validateTerminEchtzeit();
+      alert(`Datum auf ${new Date(gewaehlterVorschlag.datum + 'T00:00:00').toLocaleDateString('de-DE')} gesetzt.`);
+    }
+  }
+
+  showTerminWarnung(validation) {
+    let warnungElement = document.getElementById('terminWarnung');
+    if (!warnungElement) {
+      // Erstelle Warnungselement falls es nicht existiert
+      const form = document.getElementById('terminForm');
+      warnungElement = document.createElement('div');
+      warnungElement.id = 'terminWarnung';
+      warnungElement.style.cssText = 'padding: 10px; margin: 10px 0; border-radius: 4px; font-weight: bold;';
+      form.insertBefore(warnungElement, form.firstChild);
+    }
+
+    if (validation.blockiert) {
+      warnungElement.style.backgroundColor = '#ffebee';
+      warnungElement.style.color = '#c62828';
+      warnungElement.style.border = '2px solid #c62828';
+      warnungElement.textContent = `⚠️ ${validation.warnung} (${validation.neue_auslastung_prozent}% Auslastung)`;
+    } else if (validation.warnung) {
+      warnungElement.style.backgroundColor = '#fff3e0';
+      warnungElement.style.color = '#e65100';
+      warnungElement.style.border = '2px solid #ff9800';
+      warnungElement.textContent = `⚠️ ${validation.warnung} (${validation.neue_auslastung_prozent}% Auslastung)`;
+    } else {
+      this.hideTerminWarnung();
+    }
+  }
+
+  hideTerminWarnung() {
+    const warnungElement = document.getElementById('terminWarnung');
+    if (warnungElement) {
+      warnungElement.style.display = 'none';
+    }
+  }
+
   async handleTerminSubmit(e) {
     e.preventDefault();
 
@@ -558,6 +700,32 @@ class App {
     }
 
     try {
+      // Validiere Termin vor dem Erstellen
+      const validation = await TermineService.validate({
+        datum: termin.datum,
+        geschaetzte_zeit: termin.geschaetzte_zeit
+      });
+
+      if (validation.blockiert) {
+        const bestaetigung = confirm(
+          `${validation.warnung}\n\n` +
+          `Aktuelle Auslastung würde auf ${validation.neue_auslastung_prozent}% steigen.\n` +
+          `Möchten Sie den Termin trotzdem erstellen?`
+        );
+        if (!bestaetigung) {
+          return;
+        }
+      } else if (validation.warnung) {
+        const bestaetigung = confirm(
+          `${validation.warnung}\n\n` +
+          `Aktuelle Auslastung würde auf ${validation.neue_auslastung_prozent}% steigen.\n` +
+          `Möchten Sie fortfahren?`
+        );
+        if (!bestaetigung) {
+          return;
+        }
+      }
+
       await this.ensureArbeitenExistieren(arbeitenListe, termin.geschaetzte_zeit);
       await TermineService.create(termin);
       alert('Termin erfolgreich erstellt!');
@@ -717,7 +885,22 @@ class App {
       document.getElementById('inArbeit').textContent = this.formatMinutesToHours(data.in_arbeit_minuten || 0);
       document.getElementById('abgeschlossen').textContent = this.formatMinutesToHours(data.abgeschlossen_minuten || 0);
       document.getElementById('verfuegbar').textContent = this.formatMinutesToHours(data.verfuegbar_minuten);
-      document.getElementById('prozent').textContent = `${data.auslastung_prozent}%`;
+      const auslastungProzent = data.auslastung_prozent || 0;
+      const prozentElement = document.getElementById('prozent');
+      if (prozentElement) {
+        prozentElement.textContent = `${auslastungProzent}%`;
+        
+        // Farbcodierung basierend auf Auslastung
+        prozentElement.style.color = '';
+        prozentElement.style.fontWeight = 'bold';
+        if (auslastungProzent > 100) {
+          prozentElement.style.color = '#c62828'; // Rot
+        } else if (auslastungProzent > 80) {
+          prozentElement.style.color = '#f57c00'; // Orange
+        } else {
+          prozentElement.style.color = '#2e7d32'; // Grün
+        }
+      }
 
       if (data.gesamt_minuten) {
         document.getElementById('verfuegbar').textContent =
@@ -745,6 +928,22 @@ class App {
         geplantSegment.style.width = `${Math.min(geplantProzent, 100)}%`;
         inArbeitSegment.style.width = `${Math.min(inArbeitProzent, 100)}%`;
         abgeschlossenSegment.style.width = `${Math.min(abgeschlossenProzent, 100)}%`;
+
+        // Farbcodierung für Gesamtauslastung
+        const gesamtAuslastung = auslastungProzent;
+        const progressBar = geplantSegment.parentElement;
+        if (progressBar) {
+          if (gesamtAuslastung > 100) {
+            progressBar.style.borderColor = '#c62828';
+            progressBar.style.backgroundColor = '#ffebee';
+          } else if (gesamtAuslastung > 80) {
+            progressBar.style.borderColor = '#f57c00';
+            progressBar.style.backgroundColor = '#fff3e0';
+          } else {
+            progressBar.style.borderColor = '#2e7d32';
+            progressBar.style.backgroundColor = '#e8f5e9';
+          }
+        }
 
         // Zeige oder verstecke den "Keine Termine" Text
         const emptyText = document.getElementById('progressEmpty');
@@ -791,6 +990,18 @@ class App {
       const auslastungData = await Promise.all(
         days.map(day => AuslastungService.getByDatum(day.datum).catch(() => null))
       );
+
+      // Prognose: Zeige durchschnittliche Auslastung für die Woche
+      const auslastungen = auslastungData.filter(d => d !== null);
+      if (auslastungen.length > 0) {
+        const durchschnittlicheAuslastung = auslastungen.reduce((sum, d) => sum + (d.auslastung_prozent || 0), 0) / auslastungen.length;
+        const prognoseElement = document.getElementById('wochePrognose');
+        if (prognoseElement) {
+          prognoseElement.textContent = `Durchschnitt: ${Math.round(durchschnittlicheAuslastung)}%`;
+          prognoseElement.style.color = durchschnittlicheAuslastung > 100 ? '#c62828' :
+                                       durchschnittlicheAuslastung > 80 ? '#f57c00' : '#2e7d32';
+        }
+      }
 
       let geplant = 0;
       let inArbeit = 0;

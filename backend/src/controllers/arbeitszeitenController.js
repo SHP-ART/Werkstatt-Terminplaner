@@ -18,11 +18,11 @@ class ArbeitszeitenController {
       standard_minuten: Number.isFinite(minuten) ? minuten : standard_minuten,
       bezeichnung: bezeichnung
     };
-    ArbeitszeitenModel.update(req.params.id, data, function(err) {
+    ArbeitszeitenModel.update(req.params.id, data, (err, result) => {
       if (err) {
         res.status(500).json({ error: err.message });
       } else {
-        res.json({ changes: this.changes, message: 'Arbeitszeit aktualisiert' });
+        res.json({ changes: (result && result.changes) || 0, message: 'Arbeitszeit aktualisiert' });
       }
     });
   }
@@ -44,11 +44,11 @@ class ArbeitszeitenController {
   }
 
   static delete(req, res) {
-    ArbeitszeitenModel.delete(req.params.id, function(err) {
+    ArbeitszeitenModel.delete(req.params.id, (err, result) => {
       if (err) {
         res.status(500).json({ error: err.message });
       } else {
-        res.json({ changes: this.changes, message: 'Arbeitszeit gelöscht' });
+        res.json({ changes: (result && result.changes) || 0, message: 'Arbeitszeit gelöscht' });
       }
     });
   }

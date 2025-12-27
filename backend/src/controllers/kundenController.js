@@ -50,21 +50,21 @@ class KundenController {
   }
 
   static update(req, res) {
-    KundenModel.update(req.params.id, req.body, function(err) {
+    KundenModel.update(req.params.id, req.body, (err, result) => {
       if (err) {
         res.status(500).json({ error: err.message });
       } else {
-        res.json({ changes: this.changes, message: 'Kunde aktualisiert' });
+        res.json({ changes: (result && result.changes) || 0, message: 'Kunde aktualisiert' });
       }
     });
   }
 
   static delete(req, res) {
-    KundenModel.delete(req.params.id, function(err) {
+    KundenModel.delete(req.params.id, (err, result) => {
       if (err) {
         res.status(500).json({ error: err.message });
       } else {
-        res.json({ changes: this.changes, message: 'Kunde gelöscht' });
+        res.json({ changes: (result && result.changes) || 0, message: 'Kunde gelöscht' });
       }
     });
   }
