@@ -434,6 +434,7 @@ class App {
       tbody.innerHTML = '';
       arbeitszeiten.forEach(arbeit => {
         const row = tbody.insertRow();
+        const stundenWert = (arbeit.standard_minuten / 60).toFixed(2);
         row.innerHTML = `
           <td>
             <input type="text"
@@ -446,9 +447,12 @@ class App {
             <input type="number"
                    id="zeit_${arbeit.id}"
                    data-id="${arbeit.id}"
-                   value="${arbeit.standard_minuten}"
-                   min="1"
-                   style="width: 100px; padding: 8px;">
+                   value="${stundenWert}"
+                   min="0.01"
+                   step="0.25"
+                   placeholder="z.B. 0.25"
+                   title="Eingabe in Stunden (z.B. 0.25 = 15 Min, 0.5 = 30 Min, 1 = 60 Min)"
+                   style="width: 120px; padding: 8px;">
           </td>
         `;
       });
@@ -509,13 +513,22 @@ class App {
       if (bezeichnungInput && zeitInput) {
         const id = bezeichnungInput.dataset.id;
         const bezeichnung = bezeichnungInput.value.trim();
-        const minuten = parseInt(zeitInput.value);
+        const stunden = parseFloat(zeitInput.value);
 
         if (!bezeichnung) {
           alert('Bitte alle Bezeichnungen ausfüllen.');
           hasError = true;
           break;
         }
+
+        if (!Number.isFinite(stunden) || stunden <= 0) {
+          alert(`Bitte gültige Stunden für "${bezeichnung}" eingeben (z.B. 0.25 für 15 Minuten).`);
+          hasError = true;
+          break;
+        }
+
+        // Konvertiere Stunden in Minuten
+        const minuten = Math.round(stunden * 60);
 
         updates.push({
           id: id,
