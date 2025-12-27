@@ -125,15 +125,16 @@ class TermineModel {
   }
 
   static update(id, data, callback) {
-    const { tatsaechliche_zeit, status, geschaetzte_zeit, arbeit } = data;
+    const { tatsaechliche_zeit, status, geschaetzte_zeit, arbeit, arbeitszeiten_details } = data;
     db.run(
       `UPDATE termine
        SET tatsaechliche_zeit = COALESCE(?, tatsaechliche_zeit),
            status = COALESCE(?, status),
            geschaetzte_zeit = COALESCE(?, geschaetzte_zeit),
-           arbeit = COALESCE(?, arbeit)
+           arbeit = COALESCE(?, arbeit),
+           arbeitszeiten_details = COALESCE(?, arbeitszeiten_details)
        WHERE id = ?`,
-      [tatsaechliche_zeit, status, geschaetzte_zeit, arbeit, id],
+      [tatsaechliche_zeit, status, geschaetzte_zeit, arbeit, arbeitszeiten_details, id],
       function(err) {
         if (err) {
           return callback(err);

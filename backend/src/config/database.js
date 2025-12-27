@@ -114,6 +114,12 @@ function initializeDatabase() {
       }
     });
 
+    db.run(`ALTER TABLE termine ADD COLUMN arbeitszeiten_details TEXT`, (err) => {
+      if (err && !err.message.includes('duplicate column')) {
+        console.error('Fehler beim Hinzufügen von arbeitszeiten_details:', err);
+      }
+    });
+
     db.run(`CREATE TABLE IF NOT EXISTS arbeitszeiten (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       bezeichnung TEXT NOT NULL,

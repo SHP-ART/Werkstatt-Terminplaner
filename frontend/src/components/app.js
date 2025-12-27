@@ -1925,13 +1925,36 @@ class App {
     const liste = document.getElementById('modalArbeitszeitenListe');
     liste.innerHTML = '';
 
-    // Berechne Standardzeit pro Arbeit
+    // Parse arbeitszeiten_details wenn vorhanden
+    let arbeitszeitenDetails = {};
+    if (termin.arbeitszeiten_details) {
+      try {
+        arbeitszeitenDetails = JSON.parse(termin.arbeitszeiten_details);
+      } catch (e) {
+        console.error('Fehler beim Parsen von arbeitszeiten_details:', e);
+      }
+    }
+
+    // Verwende die tatsächlich gespeicherte Zeit (falls vorhanden), sonst die geschätzte Zeit
     const gesamtzeit = termin.tatsaechliche_zeit || termin.geschaetzte_zeit || 0;
     const zeitProArbeit = arbeitenListe.length > 0 ? Math.round(gesamtzeit / arbeitenListe.length) : 30;
 
     arbeitenListe.forEach((arbeit, index) => {
-      const standardZeitMinuten = this.findArbeitszeit(arbeit) || zeitProArbeit;
-      const standardZeitStunden = (standardZeitMinuten / 60).toFixed(2);
+      let zeitMinuten;
+
+      // Prüfe zuerst ob individuelle Zeit für diese Arbeit gespeichert ist
+      if (arbeitszeitenDetails[arbeit]) {
+        // Nutze die gespeicherte individuelle Zeit für diese Arbeit
+        zeitMinuten = arbeitszeitenDetails[arbeit];
+      } else if (termin.tatsaechliche_zeit && termin.tatsaechliche_zeit > 0) {
+        // Nutze die gespeicherte Gesamtzeit (gleichmäßig aufgeteilt)
+        zeitMinuten = zeitProArbeit;
+      } else {
+        // Nutze die Standardzeit aus der Arbeitszeiten-Tabelle
+        zeitMinuten = this.findArbeitszeit(arbeit) || zeitProArbeit;
+      }
+
+      const zeitStunden = (zeitMinuten / 60).toFixed(2);
 
       const item = document.createElement('div');
       item.className = 'arbeitszeit-item';
@@ -1939,7 +1962,7 @@ class App {
         <label>📋 ${arbeit}:</label>
         <input type="number"
                id="modal_zeit_${index}"
-               value="${standardZeitStunden}"
+               value="${zeitStunden}"
                min="0.25"
                step="0.25"
                placeholder="0"
@@ -1979,9 +2002,20 @@ class App {
     const liste = document.getElementById('modalArbeitszeitenListe');
     const inputs = liste.querySelectorAll('input[type="number"]');
     let gesamtStunden = 0;
+    const arbeitszeitenDetails = {};
 
-    inputs.forEach(input => {
-      gesamtStunden += parseFloat(input.value) || 0;
+    // Sammle individuelle Zeiten pro Arbeit
+    const termin = this.termineById[this.currentTerminId];
+    const arbeitenListe = this.parseArbeiten(termin.arbeit || '');
+
+    inputs.forEach((input, index) => {
+      const stunden = parseFloat(input.value) || 0;
+      gesamtStunden += stunden;
+
+      // Speichere die Zeit in Minuten für jede Arbeit
+      if (arbeitenListe[index]) {
+        arbeitszeitenDetails[arbeitenListe[index]] = Math.round(stunden * 60);
+      }
     });
 
     // Umrechnung von Stunden in Minuten für die Datenbank
@@ -1992,6 +2026,7 @@ class App {
     try {
       await TermineService.update(this.currentTerminId, {
         tatsaechliche_zeit: gesamtzeitMinuten,
+        arbeitszeiten_details: JSON.stringify(arbeitszeitenDetails),
         status: status
       });
 
