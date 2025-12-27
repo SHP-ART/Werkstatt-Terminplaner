@@ -116,7 +116,7 @@ class TermineController {
 
         // Lernfunktion: Passe Standardzeiten an, wenn tatsächliche Zeit gesetzt wurde
         if (sollteLernen && termin && termin.arbeit) {
-          this.lerneAusTatsaechlicherZeit(termin.arbeit, tatsaechliche_zeit, (lernErr) => {
+          TermineController.lerneAusTatsaechlicherZeit(termin.arbeit, tatsaechliche_zeit, (lernErr) => {
             if (lernErr) {
               console.error('Fehler bei Lernfunktion:', lernErr);
               // Fehler nicht an Client weitergeben, da Termin bereits aktualisiert wurde
