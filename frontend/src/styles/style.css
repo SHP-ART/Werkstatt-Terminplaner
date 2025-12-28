@@ -596,7 +596,13 @@ label {
     color: #555;
 }
 
-/* Input field styling - Underline Style */
+/* Input Container für animierten Highlight */
+.form-group {
+    position: relative;
+    margin-bottom: 15px;
+}
+
+/* Input field styling - Underline Style with Animation */
 input[type="text"],
 input[type="email"],
 input[type="tel"],
@@ -614,7 +620,34 @@ textarea {
     outline: none;
     background-color: transparent;
     color: #333;
+    transition: border-color 0.3s ease;
+}
+
+/* Animierter Highlight-Balken */
+.form-group::after {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    height: 2px;
+    width: 0;
+    background: linear-gradient(90deg, #007bff 0%, #00d4ff 100%);
+    transition: width 0.3s ease;
+    pointer-events: none;
+}
+
+.form-group:focus-within::after {
+    width: 100%;
+}
+
+/* Label Animation */
+.form-group > label {
     transition: all 0.3s ease;
+}
+
+.form-group:focus-within > label {
+    color: #007bff;
+    transform: translateY(-2px);
 }
 
 input[type="text"]::placeholder,
@@ -623,6 +656,15 @@ input[type="tel"]::placeholder,
 input[type="number"]::placeholder,
 textarea::placeholder {
     color: #999;
+    transition: opacity 0.3s ease;
+}
+
+input[type="text"]:focus::placeholder,
+input[type="email"]:focus::placeholder,
+input[type="tel"]:focus::placeholder,
+input[type="number"]:focus::placeholder,
+textarea:focus::placeholder {
+    opacity: 0.5;
 }
 
 input[type="text"]:focus,
@@ -634,8 +676,7 @@ input[type="time"]:focus,
 select:focus,
 textarea:focus {
     outline: none;
-    border-bottom-color: #007bff;
-    box-shadow: 0 1px 0 0 #007bff;
+    border-bottom-color: transparent;
 }
 
 input[type="text"]:hover,
