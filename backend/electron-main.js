@@ -109,8 +109,10 @@ app.whenReady().then(() => {
 
 app.on('window-all-closed', function () {
   stopStatsInterval();
-  stopServer();
+  // Auf macOS läuft die App weiter, daher Server nicht stoppen
+  // Auf anderen Plattformen beendet sich die App, daher Server stoppen
   if (process.platform !== 'darwin') {
+    stopServer();
     app.quit();
   }
 });
