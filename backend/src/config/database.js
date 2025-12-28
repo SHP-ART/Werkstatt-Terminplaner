@@ -108,6 +108,34 @@ function initializeDatabase() {
       }
     });
 
+    // Ersatzauto-Dauer in Tagen
+    db.run(`ALTER TABLE termine ADD COLUMN ersatzauto_tage INTEGER`, (err) => {
+      if (err && !err.message.includes('duplicate column')) {
+        console.error('Fehler beim Hinzufügen von ersatzauto_tage:', err);
+      }
+    });
+
+    // Ersatzauto bis Datum (Rückgabe-Datum)
+    db.run(`ALTER TABLE termine ADD COLUMN ersatzauto_bis_datum DATE`, (err) => {
+      if (err && !err.message.includes('duplicate column')) {
+        console.error('Fehler beim Hinzufügen von ersatzauto_bis_datum:', err);
+      }
+    });
+
+    // Ersatzauto Rückgabe-Uhrzeit
+    db.run(`ALTER TABLE termine ADD COLUMN ersatzauto_bis_zeit TEXT`, (err) => {
+      if (err && !err.message.includes('duplicate column')) {
+        console.error('Fehler beim Hinzufügen von ersatzauto_bis_zeit:', err);
+      }
+    });
+
+    // Abhol-Datum (falls anderer Tag als Termin)
+    db.run(`ALTER TABLE termine ADD COLUMN abholung_datum DATE`, (err) => {
+      if (err && !err.message.includes('duplicate column')) {
+        console.error('Fehler beim Hinzufügen von abholung_datum:', err);
+      }
+    });
+
     db.run(`ALTER TABLE termine ADD COLUMN termin_nr TEXT`, (err) => {
       if (err && !err.message.includes('duplicate column')) {
         console.error('Fehler beim Hinzufügen von termin_nr:', err);
@@ -264,6 +292,27 @@ function initializeDatabase() {
       }
     });
 
+    // Füge Ersatzauto-Anzahl Spalte hinzu falls sie nicht existiert
+    db.run(`ALTER TABLE werkstatt_einstellungen ADD COLUMN ersatzauto_anzahl INTEGER DEFAULT 2`, (err) => {
+      if (err && !err.message.includes('duplicate column')) {
+        console.error('Fehler beim Hinzufügen von ersatzauto_anzahl:', err);
+      }
+    });
+
+    // Ersatzautos-Tabelle
+    db.run(`CREATE TABLE IF NOT EXISTS ersatzautos (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      kennzeichen TEXT NOT NULL UNIQUE,
+      name TEXT NOT NULL,
+      typ TEXT,
+      aktiv INTEGER DEFAULT 1,
+      erstellt_am DATETIME DEFAULT CURRENT_TIMESTAMP
+    )`, (err) => {
+      if (err) {
+        console.error('Fehler beim Erstellen der ersatzautos Tabelle:', err);
+      }
+    });
+
     db.run(`CREATE TABLE IF NOT EXISTS abwesenheiten (
       datum TEXT PRIMARY KEY,
       urlaub INTEGER DEFAULT 0,
@@ -311,6 +360,38 @@ function initializeDatabase() {
 
     db.run(`CREATE INDEX IF NOT EXISTS idx_termine_datum_status ON termine(datum, status)`, (err) => {
       if (err) console.error('Fehler beim Erstellen des Index idx_termine_datum_status:', err);
+    });
+
+    // Termin-Phasen für mehrtägige Arbeiten (z.B. Unfallreparatur)
+    db.run(`CREATE TABLE IF NOT EXISTS termin_phasen (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      termin_id INTEGER NOT NULL,
+      phase_nr INTEGER NOT NULL,
+      bezeichnung TEXT NOT NULL,
+      datum DATE NOT NULL,
+      geschaetzte_zeit INTEGER NOT NULL,
+      tatsaechliche_zeit INTEGER,
+      mitarbeiter_id INTEGER,
+      lehrling_id INTEGER,
+      status TEXT DEFAULT 'geplant',
+      notizen TEXT,
+      erstellt_am DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (termin_id) REFERENCES termine(id) ON DELETE CASCADE,
+      FOREIGN KEY (mitarbeiter_id) REFERENCES mitarbeiter(id),
+      FOREIGN KEY (lehrling_id) REFERENCES lehrlinge(id)
+    )`, (err) => {
+      if (err && !err.message.includes('already exists')) {
+        console.error('Fehler beim Erstellen der termin_phasen Tabelle:', err);
+      }
+    });
+
+    // Indizes für termin_phasen
+    db.run(`CREATE INDEX IF NOT EXISTS idx_phasen_termin ON termin_phasen(termin_id)`, (err) => {
+      if (err) console.error('Fehler beim Erstellen des Index idx_phasen_termin:', err);
+    });
+
+    db.run(`CREATE INDEX IF NOT EXISTS idx_phasen_datum ON termin_phasen(datum)`, (err) => {
+      if (err) console.error('Fehler beim Erstellen des Index idx_phasen_datum:', err);
     });
   });
 }

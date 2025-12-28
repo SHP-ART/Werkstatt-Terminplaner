@@ -6,7 +6,7 @@ class EinstellungenModel {
   }
 
   static updateWerkstatt(data, callback) {
-    const { pufferzeit_minuten, servicezeit_minuten } = data;
+    const { pufferzeit_minuten, servicezeit_minuten, ersatzauto_anzahl } = data;
     
     // Lade erst die aktuellen Werte, um unveränderte Felder beizubehalten
     this.getWerkstatt((err, current) => {
@@ -21,12 +21,15 @@ class EinstellungenModel {
       const servicezeit = servicezeit_minuten !== undefined 
         ? parseInt(servicezeit_minuten, 10) 
         : (current && current.servicezeit_minuten !== undefined ? current.servicezeit_minuten : 10);
+      const ersatzautos = ersatzauto_anzahl !== undefined
+        ? parseInt(ersatzauto_anzahl, 10)
+        : (current && current.ersatzauto_anzahl !== undefined ? current.ersatzauto_anzahl : 2);
 
       db.run(
         `UPDATE werkstatt_einstellungen
-         SET pufferzeit_minuten = ?, servicezeit_minuten = ?
+         SET pufferzeit_minuten = ?, servicezeit_minuten = ?, ersatzauto_anzahl = ?
          WHERE id = 1`,
-        [pufferzeit, servicezeit],
+        [pufferzeit, servicezeit, ersatzautos],
         function(err) {
           if (err) {
             callback(err);
@@ -37,14 +40,44 @@ class EinstellungenModel {
           if (this.changes === 0) {
             db.run(
               `INSERT OR REPLACE INTO werkstatt_einstellungen
-               (id, pufferzeit_minuten, servicezeit_minuten)
-               VALUES (1, ?, ?)`,
-              [pufferzeit, servicezeit],
+               (id, pufferzeit_minuten, servicezeit_minuten, ersatzauto_anzahl)
+               VALUES (1, ?, ?, ?)`,
+              [pufferzeit, servicezeit, ersatzautos],
               callback
             );
           } else {
             callback(null, { changes: this.changes });
           }
+        }
+      );
+    });
+  }
+
+  // Zähle Ersatzautos die an einem bestimmten Tag vergeben sind
+  static getErsatzautoVerfuegbarkeit(datum, callback) {
+    // Hole Gesamtanzahl Ersatzautos
+    this.getWerkstatt((err, settings) => {
+      if (err) return callback(err);
+      
+      const gesamtAnzahl = settings?.ersatzauto_anzahl || 2;
+      
+      // Zähle wie viele Termine an diesem Tag ein Ersatzauto haben
+      db.get(
+        `SELECT COUNT(*) as vergeben FROM termine 
+         WHERE datum = ? AND ersatzauto = 1 AND status != 'storniert' AND geloescht = 0`,
+        [datum],
+        (err, row) => {
+          if (err) return callback(err);
+          
+          const vergeben = row?.vergeben || 0;
+          const verfuegbar = Math.max(gesamtAnzahl - vergeben, 0);
+          
+          callback(null, {
+            gesamt: gesamtAnzahl,
+            vergeben: vergeben,
+            verfuegbar: verfuegbar,
+            istVerfuegbar: verfuegbar > 0
+          });
         }
       );
     });

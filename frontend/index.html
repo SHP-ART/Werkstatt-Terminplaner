@@ -17,6 +17,7 @@
             <button class="tab-button" data-tab="heute">Heute</button>
             <button class="tab-button" data-tab="termine">Termine</button>
             <button class="tab-button" data-tab="kunden">Kunden</button>
+            <button class="tab-button" data-tab="ersatzautos">🚗 Ersatzautos</button>
             <button class="tab-button" data-tab="zeitverwaltung">Zeitverwaltung</button>
             <button class="tab-button" data-tab="auslastung">Auslastung</button>
             <button class="tab-button" data-tab="papierkorb">🗑️ Papierkorb</button>
@@ -185,7 +186,7 @@
             </div>
 
             <div class="dashboard-section">
-                <h3>Monatsübersicht (nächste 30 Tage)</h3>
+                <h3>📅 Monatsübersicht (5 Wochen)</h3>
                 <div class="monats-uebersicht" id="monatsUebersicht">
                     <div class="loading">Monatsübersicht wird geladen...</div>
                 </div>
@@ -261,6 +262,7 @@
 
             <div class="sub-tabs">
                 <button class="sub-tab-button active" data-subtab="neuerTermin">Neuer Termin</button>
+                <button class="sub-tab-button" data-subtab="terminBearbeiten">Termin bearbeiten</button>
                 <button class="sub-tab-button" data-subtab="internerTermin">Interner Termin</button>
             </div>
 
@@ -270,8 +272,22 @@
                     <form id="terminForm">
                     <div class="form-group">
                         <label>Schnellsuche (Name oder Kennzeichen):</label>
-                        <input type="text" id="terminSchnellsuche" list="terminSuchListe" placeholder="z.B. Max Mustermann oder B-AB 1234">
+                        <div style="position: relative;">
+                            <input type="text" id="terminSchnellsuche" list="terminSuchListe" placeholder="z.B. Max Mustermann oder B-AB 1234">
+                            <span id="schnellsucheStatus" class="schnellsuche-status" style="display: none;"></span>
+                        </div>
                         <datalist id="terminSuchListe"></datalist>
+                    </div>
+
+                    <!-- Gefundener Kunde Anzeige -->
+                    <div id="gefundenerKundeAnzeige" class="kunde-gefunden-box" style="display: none; margin-bottom: 15px; padding: 12px 15px; background: linear-gradient(135deg, #e8f5e9 0%, #f1f8e9 100%); border-radius: 8px; border-left: 4px solid #4caf50;">
+                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                            <div>
+                                <span style="font-weight: 600; color: #2e7d32;">👤 Kunde gefunden:</span>
+                                <span id="gefundenerKundeName" style="font-size: 1.1em; font-weight: bold; color: #1b5e20; margin-left: 8px;"></span>
+                            </div>
+                            <span id="gefundenerKundeTelefon" style="color: #666; font-size: 0.9em;"></span>
+                        </div>
                     </div>
 
                     <input type="hidden" id="kunde_id">
@@ -339,6 +355,23 @@
                             <label class="checkbox-inline">
                                 <input type="checkbox" id="ersatzauto"> Ja
                             </label>
+                            <span id="ersatzautoStatus" class="ersatzauto-status" style="display: none;">
+                                <span class="status-indicator"></span>
+                                <span class="status-text"></span>
+                            </span>
+                        </div>
+                        
+                        <!-- Ersatzauto Dauer-Felder -->
+                        <div id="ersatzautoDauerGroup" class="form-section ersatzauto-dauer-section" style="display: none; margin-top: 15px; padding: 15px; background: #fff8e1; border-radius: 8px; border-left: 4px solid #ffc107;">
+                            <h4 style="margin: 0 0 10px 0; font-size: 0.95rem; color: #856404;">🚗 Ersatzauto-Zeitraum</h4>
+                            <div class="form-group" style="margin: 0;">
+                                <label>Geschätzte Dauer (Tage):</label>
+                                <input type="number" id="ersatzauto_tage" min="1" max="30" placeholder="z.B. 1, 2, 3..." style="max-width: 150px;">
+                                <small style="color: #666; display: block; margin-top: 5px;">Ersatzwagen wird für diese Anzahl Tage blockiert</small>
+                            </div>
+                            <p id="ersatzautoDauerHinweis" style="margin: 12px 0 0 0; font-size: 0.85rem; color: #856404;">
+                                💡 <strong>Hinweis:</strong> Bei tel. Rücksprache Anzahl Tage angeben. Sonst wird das Abholdatum unten verwendet.
+                            </p>
                         </div>
                     </div>
 
@@ -371,6 +404,11 @@
                             <label>Abholzeit:</label>
                             <input type="time" id="abholung_zeit">
                         </div>
+                        <div class="form-group" id="abholDatumGroup">
+                            <label>Abhol-Datum:</label>
+                            <input type="date" id="abholung_datum">
+                            <small style="color: #666;">Falls anderer Tag als Termin</small>
+                        </div>
                         <div class="form-group" id="kontaktOptionGroup">
                             <label>Kontakt:</label>
                             <div style="display: flex; gap: 15px; align-items: center;">
@@ -384,6 +422,22 @@
                         </div>
                     </div>
 
+                    <!-- Phasen für mehrtägige Arbeiten (z.B. Unfallreparatur) -->
+                    <div id="phasenSection" class="form-section" style="margin-top: 20px; padding: 15px; background: #fff3e0; border-radius: 8px; border-left: 4px solid #ff9800; display: none;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                            <h4 style="margin: 0; color: #e65100;">🔧 Arbeitsphasen (mehrtägig)</h4>
+                            <button type="button" class="btn btn-secondary" id="addPhaseBtn" style="padding: 5px 10px; font-size: 0.9em;">+ Phase hinzufügen</button>
+                        </div>
+                        <p style="color: #666; font-size: 0.9em; margin-bottom: 15px;">Für Unfallreparaturen oder mehrtägige Arbeiten: Jede Phase kann ein eigenes Datum haben.</p>
+                        <div id="phasenListe"></div>
+                    </div>
+
+                    <div class="form-group" style="margin-top: 15px;">
+                        <label class="checkbox-inline">
+                            <input type="checkbox" id="mehrtaegigCheckbox"> Mehrtägige Arbeit (Phasen aktivieren)
+                        </label>
+                    </div>
+
                     <button type="submit" class="btn btn-primary">Termin erstellen</button>
                 </form>
             </div>
@@ -392,6 +446,176 @@
                 <p>✅ <strong>Termin erstellt!</strong></p>
                 <p>Gehen Sie zu <strong>"Zeitverwaltung"</strong>, um die Zeiten für einzelne Arbeiten zu bearbeiten.</p>
             </div>
+            </div>
+
+            <div id="terminBearbeiten" class="sub-tab-content">
+                <div class="form-section">
+                    <h3>Termin bearbeiten</h3>
+                    <p style="color: #666; margin-bottom: 20px;">Wählen Sie einen Termin aus, um ihn zu bearbeiten.</p>
+                    
+                    <!-- Termin-Auswahl -->
+                    <div class="form-group" style="margin-bottom: 20px;">
+                        <label>Termin auswählen:</label>
+                        <div style="display: flex; gap: 10px; flex-wrap: wrap; align-items: center;">
+                            <input type="date" id="editTerminDatum" style="flex: 0 0 auto;">
+                            <select id="editTerminAuswahl" style="flex: 1; min-width: 300px;">
+                                <option value="">-- Termin wählen --</option>
+                            </select>
+                            <button type="button" class="btn btn-secondary" id="editTerminLadenBtn">Termine laden</button>
+                        </div>
+                    </div>
+
+                    <!-- Bearbeitungsformular (zunächst ausgeblendet) -->
+                    <div id="editTerminFormContainer" style="display: none;">
+                        <form id="terminEditForm">
+                            <input type="hidden" id="edit_termin_id">
+                            <input type="hidden" id="edit_kunde_id">
+                            
+                            <!-- Kunde Anzeige -->
+                            <div id="editGefundenerKundeAnzeige" class="kunde-gefunden-box" style="margin-bottom: 15px; padding: 12px 15px; background: linear-gradient(135deg, #e8f5e9 0%, #f1f8e9 100%); border-radius: 8px; border-left: 4px solid #4caf50;">
+                                <div style="display: flex; justify-content: space-between; align-items: center;">
+                                    <div>
+                                        <span style="font-weight: 600; color: #2e7d32;">👤 Kunde:</span>
+                                        <span id="edit_kunde_name_display" style="font-size: 1.1em; font-weight: bold; color: #1b5e20; margin-left: 8px;"></span>
+                                    </div>
+                                    <span id="edit_kunde_telefon_display" style="color: #666; font-size: 0.9em;"></span>
+                                </div>
+                            </div>
+
+                            <div class="form-group">
+                                <label>Datum: *</label>
+                                <input type="date" id="edit_datum" required>
+                            </div>
+
+                            <div id="editTerminAuslastungAnzeige" style="margin-bottom: 20px; padding: 15px; background: #f8f9fa; border-radius: 8px; border-left: 4px solid #4a90e2; display: none;">
+                                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                                    <strong style="font-size: 1.1em;">Auslastung für gewähltes Datum</strong>
+                                    <span id="editTerminAuslastungProzent" style="font-size: 1.2em; font-weight: bold; color: #4a90e2;">-</span>
+                                </div>
+                                <div style="background: #e9ecef; border-radius: 5px; height: 20px; overflow: hidden; margin-bottom: 10px;">
+                                    <div id="editTerminAuslastungBalken" style="background: #4a90e2; height: 100%; width: 0%; transition: width 0.3s, background 0.3s;"></div>
+                                </div>
+                                <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; font-size: 0.9em;">
+                                    <div>
+                                        <span style="color: #666;">Verfügbar:</span>
+                                        <strong id="editTerminAuslastungVerfuegbar">-</strong>
+                                    </div>
+                                    <div>
+                                        <span style="color: #666;">Gesamt:</span>
+                                        <strong id="editTerminAuslastungGesamt">-</strong>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label>Kennzeichen: *</label>
+                                    <input type="text" id="edit_kennzeichen" required placeholder="z.B. B-AB 1234">
+                                </div>
+                                <div class="form-group">
+                                    <label>Kilometerstand:</label>
+                                    <input type="number" id="edit_kilometerstand" min="0" placeholder="z.B. 128000">
+                                </div>
+                            </div>
+
+                            <div class="form-row">
+                                <div class="form-group" style="position: relative;">
+                                    <label>Arbeiten (jede Zeile eine Arbeit):</label>
+                                    <textarea id="edit_arbeitEingabe" rows="3" placeholder="z.B.&#10;Ölwechsel&#10;Bremsen vorne" required autocomplete="off"></textarea>
+                                    
+                                    <!-- Geschätzte Zeit Anzeige -->
+                                    <div id="editZeitschaetzungAnzeige" style="margin-top: 10px; padding: 12px; background: linear-gradient(135deg, #e8f4fd 0%, #f0f7ff 100%); border-radius: 8px; border-left: 4px solid #4a90e2; display: none;">
+                                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                                            <span style="font-weight: 600; color: #333;">⏱️ Geschätzte Gesamtzeit:</span>
+                                            <span id="editZeitschaetzungWert" style="font-size: 1.3em; font-weight: bold; color: #4a90e2;">0 h</span>
+                                        </div>
+                                        <div id="editZeitschaetzungDetails" style="margin-top: 8px; font-size: 0.9em; color: #666;"></div>
+                                    </div>
+                                </div>
+                                <div class="form-group checkbox-group">
+                                    <label>Ersatzauto gewünscht?</label>
+                                    <label class="checkbox-inline">
+                                        <input type="checkbox" id="edit_ersatzauto"> Ja
+                                    </label>
+                                    <span id="editErsatzautoStatus" class="ersatzauto-status" style="display: none;">
+                                        <span class="status-indicator"></span>
+                                        <span class="status-text"></span>
+                                    </span>
+                                </div>
+                                
+                                <!-- Ersatzauto Dauer-Felder -->
+                                <div id="editErsatzautoDauerGroup" class="form-section ersatzauto-dauer-section" style="display: none; margin-top: 15px; padding: 15px; background: #fff8e1; border-radius: 8px; border-left: 4px solid #ffc107;">
+                                    <h4 style="margin: 0 0 10px 0; font-size: 0.95rem; color: #856404;">🚗 Ersatzauto-Zeitraum</h4>
+                                    <div class="form-group" style="margin: 0;">
+                                        <label>Geschätzte Dauer (Tage):</label>
+                                        <input type="number" id="edit_ersatzauto_tage" min="1" max="30" placeholder="z.B. 1, 2, 3..." style="max-width: 150px;">
+                                        <small style="color: #666; display: block; margin-top: 5px;">Ersatzwagen wird für diese Anzahl Tage blockiert</small>
+                                    </div>
+                                    <p id="editErsatzautoDauerHinweis" style="margin: 12px 0 0 0; font-size: 0.85rem; color: #856404;">
+                                        💡 <strong>Hinweis:</strong> Bei tel. Rücksprache Anzahl Tage angeben. Sonst wird das Abholdatum unten verwendet.
+                                    </p>
+                                </div>
+                            </div>
+
+                            <div class="form-group">
+                                <label>Umfang/Details:</label>
+                                <textarea id="edit_umfang" rows="3" placeholder="Zusätzliche Informationen..."></textarea>
+                            </div>
+
+                            <div class="form-group">
+                                <label>Fahrzeug Abholung/Lieferung:</label>
+                                <select id="edit_abholung_typ">
+                                    <option value="bringen">Kunde bringt/holt selbst</option>
+                                    <option value="hol_bring">Hol- und Bringservice</option>
+                                    <option value="ruecksprache">Telefonische Rücksprache</option>
+                                    <option value="warten">Kunde wartet</option>
+                                </select>
+                            </div>
+
+                            <div class="form-group" id="editAbholungDetailsGroup" style="display: none;">
+                                <label>Details zur Abholung/Lieferung:</label>
+                                <textarea id="edit_abholung_details" rows="2" placeholder="z.B. Adresse, Uhrzeit, besondere Hinweise..."></textarea>
+                            </div>
+
+                            <div class="form-row" id="editAbholungZeitRow" style="display: none;">
+                                <div class="form-group" id="editBringzeitGroup">
+                                    <label>Bringzeit:</label>
+                                    <input type="time" id="edit_bring_zeit">
+                                </div>
+                                <div class="form-group" id="editAbholzeitGroup">
+                                    <label>Abholzeit:</label>
+                                    <input type="time" id="edit_abholung_zeit">
+                                </div>
+                                <div class="form-group" id="editAbholDatumGroup">
+                                    <label>Abhol-Datum:</label>
+                                    <input type="date" id="edit_abholung_datum">
+                                    <small style="color: #666;">Falls anderer Tag als Termin</small>
+                                </div>
+                                <div class="form-group" id="editKontaktOptionGroup">
+                                    <label>Kontakt:</label>
+                                    <div style="display: flex; gap: 15px; align-items: center;">
+                                        <label class="checkbox-inline">
+                                            <input type="checkbox" id="edit_kontakt_kunde_anrufen"> Kunde anrufen
+                                        </label>
+                                        <label class="checkbox-inline">
+                                            <input type="checkbox" id="edit_kontakt_kunde_ruft"> Kunde ruft selbst an
+                                        </label>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div style="display: flex; gap: 10px;">
+                                <button type="submit" class="btn btn-primary">Änderungen speichern</button>
+                                <button type="button" class="btn btn-secondary" id="editTerminAbbrechenBtn">Abbrechen</button>
+                            </div>
+                        </form>
+                    </div>
+
+                    <div id="editTerminKeinAusgewaehlt" style="padding: 40px; text-align: center; color: #666;">
+                        <p style="font-size: 18px;">📋 Wählen Sie ein Datum und einen Termin aus der Liste</p>
+                        <p>Nach der Auswahl können Sie alle Termindetails bearbeiten.</p>
+                    </div>
+                </div>
             </div>
 
             <div id="internerTermin" class="sub-tab-content">
@@ -412,6 +636,17 @@
                             <div class="form-group">
                                 <label>Geschätzte Zeit (Stunden):</label>
                                 <input type="number" id="intern_zeit" min="0.25" step="0.25" placeholder="z.B. 2.5">
+                            </div>
+                        </div>
+
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>Startzeit (optional):</label>
+                                <input type="time" id="intern_zeit_von" placeholder="z.B. 08:00">
+                            </div>
+                            <div class="form-group">
+                                <label>Fertig bis (optional):</label>
+                                <input type="time" id="intern_zeit_bis" placeholder="z.B. 12:00">
                             </div>
                         </div>
 
@@ -465,61 +700,226 @@
             </div>
         </div>
 
-        <div id="zeitverwaltung" class="tab-content">
-            <h2>Zeitverwaltung</h2>
-
-            <div class="sub-tabs">
-                <button class="sub-tab-button" data-subtab="alleTermineVerwalten">Alle Termine verwalten</button>
-                <button class="sub-tab-button" data-subtab="standardzeiten">Standardzeiten</button>
-                <button class="sub-tab-button active" data-subtab="mitarbeiter">Mitarbeiter</button>
+        <!-- Ersatzautos Tab -->
+        <div id="ersatzautos" class="tab-content">
+            <div class="page-header">
+                <h2>🚗 Ersatzauto-Verwaltung</h2>
+                <p class="page-subtitle">Verwalten Sie Ihre Ersatzfahrzeuge und deren Verfügbarkeit</p>
             </div>
 
-            <div id="alleTermineVerwalten" class="sub-tab-content">
-                <p>
-                    🔴 = Keine tatsächliche Zeit angegeben | 🟢 = Tatsächliche Zeit erfasst<br>
-                    <strong>💡 Tipp:</strong> Klicken Sie auf eine Zeile, um Zeiten für einzelne Arbeiten zu bearbeiten!
-                </p>
-
-                <!-- Navigation und Aktionen -->
-                <div style="margin-bottom: 15px; display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: space-between;">
-                    <div style="display: flex; gap: 5px; align-items: center;">
-                        <button id="prevWeekBtn" class="btn btn-secondary" title="Vorherige Woche">⏪ Woche</button>
-                        <button id="prevDayBtn" class="btn btn-secondary" title="Vorheriger Tag">◀ Tag</button>
-                        <input type="date" id="filterDatum" style="padding: 8px 12px;">
-                        <button id="nextDayBtn" class="btn btn-secondary" title="Nächster Tag">Tag ▶</button>
-                        <button id="nextWeekBtn" class="btn btn-secondary" title="Nächste Woche">Woche ⏩</button>
-                        <button id="todayBtn" class="btn btn-primary" title="Zum heutigen Tag">📅 Heute</button>
-                        <button id="alleTermineBtn" class="btn btn-secondary">📋 Alle anzeigen</button>
+            <div class="dashboard-grid" style="grid-template-columns: repeat(3, 1fr); margin-bottom: 30px;">
+                <div class="dashboard-card">
+                    <div class="card-icon">🚗</div>
+                    <div class="card-content">
+                        <h3>Gesamt</h3>
+                        <div class="card-value" id="ersatzautoGesamt">0</div>
+                        <div class="card-detail">Fahrzeuge registriert</div>
                     </div>
-                    <div>
-                        <button id="offeneTermineBtn" class="btn btn-warning" style="background: #e67e22; color: white;">🔴 Offene Termine</button>
+                </div>
+                <div class="dashboard-card">
+                    <div class="card-icon">✅</div>
+                    <div class="card-content">
+                        <h3>Heute Verfügbar</h3>
+                        <div class="card-value" id="ersatzautoHeuteVerfuegbar">0</div>
+                        <div class="card-detail">Freie Fahrzeuge</div>
+                    </div>
+                </div>
+                <div class="dashboard-card">
+                    <div class="card-icon">📋</div>
+                    <div class="card-content">
+                        <h3>Heute Vergeben</h3>
+                        <div class="card-value" id="ersatzautoHeuteVergeben">0</div>
+                        <div class="card-detail">Im Einsatz</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="form-section">
+                <h3>➕ Neues Ersatzfahrzeug hinzufügen</h3>
+                <form id="ersatzautoForm" class="form-row" style="display: flex; gap: 15px; align-items: flex-end; flex-wrap: wrap;">
+                    <div class="form-group" style="flex: 1; min-width: 150px;">
+                        <label for="ersatzautoKennzeichen">Kennzeichen *</label>
+                        <input type="text" id="ersatzautoKennzeichen" placeholder="z.B. K-AB 1234" required 
+                               style="text-transform: uppercase;">
+                    </div>
+                    <div class="form-group" style="flex: 1.5; min-width: 180px;">
+                        <label for="ersatzautoName">Fahrzeugname *</label>
+                        <input type="text" id="ersatzautoName" placeholder="z.B. VW Golf" required>
+                    </div>
+                    <div class="form-group" style="flex: 1; min-width: 150px;">
+                        <label for="ersatzautoTyp">Typ / Kategorie</label>
+                        <select id="ersatzautoTyp">
+                            <option value="">-- Auswählen --</option>
+                            <option value="Kleinwagen">Kleinwagen</option>
+                            <option value="Kompakt">Kompaktwagen</option>
+                            <option value="Mittelklasse">Mittelklasse</option>
+                            <option value="Kombi">Kombi</option>
+                            <option value="SUV">SUV</option>
+                            <option value="Transporter">Transporter</option>
+                        </select>
+                    </div>
+                    <div class="form-group" style="flex: 0;">
+                        <button type="submit" class="btn btn-primary" style="white-space: nowrap;">
+                            ➕ Hinzufügen
+                        </button>
+                    </div>
+                </form>
+                <input type="hidden" id="ersatzautoEditId" value="">
+            </div>
+
+            <div class="form-section">
+                <h3>📋 Registrierte Fahrzeuge</h3>
+                <div id="ersatzautoListe" class="ersatzauto-liste">
+                    <div class="loading">Lade Fahrzeuge...</div>
+                </div>
+            </div>
+
+            <!-- Aktuelle Buchungen -->
+            <div class="form-section">
+                <h3>🔑 Aktuell vergebene Fahrzeuge</h3>
+                <p style="color: #666; margin-bottom: 15px;">Zeigt alle Ersatzautos, die heute vergeben sind oder deren Buchung noch läuft</p>
+                <div id="ersatzautoBuchungen" class="ersatzauto-buchungen">
+                    <div class="loading">Lade Buchungen...</div>
+                </div>
+            </div>
+
+            <div class="form-section">
+                <h3>📅 Verfügbarkeits-Übersicht</h3>
+                <p style="color: #666; margin-bottom: 15px;">Zeigt die Ausleihen der Ersatzautos für die nächsten Wochen</p>
+                
+                <div class="ersatzauto-legende" style="display: flex; gap: 20px; margin-bottom: 15px; padding: 10px; background: #f8fafc; border-radius: 8px;">
+                    <div style="display: flex; align-items: center; gap: 6px;">
+                        <span class="ea-status-dot ea-frei"></span>
+                        <span>Alle frei</span>
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 6px;">
+                        <span class="ea-status-dot ea-teilweise"></span>
+                        <span>Teilweise vergeben</span>
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 6px;">
+                        <span class="ea-status-dot ea-voll"></span>
+                        <span>Alle vergeben</span>
+                    </div>
+                </div>
+                
+                <div id="ersatzautoUebersicht" class="ersatzauto-grid">
+                    <div class="loading">Lade Übersicht...</div>
+                </div>
+            </div>
+        </div>
+
+        <div id="zeitverwaltung" class="tab-content">
+            <div class="page-header">
+                <h2>⏱️ Zeitverwaltung</h2>
+                <p class="page-subtitle">Termine verwalten, Zeiten erfassen und Mitarbeiter organisieren</p>
+            </div>
+
+            <div class="sub-tabs modern-tabs">
+                <button class="sub-tab-button active" data-subtab="alleTermineVerwalten">
+                    <span class="tab-icon">📝</span>
+                    <span class="tab-label">Termine verwalten</span>
+                </button>
+                <button class="sub-tab-button" data-subtab="standardzeiten">
+                    <span class="tab-icon">⏰</span>
+                    <span class="tab-label">Standardzeiten</span>
+                </button>
+                <button class="sub-tab-button" data-subtab="mitarbeiter">
+                    <span class="tab-icon">👷</span>
+                    <span class="tab-label">Mitarbeiter</span>
+                </button>
+            </div>
+
+            <div id="alleTermineVerwalten" class="sub-tab-content active">
+                <!-- Info-Legende -->
+                <div class="info-legend">
+                    <div class="legend-item">
+                        <span class="status-dot red"></span>
+                        <span>Keine Zeit erfasst</span>
+                    </div>
+                    <div class="legend-item">
+                        <span class="status-dot green"></span>
+                        <span>Zeit erfasst</span>
+                    </div>
+                    <div class="legend-tip">
+                        <span class="tip-icon">💡</span>
+                        <span>Klicken Sie auf eine Zeile, um Zeiten für einzelne Arbeiten zu bearbeiten</span>
+                    </div>
+                </div>
+
+                <!-- Navigation Panel -->
+                <div class="zeit-nav-panel">
+                    <div class="nav-section nav-date-controls">
+                        <div class="nav-group">
+                            <button id="prevWeekBtn" class="nav-btn" title="Vorherige Woche">
+                                <span class="nav-icon">⏪</span>
+                                <span class="nav-text">Woche</span>
+                            </button>
+                            <button id="prevDayBtn" class="nav-btn" title="Vorheriger Tag">
+                                <span class="nav-icon">◀</span>
+                                <span class="nav-text">Tag</span>
+                            </button>
+                        </div>
+                        
+                        <div class="date-picker-wrapper">
+                            <input type="date" id="filterDatum" class="modern-date-input">
+                        </div>
+                        
+                        <div class="nav-group">
+                            <button id="nextDayBtn" class="nav-btn" title="Nächster Tag">
+                                <span class="nav-text">Tag</span>
+                                <span class="nav-icon">▶</span>
+                            </button>
+                            <button id="nextWeekBtn" class="nav-btn" title="Nächste Woche">
+                                <span class="nav-text">Woche</span>
+                                <span class="nav-icon">⏩</span>
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div class="nav-section nav-actions">
+                        <button id="todayBtn" class="action-btn primary" title="Zum heutigen Tag">
+                            <span class="btn-icon">📅</span>
+                            <span>Heute</span>
+                        </button>
+                        <button id="alleTermineBtn" class="action-btn secondary" title="Alle Termine anzeigen">
+                            <span class="btn-icon">📋</span>
+                            <span>Alle</span>
+                        </button>
+                        <button id="offeneTermineBtn" class="action-btn warning" title="Termine ohne erfasste Zeit">
+                            <span class="btn-icon">🔴</span>
+                            <span>Offene</span>
+                        </button>
                     </div>
                 </div>
 
                 <!-- Datum-Anzeige -->
-                <div id="zeitverwaltungDatumAnzeige" style="margin-bottom: 15px; padding: 10px 15px; background: linear-gradient(135deg, #e8f4fd 0%, #f0f7ff 100%); border-radius: 8px; border-left: 4px solid #4a90e2;">
-                    <span style="font-size: 1.1em; font-weight: 600;" id="zeitverwaltungDatumText">Alle Termine</span>
+                <div class="current-date-display" id="zeitverwaltungDatumAnzeige">
+                    <span class="date-icon">🗓️</span>
+                    <span class="date-text" id="zeitverwaltungDatumText">Alle Termine</span>
                 </div>
 
-                <table id="termineTable">
-                    <thead>
-                        <tr>
-                            <th>Status</th>
-                            <th>Termin-Nr</th>
-                            <th>Datum</th>
-                            <th>Kunde</th>
-                            <th>Kennzeichen</th>
-                            <th>KM</th>
-                            <th>Ersatzauto</th>
-                            <th>Arbeit</th>
-                            <th>Zeit (Min)</th>
-                            <th>Mitarbeiter</th>
-                            <th>Termin-Status</th>
-                            <th>Aktionen</th>
-                        </tr>
-                    </thead>
-                    <tbody></tbody>
-                </table>
+                <!-- Tabelle -->
+                <div class="table-container">
+                    <table id="termineTable" class="modern-table">
+                        <thead>
+                            <tr>
+                                <th>Status</th>
+                                <th>Termin-Nr</th>
+                                <th>Datum</th>
+                                <th>Kunde</th>
+                                <th>Kennzeichen</th>
+                                <th>KM</th>
+                                <th>Ersatzauto</th>
+                                <th>Arbeit</th>
+                                <th>Zeit (Min)</th>
+                                <th>Mitarbeiter</th>
+                                <th>Termin-Status</th>
+                                <th>Aktionen</th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
             </div>
 
             <div id="standardzeiten" class="sub-tab-content">
@@ -546,8 +946,9 @@
                 </div>
             </div>
 
-            <div id="mitarbeiter" class="sub-tab-content active">
+            <div id="mitarbeiter" class="sub-tab-content">
                 <div class="form-section">
+                    <h3>⚙️ Werkstatt-Einstellungen</h3>
                     <form id="werkstattSettingsForm" class="form-row">
                         <div class="form-group">
                             <label>Servicezeit pro Termin (Minuten):</label>
@@ -1019,13 +1420,30 @@
                         <option value="abgeschlossen">Abgeschlossen</option>
                     </select>
                 </div>
+
+                <!-- Phasen für mehrtägige Arbeiten -->
+                <div id="modalPhasenSection" style="margin-top: 20px; padding: 15px; background: #fff3e0; border-radius: 8px; border-left: 4px solid #ff9800; display: none;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                        <h4 style="margin: 0; color: #e65100;">🔧 Arbeitsphasen (mehrtägig)</h4>
+                        <button type="button" class="btn btn-secondary" id="modalAddPhaseBtn" style="padding: 5px 10px; font-size: 0.9em;">+ Phase hinzufügen</button>
+                    </div>
+                    <p style="color: #666; font-size: 0.9em; margin-bottom: 15px;">Für Unfallreparaturen oder mehrtägige Arbeiten: Jede Phase hat ein eigenes Datum für die Auslastung.</p>
+                    <div id="modalPhasenListe"></div>
+                </div>
+
+                <div style="margin-top: 15px;">
+                    <label class="checkbox-inline">
+                        <input type="checkbox" id="modalMehrtaegigCheckbox"> Mehrtägige Arbeit (Phasen aktivieren)
+                    </label>
+                </div>
+
                 <button id="saveArbeitszeitenBtn" class="btn btn-primary" style="margin-top: 20px;">Zeiten & Status speichern</button>
             </div>
         </div>
     </div>
 
     <script src="config.js"></script>
-    <script src="src/services/api.js?v=26"></script>
-    <script src="src/components/app.js?v=32"></script>
+    <script src="src/services/api.js?v=35"></script>
+    <script src="src/components/app.js?v=40"></script>
 </body>
 </html>

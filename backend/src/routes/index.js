@@ -10,6 +10,8 @@ const abwesenheitenRoutes = require('./abwesenheitenRoutes');
 const backupRoutes = require('./backupRoutes');
 const mitarbeiterRoutes = require('./mitarbeiterRoutes');
 const lehrlingeRoutes = require('./lehrlingeRoutes');
+const ersatzautosRoutes = require('./ersatzautosRoutes');
+const phasenRoutes = require('./phasenRoutes');
 
 router.use('/kunden', kundenRoutes);
 router.use('/termine', termineRoutes);
@@ -20,6 +22,8 @@ router.use('/abwesenheiten', abwesenheitenRoutes);
 router.use('/backup', backupRoutes);
 router.use('/mitarbeiter', mitarbeiterRoutes);
 router.use('/lehrlinge', lehrlingeRoutes);
+router.use('/ersatzautos', ersatzautosRoutes);
+router.use('/phasen', phasenRoutes);
 
 router.get('/health', (req, res) => {
   res.json({ status: 'OK', timestamp: new Date().toISOString() });

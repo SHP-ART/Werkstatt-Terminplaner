@@ -90,6 +90,10 @@ class TermineModel {
       kontakt_option,
       kilometerstand,
       ersatzauto,
+      ersatzauto_tage,
+      ersatzauto_bis_datum,
+      ersatzauto_bis_zeit,
+      abholung_datum,
       mitarbeiter_id,
       arbeitszeiten_details
     } = termin;
@@ -102,8 +106,8 @@ class TermineModel {
 
       db.run(
         `INSERT INTO termine
-         (termin_nr, kunde_id, kunde_name, kunde_telefon, kennzeichen, arbeit, umfang, geschaetzte_zeit, datum, abholung_typ, abholung_details, abholung_zeit, bring_zeit, kontakt_option, kilometerstand, ersatzauto, mitarbeiter_id, arbeitszeiten_details)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+         (termin_nr, kunde_id, kunde_name, kunde_telefon, kennzeichen, arbeit, umfang, geschaetzte_zeit, datum, abholung_typ, abholung_details, abholung_zeit, bring_zeit, kontakt_option, kilometerstand, ersatzauto, ersatzauto_tage, ersatzauto_bis_datum, ersatzauto_bis_zeit, abholung_datum, mitarbeiter_id, arbeitszeiten_details)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           terminNr,
           kunde_id,
@@ -121,6 +125,10 @@ class TermineModel {
           kontakt_option,
           kilometerstand,
           ersatzauto,
+          ersatzauto_tage || null,
+          ersatzauto_bis_datum || null,
+          ersatzauto_bis_zeit || null,
+          abholung_datum || null,
           mitarbeiter_id || null,
           arbeitszeiten_details || null
         ],

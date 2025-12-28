@@ -163,6 +163,10 @@ class EinstellungenService {
     return ApiService.put('/einstellungen/werkstatt', data);
   }
 
+  static async getErsatzautoVerfuegbarkeit(datum) {
+    return ApiService.get(`/einstellungen/ersatzauto/${datum}`);
+  }
+
   static async getAbwesenheit(datum) {
     return ApiService.get(`/abwesenheiten/${datum}`);
   }
@@ -264,5 +268,74 @@ class BackupService {
 
   static async upload({ filename, fileBase64, restoreNow = false }) {
     return ApiService.post('/backup/upload', { filename, fileBase64, restoreNow });
+  }
+}
+
+class ErsatzautosService {
+  static async getAll() {
+    return ApiService.get('/ersatzautos');
+  }
+
+  static async getActive() {
+    return ApiService.get('/ersatzautos/aktiv');
+  }
+
+  static async getById(id) {
+    return ApiService.get(`/ersatzautos/${id}`);
+  }
+
+  static async create(auto) {
+    return ApiService.post('/ersatzautos', auto);
+  }
+
+  static async update(id, auto) {
+    return ApiService.put(`/ersatzautos/${id}`, auto);
+  }
+
+  static async delete(id) {
+    return ApiService.delete(`/ersatzautos/${id}`);
+  }
+
+  static async getVerfuegbarkeit(datum) {
+    return ApiService.get(`/ersatzautos/verfuegbarkeit/${datum}`);
+  }
+
+  static async getVerfuegbarkeitDetails(datum) {
+    return ApiService.get(`/ersatzautos/verfuegbarkeit/${datum}/details`);
+  }
+
+  static async getAktuelleBuchungen() {
+    return ApiService.get('/ersatzautos/buchungen/aktuell');
+  }
+}
+
+// Phasen-Service für mehrtägige Arbeiten (z.B. Unfallreparatur)
+class PhasenService {
+  static async getByTerminId(terminId) {
+    return ApiService.get(`/phasen/termin/${terminId}`);
+  }
+
+  static async getByDatum(datum) {
+    return ApiService.get(`/phasen/datum/${datum}`);
+  }
+
+  static async getById(id) {
+    return ApiService.get(`/phasen/${id}`);
+  }
+
+  static async create(phase) {
+    return ApiService.post('/phasen', phase);
+  }
+
+  static async update(id, data) {
+    return ApiService.put(`/phasen/${id}`, data);
+  }
+
+  static async delete(id) {
+    return ApiService.delete(`/phasen/${id}`);
+  }
+
+  static async syncPhasen(terminId, phasen) {
+    return ApiService.put(`/phasen/termin/${terminId}/sync`, { phasen });
   }
 }

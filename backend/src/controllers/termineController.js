@@ -75,10 +75,45 @@ class TermineController {
       : null;
     const mitarbeiter_id_wert = Number.isFinite(mitarbeiter_id) ? mitarbeiter_id : null;
 
+    // Ersatzauto-Tage parsen
+    const ersatzauto_tage = req.body.ersatzauto_tage 
+      ? parseInt(req.body.ersatzauto_tage, 10) 
+      : null;
+    const ersatzauto_tage_wert = Number.isFinite(ersatzauto_tage) && ersatzauto_tage > 0 
+      ? ersatzauto_tage 
+      : null;
+
+    // VALIDIERUNG: Wenn Ersatzauto gewünscht, muss Dauer oder Abholdatum angegeben sein
+    const ersatzautoGewuenscht = req.body.ersatzauto === true || req.body.ersatzauto === 1 || req.body.ersatzauto === '1';
+    const hatErsatzautoDauer = ersatzauto_tage_wert !== null && ersatzauto_tage_wert > 0;
+    const hatErsatzautoBisDatum = req.body.ersatzauto_bis_datum && req.body.ersatzauto_bis_datum.trim() !== '';
+    const hatAbholungDatum = req.body.abholung_datum && req.body.abholung_datum.trim() !== '';
+    const hatAbholungZeit = req.body.abholung_zeit && req.body.abholung_zeit.trim() !== '';
+    const istTelRuecksprache = req.body.abholung_typ === 'ruecksprache';
+    
+    if (ersatzautoGewuenscht) {
+      // Bei tel. Rücksprache: Tage sind Pflicht
+      if (istTelRuecksprache && !hatErsatzautoDauer) {
+        return res.status(400).json({ 
+          error: 'Bei Ersatzauto mit tel. Rücksprache muss die Anzahl Tage angegeben werden.' 
+        });
+      }
+      // Bei anderen Typen: Entweder Tage, Bis-Datum oder Abholdatum
+      if (!istTelRuecksprache && !hatErsatzautoDauer && !hatErsatzautoBisDatum && !hatAbholungDatum && !hatAbholungZeit) {
+        return res.status(400).json({ 
+          error: 'Bei Ersatzauto-Buchung muss entweder die Anzahl Tage oder ein Abholdatum angegeben werden.' 
+        });
+      }
+    }
+
     const payload = {
       ...req.body,
       kilometerstand: kilometerstandWert,
       ersatzauto: req.body.ersatzauto ? 1 : 0,
+      ersatzauto_tage: ersatzauto_tage_wert,
+      ersatzauto_bis_datum: req.body.ersatzauto_bis_datum || null,
+      ersatzauto_bis_zeit: req.body.ersatzauto_bis_zeit || null,
+      abholung_datum: req.body.abholung_datum || null,
       abholung_zeit: req.body.abholung_zeit || null,
       bring_zeit: req.body.bring_zeit || null,
       kontakt_option: req.body.kontakt_option || null,

@@ -16,6 +16,7 @@ class App {
     this.setInternerTerminTodayDate();
     this.loadInternerTerminMitarbeiter();
     this.setupWebSocket();
+    this.setupErsatzautoOptionHandlers();
   }
 
   setupWebSocket() {
@@ -63,6 +64,12 @@ class App {
     document.getElementById('zeitAnpassungForm').addEventListener('submit', (e) => this.handleZeitAnpassungSubmit(e));
     document.getElementById('serverConfigForm').addEventListener('submit', (e) => this.handleServerConfigSubmit(e));
     document.getElementById('werkstattSettingsForm').addEventListener('submit', (e) => this.handleWerkstattSettingsSubmit(e));
+    
+    // Ersatzauto-Formular
+    const ersatzautoForm = document.getElementById('ersatzautoForm');
+    if (ersatzautoForm) {
+      ersatzautoForm.addEventListener('submit', (e) => this.handleErsatzautoSubmit(e));
+    }
 
     // Neue Abwesenheiten-Formulare
     document.getElementById('urlaubForm').addEventListener('submit', (e) => this.handleUrlaubSubmit(e));
@@ -98,6 +105,7 @@ class App {
     document.getElementById('importBtn').addEventListener('click', () => this.importKunden());
     document.getElementById('testConnectionBtn').addEventListener('click', () => this.testConnection());
     document.getElementById('terminSchnellsuche').addEventListener('change', () => this.handleTerminSchnellsuche());
+    document.getElementById('terminSchnellsuche').addEventListener('input', () => this.updateSchnellsucheStatus());
     document.getElementById('terminSchnellsuche').addEventListener('keydown', (e) => {
       if (e.key === 'Enter') {
         e.preventDefault();
@@ -105,6 +113,10 @@ class App {
       }
     });
     document.getElementById('abholung_typ').addEventListener('change', () => this.toggleAbholungDetails());
+
+    // Ersatzauto Verfügbarkeit prüfen
+    document.getElementById('ersatzauto').addEventListener('change', () => this.checkErsatzautoVerfuegbarkeit());
+    document.getElementById('datum').addEventListener('change', () => this.checkErsatzautoVerfuegbarkeit());
 
     // Kunden-Suche Event-Listener
     const kundenSearchInput = document.getElementById('kundenSearchInput');
@@ -117,6 +129,57 @@ class App {
           this.searchKunden();
         }
       });
+    }
+
+    // Termin bearbeiten Event-Listener
+    const editTerminLadenBtn = document.getElementById('editTerminLadenBtn');
+    if (editTerminLadenBtn) {
+      editTerminLadenBtn.addEventListener('click', () => this.loadEditTermine());
+    }
+    const editTerminDatum = document.getElementById('editTerminDatum');
+    if (editTerminDatum) {
+      editTerminDatum.addEventListener('change', () => this.loadEditTermine());
+    }
+    const editTerminAuswahl = document.getElementById('editTerminAuswahl');
+    if (editTerminAuswahl) {
+      editTerminAuswahl.addEventListener('change', () => this.loadTerminZumBearbeiten());
+    }
+    const terminEditForm = document.getElementById('terminEditForm');
+    if (terminEditForm) {
+      terminEditForm.addEventListener('submit', (e) => this.handleTerminEditSubmit(e));
+    }
+    const editTerminAbbrechenBtn = document.getElementById('editTerminAbbrechenBtn');
+    if (editTerminAbbrechenBtn) {
+      editTerminAbbrechenBtn.addEventListener('click', () => this.resetTerminEditForm());
+    }
+    const editAbholungTyp = document.getElementById('edit_abholung_typ');
+    if (editAbholungTyp) {
+      editAbholungTyp.addEventListener('change', () => this.toggleEditAbholungDetails());
+    }
+    const editErsatzauto = document.getElementById('edit_ersatzauto');
+    if (editErsatzauto) {
+      editErsatzauto.addEventListener('change', () => this.checkEditErsatzautoVerfuegbarkeit());
+    }
+    const editDatum = document.getElementById('edit_datum');
+    if (editDatum) {
+      editDatum.addEventListener('change', () => {
+        this.checkEditErsatzautoVerfuegbarkeit();
+        this.loadEditTerminAuslastungAnzeige();
+      });
+    }
+    const editArbeitEingabe = document.getElementById('edit_arbeitEingabe');
+    if (editArbeitEingabe) {
+      editArbeitEingabe.addEventListener('input', () => this.updateEditZeitschaetzung());
+    }
+
+    // Phasen-System Event-Listener
+    const mehrtaegigCheckbox = document.getElementById('mehrtaegigCheckbox');
+    if (mehrtaegigCheckbox) {
+      mehrtaegigCheckbox.addEventListener('change', () => this.togglePhasenSection());
+    }
+    const addPhaseBtn = document.getElementById('addPhaseBtn');
+    if (addPhaseBtn) {
+      addPhaseBtn.addEventListener('click', () => this.addPhase());
     }
 
     const heuteTabellenBtn = document.getElementById('heuteTabellenAnsicht');
@@ -187,6 +250,16 @@ class App {
     document.getElementById('closeArbeitszeitenModal').addEventListener('click', () => this.closeArbeitszeitenModal());
     document.getElementById('saveArbeitszeitenBtn').addEventListener('click', () => this.saveArbeitszeitenModal());
 
+    // Modal Phasen Event-Listener
+    const modalMehrtaegigCheckbox = document.getElementById('modalMehrtaegigCheckbox');
+    if (modalMehrtaegigCheckbox) {
+      modalMehrtaegigCheckbox.addEventListener('change', () => this.toggleModalPhasenSection());
+    }
+    const modalAddPhaseBtn = document.getElementById('modalAddPhaseBtn');
+    if (modalAddPhaseBtn) {
+      modalAddPhaseBtn.addEventListener('click', () => this.addModalPhase());
+    }
+
     window.addEventListener('click', (event) => {
       const modal = document.getElementById('modal');
       const detailsModal = document.getElementById('terminDetailsModal');
@@ -239,6 +312,117 @@ class App {
     const showKontakt = abholungTyp === 'hol_bring' || abholungTyp === 'bringen' || abholungTyp === 'ruecksprache';
     kontaktOptionGroup.style.display = showKontakt ? 'block' : 'none';
 
+  }
+
+  async checkErsatzautoVerfuegbarkeit() {
+    const checkbox = document.getElementById('ersatzauto');
+    const datumInput = document.getElementById('datum');
+    const statusEl = document.getElementById('ersatzautoStatus');
+    const dauerGroup = document.getElementById('ersatzautoDauerGroup');
+    
+    if (!checkbox || !datumInput || !statusEl) return;
+    
+    // Ersatzauto-Dauer-Gruppe anzeigen/ausblenden
+    if (dauerGroup) {
+      dauerGroup.style.display = checkbox.checked ? 'block' : 'none';
+      
+      // Setze Mindest-Datum für ersatzauto_bis_datum
+      const bisDatumInput = document.getElementById('ersatzauto_bis_datum');
+      if (bisDatumInput && datumInput.value) {
+        bisDatumInput.min = datumInput.value;
+      }
+    }
+    
+    // Nur anzeigen wenn Checkbox aktiviert ist
+    if (!checkbox.checked) {
+      statusEl.style.display = 'none';
+      return;
+    }
+    
+    const datum = datumInput.value;
+    if (!datum) {
+      statusEl.style.display = 'none';
+      return;
+    }
+    
+    try {
+      const verfuegbarkeit = await ErsatzautosService.getVerfuegbarkeit(datum);
+      
+      statusEl.style.display = 'inline-flex';
+      const text = statusEl.querySelector('.status-text');
+      
+      const istVerfuegbar = verfuegbarkeit.verfuegbar > 0;
+      
+      if (istVerfuegbar) {
+        statusEl.className = 'ersatzauto-status verfuegbar';
+        text.textContent = `${verfuegbarkeit.verfuegbar} von ${verfuegbarkeit.gesamt} frei`;
+      } else {
+        statusEl.className = 'ersatzauto-status nicht-verfuegbar';
+        text.textContent = `Alle ${verfuegbarkeit.gesamt} vergeben`;
+      }
+    } catch (error) {
+      console.error('Fehler beim Prüfen der Ersatzauto-Verfügbarkeit:', error);
+      statusEl.style.display = 'none';
+    }
+  }
+
+  // Validiere Ersatzauto-Eingaben
+  validateErsatzautoEingaben() {
+    const checkbox = document.getElementById('ersatzauto');
+    if (!checkbox || !checkbox.checked) return true; // Kein Ersatzauto = OK
+    
+    const abholungTyp = document.getElementById('abholung_typ').value;
+    const ersatzautoTageEl = document.getElementById('ersatzauto_tage');
+    const abholungDatumEl = document.getElementById('abholung_datum');
+    const abholungZeitEl = document.getElementById('abholung_zeit');
+    
+    const ersatzautoTage = ersatzautoTageEl?.value?.trim() || '';
+    const abholungDatum = abholungDatumEl?.value?.trim() || '';
+    const abholungZeit = abholungZeitEl?.value?.trim() || '';
+    
+    const hatTage = ersatzautoTage !== '' && parseInt(ersatzautoTage, 10) > 0;
+    const hatAbholungDatum = abholungDatum !== '';
+    const hatAbholungZeit = abholungZeit !== '';
+    
+    const dauerGroup = document.getElementById('ersatzautoDauerGroup');
+    
+    // Bei "Telefonische Rücksprache" muss Anzahl Tage angegeben sein
+    // Bei anderen Typen reicht auch das Abholdatum/Zeit
+    const istTelefonRuecksprache = abholungTyp === 'ruecksprache';
+    
+    if (istTelefonRuecksprache && !hatTage) {
+      // Bei tel. Rücksprache: Tage sind Pflicht
+      if (dauerGroup) {
+        dauerGroup.style.borderColor = '#dc3545';
+        dauerGroup.style.background = '#fff5f5';
+      }
+      if (ersatzautoTageEl) ersatzautoTageEl.style.borderColor = '#dc3545';
+      return false;
+    }
+    
+    // Bei anderen Typen: Entweder Tage ODER Abholdatum muss vorhanden sein
+    if (!istTelefonRuecksprache && !hatTage && !hatAbholungDatum && !hatAbholungZeit) {
+      if (dauerGroup) {
+        dauerGroup.style.borderColor = '#dc3545';
+        dauerGroup.style.background = '#fff5f5';
+      }
+      if (ersatzautoTageEl) ersatzautoTageEl.style.borderColor = '#dc3545';
+      return false;
+    }
+    
+    // Alles OK - Styling zurücksetzen
+    if (dauerGroup) {
+      dauerGroup.style.borderColor = '#ffc107';
+      dauerGroup.style.background = '#fff8e1';
+    }
+    if (ersatzautoTageEl) ersatzautoTageEl.style.borderColor = '';
+    
+    return true;
+  }
+
+  // Event-Handler für Ersatzauto-Optionen (vereinfacht)
+  setupErsatzautoOptionHandlers() {
+    // Keine speziellen Handler mehr nötig - nur noch Tage-Feld
   }
 
   setTodayDate() {
@@ -384,6 +568,12 @@ class App {
     if (schnellsuche) {
       schnellsuche.value = '';
     }
+    
+    // Schnellsuche-Status ausblenden
+    const schnellsucheStatus = document.getElementById('schnellsucheStatus');
+    if (schnellsucheStatus) {
+      schnellsucheStatus.style.display = 'none';
+    }
 
     // Versteckte Felder zurücksetzen
     const kundeId = document.getElementById('kunde_id');
@@ -391,12 +581,556 @@ class App {
       kundeId.value = '';
     }
 
+    // Verstecke Kundenanzeige
+    this.hideGefundenerKunde();
+
+    // Ersatzauto-Felder zurücksetzen
+    const ersatzautoDauerGroup = document.getElementById('ersatzautoDauerGroup');
+    if (ersatzautoDauerGroup) {
+      ersatzautoDauerGroup.style.display = 'none';
+      ersatzautoDauerGroup.style.borderColor = '#ffc107';
+      ersatzautoDauerGroup.style.background = '#fff8e1';
+    }
+    const ersatzautoTage = document.getElementById('ersatzauto_tage');
+    if (ersatzautoTage) {
+      ersatzautoTage.value = '';
+      ersatzautoTage.style.borderColor = '';
+    }
+    
+    const abholungDatum = document.getElementById('abholung_datum');
+    if (abholungDatum) {
+      abholungDatum.value = '';
+    }
+    const ersatzautoStatus = document.getElementById('ersatzautoStatus');
+    if (ersatzautoStatus) {
+      ersatzautoStatus.style.display = 'none';
+    }
+
     // Warnung verstecken
     this.hideTerminWarnung();
 
     // Abholung-Details korrekt anzeigen
     this.toggleAbholungDetails();
+    
+    // Phasen zurücksetzen
+    this.resetPhasen();
   }
+
+  // === TERMIN BEARBEITEN METHODEN ===
+
+  async loadEditTermine() {
+    const datumInput = document.getElementById('editTerminDatum');
+    const select = document.getElementById('editTerminAuswahl');
+    
+    if (!datumInput || !select) return;
+    
+    // Setze heute als Standard wenn kein Datum
+    if (!datumInput.value) {
+      datumInput.value = new Date().toISOString().split('T')[0];
+    }
+    
+    const datum = datumInput.value;
+    
+    try {
+      const termine = await TermineService.getAll(datum);
+      
+      // Filter: Nur nicht-interne Termine (mit Kennzeichen)
+      const filteredTermine = termine.filter(t => t.kennzeichen && t.kennzeichen.trim() !== '' && t.kennzeichen !== 'INTERN');
+      
+      select.innerHTML = '<option value="">-- Termin wählen --</option>';
+      
+      if (filteredTermine.length === 0) {
+        select.innerHTML += '<option value="" disabled>Keine Termine an diesem Tag</option>';
+      } else {
+        filteredTermine.forEach(termin => {
+          const kundeName = termin.kunde_name || 'Unbekannt';
+          const arbeitKurz = (termin.arbeit || '').substring(0, 40) + ((termin.arbeit || '').length > 40 ? '...' : '');
+          select.innerHTML += `<option value="${termin.id}">${termin.kennzeichen} - ${kundeName} (${arbeitKurz})</option>`;
+        });
+      }
+      
+      // Formular verstecken
+      this.resetTerminEditForm();
+    } catch (error) {
+      console.error('Fehler beim Laden der Termine:', error);
+      select.innerHTML = '<option value="">Fehler beim Laden</option>';
+    }
+  }
+
+  async loadTerminZumBearbeiten() {
+    const select = document.getElementById('editTerminAuswahl');
+    const terminId = select?.value;
+    
+    if (!terminId) {
+      this.resetTerminEditForm();
+      return;
+    }
+    
+    try {
+      // Lade alle Termine und finde den richtigen
+      const datum = document.getElementById('editTerminDatum').value;
+      const termine = await TermineService.getAll(datum);
+      const termin = termine.find(t => t.id == terminId);
+      
+      if (!termin) {
+        alert('Termin nicht gefunden.');
+        return;
+      }
+      
+      // Zeige das Formular
+      document.getElementById('editTerminFormContainer').style.display = 'block';
+      document.getElementById('editTerminKeinAusgewaehlt').style.display = 'none';
+      
+      // Fülle das Formular mit den Termin-Daten
+      document.getElementById('edit_termin_id').value = termin.id;
+      document.getElementById('edit_kunde_id').value = termin.kunde_id || '';
+      
+      // Zeige Kundennamen in der Anzeige-Box
+      const kundeNameDisplay = document.getElementById('edit_kunde_name_display');
+      const kundeTelefonDisplay = document.getElementById('edit_kunde_telefon_display');
+      if (kundeNameDisplay) {
+        kundeNameDisplay.textContent = termin.kunde_name || 'Unbekannt';
+      }
+      // Telefon aus Cache holen
+      if (kundeTelefonDisplay && termin.kunde_id) {
+        const kunde = this.kundenCache.find(k => k.id === termin.kunde_id);
+        kundeTelefonDisplay.textContent = kunde?.telefon ? `📞 ${kunde.telefon}` : '';
+      }
+      
+      document.getElementById('edit_datum').value = termin.datum;
+      document.getElementById('edit_kennzeichen').value = termin.kennzeichen || '';
+      document.getElementById('edit_kilometerstand').value = termin.kilometerstand || '';
+      
+      // Arbeiten als mehrzeiligen Text
+      const arbeitText = (termin.arbeit || '').split(',').map(a => a.trim()).join('\n');
+      document.getElementById('edit_arbeitEingabe').value = arbeitText;
+      
+      document.getElementById('edit_umfang').value = termin.umfang || '';
+      document.getElementById('edit_abholung_typ').value = termin.abholung_typ || 'bringen';
+      document.getElementById('edit_abholung_details').value = termin.abholung_details || '';
+      document.getElementById('edit_bring_zeit').value = termin.bring_zeit || '';
+      document.getElementById('edit_abholung_zeit').value = termin.abholung_zeit || '';
+      document.getElementById('edit_abholung_datum').value = termin.abholung_datum || '';
+      
+      // Kontakt-Optionen
+      const kontaktOption = termin.kontakt_option || '';
+      document.getElementById('edit_kontakt_kunde_anrufen').checked = kontaktOption.includes('Kunde anrufen');
+      document.getElementById('edit_kontakt_kunde_ruft').checked = kontaktOption.includes('Kunde ruft selbst an');
+      
+      // Ersatzauto
+      document.getElementById('edit_ersatzauto').checked = !!termin.ersatzauto;
+      document.getElementById('edit_ersatzauto_tage').value = termin.ersatzauto_tage || '';
+      
+      // Aktualisiere die Anzeigen
+      this.toggleEditAbholungDetails();
+      this.checkEditErsatzautoVerfuegbarkeit();
+      this.updateEditZeitschaetzung();
+      this.loadEditTerminAuslastungAnzeige();
+      
+    } catch (error) {
+      console.error('Fehler beim Laden des Termins:', error);
+      alert('Fehler beim Laden des Termins.');
+    }
+  }
+
+  resetTerminEditForm() {
+    document.getElementById('editTerminFormContainer').style.display = 'none';
+    document.getElementById('editTerminKeinAusgewaehlt').style.display = 'block';
+    
+    const form = document.getElementById('terminEditForm');
+    if (form) {
+      form.reset();
+    }
+    
+    const select = document.getElementById('editTerminAuswahl');
+    if (select) {
+      select.value = '';
+    }
+    
+    // Verstecke Ersatzauto-Dauer-Gruppe
+    const dauerGroup = document.getElementById('editErsatzautoDauerGroup');
+    if (dauerGroup) {
+      dauerGroup.style.display = 'none';
+    }
+    
+    // Verstecke Auslastungsanzeige
+    const auslastung = document.getElementById('editTerminAuslastungAnzeige');
+    if (auslastung) {
+      auslastung.style.display = 'none';
+    }
+    
+    // Verstecke Zeitschätzung
+    const zeitschaetzung = document.getElementById('editZeitschaetzungAnzeige');
+    if (zeitschaetzung) {
+      zeitschaetzung.style.display = 'none';
+    }
+  }
+
+  toggleEditAbholungDetails() {
+    const abholungTyp = document.getElementById('edit_abholung_typ').value;
+    const detailsGroup = document.getElementById('editAbholungDetailsGroup');
+    const zeitRow = document.getElementById('editAbholungZeitRow');
+    const bringzeitGroup = document.getElementById('editBringzeitGroup');
+    const abholzeitGroup = document.getElementById('editAbholzeitGroup');
+    const kontaktOptionGroup = document.getElementById('editKontaktOptionGroup');
+
+    // Details anzeigen bei hol_bring, bringen oder ruecksprache
+    const showDetails = abholungTyp === 'hol_bring' || abholungTyp === 'ruecksprache' || abholungTyp === 'bringen';
+    if (detailsGroup) detailsGroup.style.display = showDetails ? 'block' : 'none';
+
+    // Zeitfelder anzeigen bei abholung, hol_bring oder bringen
+    const showZeitRow = abholungTyp === 'hol_bring' || abholungTyp === 'bringen' || abholungTyp === 'warten';
+    if (zeitRow) zeitRow.style.display = showZeitRow ? 'flex' : 'none';
+
+    // Bringzeit nur bei hol_bring, bringen oder warten
+    const showBringzeit = abholungTyp === 'hol_bring' || abholungTyp === 'bringen' || abholungTyp === 'warten';
+    if (bringzeitGroup) bringzeitGroup.style.display = showBringzeit ? 'block' : 'none';
+
+    // Abholzeit bei hol_bring oder bringen
+    const showAbholzeit = abholungTyp === 'hol_bring' || abholungTyp === 'bringen';
+    if (abholzeitGroup) abholzeitGroup.style.display = showAbholzeit ? 'block' : 'none';
+
+    // Kontakt bei hol_bring, bringen oder ruecksprache
+    const showKontakt = abholungTyp === 'hol_bring' || abholungTyp === 'bringen' || abholungTyp === 'ruecksprache';
+    if (kontaktOptionGroup) kontaktOptionGroup.style.display = showKontakt ? 'block' : 'none';
+  }
+
+  async checkEditErsatzautoVerfuegbarkeit() {
+    const checkbox = document.getElementById('edit_ersatzauto');
+    const datumInput = document.getElementById('edit_datum');
+    const statusEl = document.getElementById('editErsatzautoStatus');
+    const dauerGroup = document.getElementById('editErsatzautoDauerGroup');
+    
+    if (!checkbox || !datumInput || !statusEl) return;
+    
+    // Ersatzauto-Dauer-Gruppe anzeigen/ausblenden
+    if (dauerGroup) {
+      dauerGroup.style.display = checkbox.checked ? 'block' : 'none';
+    }
+    
+    // Nur anzeigen wenn Checkbox aktiviert ist
+    if (!checkbox.checked) {
+      statusEl.style.display = 'none';
+      return;
+    }
+    
+    const datum = datumInput.value;
+    if (!datum) {
+      statusEl.style.display = 'none';
+      return;
+    }
+    
+    try {
+      const verfuegbarkeit = await ErsatzautosService.getVerfuegbarkeit(datum);
+      
+      statusEl.style.display = 'inline-flex';
+      const text = statusEl.querySelector('.status-text');
+      
+      const istVerfuegbar = verfuegbarkeit.verfuegbar > 0;
+      
+      if (istVerfuegbar) {
+        statusEl.className = 'ersatzauto-status verfuegbar';
+        text.textContent = `${verfuegbarkeit.verfuegbar} von ${verfuegbarkeit.gesamt} frei`;
+      } else {
+        statusEl.className = 'ersatzauto-status nicht-verfuegbar';
+        text.textContent = `Alle ${verfuegbarkeit.gesamt} vergeben`;
+      }
+    } catch (error) {
+      console.error('Fehler beim Prüfen der Ersatzauto-Verfügbarkeit:', error);
+      statusEl.style.display = 'none';
+    }
+  }
+
+  updateEditZeitschaetzung() {
+    const arbeitText = document.getElementById('edit_arbeitEingabe').value.trim();
+    const anzeige = document.getElementById('editZeitschaetzungAnzeige');
+    const wertEl = document.getElementById('editZeitschaetzungWert');
+    const detailsEl = document.getElementById('editZeitschaetzungDetails');
+    
+    if (!arbeitText || !anzeige || !wertEl) return;
+    
+    const arbeiten = this.parseArbeiten(arbeitText);
+    if (arbeiten.length === 0) {
+      anzeige.style.display = 'none';
+      return;
+    }
+    
+    // Berechne die Zeiten für jede Arbeit
+    let gesamtMinuten = 0;
+    const details = [];
+    
+    arbeiten.forEach(arbeit => {
+      // Suche nach der Arbeit in den Standardzeiten (case-insensitive)
+      const gefunden = this.arbeitszeiten.find(
+        az => az.bezeichnung.toLowerCase() === arbeit.toLowerCase()
+      );
+      
+      if (gefunden) {
+        const minuten = gefunden.standard_minuten || 0;
+        gesamtMinuten += minuten;
+        details.push(`✓ ${arbeit}: ${minuten} min`);
+      } else {
+        details.push(`⚠️ ${arbeit}: keine Standardzeit`);
+      }
+    });
+    
+    // Formatiere die Gesamtzeit
+    const gesamtStunden = Math.floor(gesamtMinuten / 60);
+    const gesamtRestMinuten = gesamtMinuten % 60;
+    let gesamtZeitStr = '';
+    
+    if (gesamtMinuten === 0) {
+      gesamtZeitStr = 'Keine Standardzeiten';
+    } else if (gesamtStunden > 0 && gesamtRestMinuten > 0) {
+      gesamtZeitStr = `${gesamtStunden} h ${gesamtRestMinuten} min`;
+    } else if (gesamtStunden > 0) {
+      gesamtZeitStr = `${gesamtStunden} h`;
+    } else {
+      gesamtZeitStr = `${gesamtRestMinuten} min`;
+    }
+    
+    anzeige.style.display = 'block';
+    wertEl.textContent = gesamtZeitStr;
+    
+    if (detailsEl) {
+      detailsEl.innerHTML = details.join(' | ');
+    }
+  }
+
+  async loadEditTerminAuslastungAnzeige() {
+    const datumInput = document.getElementById('edit_datum');
+    const anzeige = document.getElementById('editTerminAuslastungAnzeige');
+
+    if (!datumInput || !anzeige) return;
+
+    const datum = datumInput.value;
+    if (!datum) {
+      anzeige.style.display = 'none';
+      return;
+    }
+
+    try {
+      const auslastung = await AuslastungService.getByDatum(datum);
+      
+      anzeige.style.display = 'block';
+      
+      const prozent = auslastung.auslastung_prozent || 0;
+      const verfuegbar = auslastung.verfuegbare_minuten || 0;
+      const gesamt = auslastung.gesamt_minuten || 0;
+      
+      document.getElementById('editTerminAuslastungProzent').textContent = `${Math.round(prozent)}%`;
+      document.getElementById('editTerminAuslastungVerfuegbar').textContent = `${Math.round(verfuegbar / 60 * 10) / 10} h`;
+      document.getElementById('editTerminAuslastungGesamt').textContent = `${Math.round(gesamt / 60 * 10) / 10} h`;
+      
+      const balken = document.getElementById('editTerminAuslastungBalken');
+      balken.style.width = `${Math.min(prozent, 100)}%`;
+      
+      if (prozent >= 100) {
+        balken.style.background = '#dc3545';
+      } else if (prozent >= 80) {
+        balken.style.background = '#ffc107';
+      } else {
+        balken.style.background = '#4a90e2';
+      }
+    } catch (error) {
+      console.error('Fehler beim Laden der Auslastung:', error);
+      anzeige.style.display = 'none';
+    }
+  }
+
+  async handleTerminEditSubmit(e) {
+    e.preventDefault();
+    
+    const terminId = document.getElementById('edit_termin_id').value;
+    if (!terminId) {
+      alert('Kein Termin ausgewählt.');
+      return;
+    }
+    
+    const arbeitText = document.getElementById('edit_arbeitEingabe').value.trim();
+    const arbeitenListe = this.parseArbeiten(arbeitText);
+    if (arbeitenListe.length === 0) {
+      alert('Bitte mindestens eine Arbeit eingeben.');
+      return;
+    }
+    
+    const abholungTyp = document.getElementById('edit_abholung_typ').value;
+    const abholungZeit = document.getElementById('edit_abholung_zeit').value || null;
+    const abholungDatum = document.getElementById('edit_abholung_datum').value || null;
+    const bringZeit = document.getElementById('edit_bring_zeit').value || null;
+    
+    // Sammle alle ausgewählten Kontakt-Optionen
+    const kontaktOptionen = [];
+    if (document.getElementById('edit_kontakt_kunde_anrufen').checked) {
+      kontaktOptionen.push('Kunde anrufen');
+    }
+    if (document.getElementById('edit_kontakt_kunde_ruft').checked) {
+      kontaktOptionen.push('Kunde ruft selbst an');
+    }
+    const kontaktOption = kontaktOptionen.length > 0 ? kontaktOptionen.join(', ') : null;
+    
+    const kontaktAktiv = ['hol_bring', 'bringen', 'ruecksprache', 'warten'].includes(abholungTyp);
+    
+    const kilometerstandWert = document.getElementById('edit_kilometerstand').value;
+    
+    // Ersatzauto-Daten sammeln
+    const ersatzautoChecked = document.getElementById('edit_ersatzauto').checked;
+    const ersatzautoTage = document.getElementById('edit_ersatzauto_tage')?.value?.trim() || '';
+    
+    // Berechne die geschätzte Zeit aus den Standardzeiten
+    const geschaetzteZeit = this.getGeschaetzteZeit(arbeitenListe);
+    
+    const terminData = {
+      kennzeichen: document.getElementById('edit_kennzeichen').value.trim(),
+      arbeit: arbeitenListe.join(', '),
+      umfang: document.getElementById('edit_umfang').value.trim(),
+      geschaetzte_zeit: geschaetzteZeit,
+      datum: document.getElementById('edit_datum').value,
+      abholung_typ: abholungTyp,
+      abholung_details: document.getElementById('edit_abholung_details').value,
+      abholung_zeit: kontaktAktiv ? abholungZeit : null,
+      abholung_datum: kontaktAktiv ? abholungDatum : null,
+      bring_zeit: kontaktAktiv ? bringZeit : null,
+      kontakt_option: kontaktAktiv ? kontaktOption : null,
+      kilometerstand: kilometerstandWert !== '' ? parseInt(kilometerstandWert, 10) : null,
+      ersatzauto: ersatzautoChecked,
+      ersatzauto_tage: ersatzautoChecked && ersatzautoTage ? parseInt(ersatzautoTage, 10) : null,
+      ersatzauto_bis_datum: ersatzautoChecked && !ersatzautoTage && abholungDatum ? abholungDatum : null,
+      ersatzauto_bis_zeit: ersatzautoChecked && !ersatzautoTage && abholungZeit ? abholungZeit : null
+    };
+    
+    try {
+      await this.ensureArbeitenExistieren(arbeitenListe, geschaetzteZeit);
+      await TermineService.update(terminId, terminData);
+      alert('Termin erfolgreich aktualisiert!');
+      
+      // Formular zurücksetzen und Termine neu laden
+      this.resetTerminEditForm();
+      this.loadEditTermine();
+      this.loadTermine();
+      this.loadDashboard();
+      this.loadArbeitszeiten();
+      this.loadTermineZeiten();
+    } catch (error) {
+      console.error('Fehler beim Aktualisieren des Termins:', error);
+      alert('Fehler beim Aktualisieren des Termins: ' + (error.message || 'Unbekannter Fehler'));
+    }
+  }
+
+  // === ENDE TERMIN BEARBEITEN METHODEN ===
+
+  // === PHASEN-SYSTEM METHODEN ===
+
+  phasenCounter = 0;
+  phasenData = [];
+
+  togglePhasenSection() {
+    const checkbox = document.getElementById('mehrtaegigCheckbox');
+    const phasenSection = document.getElementById('phasenSection');
+    
+    if (checkbox && phasenSection) {
+      phasenSection.style.display = checkbox.checked ? 'block' : 'none';
+      
+      // Wenn aktiviert und keine Phasen vorhanden, füge erste Phase hinzu
+      if (checkbox.checked && this.phasenData.length === 0) {
+        this.addPhase();
+      }
+    }
+  }
+
+  addPhase() {
+    this.phasenCounter++;
+    const phasenListe = document.getElementById('phasenListe');
+    const terminDatum = document.getElementById('datum').value || new Date().toISOString().split('T')[0];
+    
+    const phaseDiv = document.createElement('div');
+    phaseDiv.className = 'phase-item';
+    phaseDiv.id = `phase_${this.phasenCounter}`;
+    phaseDiv.style.cssText = 'background: #fff; padding: 15px; border-radius: 8px; margin-bottom: 10px; border: 1px solid #ddd;';
+    
+    phaseDiv.innerHTML = `
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+        <strong style="color: #e65100;">Phase ${this.phasenCounter}</strong>
+        <button type="button" class="btn btn-delete-icon" onclick="app.removePhase(${this.phasenCounter})" title="Phase entfernen">🗑️</button>
+      </div>
+      <div class="form-row" style="display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 10px;">
+        <div class="form-group" style="margin: 0;">
+          <label style="font-size: 0.85em;">Arbeit/Bezeichnung:</label>
+          <input type="text" id="phase_${this.phasenCounter}_bezeichnung" placeholder="z.B. Zerlegen (Karosserie)" required>
+        </div>
+        <div class="form-group" style="margin: 0;">
+          <label style="font-size: 0.85em;">Datum:</label>
+          <input type="date" id="phase_${this.phasenCounter}_datum" value="${terminDatum}" required>
+        </div>
+        <div class="form-group" style="margin: 0;">
+          <label style="font-size: 0.85em;">Zeit (Stunden):</label>
+          <input type="number" id="phase_${this.phasenCounter}_zeit" min="0.25" step="0.25" placeholder="z.B. 4" required>
+        </div>
+      </div>
+      <div class="form-group" style="margin-top: 10px; margin-bottom: 0;">
+        <label style="font-size: 0.85em;">Notizen (optional):</label>
+        <input type="text" id="phase_${this.phasenCounter}_notizen" placeholder="z.B. Lackierer informieren">
+      </div>
+    `;
+    
+    phasenListe.appendChild(phaseDiv);
+    
+    // Speichere Phase-Referenz
+    this.phasenData.push({
+      id: this.phasenCounter,
+      element: phaseDiv
+    });
+  }
+
+  removePhase(phaseId) {
+    const phaseElement = document.getElementById(`phase_${phaseId}`);
+    if (phaseElement) {
+      phaseElement.remove();
+      this.phasenData = this.phasenData.filter(p => p.id !== phaseId);
+    }
+  }
+
+  getPhasenFromForm() {
+    const phasen = [];
+    
+    for (const phaseRef of this.phasenData) {
+      const id = phaseRef.id;
+      const bezeichnung = document.getElementById(`phase_${id}_bezeichnung`)?.value?.trim();
+      const datum = document.getElementById(`phase_${id}_datum`)?.value;
+      const zeitStunden = parseFloat(document.getElementById(`phase_${id}_zeit`)?.value) || 0;
+      const notizen = document.getElementById(`phase_${id}_notizen`)?.value?.trim();
+      
+      if (bezeichnung && datum && zeitStunden > 0) {
+        phasen.push({
+          bezeichnung,
+          datum,
+          geschaetzte_zeit: Math.round(zeitStunden * 60), // In Minuten
+          notizen
+        });
+      }
+    }
+    
+    return phasen;
+  }
+
+  resetPhasen() {
+    this.phasenCounter = 0;
+    this.phasenData = [];
+    const phasenListe = document.getElementById('phasenListe');
+    if (phasenListe) {
+      phasenListe.innerHTML = '';
+    }
+    const mehrtaegigCheckbox = document.getElementById('mehrtaegigCheckbox');
+    if (mehrtaegigCheckbox) {
+      mehrtaegigCheckbox.checked = false;
+    }
+    const phasenSection = document.getElementById('phasenSection');
+    if (phasenSection) {
+      phasenSection.style.display = 'none';
+    }
+  }
+
+  // === ENDE PHASEN-SYSTEM METHODEN ===
 
   handleTabChange(e) {
     const tabName = e.target.dataset.tab;
@@ -456,14 +1190,21 @@ class App {
       this.loadPapierkorb();
     } else if (tabName === 'kunden') {
       this.loadKundenSearch();
+    } else if (tabName === 'ersatzautos') {
+      this.loadErsatzautos();
     }
   }
 
   handleSubTabChange(e) {
-    const subTabName = e.target.dataset.subtab;
+    // Finde den Button, auch wenn auf ein inneres Element geklickt wurde
+    const button = e.target.closest('.sub-tab-button');
+    if (!button) return;
+    
+    const subTabName = button.dataset.subtab;
+    if (!subTabName) return;
 
     // Finde den direkten Parent-Container der sub-tabs
-    const subTabsContainer = e.target.closest('.sub-tabs');
+    const subTabsContainer = button.closest('.sub-tabs');
     const parentContainer = subTabsContainer.parentElement;
 
     // Entferne active nur von Geschwister-Elementen (siblings)
@@ -473,9 +1214,9 @@ class App {
       }
     });
 
-    Array.from(subTabsContainer.children).forEach(button => {
-      if (button.classList.contains('sub-tab-button')) {
-        button.classList.remove('active');
+    Array.from(subTabsContainer.children).forEach(btn => {
+      if (btn.classList.contains('sub-tab-button')) {
+        btn.classList.remove('active');
       }
     });
 
@@ -483,7 +1224,7 @@ class App {
     if (targetContent) {
       targetContent.classList.add('active');
     }
-    e.target.classList.add('active');
+    button.classList.add('active');
 
     if (subTabName === 'mitarbeiter') {
       this.loadWerkstattSettings();
@@ -491,6 +1232,15 @@ class App {
       this.loadLehrlinge();
       this.loadAbwesenheitenPersonen();
       this.loadUrlaubListe();
+    }
+
+    if (subTabName === 'terminBearbeiten') {
+      // Setze heute als Datum und lade Termine
+      const datumInput = document.getElementById('editTerminDatum');
+      if (datumInput && !datumInput.value) {
+        datumInput.value = new Date().toISOString().split('T')[0];
+      }
+      this.loadEditTermine();
     }
 
     if (subTabName === 'urlaubAbwesenheit') {
@@ -523,12 +1273,24 @@ class App {
 
   loadInitialData() {
     this.loadKunden();
+    this.loadTermineCache(); // Lade alle Termine für Cache
     this.loadTermine();
     this.loadArbeitszeiten();
     this.loadDashboard();
     this.loadWerkstattSettings();
     this.loadTermineZeiten();
     this.heuteTermine = [];
+  }
+
+  async loadTermineCache() {
+    // Lade alle Termine (ohne Datum-Filter) für den Cache
+    try {
+      const alleTermine = await TermineService.getAll(null);
+      this.termineCache = alleTermine;
+      this.updateTerminSuchliste();
+    } catch (error) {
+      console.error('Fehler beim Laden des Termin-Caches:', error);
+    }
   }
 
   async loadKunden() {
@@ -1151,8 +1913,17 @@ class App {
       return;
     }
 
+    // Validiere Ersatzauto-Eingaben
+    if (!this.validateErsatzautoEingaben()) {
+      alert('Ersatzauto gewünscht: Bitte geben Sie entweder die Anzahl Tage ODER ein Rückgabe-Datum ein.');
+      // Scroll zur Ersatzauto-Sektion
+      document.getElementById('ersatzautoDauerGroup')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      return;
+    }
+
     const abholungTyp = document.getElementById('abholung_typ').value;
     const abholungZeit = document.getElementById('abholung_zeit').value || null;
+    const abholungDatum = document.getElementById('abholung_datum').value || null;
     const bringZeit = document.getElementById('bring_zeit').value || null;
 
     // Sammle alle ausgewählten Kontakt-Optionen
@@ -1169,6 +1940,32 @@ class App {
 
     const kilometerstandWert = document.getElementById('kilometerstand').value;
 
+    // Ersatzauto-Daten sammeln
+    const ersatzautoChecked = document.getElementById('ersatzauto').checked;
+    const ersatzautoTage = document.getElementById('ersatzauto_tage')?.value?.trim() || '';
+
+    // Nochmalige Validierung direkt vor dem Senden
+    if (ersatzautoChecked) {
+      const hatTage = ersatzautoTage !== '' && parseInt(ersatzautoTage, 10) > 0;
+      const istTelRuecksprache = abholungTyp === 'ruecksprache';
+      const hatAbholDatum = abholungDatum && abholungDatum.trim() !== '';
+      const hatAbholZeit = abholungZeit && abholungZeit.trim() !== '';
+      
+      // Bei tel. Rücksprache: Tage sind Pflicht
+      if (istTelRuecksprache && !hatTage) {
+        alert('Ersatzauto bei tel. Rücksprache: Bitte geben Sie die geschätzte Anzahl Tage an.');
+        document.getElementById('ersatzautoDauerGroup')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        return;
+      }
+      
+      // Bei anderen Typen: Entweder Tage oder Abholdatum
+      if (!istTelRuecksprache && !hatTage && !hatAbholDatum && !hatAbholZeit) {
+        alert('Ersatzauto: Bitte geben Sie die Anzahl Tage oder unten ein Abholdatum an.');
+        document.getElementById('ersatzautoDauerGroup')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        return;
+      }
+    }
+
     // Berechne die geschätzte Zeit aus den Standardzeiten
     const geschaetzteZeit = this.getGeschaetzteZeit(arbeitenListe);
 
@@ -1181,10 +1978,15 @@ class App {
       abholung_typ: abholungTyp,
       abholung_details: document.getElementById('abholung_details').value,
       abholung_zeit: kontaktAktiv ? abholungZeit : null,
+      abholung_datum: kontaktAktiv ? abholungDatum : null,
       bring_zeit: kontaktAktiv ? bringZeit : null,
       kontakt_option: kontaktAktiv ? kontaktOption : null,
       kilometerstand: kilometerstandWert !== '' ? parseInt(kilometerstandWert, 10) : null,
-      ersatzauto: document.getElementById('ersatzauto').checked
+      ersatzauto: ersatzautoChecked,
+      ersatzauto_tage: ersatzautoChecked && ersatzautoTage ? parseInt(ersatzautoTage, 10) : null,
+      // Wenn keine Tage angegeben, nutze Abholdatum als Ende-Datum
+      ersatzauto_bis_datum: ersatzautoChecked && !ersatzautoTage && abholungDatum ? abholungDatum : null,
+      ersatzauto_bis_zeit: ersatzautoChecked && !ersatzautoTage && abholungZeit ? abholungZeit : null
     };
 
     const kundeId = document.getElementById('kunde_id').value;
@@ -1252,11 +2054,28 @@ class App {
       }
 
       await this.ensureArbeitenExistieren(arbeitenListe, termin.geschaetzte_zeit);
-      await TermineService.create(termin);
+      const createdTermin = await TermineService.create(termin);
+      
+      // Wenn Phasen aktiviert sind, speichere diese
+      const mehrtaegigCheckbox = document.getElementById('mehrtaegigCheckbox');
+      if (mehrtaegigCheckbox && mehrtaegigCheckbox.checked) {
+        const phasen = this.getPhasenFromForm();
+        if (phasen.length > 0 && createdTermin && createdTermin.id) {
+          try {
+            await PhasenService.syncPhasen(createdTermin.id, phasen);
+          } catch (phasenError) {
+            console.error('Fehler beim Speichern der Phasen:', phasenError);
+            // Termin wurde erstellt, Phasen aber nicht - warnen aber nicht abbrechen
+            alert('Termin erstellt, aber Phasen konnten nicht gespeichert werden: ' + phasenError.message);
+          }
+        }
+      }
+      
       alert('Termin erfolgreich erstellt!');
 
       // Formular komplett zurücksetzen
       this.resetTerminForm();
+      this.resetPhasen();
 
       this.loadTermine();
       this.loadDashboard();
@@ -1318,8 +2137,8 @@ class App {
       datum: document.getElementById('intern_datum').value,
       abholung_typ: 'warten',
       abholung_details: 'Interner Termin',
-      abholung_zeit: null,
-      bring_zeit: null,
+      abholung_zeit: document.getElementById('intern_zeit_von').value || null,
+      bring_zeit: document.getElementById('intern_zeit_bis').value || null,
       kontakt_option: null,
       kilometerstand: null,
       ersatzauto: false,
@@ -1388,12 +2207,12 @@ class App {
           <td>${this.formatZeit(zeitAnzeige)}</td>
           <td>${termin.mitarbeiter_name || '-'}</td>
           <td><span class="status-badge ${statusClass}">${termin.status}</span></td>
-          <td class="action-buttons">
-            <button class="btn btn-edit" onclick="event.stopPropagation(); app.showTerminDetails(${termin.id})">
+          <td class="action-buttons-grid">
+            <button class="btn btn-edit action-btn-details" onclick="event.stopPropagation(); app.showTerminDetails(${termin.id})">
               📄 Details
             </button>
-            <button class="btn btn-delete" onclick="event.stopPropagation(); app.deleteTermin(${termin.id})" style="margin-left: 5px;">
-              🗑️ Löschen
+            <button class="btn btn-delete-icon" onclick="event.stopPropagation(); app.deleteTermin(${termin.id})" title="Löschen">
+              🗑️
             </button>
           </td>
         `;
@@ -1508,12 +2327,12 @@ class App {
             <td>${this.formatZeit(zeitAnzeige)}</td>
             <td>${termin.mitarbeiter_name || '-'}</td>
             <td><span class="status-badge ${statusClass}">${termin.status}</span></td>
-            <td class="action-buttons">
-              <button class="btn btn-edit" onclick="event.stopPropagation(); app.showTerminDetails(${termin.id})">
+            <td class="action-buttons-grid">
+              <button class="btn btn-edit action-btn-details" onclick="event.stopPropagation(); app.showTerminDetails(${termin.id})">
                 📄 Details
               </button>
-              <button class="btn btn-delete" onclick="event.stopPropagation(); app.deleteTermin(${termin.id})" style="margin-left: 5px;">
-                🗑️ Löschen
+              <button class="btn btn-delete-icon" onclick="event.stopPropagation(); app.deleteTermin(${termin.id})" title="Löschen">
+                🗑️
               </button>
             </td>
           `;
@@ -2643,6 +3462,39 @@ class App {
     return days;
   }
 
+  // Gibt Wochen für die Monatsübersicht zurück (5 Wochen, Mo-Sa)
+  getWeeksForMonthView() {
+    const weeks = [];
+    const today = new Date();
+    today.setHours(12, 0, 0, 0);
+    
+    // Finde den Montag der aktuellen Woche
+    const currentDay = today.getDay();
+    const mondayOffset = currentDay === 0 ? -6 : 1 - currentDay; // Sonntag = 0 -> gehe 6 Tage zurück
+    const startMonday = new Date(today);
+    startMonday.setDate(today.getDate() + mondayOffset);
+    
+    // 5 Wochen generieren (Mo-Sa = 6 Tage pro Woche = 30 Arbeitstage)
+    for (let weekNum = 0; weekNum < 5; weekNum++) {
+      const week = [];
+      for (let dayNum = 0; dayNum < 6; dayNum++) { // Mo=0 bis Sa=5
+        const day = new Date(startMonday);
+        day.setDate(startMonday.getDate() + (weekNum * 7) + dayNum);
+        
+        const monthNames = ['Jan', 'Feb', 'Mär', 'Apr', 'Mai', 'Jun', 'Jul', 'Aug', 'Sep', 'Okt', 'Nov', 'Dez'];
+        
+        week.push({
+          datum: day.toISOString().split('T')[0],
+          dayNum: day.getDate(),
+          monthShort: monthNames[day.getMonth()],
+          dayOfWeek: day.getDay() // 1=Mo, 2=Di, ..., 6=Sa
+        });
+      }
+      weeks.push(week);
+    }
+    return weeks;
+  }
+
   async loadMonatsUebersicht() {
     const container = document.getElementById('monatsUebersicht');
     if (!container) return;
@@ -2651,37 +3503,75 @@ class App {
 
     try {
       const allTermine = await TermineService.getAll();
-      const days = this.getNextDays(30);
+      const weeks = this.getWeeksForMonthView();
       const today = new Date().toISOString().split('T')[0];
 
-      const auslastungPromises = days.map(day =>
+      // Sammle alle Tage für Auslastungsabfrage
+      const allDays = weeks.flat();
+      const auslastungPromises = allDays.map(day =>
         AuslastungService.getByDatum(day.datum).catch(() => ({ auslastung_prozent: 0 }))
       );
       const auslastungen = await Promise.all(auslastungPromises);
+      
+      // Erstelle Map für schnellen Zugriff
+      const auslastungMap = {};
+      allDays.forEach((day, index) => {
+        auslastungMap[day.datum] = auslastungen[index] || { auslastung_prozent: 0 };
+      });
 
+      // Erstelle Kalender-Layout
       container.innerHTML = '';
-      days.forEach((day, index) => {
-        const termineForDay = allTermine.filter(t => t.datum === day.datum);
-        const auslastung = auslastungen[index] || { auslastung_prozent: 0 };
+      
+      // Header mit Wochentagen
+      const header = document.createElement('div');
+      header.className = 'monats-header';
+      header.innerHTML = `
+        <div class="monats-header-cell">Mo</div>
+        <div class="monats-header-cell">Di</div>
+        <div class="monats-header-cell">Mi</div>
+        <div class="monats-header-cell">Do</div>
+        <div class="monats-header-cell">Fr</div>
+        <div class="monats-header-cell">Sa</div>
+      `;
+      container.appendChild(header);
 
-        const card = document.createElement('div');
-        card.className = 'monats-card';
-        if (day.datum === today) {
-          card.classList.add('heute');
-        }
+      // Wochen als Zeilen
+      weeks.forEach(week => {
+        const weekRow = document.createElement('div');
+        weekRow.className = 'monats-week';
 
-        card.innerHTML = `
-          <div class="monats-datum">
-            <span class="monats-wochentag">${day.weekday}</span>
-            <span class="monats-tag">${day.formatted}</span>
-          </div>
-          <div class="monats-termine">${termineForDay.length} Termine</div>
-          <div class="mini-progress-bar">
-            <div class="mini-progress-fill" style="width:${Math.min(auslastung.auslastung_prozent, 100)}%"></div>
-          </div>
-        `;
+        week.forEach(day => {
+          const termineForDay = allTermine.filter(t => t.datum === day.datum);
+          const auslastung = auslastungMap[day.datum] || { auslastung_prozent: 0 };
+          const isPast = day.datum < today;
 
-        container.appendChild(card);
+          const card = document.createElement('div');
+          card.className = 'monats-card';
+          if (day.datum === today) {
+            card.classList.add('heute');
+          }
+          if (isPast) {
+            card.classList.add('vergangen');
+          }
+          if (day.dayOfWeek === 6) {
+            card.classList.add('samstag');
+          }
+
+          card.innerHTML = `
+            <div class="monats-datum">
+              <span class="monats-tag">${day.dayNum}</span>
+              <span class="monats-monat">${day.monthShort}</span>
+            </div>
+            <div class="monats-termine">${termineForDay.length}</div>
+            <div class="mini-progress-bar">
+              <div class="mini-progress-fill" style="width:${Math.min(auslastung.auslastung_prozent, 100)}%"></div>
+            </div>
+          `;
+
+          weekRow.appendChild(card);
+        });
+
+        container.appendChild(weekRow);
       });
     } catch (error) {
       console.error('Fehler beim Laden der Monatsübersicht:', error);
@@ -2721,13 +3611,17 @@ class App {
 
   handleTerminSchnellsuche() {
     const eingabe = document.getElementById('terminSchnellsuche').value.trim();
-    if (!eingabe) return;
+    if (!eingabe) {
+      this.hideGefundenerKunde();
+      return;
+    }
 
     const lower = eingabe.toLowerCase();
     const kundeMatch = (this.kundenCache || []).find(kunde => kunde.name && kunde.name.toLowerCase() === lower);
     if (kundeMatch) {
       document.getElementById('kunde_id').value = kundeMatch.id;
       document.getElementById('neuer_kunde_telefon').value = kundeMatch.telefon || '';
+      this.showGefundenerKunde(kundeMatch.name, kundeMatch.telefon);
 
       const letztesKennzeichen = this.findLetztesKennzeichen(kundeMatch.id, kundeMatch.name);
       if (letztesKennzeichen) {
@@ -2755,6 +3649,7 @@ class App {
         if (kunde) {
           document.getElementById('kunde_id').value = kunde.id;
           document.getElementById('neuer_kunde_telefon').value = kunde.telefon || '';
+          this.showGefundenerKunde(kunde.name, kunde.telefon);
 
           // Finde und zeige letzten KM-Stand als Hinweis (grau)
           const letzterKmStand = this.findLetztenKmStand(kunde.id, kunde.name, terminMatch.kennzeichen);
@@ -2768,6 +3663,7 @@ class App {
       } else if (terminMatch.kunde_name) {
         document.getElementById('kunde_id').value = '';
         document.getElementById('terminSchnellsuche').value = terminMatch.kunde_name;
+        this.showGefundenerKunde(terminMatch.kunde_name, null);
       }
       return;
     }
@@ -2777,9 +3673,84 @@ class App {
       document.getElementById('kennzeichen').value = eingabe;
       document.getElementById('kunde_id').value = '';
       document.getElementById('terminSchnellsuche').value = '';
+      this.hideGefundenerKunde();
     } else {
       document.getElementById('kunde_id').value = '';
       document.getElementById('terminSchnellsuche').value = eingabe;
+      this.hideGefundenerKunde();
+    }
+    this.updateSchnellsucheStatus();
+  }
+
+  showGefundenerKunde(name, telefon) {
+    const anzeige = document.getElementById('gefundenerKundeAnzeige');
+    const nameEl = document.getElementById('gefundenerKundeName');
+    const telefonEl = document.getElementById('gefundenerKundeTelefon');
+    
+    if (anzeige && nameEl) {
+      anzeige.style.display = 'block';
+      nameEl.textContent = name || 'Unbekannt';
+      if (telefonEl) {
+        telefonEl.textContent = telefon ? `📞 ${telefon}` : '';
+      }
+    }
+  }
+
+  hideGefundenerKunde() {
+    const anzeige = document.getElementById('gefundenerKundeAnzeige');
+    if (anzeige) {
+      anzeige.style.display = 'none';
+    }
+  }
+
+  updateSchnellsucheStatus() {
+    const eingabe = document.getElementById('terminSchnellsuche').value.trim();
+    const statusEl = document.getElementById('schnellsucheStatus');
+    
+    if (!statusEl) return;
+    
+    if (!eingabe) {
+      statusEl.style.display = 'none';
+      return;
+    }
+    
+    const lower = eingabe.toLowerCase();
+    
+    // Prüfe ob Kunde existiert
+    const kundeMatch = (this.kundenCache || []).find(kunde => 
+      kunde.name && kunde.name.toLowerCase() === lower
+    );
+    
+    if (kundeMatch) {
+      statusEl.textContent = '✓ Kunde gefunden';
+      statusEl.className = 'schnellsuche-status gefunden';
+      statusEl.style.display = 'inline-block';
+      return;
+    }
+    
+    // Prüfe ob Kennzeichen existiert
+    const terminMatch = (this.termineCache || []).find(termin =>
+      termin.kennzeichen && termin.kennzeichen.toLowerCase() === lower
+    );
+    
+    if (terminMatch) {
+      statusEl.textContent = '✓ Kennzeichen gefunden';
+      statusEl.className = 'schnellsuche-status kennzeichen';
+      statusEl.style.display = 'inline-block';
+      return;
+    }
+    
+    // Sieht es nach einem Kennzeichen aus?
+    const siehtWieKennzeichenAus = /\d/.test(eingabe) || eingabe.includes('-');
+    
+    if (siehtWieKennzeichenAus) {
+      statusEl.textContent = '+ Neues Kennzeichen';
+      statusEl.className = 'schnellsuche-status kennzeichen';
+      statusEl.style.display = 'inline-block';
+    } else {
+      statusEl.textContent = '+ Neuer Kunde';
+      statusEl.className = 'schnellsuche-status neu';
+      statusEl.style.display = 'inline-block';
     }
   }
 
@@ -2983,6 +3954,292 @@ class App {
     const servicezeitField = document.getElementById('servicezeit_minuten');
     if (servicezeitField) {
       servicezeitField.value = einstellungen.servicezeit_minuten || 10;
+    }
+  }
+
+  // Ersatzautos laden und anzeigen
+  async loadErsatzautos() {
+    try {
+      const [autos, heuteVerfuegbarkeit] = await Promise.all([
+        ErsatzautosService.getAll(),
+        ErsatzautosService.getVerfuegbarkeit(new Date().toISOString().split('T')[0])
+      ]);
+      
+      // Dashboard-Karten aktualisieren
+      const gesamtEl = document.getElementById('ersatzautoGesamt');
+      const verfuegbarEl = document.getElementById('ersatzautoHeuteVerfuegbar');
+      const vergebenEl = document.getElementById('ersatzautoHeuteVergeben');
+      
+      if (gesamtEl) gesamtEl.textContent = autos.filter(a => a.aktiv).length;
+      if (verfuegbarEl) verfuegbarEl.textContent = heuteVerfuegbarkeit.verfuegbar;
+      if (vergebenEl) vergebenEl.textContent = heuteVerfuegbarkeit.vergeben;
+      
+      // Liste rendern
+      this.renderErsatzautoListe(autos);
+      
+      // Aktuelle Buchungen laden
+      this.loadErsatzautoBuchungen();
+      
+      // Übersicht laden
+      this.loadErsatzautoUebersicht();
+    } catch (error) {
+      console.error('Fehler beim Laden der Ersatzautos:', error);
+    }
+  }
+
+  // Aktuelle Buchungen laden und anzeigen
+  async loadErsatzautoBuchungen() {
+    const container = document.getElementById('ersatzautoBuchungen');
+    if (!container) return;
+    
+    try {
+      const buchungen = await ErsatzautosService.getAktuelleBuchungen();
+      
+      if (!buchungen || buchungen.length === 0) {
+        container.innerHTML = `
+          <div class="ersatzauto-empty" style="padding: 20px; text-align: center; background: #f0fdf4; border-radius: 8px; border: 1px solid #bbf7d0;">
+            <div style="font-size: 2rem; margin-bottom: 10px;">✅</div>
+            <p style="margin: 0; color: #166534;">Aktuell sind keine Ersatzautos vergeben.</p>
+          </div>
+        `;
+        return;
+      }
+      
+      const heute = new Date().toISOString().split('T')[0];
+      
+      container.innerHTML = buchungen.map(buchung => {
+        const vonDatum = new Date(buchung.datum);
+        const bisDatum = buchung.bis_datum ? new Date(buchung.bis_datum) : vonDatum;
+        
+        const vonFormatiert = vonDatum.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' });
+        const bisFormatiert = bisDatum.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' });
+        
+        const istMehrtaegig = buchung.datum !== buchung.bis_datum;
+        const istHeute = buchung.datum === heute || (buchung.datum <= heute && buchung.bis_datum >= heute);
+        
+        // Zeitraum-Anzeige
+        let zeitraumText = vonFormatiert;
+        if (istMehrtaegig) {
+          zeitraumText = `${vonFormatiert} - ${bisFormatiert}`;
+          if (buchung.ersatzauto_tage) {
+            zeitraumText += ` (${buchung.ersatzauto_tage} Tage)`;
+          }
+        }
+        if (buchung.ersatzauto_bis_zeit) {
+          zeitraumText += ` bis ${buchung.ersatzauto_bis_zeit} Uhr`;
+        }
+        
+        return `
+          <div class="buchung-card${istHeute ? ' heute' : ''}" style="display: flex; gap: 15px; padding: 15px; background: ${istHeute ? '#fef3c7' : '#f8fafc'}; border-radius: 8px; margin-bottom: 10px; border-left: 4px solid ${istHeute ? '#f59e0b' : '#3b82f6'};">
+            <div class="buchung-icon" style="font-size: 2rem;">🚗</div>
+            <div class="buchung-info" style="flex: 1;">
+              <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px;">
+                <div>
+                  <strong style="font-size: 1.1rem; color: #1e40af;">${buchung.kennzeichen}</strong>
+                  ${buchung.termin_nr ? `<span style="margin-left: 10px; color: #6b7280; font-size: 0.85rem;">${buchung.termin_nr}</span>` : ''}
+                </div>
+                ${istHeute ? '<span style="background: #f59e0b; color: white; padding: 2px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: 600;">HEUTE</span>' : ''}
+              </div>
+              <div style="display: flex; flex-wrap: wrap; gap: 15px; font-size: 0.9rem; color: #4b5563;">
+                <div>
+                  <span style="color: #9ca3af;">👤 Kunde:</span>
+                  <strong>${buchung.kunde_name || 'Unbekannt'}</strong>
+                </div>
+                ${buchung.kunde_telefon ? `<div><span style="color: #9ca3af;">📞</span> ${buchung.kunde_telefon}</div>` : ''}
+              </div>
+              <div style="margin-top: 8px; font-size: 0.85rem; color: #6b7280;">
+                <span style="color: #9ca3af;">📅 Zeitraum:</span> ${zeitraumText}
+              </div>
+            </div>
+          </div>
+        `;
+      }).join('');
+    } catch (error) {
+      console.error('Fehler beim Laden der Buchungen:', error);
+      container.innerHTML = '<div class="loading" style="color: #ef4444;">Fehler beim Laden der Buchungen</div>';
+    }
+  }
+
+  renderErsatzautoListe(autos) {
+    const container = document.getElementById('ersatzautoListe');
+    if (!container) return;
+    
+    if (!autos || autos.length === 0) {
+      container.innerHTML = `
+        <div class="ersatzauto-empty">
+          <div class="empty-icon">🚗</div>
+          <p>Noch keine Ersatzfahrzeuge registriert.</p>
+          <p style="font-size: 0.9rem;">Fügen Sie oben Ihr erstes Fahrzeug hinzu.</p>
+        </div>
+      `;
+      return;
+    }
+    
+    container.innerHTML = autos.map(auto => `
+      <div class="ersatzauto-card${auto.aktiv ? '' : ' inaktiv'}">
+        <div class="ea-icon">🚗</div>
+        <div class="ea-info">
+          <div class="ea-kennzeichen">${auto.kennzeichen}</div>
+          <div class="ea-name">${auto.name}</div>
+          ${auto.typ ? `<span class="ea-typ">${auto.typ}</span>` : ''}
+        </div>
+        <div class="ea-actions">
+          <button class="btn-toggle" onclick="app.toggleErsatzautoAktiv(${auto.id}, ${auto.aktiv})" 
+                  title="${auto.aktiv ? 'Deaktivieren' : 'Aktivieren'}">
+            ${auto.aktiv ? '✓' : '○'}
+          </button>
+          <button class="btn-edit" onclick="app.editErsatzauto(${auto.id})" title="Bearbeiten">✏️</button>
+          <button class="btn-delete" onclick="app.deleteErsatzauto(${auto.id})" title="Löschen">🗑️</button>
+        </div>
+      </div>
+    `).join('');
+  }
+
+  async handleErsatzautoSubmit(e) {
+    e.preventDefault();
+    
+    const kennzeichenField = document.getElementById('ersatzautoKennzeichen');
+    const nameField = document.getElementById('ersatzautoName');
+    const typField = document.getElementById('ersatzautoTyp');
+    const editIdField = document.getElementById('ersatzautoEditId');
+    
+    const kennzeichen = kennzeichenField.value.trim().toUpperCase();
+    const name = nameField.value.trim();
+    const typ = typField.value;
+    const editId = editIdField.value;
+    
+    if (!kennzeichen || !name) {
+      alert('Bitte Kennzeichen und Fahrzeugname eingeben.');
+      return;
+    }
+    
+    try {
+      if (editId) {
+        await ErsatzautosService.update(editId, { kennzeichen, name, typ, aktiv: 1 });
+        alert('Fahrzeug aktualisiert.');
+      } else {
+        await ErsatzautosService.create({ kennzeichen, name, typ });
+        alert('Fahrzeug hinzugefügt.');
+      }
+      
+      // Form zurücksetzen
+      kennzeichenField.value = '';
+      nameField.value = '';
+      typField.value = '';
+      editIdField.value = '';
+      
+      this.loadErsatzautos();
+    } catch (error) {
+      console.error('Fehler beim Speichern:', error);
+      alert(error.data?.error || 'Fahrzeug konnte nicht gespeichert werden.');
+    }
+  }
+
+  async editErsatzauto(id) {
+    try {
+      const auto = await ErsatzautosService.getById(id);
+      
+      document.getElementById('ersatzautoKennzeichen').value = auto.kennzeichen;
+      document.getElementById('ersatzautoName').value = auto.name;
+      document.getElementById('ersatzautoTyp').value = auto.typ || '';
+      document.getElementById('ersatzautoEditId').value = auto.id;
+      
+      // Scroll zum Formular
+      document.getElementById('ersatzautoForm').scrollIntoView({ behavior: 'smooth' });
+    } catch (error) {
+      console.error('Fehler beim Laden des Fahrzeugs:', error);
+      alert('Fahrzeug konnte nicht geladen werden.');
+    }
+  }
+
+  async deleteErsatzauto(id) {
+    if (!confirm('Möchten Sie dieses Ersatzfahrzeug wirklich löschen?')) return;
+    
+    try {
+      await ErsatzautosService.delete(id);
+      this.loadErsatzautos();
+    } catch (error) {
+      console.error('Fehler beim Löschen:', error);
+      alert('Fahrzeug konnte nicht gelöscht werden.');
+    }
+  }
+
+  async toggleErsatzautoAktiv(id, currentStatus) {
+    try {
+      const auto = await ErsatzautosService.getById(id);
+      await ErsatzautosService.update(id, {
+        ...auto,
+        aktiv: currentStatus ? 0 : 1
+      });
+      this.loadErsatzautos();
+    } catch (error) {
+      console.error('Fehler beim Ändern des Status:', error);
+    }
+  }
+
+  // Ersatzauto-Übersicht laden
+  async loadErsatzautoUebersicht() {
+    const container = document.getElementById('ersatzautoUebersicht');
+    if (!container) return;
+    
+    container.innerHTML = '<div class="loading">Lade Übersicht...</div>';
+    
+    try {
+      // Generiere die nächsten 30 Tage (Mo-Sa)
+      const days = this.getWeeksForMonthView().flat();
+      const today = new Date().toISOString().split('T')[0];
+      
+      // Lade Verfügbarkeit für alle Tage parallel
+      const verfuegbarkeitPromises = days.map(day => 
+        ErsatzautosService.getVerfuegbarkeit(day.datum)
+          .catch(() => ({ gesamt: 0, vergeben: 0, verfuegbar: 0 }))
+      );
+      const verfuegbarkeiten = await Promise.all(verfuegbarkeitPromises);
+      
+      container.innerHTML = '';
+      
+      days.forEach((day, index) => {
+        const verf = verfuegbarkeiten[index];
+        const isPast = day.datum < today;
+        const isToday = day.datum === today;
+        
+        let statusClass = 'frei';
+        let statusText = `${verf.verfuegbar}/${verf.gesamt}`;
+        
+        if (verf.gesamt === 0) {
+          statusClass = 'frei';
+          statusText = '-';
+        } else if (verf.vergeben === 0) {
+          statusClass = 'frei';
+        } else if (verf.verfuegbar === 0) {
+          statusClass = 'voll';
+        } else {
+          statusClass = 'teilweise';
+        }
+        
+        const wochentage = ['So', 'Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa'];
+        const dateObj = new Date(day.datum);
+        const wochentag = wochentage[dateObj.getDay()];
+        
+        const card = document.createElement('div');
+        // Status-Klasse zur Karte hinzufügen für bessere Sichtbarkeit
+        card.className = `ersatzauto-tag${isToday ? ' heute' : ''}${isPast ? ' vergangen' : ''} status-${statusClass}`;
+        
+        card.innerHTML = `
+          <div class="ea-datum">${day.dayNum}. ${day.monthShort}</div>
+          <div class="ea-wochentag">${wochentag}</div>
+          <div class="ea-status ${statusClass}">
+            <span class="ea-status-dot ea-${statusClass}"></span>
+            ${statusText}
+          </div>
+          ${verf.vergeben > 0 ? `<div class="ea-details">${verf.vergeben} vergeben</div>` : ''}
+        `;
+        
+        container.appendChild(card);
+      });
+    } catch (error) {
+      console.error('Fehler beim Laden der Ersatzauto-Übersicht:', error);
+      container.innerHTML = '<div class="loading" style="color: #ef4444;">Fehler beim Laden</div>';
     }
   }
 
@@ -3361,15 +4618,23 @@ class App {
     e.preventDefault();
 
     const servicezeitField = document.getElementById('servicezeit_minuten');
+    const ersatzautoField = document.getElementById('ersatzauto_anzahl');
+    
     if (!servicezeitField) {
       alert('Servicezeit-Feld nicht gefunden.');
       return;
     }
 
     const servicezeit = parseInt(servicezeitField.value, 10);
+    const ersatzautoAnzahl = ersatzautoField ? parseInt(ersatzautoField.value, 10) : 2;
 
     if (!Number.isFinite(servicezeit) || servicezeit < 0) {
       alert('Bitte eine gültige Servicezeit eingeben.');
+      return;
+    }
+
+    if (!Number.isFinite(ersatzautoAnzahl) || ersatzautoAnzahl < 0) {
+      alert('Bitte eine gültige Anzahl Ersatzautos eingeben.');
       return;
     }
 
@@ -3379,7 +4644,8 @@ class App {
       
       await EinstellungenService.updateWerkstatt({
         pufferzeit_minuten: aktuelleEinstellungen?.pufferzeit_minuten || 15,
-        servicezeit_minuten: servicezeit
+        servicezeit_minuten: servicezeit,
+        ersatzauto_anzahl: ersatzautoAnzahl
       });
       alert('Einstellungen gespeichert.');
       this.loadAuslastung();
@@ -3866,12 +5132,152 @@ class App {
     });
 
     this.updateModalGesamtzeit();
+    
+    // Lade Phasen für diesen Termin
+    await this.loadModalPhasen(terminId, termin.datum);
+    
     document.getElementById('arbeitszeitenModal').style.display = 'block';
+  }
+
+  async loadModalPhasen(terminId, terminDatum) {
+    // Reset
+    this.modalPhasenCounter = 0;
+    this.modalPhasenData = [];
+    const phasenListe = document.getElementById('modalPhasenListe');
+    phasenListe.innerHTML = '';
+    
+    // Lade existierende Phasen
+    try {
+      const phasen = await PhasenService.getByTerminId(terminId);
+      if (phasen && phasen.length > 0) {
+        // Phasen vorhanden - aktiviere Checkbox und zeige Section
+        document.getElementById('modalMehrtaegigCheckbox').checked = true;
+        document.getElementById('modalPhasenSection').style.display = 'block';
+        
+        // Füge Phasen hinzu
+        phasen.forEach(phase => {
+          this.addModalPhase(phase);
+        });
+      } else {
+        // Keine Phasen - verstecke Section
+        document.getElementById('modalMehrtaegigCheckbox').checked = false;
+        document.getElementById('modalPhasenSection').style.display = 'none';
+      }
+    } catch (error) {
+      console.error('Fehler beim Laden der Phasen:', error);
+      document.getElementById('modalMehrtaegigCheckbox').checked = false;
+      document.getElementById('modalPhasenSection').style.display = 'none';
+    }
+  }
+
+  toggleModalPhasenSection() {
+    const checkbox = document.getElementById('modalMehrtaegigCheckbox');
+    const section = document.getElementById('modalPhasenSection');
+    
+    if (checkbox.checked) {
+      section.style.display = 'block';
+      // Füge eine erste Phase hinzu wenn leer
+      const phasenListe = document.getElementById('modalPhasenListe');
+      if (phasenListe.children.length === 0) {
+        const termin = this.termineById[this.currentTerminId];
+        this.addModalPhase({ datum: termin ? termin.datum : new Date().toISOString().split('T')[0] });
+      }
+    } else {
+      section.style.display = 'none';
+    }
+  }
+
+  addModalPhase(existingPhase = null) {
+    this.modalPhasenCounter = this.modalPhasenCounter || 0;
+    this.modalPhasenCounter++;
+    const phaseId = this.modalPhasenCounter;
+    
+    const termin = this.termineById[this.currentTerminId];
+    const defaultDatum = existingPhase?.datum || (termin ? termin.datum : new Date().toISOString().split('T')[0]);
+    const bezeichnung = existingPhase?.bezeichnung || `Phase ${phaseId}`;
+    const zeit = existingPhase?.geschaetzte_zeit || 60;
+    const zeitStunden = (zeit / 60).toFixed(2);
+    const notizen = existingPhase?.notizen || '';
+    const dbId = existingPhase?.id || '';
+    
+    const phasenListe = document.getElementById('modalPhasenListe');
+    const phaseDiv = document.createElement('div');
+    phaseDiv.id = `modal_phase_${phaseId}`;
+    phaseDiv.className = 'phase-item';
+    phaseDiv.dataset.dbId = dbId;
+    phaseDiv.style.cssText = 'padding: 15px; background: #fff; border: 1px solid #ffcc80; border-radius: 8px; margin-bottom: 10px;';
+    
+    phaseDiv.innerHTML = `
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+        <strong style="color: #e65100;">Phase ${phaseId}</strong>
+        <button type="button" onclick="app.removeModalPhase(${phaseId})" style="background: #ff5252; color: white; border: none; border-radius: 4px; padding: 3px 8px; cursor: pointer; font-size: 12px;">✕ Entfernen</button>
+      </div>
+      <div style="display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 10px; margin-bottom: 10px;">
+        <div>
+          <label style="font-size: 0.85em; color: #666;">Bezeichnung:</label>
+          <input type="text" id="modal_phase_bez_${phaseId}" value="${bezeichnung}" placeholder="z.B. Zerlegen" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+        </div>
+        <div>
+          <label style="font-size: 0.85em; color: #666;">Datum:</label>
+          <input type="date" id="modal_phase_datum_${phaseId}" value="${defaultDatum}" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+        </div>
+        <div>
+          <label style="font-size: 0.85em; color: #666;">Zeit (h):</label>
+          <input type="number" id="modal_phase_zeit_${phaseId}" value="${zeitStunden}" min="0.25" step="0.25" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+        </div>
+      </div>
+      <div>
+        <label style="font-size: 0.85em; color: #666;">Notizen:</label>
+        <input type="text" id="modal_phase_notizen_${phaseId}" value="${notizen}" placeholder="Optionale Notizen..." style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+      </div>
+    `;
+    
+    phasenListe.appendChild(phaseDiv);
+  }
+
+  removeModalPhase(phaseId) {
+    const phaseDiv = document.getElementById(`modal_phase_${phaseId}`);
+    if (phaseDiv) {
+      phaseDiv.remove();
+    }
+  }
+
+  getModalPhasenFromForm() {
+    const phasen = [];
+    const phasenListe = document.getElementById('modalPhasenListe');
+    const phaseItems = phasenListe.querySelectorAll('.phase-item');
+    
+    phaseItems.forEach((item, index) => {
+      const idMatch = item.id.match(/modal_phase_(\d+)/);
+      if (idMatch) {
+        const phaseId = idMatch[1];
+        const dbId = item.dataset.dbId || null;
+        const bezeichnung = document.getElementById(`modal_phase_bez_${phaseId}`)?.value || `Phase ${index + 1}`;
+        const datum = document.getElementById(`modal_phase_datum_${phaseId}`)?.value || '';
+        const zeitStunden = parseFloat(document.getElementById(`modal_phase_zeit_${phaseId}`)?.value) || 1;
+        const zeitMinuten = Math.round(zeitStunden * 60);
+        const notizen = document.getElementById(`modal_phase_notizen_${phaseId}`)?.value || '';
+        
+        phasen.push({
+          id: dbId ? parseInt(dbId, 10) : null,
+          phase_nr: index + 1,
+          bezeichnung: bezeichnung,
+          datum: datum,
+          geschaetzte_zeit: zeitMinuten,
+          notizen: notizen
+        });
+      }
+    });
+    
+    return phasen;
   }
 
   closeArbeitszeitenModal() {
     document.getElementById('arbeitszeitenModal').style.display = 'none';
     this.currentTerminId = null;
+    // Reset Phasen
+    this.modalPhasenCounter = 0;
+    this.modalPhasenData = [];
   }
 
   updateModalGesamtzeit() {
@@ -3968,6 +5374,18 @@ class App {
         status: status,
         mitarbeiter_id: terminMitarbeiterId
       });
+
+      // Speichere Phasen wenn mehrtägig aktiviert ist
+      const mehrtaegigCheckbox = document.getElementById('modalMehrtaegigCheckbox');
+      if (mehrtaegigCheckbox && mehrtaegigCheckbox.checked) {
+        const phasen = this.getModalPhasenFromForm();
+        if (phasen.length > 0) {
+          await PhasenService.syncPhasen(this.currentTerminId, phasen);
+        }
+      } else {
+        // Wenn mehrtägig deaktiviert, lösche alle Phasen
+        await PhasenService.syncPhasen(this.currentTerminId, []);
+      }
 
       this.closeArbeitszeitenModal();
       this.loadTermine();
