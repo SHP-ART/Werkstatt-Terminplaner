@@ -6,56 +6,180 @@
     <style>
         body {
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-            background-color: #f0f2f5;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             color: #333;
             margin: 0;
-            padding: 15px;
-            text-align: center;
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            height: 100vh;
+            padding: 10px;
+            min-height: 100vh;
             box-sizing: border-box;
+            font-size: 12px;
         }
         .status-box {
             background-color: #fff;
             border-radius: 8px;
-            padding: 20px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            padding: 10px;
+            box-shadow: 0 4px 16px rgba(0,0,0,0.2);
+            margin-bottom: 8px;
         }
         h1 {
-            font-size: 1.2em;
-            margin-top: 0;
-            color: #1c1e21;
+            font-size: 1.1em;
+            margin: 0 0 8px 0;
+            display: flex;
+            align-items: center;
+            gap: 8px;
         }
-        p {
-            margin: 10px 0;
+        h2 {
+            font-size: 0.85em;
+            margin: 0 0 6px 0;
+            color: #666;
         }
-        #status {
-            font-weight: bold;
-            color: #28a745;
+        .status-indicator {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: #28a745;
+            box-shadow: 0 0 8px #28a745;
+            animation: pulse 2s infinite;
         }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        .info-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 3px 0;
+        }
+        .info-label { color: #666; }
+        .info-value { font-weight: 600; }
         #url {
-            font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, Courier, monospace;
-            background-color: #e9ecef;
-            padding: 5px 8px;
+            font-family: monospace;
+            background: #e9ecef;
+            padding: 6px;
             border-radius: 4px;
             font-size: 0.9em;
+            text-align: center;
+            margin-top: 6px;
+            word-break: break-all;
         }
-        #clients {
-            font-size: 1.5em;
+        .clients-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        .clients-count {
+            font-size: 1.8em;
             font-weight: bold;
             color: #007bff;
         }
+        .stats-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+        }
+        .stat-card {
+            background: #f8f9fa;
+            border-radius: 6px;
+            padding: 8px;
+            text-align: center;
+        }
+        .stat-value {
+            font-size: 1.2em;
+            font-weight: bold;
+        }
+        .stat-label {
+            font-size: 0.75em;
+            color: #666;
+        }
+        .progress-bar {
+            background: #e9ecef;
+            border-radius: 3px;
+            height: 4px;
+            margin-top: 4px;
+        }
+        .progress-fill {
+            height: 100%;
+            border-radius: 3px;
+            transition: width 0.5s;
+        }
+        .progress-fill.cpu { background: linear-gradient(90deg, #28a745, #ffc107, #dc3545); }
+        .progress-fill.memory { background: linear-gradient(90deg, #007bff, #6f42c1); }
+        .requests-list {
+            max-height: 60px;
+            overflow-y: auto;
+            font-size: 0.85em;
+        }
+        .request-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 2px 0;
+            border-bottom: 1px solid #f0f0f0;
+            color: #666;
+        }
+        .request-method { font-weight: 600; color: #28a745; }
+        .request-method.POST { color: #007bff; }
+        .request-method.PUT { color: #ffc107; }
+        .request-method.DELETE { color: #dc3545; }
     </style>
 </head>
 <body>
+    <div class="status-box">
+        <h1><span class="status-indicator" id="statusIndicator"></span> Server</h1>
+        <div class="info-row">
+            <span class="info-label">Status</span>
+            <span class="info-value" id="status">Läuft</span>
+        </div>
+        <div class="info-row">
+            <span class="info-label">Uptime</span>
+            <span class="info-value" id="uptime">0:00:00</span>
+        </div>
+        <div id="url">Wird geladen...</div>
+    </div>
 
     <div class="status-box">
-        <h1>Server Status</h1>
-        <p>Status: <span id="status">Läuft</span></p>
-        <p>Adresse: <span id="url">Wird geladen...</span></p>
-        <p>Verbundene Clients: <span id="clients">0</span></p>
+        <div class="clients-row">
+            <h2>👥 Clients</h2>
+            <span class="clients-count" id="clients">0</span>
+        </div>
+    </div>
+
+    <div class="status-box">
+        <h2>📊 Ressourcen</h2>
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-value" id="cpuUsage">0%</div>
+                <div class="stat-label">CPU</div>
+                <div class="progress-bar"><div class="progress-fill cpu" id="cpuBar" style="width: 0%"></div></div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="memoryUsage">0 MB</div>
+                <div class="stat-label">Speicher</div>
+                <div class="progress-bar"><div class="progress-fill memory" id="memoryBar" style="width: 0%"></div></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="status-box">
+        <h2>📈 Stats</h2>
+        <div class="info-row">
+            <span class="info-label">Anfragen</span>
+            <span class="info-value" id="totalRequests">0</span>
+        </div>
+        <div class="info-row">
+            <span class="info-label">Pro Minute</span>
+            <span class="info-value" id="requestsPerMin">0</span>
+        </div>
+        <div class="info-row">
+            <span class="info-label">Letzter</span>
+            <span class="info-value" id="lastActivity">-</span>
+        </div>
+    </div>
+
+    <div class="status-box">
+        <h2>📝 Requests</h2>
+        <div class="requests-list" id="requestsList">
+            <div style="color: #999; text-align: center;">Keine</div>
+        </div>
     </div>
 
     <script src="./status.js"></script>

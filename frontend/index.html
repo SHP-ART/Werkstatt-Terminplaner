@@ -298,9 +298,36 @@
                         <input type="tel" id="neuer_kunde_telefon" placeholder="Telefonnummer (optional)">
                     </div>
 
-                    <div class="form-group">
+                    <div class="form-group" style="position: relative;">
                         <label>Datum: *</label>
-                        <input type="date" id="datum" required>
+                        <div class="datum-picker-wrapper">
+                            <input type="date" id="datum" required class="datum-input-clickable">
+                            <button type="button" id="datumPickerBtn" class="datum-picker-btn" title="Kalender mit Auslastung öffnen">📅</button>
+                        </div>
+                        <!-- Kalender-Picker mit Auslastung -->
+                        <div id="auslastungKalenderPopup" class="auslastung-kalender-popup" style="display: none;">
+                            <div class="kalender-header">
+                                <button type="button" class="kalender-nav-btn" id="kalenderPrevMonth">◀</button>
+                                <span id="kalenderMonatJahr">Januar 2025</span>
+                                <button type="button" class="kalender-nav-btn" id="kalenderNextMonth">▶</button>
+                            </div>
+                            <div class="kalender-legende">
+                                <span class="legende-item"><span class="legende-farbe legende-gruen"></span>0-50%</span>
+                                <span class="legende-item"><span class="legende-farbe legende-gelb"></span>51-80%</span>
+                                <span class="legende-item"><span class="legende-farbe legende-orange"></span>81-100%</span>
+                                <span class="legende-item"><span class="legende-farbe legende-rot"></span>&gt;100%</span>
+                            </div>
+                            <div class="kalender-wochentage">
+                                <span>Mo</span><span>Di</span><span>Mi</span><span>Do</span><span>Fr</span><span>Sa</span><span>So</span>
+                            </div>
+                            <div id="kalenderTage" class="kalender-tage">
+                                <!-- Tage werden dynamisch gefüllt -->
+                            </div>
+                            <div class="kalender-footer">
+                                <button type="button" class="btn btn-secondary" id="kalenderHeuteBtn">Heute</button>
+                                <button type="button" class="btn btn-secondary" id="kalenderSchliessenBtn">Schließen</button>
+                            </div>
+                        </div>
                     </div>
 
                     <div id="terminAuslastungAnzeige" style="margin-bottom: 20px; padding: 15px; background: #f8f9fa; border-radius: 8px; border-left: 4px solid #4a90e2; display: none;">

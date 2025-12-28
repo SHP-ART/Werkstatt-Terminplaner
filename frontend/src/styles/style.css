@@ -1998,3 +1998,253 @@ tr:hover {
     border-color: var(--accent);
     background: white;
 }
+
+/* Auslastung Kalender-Picker */
+.datum-picker-wrapper {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.datum-input-clickable {
+    flex: 1;
+    cursor: pointer;
+}
+
+.datum-picker-btn {
+    background: linear-gradient(135deg, #4a90e2 0%, #357abd 100%);
+    border: none;
+    border-radius: 8px;
+    padding: 10px 14px;
+    font-size: 1.2em;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    box-shadow: 0 2px 6px rgba(74, 144, 226, 0.3);
+}
+
+.datum-picker-btn:hover {
+    background: linear-gradient(135deg, #357abd 0%, #2a6195 100%);
+    transform: scale(1.05);
+    box-shadow: 0 4px 12px rgba(74, 144, 226, 0.4);
+}
+
+.auslastung-kalender-popup {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    z-index: 1000;
+    background: white;
+    border-radius: 12px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+    padding: 16px;
+    min-width: 360px;
+    max-width: 420px;
+    margin-top: 8px;
+    border: 1px solid #e2e8f0;
+}
+
+.kalender-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid #e2e8f0;
+}
+
+.kalender-header span {
+    font-weight: 600;
+    font-size: 1.1em;
+    color: var(--steel);
+}
+
+.kalender-nav-btn {
+    background: #f1f5f9;
+    border: 1px solid #e2e8f0;
+    border-radius: 6px;
+    padding: 8px 12px;
+    cursor: pointer;
+    font-size: 0.9em;
+    transition: all 0.2s ease;
+}
+
+.kalender-nav-btn:hover {
+    background: #e2e8f0;
+    border-color: #cbd5e1;
+}
+
+.kalender-legende {
+    display: flex;
+    justify-content: center;
+    gap: 12px;
+    margin-bottom: 12px;
+    font-size: 0.75em;
+    color: #666;
+}
+
+.legende-item {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.legende-farbe {
+    width: 12px;
+    height: 12px;
+    border-radius: 3px;
+}
+
+.legende-gruen {
+    background: #22c55e;
+}
+
+.legende-gelb {
+    background: #eab308;
+}
+
+.legende-orange {
+    background: #f97316;
+}
+
+.legende-rot {
+    background: #ef4444;
+}
+
+.kalender-wochentage {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 4px;
+    margin-bottom: 8px;
+    text-align: center;
+    font-weight: 600;
+    font-size: 0.85em;
+    color: #64748b;
+}
+
+.kalender-tage {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 4px;
+}
+
+.kalender-tag {
+    position: relative;
+    aspect-ratio: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    font-size: 0.9em;
+    background: #f8fafc;
+    border: 2px solid transparent;
+    min-height: 45px;
+}
+
+.kalender-tag:hover:not(.kalender-tag-disabled) {
+    transform: scale(1.05);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.kalender-tag-disabled {
+    opacity: 0.3;
+    cursor: not-allowed;
+    background: #f1f5f9;
+}
+
+.kalender-tag-heute {
+    border-color: var(--accent) !important;
+    font-weight: bold;
+}
+
+.kalender-tag-selected {
+    border-color: var(--steel) !important;
+    box-shadow: 0 0 0 2px rgba(13, 27, 42, 0.2);
+}
+
+.kalender-tag-vergangen {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.kalender-tag-wochenende {
+    background: #fef3c7;
+}
+
+.kalender-tag-auslastung-0-50 {
+    background: linear-gradient(135deg, #dcfce7 0%, #bbf7d0 100%);
+}
+
+.kalender-tag-auslastung-51-80 {
+    background: linear-gradient(135deg, #fef9c3 0%, #fde047 100%);
+}
+
+.kalender-tag-auslastung-81-100 {
+    background: linear-gradient(135deg, #fed7aa 0%, #fdba74 100%);
+}
+
+.kalender-tag-auslastung-over-100 {
+    background: linear-gradient(135deg, #fecaca 0%, #fca5a5 100%);
+}
+
+.kalender-tag-nummer {
+    font-weight: 500;
+    color: var(--steel);
+}
+
+.kalender-tag-prozent {
+    font-size: 0.65em;
+    color: #64748b;
+    margin-top: 2px;
+}
+
+.kalender-tag-auslastung-over-100 .kalender-tag-prozent {
+    color: #dc2626;
+    font-weight: 600;
+}
+
+.kalender-tag-leer {
+    background: transparent;
+    cursor: default;
+}
+
+.kalender-footer {
+    display: flex;
+    justify-content: space-between;
+    gap: 10px;
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px solid #e2e8f0;
+}
+
+.kalender-footer .btn {
+    flex: 1;
+    padding: 10px 16px;
+    font-size: 0.9em;
+}
+
+/* Lade-Animation für Kalender */
+.kalender-loading {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 200px;
+    color: #64748b;
+}
+
+.kalender-loading::after {
+    content: '';
+    width: 24px;
+    height: 24px;
+    border: 3px solid #e2e8f0;
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+    margin-left: 10px;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}

@@ -4,11 +4,18 @@ const os = require('os');
 const { startServer } = require('./src/server');
 
 let mainWindow;
+let statsInterval;
+let serverStats = {
+  totalRequests: 0,
+  requestsLastMinute: [],
+  lastActivity: null,
+  startTime: Date.now()
+};
 
 function createWindow() {
   mainWindow = new BrowserWindow({
-    width: 400,
-    height: 300,
+    width: 320,
+    height: 420,
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
@@ -18,20 +25,82 @@ function createWindow() {
 
   mainWindow.loadFile(path.join(__dirname, 'status.html'));
   mainWindow.setMenuBarVisibility(false);
+  mainWindow.on('closed', () => {
+    mainWindow = null;
+    stopStatsInterval();
+  });
 }
 
 // Function to send client count updates to the window
 function sendClientCount(count) {
-  if (mainWindow) {
+  if (mainWindow && !mainWindow.isDestroyed()) {
     mainWindow.webContents.send('client-count-update', count);
   }
 }
 
-// Start the Express server and pass the callback
-const server = startServer(sendClientCount);
+// Function to send request log to the window
+function sendRequestLog(request) {
+  serverStats.totalRequests++;
+  serverStats.lastActivity = Date.now();
+  serverStats.requestsLastMinute.push(Date.now());
+  
+  // Entferne alte Einträge (älter als 1 Minute)
+  const oneMinuteAgo = Date.now() - 60000;
+  serverStats.requestsLastMinute = serverStats.requestsLastMinute.filter(t => t > oneMinuteAgo);
+
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send('request-log', request);
+  }
+}
+
+// Function to send system stats
+function sendSystemStats() {
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+
+  const cpuUsage = process.cpuUsage();
+  const memoryUsage = process.memoryUsage();
+  
+  // Einfache CPU-Berechnung basierend auf den letzten Werten
+  const cpuPercent = ((cpuUsage.user + cpuUsage.system) / 1000000) % 100;
+
+  const stats = {
+    cpu: cpuPercent,
+    memory: memoryUsage.heapUsed,
+    uptime: (Date.now() - serverStats.startTime) / 1000,
+    totalRequests: serverStats.totalRequests,
+    requestsPerMin: serverStats.requestsLastMinute.length,
+    lastActivity: serverStats.lastActivity
+  };
+
+  mainWindow.webContents.send('system-stats', stats);
+}
+
+function stopStatsInterval() {
+  if (statsInterval) {
+    clearInterval(statsInterval);
+    statsInterval = null;
+  }
+}
+
+// Start the Express server and pass the callbacks
+const server = startServer(sendClientCount, sendRequestLog);
+
+function stopServer() {
+  if (server && server.shutdown) {
+    console.log('Shutting down server...');
+    server.shutdown().then(() => {
+      console.log('Server stopped successfully');
+    }).catch((err) => {
+      console.error('Error stopping server:', err);
+    });
+  }
+}
 
 app.whenReady().then(() => {
   createWindow();
+
+  // System-Stats alle 2 Sekunden senden
+  statsInterval = setInterval(sendSystemStats, 2000);
 
   app.on('activate', function () {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
@@ -39,9 +108,16 @@ app.whenReady().then(() => {
 });
 
 app.on('window-all-closed', function () {
+  stopStatsInterval();
+  stopServer();
   if (process.platform !== 'darwin') {
     app.quit();
   }
+});
+
+app.on('before-quit', () => {
+  stopStatsInterval();
+  stopServer();
 });
 
 // Function to get the actual IP address of the machine

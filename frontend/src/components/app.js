@@ -200,6 +200,9 @@ class App {
       });
     }
 
+    // Kalender-Picker Event-Listener
+    this.setupAuslastungKalender();
+
     // Entferne Placeholder-Styling wenn Benutzer KM-Stand eingibt
     const kmStandInput = document.getElementById('kilometerstand');
     if (kmStandInput) {
@@ -2072,6 +2075,9 @@ class App {
       }
       
       alert('Termin erfolgreich erstellt!');
+
+      // Kalender-Auslastungs-Cache leeren, damit neue Daten geladen werden
+      this.kalenderAuslastungCache = {};
 
       // Formular komplett zurücksetzen
       this.resetTerminForm();
@@ -5878,6 +5884,232 @@ class App {
       'abgesagt': 'Abgesagt'
     };
     return texts[status] || status || 'Unbekannt';
+  }
+
+  // ==========================================
+  // Auslastung Kalender-Picker Funktionen
+  // ==========================================
+
+  setupAuslastungKalender() {
+    this.kalenderAktuellMonat = new Date();
+    this.kalenderAuslastungCache = {};
+
+    const datumPickerBtn = document.getElementById('datumPickerBtn');
+    if (datumPickerBtn) {
+      datumPickerBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        this.openAuslastungKalender();
+      });
+    }
+
+    const kalenderPrevMonth = document.getElementById('kalenderPrevMonth');
+    if (kalenderPrevMonth) {
+      kalenderPrevMonth.addEventListener('click', () => this.navigateKalenderMonat(-1));
+    }
+
+    const kalenderNextMonth = document.getElementById('kalenderNextMonth');
+    if (kalenderNextMonth) {
+      kalenderNextMonth.addEventListener('click', () => this.navigateKalenderMonat(1));
+    }
+
+    const kalenderHeuteBtn = document.getElementById('kalenderHeuteBtn');
+    if (kalenderHeuteBtn) {
+      kalenderHeuteBtn.addEventListener('click', () => this.selectKalenderHeute());
+    }
+
+    const kalenderSchliessenBtn = document.getElementById('kalenderSchliessenBtn');
+    if (kalenderSchliessenBtn) {
+      kalenderSchliessenBtn.addEventListener('click', () => this.closeAuslastungKalender());
+    }
+
+    // Schließen bei Klick außerhalb
+    document.addEventListener('click', (e) => {
+      const popup = document.getElementById('auslastungKalenderPopup');
+      const datumWrapper = e.target.closest('.datum-picker-wrapper');
+      const datumFormGroup = e.target.closest('.form-group');
+      if (popup && popup.style.display !== 'none' && !popup.contains(e.target) && !datumWrapper) {
+        this.closeAuslastungKalender();
+      }
+    });
+  }
+
+  async openAuslastungKalender() {
+    const popup = document.getElementById('auslastungKalenderPopup');
+    if (!popup) return;
+
+    // Setze den aktuellen Monat basierend auf ausgewähltem Datum oder heute
+    const datumInput = document.getElementById('datum');
+    if (datumInput && datumInput.value) {
+      this.kalenderAktuellMonat = new Date(datumInput.value + 'T00:00:00');
+    } else {
+      this.kalenderAktuellMonat = new Date();
+    }
+
+    popup.style.display = 'block';
+    await this.renderAuslastungKalender();
+  }
+
+  closeAuslastungKalender() {
+    const popup = document.getElementById('auslastungKalenderPopup');
+    if (popup) {
+      popup.style.display = 'none';
+    }
+  }
+
+  async navigateKalenderMonat(offset) {
+    this.kalenderAktuellMonat.setMonth(this.kalenderAktuellMonat.getMonth() + offset);
+    await this.renderAuslastungKalender();
+  }
+
+  async selectKalenderHeute() {
+    const heute = new Date();
+    const datumInput = document.getElementById('datum');
+    if (datumInput) {
+      datumInput.value = heute.toISOString().split('T')[0];
+      datumInput.dispatchEvent(new Event('change'));
+    }
+    this.closeAuslastungKalender();
+  }
+
+  async renderAuslastungKalender() {
+    const kalenderTage = document.getElementById('kalenderTage');
+    const kalenderMonatJahr = document.getElementById('kalenderMonatJahr');
+    
+    if (!kalenderTage || !kalenderMonatJahr) return;
+
+    // Zeige Ladeanimation
+    kalenderTage.innerHTML = '<div class="kalender-loading">Lade Auslastung...</div>';
+
+    const jahr = this.kalenderAktuellMonat.getFullYear();
+    const monat = this.kalenderAktuellMonat.getMonth();
+
+    // Monatsname anzeigen
+    const monatNamen = ['Januar', 'Februar', 'März', 'April', 'Mai', 'Juni', 
+                        'Juli', 'August', 'September', 'Oktober', 'November', 'Dezember'];
+    kalenderMonatJahr.textContent = `${monatNamen[monat]} ${jahr}`;
+
+    // Lade Auslastungsdaten für den gesamten Monat
+    const auslastungDaten = await this.loadMonatAuslastung(jahr, monat);
+
+    // Berechne ersten und letzten Tag
+    const ersterTag = new Date(jahr, monat, 1);
+    const letzterTag = new Date(jahr, monat + 1, 0);
+    const heute = new Date();
+    heute.setHours(0, 0, 0, 0);
+
+    // Wochentag des ersten Tags (0 = Sonntag, anpassen für Montag-Start)
+    let startWochentag = ersterTag.getDay();
+    startWochentag = startWochentag === 0 ? 6 : startWochentag - 1; // Montag = 0
+
+    // Aktuell ausgewähltes Datum
+    const datumInput = document.getElementById('datum');
+    const selectedDate = datumInput && datumInput.value ? datumInput.value : null;
+
+    let html = '';
+
+    // Leere Zellen vor dem ersten Tag
+    for (let i = 0; i < startWochentag; i++) {
+      html += '<div class="kalender-tag kalender-tag-leer"></div>';
+    }
+
+    // Tage des Monats
+    for (let tag = 1; tag <= letzterTag.getDate(); tag++) {
+      const datum = new Date(jahr, monat, tag);
+      const datumStr = datum.toISOString().split('T')[0];
+      const istHeute = datum.getTime() === heute.getTime();
+      const istVergangen = datum < heute;
+      const istWochenende = datum.getDay() === 0 || datum.getDay() === 6;
+      const istAusgewaehlt = datumStr === selectedDate;
+
+      // Auslastung für diesen Tag
+      const auslastung = auslastungDaten[datumStr];
+      let auslastungProzent = auslastung ? auslastung.auslastung_prozent : 0;
+      let auslastungKlasse = '';
+
+      if (!istWochenende && !istVergangen) {
+        if (auslastungProzent > 100) {
+          auslastungKlasse = 'kalender-tag-auslastung-over-100';
+        } else if (auslastungProzent > 80) {
+          auslastungKlasse = 'kalender-tag-auslastung-81-100';
+        } else if (auslastungProzent > 50) {
+          auslastungKlasse = 'kalender-tag-auslastung-51-80';
+        } else {
+          auslastungKlasse = 'kalender-tag-auslastung-0-50';
+        }
+      }
+
+      const klassen = [
+        'kalender-tag',
+        istHeute ? 'kalender-tag-heute' : '',
+        istVergangen ? 'kalender-tag-vergangen' : '',
+        istWochenende ? 'kalender-tag-wochenende' : '',
+        istAusgewaehlt ? 'kalender-tag-selected' : '',
+        auslastungKlasse
+      ].filter(k => k).join(' ');
+
+      html += `
+        <div class="${klassen}" data-datum="${datumStr}" ${istVergangen && !istHeute ? '' : 'onclick="app.selectKalenderDatum(\'' + datumStr + '\')"'}>
+          <span class="kalender-tag-nummer">${tag}</span>
+          ${!istWochenende && auslastung ? `<span class="kalender-tag-prozent">${Math.round(auslastungProzent)}%</span>` : ''}
+        </div>
+      `;
+    }
+
+    kalenderTage.innerHTML = html;
+  }
+
+  async loadMonatAuslastung(jahr, monat) {
+    const cacheKey = `${jahr}-${monat}`;
+    
+    // Prüfe Cache
+    if (this.kalenderAuslastungCache[cacheKey]) {
+      return this.kalenderAuslastungCache[cacheKey];
+    }
+
+    const ersterTag = new Date(jahr, monat, 1);
+    const letzterTag = new Date(jahr, monat + 1, 0);
+    const auslastungDaten = {};
+
+    try {
+      // Lade Auslastung für jeden Tag des Monats (nur Werktage)
+      const promises = [];
+      for (let tag = 1; tag <= letzterTag.getDate(); tag++) {
+        const datum = new Date(jahr, monat, tag);
+        // Überspringe Wochenende
+        if (datum.getDay() === 0 || datum.getDay() === 6) continue;
+        
+        const datumStr = datum.toISOString().split('T')[0];
+        promises.push(
+          AuslastungService.getByDatum(datumStr)
+            .then(data => {
+              auslastungDaten[datumStr] = data;
+            })
+            .catch(err => {
+              console.warn(`Fehler beim Laden der Auslastung für ${datumStr}:`, err);
+              auslastungDaten[datumStr] = { auslastung_prozent: 0 };
+            })
+        );
+      }
+
+      await Promise.all(promises);
+      
+      // Cache speichern
+      this.kalenderAuslastungCache[cacheKey] = auslastungDaten;
+      
+    } catch (error) {
+      console.error('Fehler beim Laden der Monatsauslastung:', error);
+    }
+
+    return auslastungDaten;
+  }
+
+  selectKalenderDatum(datumStr) {
+    const datumInput = document.getElementById('datum');
+    if (datumInput) {
+      datumInput.value = datumStr;
+      datumInput.dispatchEvent(new Event('change'));
+    }
+    this.closeAuslastungKalender();
   }
 }
 

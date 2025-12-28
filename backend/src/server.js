@@ -9,7 +9,7 @@ const http = require('http');
 
 let wss;
 
-function startServer(clientCountCallback) {
+function startServer(clientCountCallback, requestLogCallback) {
     const app = express();
     const PORT = process.env.PORT || 3001;
 
@@ -46,6 +46,25 @@ function startServer(clientCountCallback) {
     app.use(bodyParser.json());
     app.use(bodyParser.urlencoded({ extended: true }));
 
+    // Request-Logging Middleware für Electron
+    if (requestLogCallback) {
+        app.use((req, res, next) => {
+            const startTime = Date.now();
+            
+            res.on('finish', () => {
+                const duration = Date.now() - startTime;
+                requestLogCallback({
+                    method: req.method,
+                    path: req.path,
+                    status: res.statusCode,
+                    duration: duration
+                });
+            });
+            
+            next();
+        });
+    }
+
     initializeDatabase();
 
     app.use('/api', routes);
@@ -61,11 +80,11 @@ function startServer(clientCountCallback) {
 
     wss.on('connection', (ws) => {
         console.log('Client connected');
-        clientCountCallback(wss.clients.size);
+        if (clientCountCallback) clientCountCallback(wss.clients.size);
 
         ws.on('close', () => {
             console.log('Client disconnected');
-            clientCountCallback(wss.clients.size);
+            if (clientCountCallback) clientCountCallback(wss.clients.size);
         });
 
         ws.on('error', (error) => {
@@ -79,12 +98,35 @@ function startServer(clientCountCallback) {
         console.log(`Zugriff im Netzwerk: http://<IP-ADRESSE>:${PORT}`);
     });
 
+    // Shutdown-Funktion hinzufügen
+    server.shutdown = () => {
+        return new Promise((resolve) => {
+            console.log('Closing WebSocket connections...');
+            if (wss) {
+                wss.clients.forEach(client => {
+                    client.close();
+                });
+                wss.close(() => {
+                    console.log('WebSocket server closed');
+                });
+            }
+
+            server.close(() => {
+                console.log('HTTP server closed');
+                resolve();
+            });
+        });
+    };
+
     return server;
 }
 
 // If the file is executed directly (for non-electron environment)
 if (require.main === module) {
-    startServer((count) => console.log(`Clients: ${count}`));
+    startServer(
+        (count) => console.log(`Clients: ${count}`),
+        (req) => console.log(`${req.method} ${req.path} - ${req.status} (${req.duration}ms)`)
+    );
 }
 
 module.exports = { startServer };
