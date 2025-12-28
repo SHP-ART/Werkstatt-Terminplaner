@@ -2,12 +2,37 @@ require('dotenv').config();
 const express = require('express');
 const bodyParser = require('body-parser');
 const cors = require('cors');
+const path = require('path');
+const fs = require('fs');
 const { initializeDatabase } = require('./config/database');
 const routes = require('./routes');
 const { WebSocketServer } = require('ws');
 const http = require('http');
 
 let wss;
+
+// Funktion zum Finden des Frontend-Ordners
+function findFrontendPath() {
+    const possiblePaths = [
+        // Entwicklung: Frontend neben Backend
+        path.join(__dirname, '..', '..', 'frontend'),
+        // Produktion: Frontend im gleichen Ordner wie die EXE
+        path.join(process.resourcesPath || '', '..', 'frontend'),
+        // Produktion: Frontend in resources
+        path.join(process.resourcesPath || '', 'frontend'),
+        // Fallback: Relativ zum Arbeitsverzeichnis
+        path.join(process.cwd(), 'frontend'),
+    ];
+
+    for (const frontendPath of possiblePaths) {
+        if (fs.existsSync(path.join(frontendPath, 'index.html'))) {
+            console.log(`Frontend gefunden: ${frontendPath}`);
+            return frontendPath;
+        }
+    }
+    console.warn('Frontend-Ordner nicht gefunden!');
+    return null;
+}
 
 function startServer(clientCountCallback, requestLogCallback) {
     const app = express();
@@ -69,6 +94,24 @@ function startServer(clientCountCallback, requestLogCallback) {
 
     app.use('/api', routes);
 
+    // Frontend statisch ausliefern (falls vorhanden)
+    const frontendPath = findFrontendPath();
+    if (frontendPath) {
+        // Statische Dateien aus dem Frontend-Ordner
+        app.use(express.static(frontendPath));
+        
+        // Alle anderen Anfragen an index.html weiterleiten (SPA-Support)
+        app.get('*', (req, res, next) => {
+            // Nur wenn es keine API-Route ist
+            if (!req.path.startsWith('/api')) {
+                res.sendFile(path.join(frontendPath, 'index.html'));
+            } else {
+                next();
+            }
+        });
+        console.log('Frontend wird auf / ausgeliefert');
+    }
+
     app.use((err, req, res, next) => {
         console.error(err.stack);
         res.status(500).json({ error: 'Interner Serverfehler' });
@@ -95,6 +138,9 @@ function startServer(clientCountCallback, requestLogCallback) {
     server.listen(PORT, '0.0.0.0', () => {
         console.log(`Backend-Server läuft auf http://0.0.0.0:${PORT}`);
         console.log(`API-Endpoint: http://0.0.0.0:${PORT}/api`);
+        if (frontendPath) {
+            console.log(`Frontend: http://0.0.0.0:${PORT}/`);
+        }
         console.log(`Zugriff im Netzwerk: http://<IP-ADRESSE>:${PORT}`);
     });
 
