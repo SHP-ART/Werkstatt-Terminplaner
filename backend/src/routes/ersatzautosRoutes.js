@@ -17,6 +17,18 @@ router.get('/verfuegbarkeit/:datum', ersatzautosController.getVerfuegbarkeit);
 // Detaillierte Verfügbarkeit für Datum
 router.get('/verfuegbarkeit/:datum/details', ersatzautosController.getVerfuegbarkeitDetails);
 
+// Manuelle Sperrung umschalten (Toggle)
+router.post('/:id/toggle-gesperrt', ersatzautosController.toggleManuellGesperrt);
+
+// Manuelle Sperrung direkt setzen
+router.put('/:id/gesperrt', ersatzautosController.setManuellGesperrt);
+
+// Zeitbasierte Sperrung setzen (sperren bis zu einem bestimmten Datum)
+router.post('/:id/sperren-bis', ersatzautosController.sperrenBis);
+
+// Sperrung aufheben
+router.post('/:id/entsperren', ersatzautosController.entsperren);
+
 // Einzelnes Ersatzauto abrufen
 router.get('/:id', ersatzautosController.getById);
 

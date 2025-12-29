@@ -6,7 +6,7 @@ class EinstellungenModel {
   }
 
   static updateWerkstatt(data, callback) {
-    const { pufferzeit_minuten, servicezeit_minuten, ersatzauto_anzahl } = data;
+    const { pufferzeit_minuten, servicezeit_minuten, ersatzauto_anzahl, nebenzeit_prozent } = data;
     
     // Lade erst die aktuellen Werte, um unveränderte Felder beizubehalten
     this.getWerkstatt((err, current) => {
@@ -24,12 +24,15 @@ class EinstellungenModel {
       const ersatzautos = ersatzauto_anzahl !== undefined
         ? parseInt(ersatzauto_anzahl, 10)
         : (current && current.ersatzauto_anzahl !== undefined ? current.ersatzauto_anzahl : 2);
+      const nebenzeit = nebenzeit_prozent !== undefined
+        ? parseFloat(nebenzeit_prozent)
+        : (current && current.nebenzeit_prozent !== undefined ? current.nebenzeit_prozent : 0);
 
       db.run(
         `UPDATE werkstatt_einstellungen
-         SET pufferzeit_minuten = ?, servicezeit_minuten = ?, ersatzauto_anzahl = ?
+         SET pufferzeit_minuten = ?, servicezeit_minuten = ?, ersatzauto_anzahl = ?, nebenzeit_prozent = ?
          WHERE id = 1`,
-        [pufferzeit, servicezeit, ersatzautos],
+        [pufferzeit, servicezeit, ersatzautos, nebenzeit],
         function(err) {
           if (err) {
             callback(err);
@@ -40,9 +43,9 @@ class EinstellungenModel {
           if (this.changes === 0) {
             db.run(
               `INSERT OR REPLACE INTO werkstatt_einstellungen
-               (id, pufferzeit_minuten, servicezeit_minuten, ersatzauto_anzahl)
-               VALUES (1, ?, ?, ?)`,
-              [pufferzeit, servicezeit, ersatzautos],
+               (id, pufferzeit_minuten, servicezeit_minuten, ersatzauto_anzahl, nebenzeit_prozent)
+               VALUES (1, ?, ?, ?, ?)`,
+              [pufferzeit, servicezeit, ersatzautos, nebenzeit],
               callback
             );
           } else {

@@ -2,12 +2,23 @@ const sqlite3 = require('sqlite3').verbose();
 const path = require('path');
 const fs = require('fs');
 
+// Bestimme das Datenverzeichnis:
+// 1. Umgebungsvariable DATA_DIR hat Priorität
+// 2. Ansonsten: Das Verzeichnis, in dem der Server gestartet wurde (process.cwd())
+// Hinweis: Bei Start aus backend/ wird process.cwd() = backend/
+// Bei Start aus dem Root-Verzeichnis wird process.cwd() = Root
 const dataDir = process.env.DATA_DIR || process.cwd();
 const dbPath = process.env.DB_PATH || path.join(dataDir, 'database', 'werkstatt.db');
 const dbDir = path.dirname(dbPath);
 
+// Zeige Pfade beim Start an
+console.log('Arbeitsverzeichnis:', process.cwd());
+console.log('Daten-Verzeichnis:', dataDir);
+console.log('Datenbank-Pfad:', dbPath);
+
 if (!fs.existsSync(dbDir)) {
   fs.mkdirSync(dbDir, { recursive: true });
+  console.log('Datenbank-Verzeichnis erstellt:', dbDir);
 }
 
 const db = new sqlite3.Database(dbPath, (err) => {
@@ -27,8 +38,30 @@ function initializeDatabase() {
       email TEXT,
       adresse TEXT,
       locosoft_id TEXT,
+      kennzeichen TEXT,
+      vin TEXT,
+      fahrzeugtyp TEXT,
       erstellt_am DATETIME DEFAULT CURRENT_TIMESTAMP
     )`);
+
+    // Migration: Neue Kundenfelder hinzufügen
+    db.run(`ALTER TABLE kunden ADD COLUMN kennzeichen TEXT`, (err) => {
+      if (err && !err.message.includes('duplicate column')) {
+        console.error('Fehler beim Hinzufügen von kennzeichen:', err);
+      }
+    });
+
+    db.run(`ALTER TABLE kunden ADD COLUMN vin TEXT`, (err) => {
+      if (err && !err.message.includes('duplicate column')) {
+        console.error('Fehler beim Hinzufügen von vin:', err);
+      }
+    });
+
+    db.run(`ALTER TABLE kunden ADD COLUMN fahrzeugtyp TEXT`, (err) => {
+      if (err && !err.message.includes('duplicate column')) {
+        console.error('Fehler beim Hinzufügen von fahrzeugtyp:', err);
+      }
+    });
 
     db.run(`CREATE TABLE IF NOT EXISTS termine (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -158,6 +191,27 @@ function initializeDatabase() {
     db.run(`ALTER TABLE termine ADD COLUMN geloescht_am DATETIME`, (err) => {
       if (err && !err.message.includes('duplicate column')) {
         console.error('Fehler beim Hinzufügen von geloescht_am:', err);
+      }
+    });
+
+    // Dringlichkeit für interne Termine
+    db.run(`ALTER TABLE termine ADD COLUMN dringlichkeit TEXT`, (err) => {
+      if (err && !err.message.includes('duplicate column')) {
+        console.error('Fehler beim Hinzufügen von dringlichkeit:', err);
+      }
+    });
+
+    // VIN/VIS (Fahrzeug-Identifizierungsnummer)
+    db.run(`ALTER TABLE termine ADD COLUMN vin TEXT`, (err) => {
+      if (err && !err.message.includes('duplicate column')) {
+        console.error('Fehler beim Hinzufügen von vin:', err);
+      }
+    });
+
+    // Fahrzeugtyp
+    db.run(`ALTER TABLE termine ADD COLUMN fahrzeugtyp TEXT`, (err) => {
+      if (err && !err.message.includes('duplicate column')) {
+        console.error('Fehler beim Hinzufügen von fahrzeugtyp:', err);
       }
     });
 
@@ -299,6 +353,13 @@ function initializeDatabase() {
       }
     });
 
+    // Füge Nebenzeit-Prozent Spalte hinzu falls sie nicht existiert (globale Einstellung)
+    db.run(`ALTER TABLE werkstatt_einstellungen ADD COLUMN nebenzeit_prozent REAL DEFAULT 0`, (err) => {
+      if (err && !err.message.includes('duplicate column')) {
+        console.error('Fehler beim Hinzufügen von nebenzeit_prozent:', err);
+      }
+    });
+
     // Ersatzautos-Tabelle
     db.run(`CREATE TABLE IF NOT EXISTS ersatzautos (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -306,10 +367,25 @@ function initializeDatabase() {
       name TEXT NOT NULL,
       typ TEXT,
       aktiv INTEGER DEFAULT 1,
+      manuell_gesperrt INTEGER DEFAULT 0,
       erstellt_am DATETIME DEFAULT CURRENT_TIMESTAMP
     )`, (err) => {
       if (err) {
         console.error('Fehler beim Erstellen der ersatzautos Tabelle:', err);
+      }
+    });
+
+    // Migration: manuell_gesperrt Feld hinzufügen
+    db.run(`ALTER TABLE ersatzautos ADD COLUMN manuell_gesperrt INTEGER DEFAULT 0`, (err) => {
+      if (err && !err.message.includes('duplicate column')) {
+        console.error('Fehler beim Hinzufügen von manuell_gesperrt:', err);
+      }
+    });
+
+    // Migration: gesperrt_bis Feld für zeitbasierte Sperrung hinzufügen
+    db.run(`ALTER TABLE ersatzautos ADD COLUMN gesperrt_bis TEXT`, (err) => {
+      if (err && !err.message.includes('duplicate column')) {
+        console.error('Fehler beim Hinzufügen von gesperrt_bis:', err);
       }
     });
 

@@ -40,10 +40,14 @@ fi
 # Erstelle Logs-Verzeichnis
 mkdir -p logs
 
-# Starte Backend
+# Speichere aktuelles Verzeichnis für DATA_DIR
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+
+# Starte Backend mit DATA_DIR auf das aktuelle Verzeichnis gesetzt
 echo -e "${BLUE}[START]${NC} Starte Backend-Server auf Port 3001..."
+echo -e "${BLUE}[INFO]${NC} Daten-Verzeichnis: $SCRIPT_DIR"
 cd backend
-nohup npm start > ../logs/backend.log 2>&1 &
+DATA_DIR="$SCRIPT_DIR" nohup npm start > ../logs/backend.log 2>&1 &
 BACKEND_PID=$!
 echo $BACKEND_PID > ../logs/backend.pid
 cd ..

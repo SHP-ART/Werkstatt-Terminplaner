@@ -124,6 +124,79 @@ const ersatzautosController = {
       }
       res.json(buchungen);
     });
+  },
+
+  // Manuelle Sperrung umschalten
+  toggleManuellGesperrt: (req, res) => {
+    const id = req.params.id;
+    ErsatzautosModel.toggleManuellGesperrt(id, (err, auto) => {
+      if (err) {
+        console.error('Fehler beim Umschalten der Sperrung:', err);
+        return res.status(500).json({ error: 'Interner Serverfehler' });
+      }
+      if (!auto) {
+        return res.status(404).json({ error: 'Ersatzauto nicht gefunden' });
+      }
+      res.json(auto);
+    });
+  },
+
+  // Manuelle Sperrung direkt setzen
+  setManuellGesperrt: (req, res) => {
+    const id = req.params.id;
+    const { gesperrt } = req.body;
+    
+    if (typeof gesperrt !== 'boolean' && gesperrt !== 0 && gesperrt !== 1) {
+      return res.status(400).json({ error: 'Feld "gesperrt" muss boolean sein' });
+    }
+    
+    ErsatzautosModel.setManuellGesperrt(id, gesperrt, (err, auto) => {
+      if (err) {
+        console.error('Fehler beim Setzen der Sperrung:', err);
+        return res.status(500).json({ error: 'Interner Serverfehler' });
+      }
+      if (!auto) {
+        return res.status(404).json({ error: 'Ersatzauto nicht gefunden' });
+      }
+      res.json(auto);
+    });
+  },
+
+  // Zeitbasierte Sperrung setzen (sperren bis zu einem bestimmten Datum)
+  sperrenBis: (req, res) => {
+    const id = req.params.id;
+    const { bisDatum } = req.body;
+    
+    if (!bisDatum) {
+      return res.status(400).json({ error: 'Feld "bisDatum" ist erforderlich' });
+    }
+    
+    ErsatzautosModel.sperrenBis(id, bisDatum, (err, auto) => {
+      if (err) {
+        console.error('Fehler beim Setzen der zeitbasierten Sperrung:', err);
+        return res.status(500).json({ error: 'Interner Serverfehler' });
+      }
+      if (!auto) {
+        return res.status(404).json({ error: 'Ersatzauto nicht gefunden' });
+      }
+      res.json(auto);
+    });
+  },
+
+  // Sperrung aufheben
+  entsperren: (req, res) => {
+    const id = req.params.id;
+    
+    ErsatzautosModel.entsperren(id, (err, auto) => {
+      if (err) {
+        console.error('Fehler beim Aufheben der Sperrung:', err);
+        return res.status(500).json({ error: 'Interner Serverfehler' });
+      }
+      if (!auto) {
+        return res.status(404).json({ error: 'Ersatzauto nicht gefunden' });
+      }
+      res.json(auto);
+    });
   }
 };
 

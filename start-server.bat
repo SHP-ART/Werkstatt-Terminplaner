@@ -6,6 +6,11 @@ echo.
 echo Server wird gestartet...
 echo.
 
+REM Speichere das Startverzeichnis für Daten
+set "DATA_DIR=%~dp0"
+echo Daten-Verzeichnis: %DATA_DIR%
+echo.
+
 cd /d "%~dp0backend"
 
 REM Prüfen ob Node.js installiert ist

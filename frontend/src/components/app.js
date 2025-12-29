@@ -251,6 +251,7 @@ class App {
     document.querySelector('.close').addEventListener('click', () => this.closeModal());
     document.getElementById('closeDetails').addEventListener('click', () => this.closeTerminDetails());
     document.getElementById('closeArbeitszeitenModal').addEventListener('click', () => this.closeArbeitszeitenModal());
+    document.getElementById('closeTagesUebersicht').addEventListener('click', () => this.closeTagesUebersichtModal());
     document.getElementById('saveArbeitszeitenBtn').addEventListener('click', () => this.saveArbeitszeitenModal());
 
     // Modal Phasen Event-Listener
@@ -267,6 +268,7 @@ class App {
       const modal = document.getElementById('modal');
       const detailsModal = document.getElementById('terminDetailsModal');
       const arbeitszeitenModal = document.getElementById('arbeitszeitenModal');
+      const tagesUebersichtModal = document.getElementById('tagesUebersichtModal');
       const autocomplete = document.getElementById('arbeitAutocomplete');
       const arbeitEingabe = document.getElementById('arbeitEingabe');
 
@@ -278,6 +280,9 @@ class App {
       }
       if (event.target === arbeitszeitenModal) {
         this.closeArbeitszeitenModal();
+      }
+      if (event.target === tagesUebersichtModal) {
+        this.closeTagesUebersichtModal();
       }
 
       // Schließe Autocomplete wenn außerhalb geklickt wird
@@ -703,6 +708,8 @@ class App {
       document.getElementById('edit_datum').value = termin.datum;
       document.getElementById('edit_kennzeichen').value = termin.kennzeichen || '';
       document.getElementById('edit_kilometerstand').value = termin.kilometerstand || '';
+      document.getElementById('edit_vin').value = termin.vin || '';
+      document.getElementById('edit_fahrzeugtyp').value = termin.fahrzeugtyp || '';
       
       // Arbeiten als mehrzeiligen Text
       const arbeitText = (termin.arbeit || '').split(',').map(a => a.trim()).join('\n');
@@ -830,13 +837,24 @@ class App {
       const text = statusEl.querySelector('.status-text');
       
       const istVerfuegbar = verfuegbarkeit.verfuegbar > 0;
+      const gesperrt = verfuegbarkeit.gesperrt || 0;
       
       if (istVerfuegbar) {
         statusEl.className = 'ersatzauto-status verfuegbar';
-        text.textContent = `${verfuegbarkeit.verfuegbar} von ${verfuegbarkeit.gesamt} frei`;
+        if (gesperrt > 0) {
+          text.textContent = `${verfuegbarkeit.verfuegbar} frei (${gesperrt} gesperrt)`;
+        } else {
+          text.textContent = `${verfuegbarkeit.verfuegbar} von ${verfuegbarkeit.gesamt} frei`;
+        }
       } else {
         statusEl.className = 'ersatzauto-status nicht-verfuegbar';
-        text.textContent = `Alle ${verfuegbarkeit.gesamt} vergeben`;
+        if (gesperrt > 0 && verfuegbarkeit.vergeben === 0) {
+          text.textContent = `Alle ${gesperrt} gesperrt`;
+        } else if (gesperrt > 0) {
+          text.textContent = `${verfuegbarkeit.vergeben} vergeben, ${gesperrt} gesperrt`;
+        } else {
+          text.textContent = `Alle ${verfuegbarkeit.gesamt} vergeben`;
+        }
       }
     } catch (error) {
       console.error('Fehler beim Prüfen der Ersatzauto-Verfügbarkeit:', error);
@@ -999,7 +1017,9 @@ class App {
       ersatzauto: ersatzautoChecked,
       ersatzauto_tage: ersatzautoChecked && ersatzautoTage ? parseInt(ersatzautoTage, 10) : null,
       ersatzauto_bis_datum: ersatzautoChecked && !ersatzautoTage && abholungDatum ? abholungDatum : null,
-      ersatzauto_bis_zeit: ersatzautoChecked && !ersatzautoTage && abholungZeit ? abholungZeit : null
+      ersatzauto_bis_zeit: ersatzautoChecked && !ersatzautoTage && abholungZeit ? abholungZeit : null,
+      vin: document.getElementById('edit_vin')?.value?.trim().toUpperCase() || null,
+      fahrzeugtyp: document.getElementById('edit_fahrzeugtyp')?.value?.trim() || null
     };
     
     try {
@@ -1136,7 +1156,12 @@ class App {
   // === ENDE PHASEN-SYSTEM METHODEN ===
 
   handleTabChange(e) {
-    const tabName = e.target.dataset.tab;
+    // closest() verwenden, falls auf ein Kind-Element (z.B. <span>) geklickt wurde
+    const button = e.target.closest('.tab-button');
+    if (!button) return;
+    
+    const tabName = button.dataset.tab;
+    if (!tabName) return;
 
     document.querySelectorAll('.tab-content').forEach(content => {
       content.classList.remove('active');
@@ -1147,7 +1172,7 @@ class App {
     });
 
     document.getElementById(tabName).classList.add('active');
-    e.target.classList.add('active');
+    button.classList.add('active');
 
     if (tabName === 'termine') {
       // Formular komplett zurücksetzen beim Öffnen des Termine-Tabs
@@ -1321,7 +1346,13 @@ class App {
           <td>${kunde.name}</td>
           <td>${kunde.telefon || '-'}</td>
           <td>${kunde.email || '-'}</td>
+          <td>${kunde.kennzeichen || '-'}</td>
+          <td>${kunde.fahrzeugtyp || '-'}</td>
           <td>${kunde.locosoft_id || '-'}</td>
+          <td>
+            <button class="btn btn-small btn-secondary" onclick="app.editKunde(${kunde.id})" title="Bearbeiten">✏️</button>
+            <button class="btn btn-small btn-danger" onclick="app.deleteKunde(${kunde.id}, '${kunde.name.replace(/'/g, "\\'")}')">🗑️</button>
+          </td>
         `;
       });
 
@@ -1335,22 +1366,42 @@ class App {
   async handleKundenSubmit(e) {
     e.preventDefault();
 
+    const form = document.getElementById('kundenForm');
+    const editId = form.dataset.editId;
+
     const kunde = {
       name: document.getElementById('kunde_name').value,
       telefon: document.getElementById('telefon').value,
       email: document.getElementById('email').value,
       adresse: document.getElementById('adresse').value,
-      locosoft_id: document.getElementById('locosoft_id').value
+      locosoft_id: document.getElementById('locosoft_id').value,
+      kennzeichen: document.getElementById('kunde_kennzeichen')?.value?.trim().toUpperCase() || null,
+      vin: document.getElementById('kunde_vin')?.value?.trim().toUpperCase() || null,
+      fahrzeugtyp: document.getElementById('kunde_fahrzeugtyp')?.value?.trim() || null
     };
 
     try {
-      await KundenService.create(kunde);
-      alert('Kunde erfolgreich angelegt!');
-      document.getElementById('kundenForm').reset();
+      if (editId) {
+        // Update bestehenden Kunden
+        await KundenService.update(editId, kunde);
+        alert('Kunde erfolgreich aktualisiert!');
+        delete form.dataset.editId;
+        
+        // Button zurücksetzen
+        const submitBtn = form.querySelector('button[type="submit"]');
+        submitBtn.textContent = 'Kunde anlegen';
+        submitBtn.classList.remove('btn-warning');
+      } else {
+        // Neuen Kunden anlegen
+        await KundenService.create(kunde);
+        alert('Kunde erfolgreich angelegt!');
+      }
+      
+      form.reset();
       this.loadKunden();
     } catch (error) {
-      console.error('Fehler beim Anlegen des Kunden:', error);
-      alert('Fehler beim Anlegen des Kunden');
+      console.error('Fehler beim Speichern des Kunden:', error);
+      alert('Fehler beim Speichern des Kunden');
     }
   }
 
@@ -1366,6 +1417,57 @@ class App {
     } catch (error) {
       console.error('Fehler beim Import:', error);
       alert('Fehler beim Import. Bitte überprüfen Sie das JSON-Format.');
+    }
+  }
+
+  // Kunde bearbeiten
+  async editKunde(id) {
+    try {
+      const kunde = await KundenService.getById(id);
+      if (!kunde) {
+        alert('Kunde nicht gefunden');
+        return;
+      }
+
+      // Formular mit Kundendaten füllen
+      document.getElementById('kunde_name').value = kunde.name || '';
+      document.getElementById('telefon').value = kunde.telefon || '';
+      document.getElementById('email').value = kunde.email || '';
+      document.getElementById('adresse').value = kunde.adresse || '';
+      document.getElementById('locosoft_id').value = kunde.locosoft_id || '';
+      document.getElementById('kunde_kennzeichen').value = kunde.kennzeichen || '';
+      document.getElementById('kunde_vin').value = kunde.vin || '';
+      document.getElementById('kunde_fahrzeugtyp').value = kunde.fahrzeugtyp || '';
+
+      // Speichere ID für Update
+      document.getElementById('kundenForm').dataset.editId = id;
+
+      // Button-Text ändern
+      const submitBtn = document.getElementById('kundenForm').querySelector('button[type="submit"]');
+      submitBtn.textContent = 'Kunde aktualisieren';
+      submitBtn.classList.add('btn-warning');
+
+      // Scroll zum Formular
+      document.getElementById('kundenForm').scrollIntoView({ behavior: 'smooth' });
+    } catch (error) {
+      console.error('Fehler beim Laden des Kunden:', error);
+      alert('Fehler beim Laden des Kunden');
+    }
+  }
+
+  // Kunde löschen
+  async deleteKunde(id, name) {
+    if (!confirm(`Möchten Sie den Kunden "${name}" wirklich löschen?`)) {
+      return;
+    }
+
+    try {
+      await KundenService.delete(id);
+      alert('Kunde erfolgreich gelöscht');
+      this.loadKunden();
+    } catch (error) {
+      console.error('Fehler beim Löschen des Kunden:', error);
+      alert('Fehler beim Löschen des Kunden');
     }
   }
 
@@ -1989,7 +2091,9 @@ class App {
       ersatzauto_tage: ersatzautoChecked && ersatzautoTage ? parseInt(ersatzautoTage, 10) : null,
       // Wenn keine Tage angegeben, nutze Abholdatum als Ende-Datum
       ersatzauto_bis_datum: ersatzautoChecked && !ersatzautoTage && abholungDatum ? abholungDatum : null,
-      ersatzauto_bis_zeit: ersatzautoChecked && !ersatzautoTage && abholungZeit ? abholungZeit : null
+      ersatzauto_bis_zeit: ersatzautoChecked && !ersatzautoTage && abholungZeit ? abholungZeit : null,
+      vin: document.getElementById('vin')?.value?.trim().toUpperCase() || null,
+      fahrzeugtyp: document.getElementById('fahrzeugtyp')?.value?.trim() || null
     };
 
     const kundeId = document.getElementById('kunde_id').value;
@@ -2133,6 +2237,9 @@ class App {
 
     console.log('Termin-Objekt:', { mitarbeiter_id: mitarbeiterIdValue, arbeitszeiten_details: arbeitszeitenDetails });
 
+    // Dringlichkeit auslesen
+    const dringlichkeitValue = document.getElementById('intern_dringlichkeit')?.value || null;
+
     const termin = {
       kunde_name: 'Intern',
       kunde_telefon: null,
@@ -2148,7 +2255,8 @@ class App {
       kontakt_option: null,
       kilometerstand: null,
       ersatzauto: false,
-      mitarbeiter_id: mitarbeiterIdValue
+      mitarbeiter_id: mitarbeiterIdValue,
+      dringlichkeit: dringlichkeitValue
     };
 
     // Füge arbeitszeiten_details hinzu, wenn Mitarbeiter/Lehrling zugeordnet
@@ -2201,9 +2309,12 @@ class App {
         const hatTatsaechlicheZeit = termin.tatsaechliche_zeit && termin.tatsaechliche_zeit > 0;
         const zeitStatusIcon = hatTatsaechlicheZeit ? '🟢' : '🔴';
 
+        // Dringlichkeit-Badge
+        const terminDringlichkeit = this.getDringlichkeitBadge(termin.dringlichkeit);
+
         row.innerHTML = `
           <td style="text-align: center; font-size: 20px;">${zeitStatusIcon}</td>
-          <td><strong>${termin.termin_nr || '-'}</strong></td>
+          <td><strong>${termin.termin_nr || '-'}</strong>${terminDringlichkeit}</td>
           <td>${termin.datum}</td>
           <td>${termin.kunde_name}</td>
           <td>${termin.kennzeichen}</td>
@@ -2321,9 +2432,12 @@ class App {
 
           const zeitStatusIcon = '🔴';
 
+          // Dringlichkeit-Badge
+          const offeneTerminDringlichkeit = this.getDringlichkeitBadge(termin.dringlichkeit);
+
           row.innerHTML = `
             <td style="text-align: center; font-size: 20px;">${zeitStatusIcon}</td>
-            <td><strong>${termin.termin_nr || '-'}</strong></td>
+            <td><strong>${termin.termin_nr || '-'}</strong>${offeneTerminDringlichkeit}</td>
             <td>${termin.datum}</td>
             <td>${termin.kunde_name}</td>
             <td>${termin.kennzeichen}</td>
@@ -2467,6 +2581,13 @@ class App {
     const kontaktText = termin.kontakt_option || '-';
     const abholungText = termin.abholung_typ || '-';
 
+    // Dringlichkeit für Details
+    const dringlichkeitText = {
+      'dringend': '🔴 Dringend',
+      'heute': '🟠 Heute',
+      'woche': '🟡 Laufe der Woche'
+    }[termin.dringlichkeit] || '-';
+
     body.innerHTML = `
       <p><strong>Termin-Nr:</strong> ${termin.termin_nr || '-'}</p>
       <p><strong>Datum:</strong> ${termin.datum}</p>
@@ -2474,6 +2595,7 @@ class App {
       <p><strong>Kennzeichen:</strong> ${termin.kennzeichen || '-'}</p>
       <p><strong>Arbeiten:</strong> ${termin.arbeit || '-'}</p>
       <p><strong>Details/Wünsche:</strong> ${termin.umfang || '-'}</p>
+      ${termin.dringlichkeit ? `<p><strong>Dringlichkeit:</strong> ${dringlichkeitText}</p>` : ''}
       <p><strong>Abholung/Bringen:</strong> ${abholungText}</p>
       <p><strong>Bringzeit:</strong> ${termin.bring_zeit || '-'}</p>
       <p><strong>Abholzeit:</strong> ${termin.abholung_zeit || '-'}</p>
@@ -2763,9 +2885,8 @@ class App {
           // zeige sie trotzdem an (mit 0% Auslastung)
           html += data.lehrlinge.map(l => {
             const lehrlingBadge = '<span style="background: #9c27b0; color: white; padding: 2px 8px; border-radius: 12px; font-size: 0.8em; margin-left: 10px;">Lehrling</span>';
-            const arbeitszeitMinuten = (l.arbeitsstunden_pro_tag || 8) * 60;
-            const nebenzeitMinuten = arbeitszeitMinuten * ((l.nebenzeit_prozent || 0) / 100);
-            const verfuegbar = arbeitszeitMinuten - nebenzeitMinuten;
+            // Nebenzeit wird auf belegte Zeit aufgeschlagen, nicht von Kapazität abgezogen
+            const verfuegbar = (l.arbeitsstunden_pro_tag || 8) * 60;
             return `
               <div style="margin-bottom: 20px; padding: 15px; background: #f8f9fa; border-radius: 8px; border-left: 4px solid #2e7d32;">
                 <h4 style="margin: 0 0 10px 0;">${l.name || 'Unbekannt'}${lehrlingBadge}</h4>
@@ -3092,6 +3213,9 @@ class App {
         ? '<span style="color: #28a745; font-size: 1.2em; font-weight: bold;">✓</span>'
         : '';
 
+      // Dringlichkeit-Badge erstellen
+      const dringlichkeitBadge = this.getDringlichkeitBadge(termin.dringlichkeit);
+
       const aktuellerStatus = termin.status || 'geplant';
       const statusTexte = {
         'geplant': 'Geplant',
@@ -3102,7 +3226,7 @@ class App {
 
       row.innerHTML = `
         <td>${bringZeitDisplay}</td>
-        <td>${termin.kunde_name || '-'}</td>
+        <td>${termin.kunde_name || '-'}${dringlichkeitBadge}</td>
         <td>${termin.kunde_telefon || '-'}</td>
         <td>${termin.kennzeichen || '-'}</td>
         <td style="text-align: center;">${kundeWartet}</td>
@@ -3185,10 +3309,13 @@ class App {
         ? '<div style="background: #28a745; color: white; padding: 8px; text-align: center; font-weight: bold; border-radius: 5px 5px 0 0;">⚠️ KUNDE WARTET ⚠️</div>'
         : '';
 
+      // Dringlichkeit-Badge für Karten
+      const karteDringlichkeitBadge = this.getDringlichkeitBadge(termin.dringlichkeit);
+
       karte.innerHTML = `
         ${kundeWartetBanner}
         <div class="heute-karte-header">
-          <div class="heute-karte-nr"><strong>${termin.termin_nr || '-'}</strong></div>
+          <div class="heute-karte-nr"><strong>${termin.termin_nr || '-'}</strong>${karteDringlichkeitBadge}</div>
           <div class="status-container" style="position: relative;">
             <span class="status-badge ${statusClass}" data-termin-id="${termin.id}" data-status="${aktuellerStatus}" style="cursor: pointer; user-select: none;">
               ${statusTexte[aktuellerStatus]}
@@ -3433,6 +3560,10 @@ class App {
         } else {
           card.classList.remove('heute');
         }
+
+        // Click-Event für Tagesübersicht-Popup
+        card.dataset.datum = day.datum;
+        card.onclick = () => this.openTagesUebersichtModal(day.datum);
       }
     } catch (error) {
       console.error('Fehler beim Laden der Wochenübersicht:', error);
@@ -3573,6 +3704,10 @@ class App {
               <div class="mini-progress-fill" style="width:${Math.min(auslastung.auslastung_prozent, 100)}%"></div>
             </div>
           `;
+
+          // Click-Event für Tagesübersicht-Popup
+          card.dataset.datum = day.datum;
+          card.addEventListener('click', () => this.openTagesUebersichtModal(day.datum));
 
           weekRow.appendChild(card);
         });
@@ -3961,6 +4096,10 @@ class App {
     if (servicezeitField) {
       servicezeitField.value = einstellungen.servicezeit_minuten || 10;
     }
+    const nebenzeitField = document.getElementById('nebenzeit_prozent');
+    if (nebenzeitField) {
+      nebenzeitField.value = einstellungen.nebenzeit_prozent || 0;
+    }
   }
 
   // Ersatzautos laden und anzeigen
@@ -3975,10 +4114,15 @@ class App {
       const gesamtEl = document.getElementById('ersatzautoGesamt');
       const verfuegbarEl = document.getElementById('ersatzautoHeuteVerfuegbar');
       const vergebenEl = document.getElementById('ersatzautoHeuteVergeben');
+      const gesperrtEl = document.getElementById('ersatzautoGesperrt');
       
       if (gesamtEl) gesamtEl.textContent = autos.filter(a => a.aktiv).length;
       if (verfuegbarEl) verfuegbarEl.textContent = heuteVerfuegbarkeit.verfuegbar;
       if (vergebenEl) vergebenEl.textContent = heuteVerfuegbarkeit.vergeben;
+      if (gesperrtEl) gesperrtEl.textContent = heuteVerfuegbarkeit.gesperrt || 0;
+      
+      // Schnellzugriff-Kacheln rendern
+      this.renderErsatzautoKacheln(autos.filter(a => a.aktiv));
       
       // Liste rendern
       this.renderErsatzautoListe(autos);
@@ -3990,6 +4134,229 @@ class App {
       this.loadErsatzautoUebersicht();
     } catch (error) {
       console.error('Fehler beim Laden der Ersatzautos:', error);
+    }
+  }
+
+  // Schnellzugriff-Kacheln für Ersatzautos rendern
+  renderErsatzautoKacheln(autos) {
+    const container = document.getElementById('ersatzautoKacheln');
+    if (!container) return;
+    
+    if (!autos || autos.length === 0) {
+      container.innerHTML = `
+        <div style="padding: 20px; text-align: center; background: #f8fafc; border-radius: 8px; width: 100%;">
+          <p style="margin: 0; color: #64748b;">Keine aktiven Ersatzautos vorhanden. Fügen Sie unten ein Fahrzeug hinzu.</p>
+        </div>
+      `;
+      return;
+    }
+    
+    const heute = new Date().toISOString().split('T')[0];
+    
+    container.innerHTML = autos.map(auto => {
+      // Prüfen ob Sperrung abgelaufen ist
+      const gesperrtBis = auto.gesperrt_bis;
+      const istAbgelaufen = gesperrtBis && gesperrtBis < heute;
+      const istGesperrt = auto.manuell_gesperrt === 1 && !istAbgelaufen;
+      
+      const statusClass = istGesperrt ? 'gesperrt' : 'verfuegbar';
+      const statusText = istGesperrt 
+        ? (gesperrtBis ? `Gesperrt bis ${new Date(gesperrtBis).toLocaleDateString('de-DE')}` : 'Gesperrt') 
+        : 'Verfügbar';
+      const icon = istGesperrt ? '🔴' : '🟢';
+      const hinweisText = istGesperrt 
+        ? '🔓 Klicken zum Freigeben' 
+        : '🔒 Klicken zum Sperren';
+      
+      return `
+        <div class="ersatzauto-kachel ${statusClass}" 
+             data-id="${auto.id}" 
+             data-name="${auto.name}"
+             data-kennzeichen="${auto.kennzeichen}"
+             data-gesperrt="${istGesperrt ? '1' : '0'}"
+             onclick="app.toggleErsatzautoVerfuegbarkeit(${auto.id}, '${auto.name}', '${auto.kennzeichen}', ${istGesperrt})">
+          <div class="kachel-header">
+            <span class="kachel-icon">${icon}</span>
+            <span class="kachel-status">${statusText}</span>
+          </div>
+          <div class="kachel-name">${auto.name}</div>
+          <div class="kachel-kennzeichen">${auto.kennzeichen}</div>
+          ${auto.typ ? `<div class="kachel-typ">📋 ${auto.typ}</div>` : ''}
+          <div class="kachel-hinweis">
+            <span>${hinweisText}</span>
+          </div>
+        </div>
+      `;
+    }).join('');
+  }
+
+  // Ersatzauto-Verfügbarkeit umschalten mit Popup für Sperrung
+  async toggleErsatzautoVerfuegbarkeit(id, name, kennzeichen, istGesperrt) {
+    if (istGesperrt) {
+      // Freigeben - einfache Bestätigung
+      const bestaetigung = confirm(
+        `🚗 Ersatzauto FREIGEBEN?\n\nDas Fahrzeug "${name}" (${kennzeichen}) wird wieder als VERFÜGBAR markiert.\n\nMöchten Sie fortfahren?`
+      );
+      
+      if (!bestaetigung) return;
+      
+      try {
+        await ErsatzautosService.entsperren(id);
+        alert(`✅ ${name} (${kennzeichen}) ist jetzt wieder verfügbar.`);
+        this.loadErsatzautos();
+        this.loadDashboard();
+      } catch (error) {
+        console.error('Fehler beim Freigeben:', error);
+        alert('❌ Fehler beim Freigeben. Bitte versuchen Sie es erneut.');
+      }
+    } else {
+      // Sperren - Popup für Anzahl Tage anzeigen
+      this.showSperrenPopup(id, name, kennzeichen);
+    }
+  }
+
+  // Popup für Sperrung mit Tage-Auswahl anzeigen
+  showSperrenPopup(id, name, kennzeichen) {
+    // Bestehenden Modal entfernen falls vorhanden
+    const existingModal = document.getElementById('sperrenModal');
+    if (existingModal) existingModal.remove();
+    
+    const heute = new Date();
+    const morgen = new Date(heute);
+    morgen.setDate(morgen.getDate() + 1);
+    const minDatum = heute.toISOString().split('T')[0];
+    
+    const modal = document.createElement('div');
+    modal.id = 'sperrenModal';
+    modal.className = 'modal-overlay';
+    modal.innerHTML = `
+      <div class="modal-content sperren-modal">
+        <div class="modal-header">
+          <h3>🔒 Ersatzauto sperren</h3>
+          <button class="modal-close" onclick="app.closeSperrenModal()">&times;</button>
+        </div>
+        <div class="modal-body">
+          <p><strong>${name}</strong> (${kennzeichen})</p>
+          <p style="margin-bottom: 15px; color: #64748b;">Wie lange soll das Fahrzeug gesperrt werden?</p>
+          
+          <div class="sperren-optionen">
+            <button class="sperren-option-btn" onclick="app.sperrenFuerTage(${id}, 1)">
+              <span class="option-tage">1</span>
+              <span class="option-label">Tag</span>
+            </button>
+            <button class="sperren-option-btn" onclick="app.sperrenFuerTage(${id}, 2)">
+              <span class="option-tage">2</span>
+              <span class="option-label">Tage</span>
+            </button>
+            <button class="sperren-option-btn" onclick="app.sperrenFuerTage(${id}, 3)">
+              <span class="option-tage">3</span>
+              <span class="option-label">Tage</span>
+            </button>
+            <button class="sperren-option-btn" onclick="app.sperrenFuerTage(${id}, 5)">
+              <span class="option-tage">5</span>
+              <span class="option-label">Tage</span>
+            </button>
+            <button class="sperren-option-btn" onclick="app.sperrenFuerTage(${id}, 7)">
+              <span class="option-tage">7</span>
+              <span class="option-label">Tage</span>
+            </button>
+            <button class="sperren-option-btn" onclick="app.sperrenFuerTage(${id}, 14)">
+              <span class="option-tage">14</span>
+              <span class="option-label">Tage</span>
+            </button>
+          </div>
+          
+          <div class="sperren-custom" style="margin-top: 20px;">
+            <label style="display: block; margin-bottom: 8px; font-weight: 500;">Oder bis zu einem bestimmten Datum:</label>
+            <input type="date" id="sperrenBisDatum" min="${minDatum}" class="form-input" style="width: 100%;">
+          </div>
+          
+          <div class="sperren-vorschau" id="sperrenVorschau" style="margin-top: 15px; padding: 10px; background: #f8fafc; border-radius: 8px; display: none;">
+            <span id="sperrenVorschauText"></span>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-secondary" onclick="app.closeSperrenModal()">Abbrechen</button>
+          <button class="btn btn-primary" id="sperrenBestaetigenBtn" onclick="app.bestaetigenSperrenMitDatum(${id})" disabled>
+            🔒 Sperren
+          </button>
+        </div>
+      </div>
+    `;
+    
+    document.body.appendChild(modal);
+    
+    // Event-Listener für Datum-Eingabe
+    const datumInput = document.getElementById('sperrenBisDatum');
+    datumInput.addEventListener('change', () => {
+      this.updateSperrenVorschau(datumInput.value);
+    });
+    
+    // Modal anzeigen
+    setTimeout(() => modal.classList.add('active'), 10);
+  }
+
+  // Vorschau aktualisieren und Button aktivieren
+  updateSperrenVorschau(datum) {
+    const vorschau = document.getElementById('sperrenVorschau');
+    const vorschauText = document.getElementById('sperrenVorschauText');
+    const bestaetigenBtn = document.getElementById('sperrenBestaetigenBtn');
+    
+    if (datum) {
+      if (vorschau) vorschau.style.display = 'block';
+      if (vorschauText) vorschauText.innerHTML = `📅 Gesperrt bis: <strong>${new Date(datum).toLocaleDateString('de-DE')}</strong>`;
+      if (bestaetigenBtn) {
+        bestaetigenBtn.disabled = false;
+        bestaetigenBtn.removeAttribute('disabled');
+      }
+    } else {
+      if (vorschau) vorschau.style.display = 'none';
+      if (bestaetigenBtn) bestaetigenBtn.disabled = true;
+    }
+  }
+
+  // Schnell-Sperrung für eine bestimmte Anzahl Tage
+  async sperrenFuerTage(id, tage) {
+    const bisDatum = new Date();
+    bisDatum.setDate(bisDatum.getDate() + tage);
+    const bisDatumStr = bisDatum.toISOString().split('T')[0];
+    
+    // Datum-Input setzen und Vorschau aktualisieren
+    const datumInput = document.getElementById('sperrenBisDatum');
+    if (datumInput) {
+      datumInput.value = bisDatumStr;
+      this.updateSperrenVorschau(bisDatumStr);
+    }
+  }
+
+  // Sperrung mit gewähltem Datum bestätigen
+  async bestaetigenSperrenMitDatum(id) {
+    const datumInput = document.getElementById('sperrenBisDatum');
+    const bisDatum = datumInput?.value;
+    
+    if (!bisDatum) {
+      alert('Bitte wählen Sie ein Datum aus.');
+      return;
+    }
+    
+    try {
+      await ErsatzautosService.sperrenBis(id, bisDatum);
+      this.closeSperrenModal();
+      alert(`✅ Fahrzeug gesperrt bis ${new Date(bisDatum).toLocaleDateString('de-DE')}.`);
+      this.loadErsatzautos();
+      this.loadDashboard();
+    } catch (error) {
+      console.error('Fehler beim Sperren:', error);
+      alert('❌ Fehler beim Sperren. Bitte versuchen Sie es erneut.');
+    }
+  }
+
+  // Modal schließen
+  closeSperrenModal() {
+    const modal = document.getElementById('sperrenModal');
+    if (modal) {
+      modal.classList.remove('active');
+      setTimeout(() => modal.remove(), 300);
     }
   }
 
@@ -4208,19 +4575,33 @@ class App {
         const verf = verfuegbarkeiten[index];
         const isPast = day.datum < today;
         const isToday = day.datum === today;
+        const gesperrt = verf.gesperrt || 0;
         
         let statusClass = 'frei';
         let statusText = `${verf.verfuegbar}/${verf.gesamt}`;
+        let detailText = '';
         
         if (verf.gesamt === 0) {
           statusClass = 'frei';
           statusText = '-';
-        } else if (verf.vergeben === 0) {
-          statusClass = 'frei';
         } else if (verf.verfuegbar === 0) {
           statusClass = 'voll';
-        } else {
+          // Unterscheide ob gesperrt oder vergeben
+          if (gesperrt > 0 && verf.vergeben === 0) {
+            statusText = `0/${verf.gesamt}`;
+            detailText = `${gesperrt} gesperrt`;
+          } else if (gesperrt > 0) {
+            statusText = `0/${verf.gesamt}`;
+            detailText = `${verf.vergeben} vergeben, ${gesperrt} gesperrt`;
+          } else {
+            detailText = `${verf.vergeben} vergeben`;
+          }
+        } else if (verf.vergeben > 0 || gesperrt > 0) {
           statusClass = 'teilweise';
+          let details = [];
+          if (verf.vergeben > 0) details.push(`${verf.vergeben} vergeben`);
+          if (gesperrt > 0) details.push(`${gesperrt} gesperrt`);
+          detailText = details.join(', ');
         }
         
         const wochentage = ['So', 'Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa'];
@@ -4238,7 +4619,7 @@ class App {
             <span class="ea-status-dot ea-${statusClass}"></span>
             ${statusText}
           </div>
-          ${verf.vergeben > 0 ? `<div class="ea-details">${verf.vergeben} vergeben</div>` : ''}
+          ${detailText ? `<div class="ea-details">${detailText}</div>` : ''}
         `;
         
         container.appendChild(card);
@@ -4625,6 +5006,7 @@ class App {
 
     const servicezeitField = document.getElementById('servicezeit_minuten');
     const ersatzautoField = document.getElementById('ersatzauto_anzahl');
+    const nebenzeitField = document.getElementById('nebenzeit_prozent');
     
     if (!servicezeitField) {
       alert('Servicezeit-Feld nicht gefunden.');
@@ -4633,6 +5015,7 @@ class App {
 
     const servicezeit = parseInt(servicezeitField.value, 10);
     const ersatzautoAnzahl = ersatzautoField ? parseInt(ersatzautoField.value, 10) : 2;
+    const nebenzeit = nebenzeitField ? parseFloat(nebenzeitField.value) : 0;
 
     if (!Number.isFinite(servicezeit) || servicezeit < 0) {
       alert('Bitte eine gültige Servicezeit eingeben.');
@@ -4644,6 +5027,11 @@ class App {
       return;
     }
 
+    if (!Number.isFinite(nebenzeit) || nebenzeit < 0 || nebenzeit > 100) {
+      alert('Bitte eine gültige Nebenzeit eingeben (0-100%).');
+      return;
+    }
+
     try {
       // Lade aktuelle Einstellungen, um Pufferzeit beizubehalten
       const aktuelleEinstellungen = await EinstellungenService.getWerkstatt();
@@ -4651,7 +5039,8 @@ class App {
       await EinstellungenService.updateWerkstatt({
         pufferzeit_minuten: aktuelleEinstellungen?.pufferzeit_minuten || 15,
         servicezeit_minuten: servicezeit,
-        ersatzauto_anzahl: ersatzautoAnzahl
+        ersatzauto_anzahl: ersatzautoAnzahl,
+        nebenzeit_prozent: nebenzeit
       });
       alert('Einstellungen gespeichert.');
       this.loadAuslastung();
@@ -4671,7 +5060,7 @@ class App {
       tbody.innerHTML = '';
 
       if (mitarbeiter.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="6" class="loading">Keine Mitarbeiter vorhanden</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="5" class="loading">Keine Mitarbeiter vorhanden</td></tr>';
         return;
       }
 
@@ -4680,7 +5069,6 @@ class App {
         row.innerHTML = `
           <td><input type="text" id="mitarbeiter_name_${ma.id}" value="${ma.name || ''}" style="width: 100%; padding: 5px;"></td>
           <td><input type="number" id="mitarbeiter_stunden_${ma.id}" value="${ma.arbeitsstunden_pro_tag || 8}" min="1" max="24" style="width: 100%; padding: 5px;"></td>
-          <td><input type="number" id="mitarbeiter_nebenzeit_${ma.id}" value="${ma.nebenzeit_prozent || 0}" min="0" max="100" step="0.1" style="width: 100%; padding: 5px;"></td>
           <td><input type="checkbox" id="mitarbeiter_nur_service_${ma.id}" ${ma.nur_service === 1 || ma.nur_service === true ? 'checked' : ''} title="Nur Service (Annahme/Rechnung)"></td>
           <td><input type="checkbox" id="mitarbeiter_aktiv_${ma.id}" ${ma.aktiv !== 0 ? 'checked' : ''}></td>
           <td>
@@ -4701,7 +5089,7 @@ class App {
       tbody.innerHTML = '';
 
       if (lehrlinge.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="5" class="loading">Keine Lehrlinge vorhanden</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="4" class="loading">Keine Lehrlinge vorhanden</td></tr>';
         return;
       }
 
@@ -4709,7 +5097,6 @@ class App {
         const row = tbody.insertRow();
         row.innerHTML = `
           <td><input type="text" id="lehrling_name_${l.id}" value="${l.name || ''}" style="width: 100%; padding: 5px;"></td>
-          <td><input type="number" id="lehrling_nebenzeit_${l.id}" value="${l.nebenzeit_prozent || 0}" min="0" max="100" step="0.1" style="width: 100%; padding: 5px;"></td>
           <td><input type="number" id="lehrling_aufgabe_${l.id}" value="${l.aufgabenbewaeltigung_prozent || 100}" min="0" max="500" step="1" style="width: 100%; padding: 5px;"></td>
           <td><input type="checkbox" id="lehrling_aktiv_${l.id}" ${l.aktiv !== 0 ? 'checked' : ''}></td>
           <td>
@@ -4730,7 +5117,6 @@ class App {
     row.innerHTML = `
       <td><input type="text" id="new_mitarbeiter_name" placeholder="Name" style="width: 100%; padding: 5px;"></td>
       <td><input type="number" id="new_mitarbeiter_stunden" value="8" min="1" max="24" style="width: 100%; padding: 5px;"></td>
-      <td><input type="number" id="new_mitarbeiter_nebenzeit" value="0" min="0" max="100" step="0.1" style="width: 100%; padding: 5px;"></td>
       <td><input type="checkbox" id="new_mitarbeiter_nur_service" title="Nur Service (Annahme/Rechnung)"></td>
       <td><input type="checkbox" id="new_mitarbeiter_aktiv" checked></td>
       <td>
@@ -4751,7 +5137,6 @@ class App {
   async saveNewMitarbeiter() {
     const name = document.getElementById('new_mitarbeiter_name').value.trim();
     const stunden = parseInt(document.getElementById('new_mitarbeiter_stunden').value, 10);
-    const nebenzeit = parseFloat(document.getElementById('new_mitarbeiter_nebenzeit').value);
     const nurService = document.getElementById('new_mitarbeiter_nur_service').checked;
     const aktiv = document.getElementById('new_mitarbeiter_aktiv').checked;
 
@@ -4764,7 +5149,6 @@ class App {
       await MitarbeiterService.create({
         name,
         arbeitsstunden_pro_tag: stunden || 8,
-        nebenzeit_prozent: nebenzeit || 0,
         nur_service: nurService,
         aktiv: aktiv ? 1 : 0
       });
@@ -4779,7 +5163,6 @@ class App {
   async saveMitarbeiter(id) {
     const name = document.getElementById(`mitarbeiter_name_${id}`).value.trim();
     const stunden = parseInt(document.getElementById(`mitarbeiter_stunden_${id}`).value, 10);
-    const nebenzeit = parseFloat(document.getElementById(`mitarbeiter_nebenzeit_${id}`).value);
     const nurService = document.getElementById(`mitarbeiter_nur_service_${id}`).checked;
     const aktiv = document.getElementById(`mitarbeiter_aktiv_${id}`).checked;
 
@@ -4792,7 +5175,6 @@ class App {
       await MitarbeiterService.update(id, {
         name,
         arbeitsstunden_pro_tag: stunden || 8,
-        nebenzeit_prozent: nebenzeit || 0,
         nur_service: nurService,
         aktiv: aktiv ? 1 : 0
       });
@@ -4827,7 +5209,6 @@ class App {
     row.className = 'new-lehrling-row';
     row.innerHTML = `
       <td><input type="text" id="new_lehrling_name" placeholder="Name" style="width: 100%; padding: 5px;"></td>
-      <td><input type="number" id="new_lehrling_nebenzeit" value="0" min="0" max="100" step="0.1" style="width: 100%; padding: 5px;"></td>
       <td><input type="number" id="new_lehrling_aufgabe" value="100" min="0" max="500" step="1" style="width: 100%; padding: 5px;"></td>
       <td><input type="checkbox" id="new_lehrling_aktiv" checked></td>
       <td>
@@ -4847,7 +5228,6 @@ class App {
 
   async saveNewLehrling() {
     const name = document.getElementById('new_lehrling_name').value.trim();
-    const nebenzeit = parseFloat(document.getElementById('new_lehrling_nebenzeit').value);
     const aufgabe = parseFloat(document.getElementById('new_lehrling_aufgabe').value);
     const aktiv = document.getElementById('new_lehrling_aktiv').checked;
 
@@ -4859,7 +5239,6 @@ class App {
     try {
       await LehrlingeService.create({
         name,
-        nebenzeit_prozent: nebenzeit || 0,
         aufgabenbewaeltigung_prozent: aufgabe || 100,
         aktiv: aktiv ? 1 : 0
       });
@@ -4873,7 +5252,6 @@ class App {
 
   async saveLehrling(id) {
     const name = document.getElementById(`lehrling_name_${id}`).value.trim();
-    const nebenzeit = parseFloat(document.getElementById(`lehrling_nebenzeit_${id}`).value);
     const aufgabe = parseFloat(document.getElementById(`lehrling_aufgabe_${id}`).value);
     const aktiv = document.getElementById(`lehrling_aktiv_${id}`).checked;
 
@@ -4885,7 +5263,6 @@ class App {
     try {
       await LehrlingeService.update(id, {
         name,
-        nebenzeit_prozent: nebenzeit || 0,
         aufgabenbewaeltigung_prozent: aufgabe || 100,
         aktiv: aktiv ? 1 : 0
       });
@@ -5284,6 +5661,134 @@ class App {
     // Reset Phasen
     this.modalPhasenCounter = 0;
     this.modalPhasenData = [];
+  }
+
+  // ================================================
+  // TAGESÜBERSICHT POPUP/MODAL
+  // ================================================
+
+  async openTagesUebersichtModal(datum) {
+    const modal = document.getElementById('tagesUebersichtModal');
+    const body = document.getElementById('tagesUebersichtBody');
+    const titel = document.getElementById('tagesUebersichtTitel');
+    const termineCount = document.getElementById('tagesTermineCount');
+    const auslastungBadge = document.getElementById('tagesAuslastung');
+
+    if (!modal || !body) return;
+
+    // Formatiere das Datum für den Titel
+    const datumObj = new Date(datum + 'T12:00:00');
+    const wochentag = datumObj.toLocaleDateString('de-DE', { weekday: 'long' });
+    const datumFormatiert = datumObj.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' });
+    
+    titel.textContent = `📅 ${wochentag}, ${datumFormatiert}`;
+    body.innerHTML = '<div class="loading">Termine werden geladen...</div>';
+    modal.style.display = 'block';
+
+    try {
+      // Lade Termine und Auslastung für diesen Tag
+      const allTermine = await TermineService.getAll();
+      const termineForDay = allTermine.filter(t => t.datum === datum);
+      const auslastung = await AuslastungService.getByDatum(datum);
+
+      // Aktualisiere Stats
+      termineCount.textContent = `${termineForDay.length} Termin${termineForDay.length !== 1 ? 'e' : ''}`;
+      auslastungBadge.textContent = `${Math.round(auslastung.auslastung_prozent || 0)}% Auslastung`;
+
+      if (termineForDay.length === 0) {
+        body.innerHTML = `
+          <div class="tages-keine-termine">
+            <div class="emoji">📭</div>
+            <p>Keine Termine an diesem Tag</p>
+          </div>
+        `;
+        return;
+      }
+
+      // Sortiere Termine nach Uhrzeit
+      termineForDay.sort((a, b) => {
+        const zeitA = a.uhrzeit || '23:59';
+        const zeitB = b.uhrzeit || '23:59';
+        return zeitA.localeCompare(zeitB);
+      });
+
+      // Erstelle HTML für alle Termine
+      let html = '';
+      for (const termin of termineForDay) {
+        const isIntern = termin.ist_intern === 1 || termin.ist_intern === true;
+        const statusClass = `status-${termin.status || 'geplant'}`;
+        const internClass = isIntern ? 'intern' : '';
+
+        // Berechne Dauer
+        let dauerText = '';
+        if (termin.geschaetzte_zeit) {
+          const stunden = Math.floor(termin.geschaetzte_zeit / 60);
+          const minuten = termin.geschaetzte_zeit % 60;
+          if (stunden > 0 && minuten > 0) {
+            dauerText = `${stunden}h ${minuten}min`;
+          } else if (stunden > 0) {
+            dauerText = `${stunden}h`;
+          } else {
+            dauerText = `${minuten}min`;
+          }
+        }
+
+        // Kundenname ermitteln
+        let kundenName = 'Unbekannt';
+        if (isIntern) {
+          kundenName = '🔧 Interner Termin';
+        } else if (termin.kunde_name) {
+          kundenName = termin.kunde_name;
+        } else if (termin.kunde_id) {
+          const kunde = this.kundenCache.find(k => k.id === termin.kunde_id);
+          if (kunde) kundenName = kunde.name;
+        }
+
+        // Arbeiten kürzen falls zu lang
+        let arbeitText = termin.arbeit || '-';
+        if (arbeitText.length > 100) {
+          arbeitText = arbeitText.substring(0, 100) + '...';
+        }
+
+        // Status-Badge
+        const statusLabels = {
+          'geplant': '⏳ Geplant',
+          'in_arbeit': '🔧 In Arbeit',
+          'abgeschlossen': '✅ Abgeschlossen'
+        };
+        const statusLabel = statusLabels[termin.status] || '⏳ Geplant';
+
+        html += `
+          <div class="tages-termin-card ${statusClass} ${internClass}">
+            <div class="tages-termin-zeit">
+              <span class="zeit">${termin.uhrzeit || '--:--'}</span>
+              ${dauerText ? `<span class="dauer">${dauerText}</span>` : ''}
+            </div>
+            <div class="tages-termin-info">
+              <div class="tages-termin-kunde">${this.escapeHtml(kundenName)}</div>
+              ${!isIntern && termin.kennzeichen ? `<div class="tages-termin-kennzeichen">🚗 ${this.escapeHtml(termin.kennzeichen)}</div>` : ''}
+              <div class="tages-termin-arbeit">${this.escapeHtml(arbeitText)}</div>
+            </div>
+            <div class="tages-termin-status">
+              <span class="status-badge ${statusClass}">${statusLabel}</span>
+            </div>
+          </div>
+        `;
+      }
+
+      body.innerHTML = html;
+
+    } catch (error) {
+      console.error('Fehler beim Laden der Tagesübersicht:', error);
+      body.innerHTML = '<div class="loading">Fehler beim Laden der Termine</div>';
+    }
+  }
+
+  closeTagesUebersichtModal() {
+    const modal = document.getElementById('tagesUebersichtModal');
+    if (modal) {
+      modal.style.display = 'none';
+    }
   }
 
   updateModalGesamtzeit() {
@@ -5866,6 +6371,19 @@ class App {
     return `${stunden.toFixed(2)} h`;
   }
 
+  // Dringlichkeit-Badge HTML generieren
+  getDringlichkeitBadge(dringlichkeit) {
+    if (!dringlichkeit) return '';
+    
+    const badges = {
+      'dringend': '<span class="dringlichkeit-badge dringlichkeit-dringend">🔴 Dringend</span>',
+      'heute': '<span class="dringlichkeit-badge dringlichkeit-heute">🟠 Heute</span>',
+      'woche': '<span class="dringlichkeit-badge dringlichkeit-woche">🟡 Diese Woche</span>'
+    };
+    
+    return badges[dringlichkeit] || '';
+  }
+
   getStatusColor(status) {
     const colors = {
       'geplant': '#4a90e2',
@@ -6110,6 +6628,14 @@ class App {
       datumInput.dispatchEvent(new Event('change'));
     }
     this.closeAuslastungKalender();
+  }
+
+  // Hilfsmethode zum Escapen von HTML
+  escapeHtml(text) {
+    if (!text) return '';
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
   }
 }
 

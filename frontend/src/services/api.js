@@ -307,6 +307,26 @@ class ErsatzautosService {
   static async getAktuelleBuchungen() {
     return ApiService.get('/ersatzautos/buchungen/aktuell');
   }
+
+  // Manuelle Sperrung umschalten (Toggle)
+  static async toggleManuellGesperrt(id) {
+    return ApiService.post(`/ersatzautos/${id}/toggle-gesperrt`);
+  }
+
+  // Manuelle Sperrung direkt setzen
+  static async setManuellGesperrt(id, gesperrt) {
+    return ApiService.put(`/ersatzautos/${id}/gesperrt`, { gesperrt });
+  }
+
+  // Zeitbasierte Sperrung setzen (sperren bis zu einem bestimmten Datum)
+  static async sperrenBis(id, bisDatum) {
+    return ApiService.post(`/ersatzautos/${id}/sperren-bis`, { bisDatum });
+  }
+
+  // Sperrung aufheben
+  static async entsperren(id) {
+    return ApiService.post(`/ersatzautos/${id}/entsperren`);
+  }
 }
 
 // Phasen-Service für mehrtägige Arbeiten (z.B. Unfallreparatur)

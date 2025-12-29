@@ -5,6 +5,56 @@ class ErsatzautosModel {
     db.all('SELECT * FROM ersatzautos ORDER BY name ASC', callback);
   }
 
+  // Manuelle Sperrung umschalten (mit optionalem Bis-Datum)
+  static toggleManuellGesperrt(id, callback) {
+    // Behandle NULL als 0 (nicht gesperrt)
+    db.run(
+      'UPDATE ersatzautos SET manuell_gesperrt = CASE WHEN COALESCE(manuell_gesperrt, 0) = 1 THEN 0 ELSE 1 END, gesperrt_bis = NULL WHERE id = ?',
+      [id],
+      function(err) {
+        if (err) return callback(err);
+        // Hole das aktualisierte Auto zurück
+        ErsatzautosModel.getById(id, callback);
+      }
+    );
+  }
+
+  // Manuelle Sperrung direkt setzen
+  static setManuellGesperrt(id, gesperrt, callback) {
+    db.run(
+      'UPDATE ersatzautos SET manuell_gesperrt = ?, gesperrt_bis = NULL WHERE id = ?',
+      [gesperrt ? 1 : 0, id],
+      function(err) {
+        if (err) return callback(err);
+        ErsatzautosModel.getById(id, callback);
+      }
+    );
+  }
+
+  // Zeitbasierte Sperrung setzen (sperren bis zu einem bestimmten Datum)
+  static sperrenBis(id, bisDatum, callback) {
+    db.run(
+      'UPDATE ersatzautos SET manuell_gesperrt = 1, gesperrt_bis = ? WHERE id = ?',
+      [bisDatum, id],
+      function(err) {
+        if (err) return callback(err);
+        ErsatzautosModel.getById(id, callback);
+      }
+    );
+  }
+
+  // Sperrung aufheben
+  static entsperren(id, callback) {
+    db.run(
+      'UPDATE ersatzautos SET manuell_gesperrt = 0, gesperrt_bis = NULL WHERE id = ?',
+      [id],
+      function(err) {
+        if (err) return callback(err);
+        ErsatzautosModel.getById(id, callback);
+      }
+    );
+  }
+
   static getActive(callback) {
     db.all('SELECT * FROM ersatzautos WHERE aktiv = 1 ORDER BY name ASC', callback);
   }
@@ -51,45 +101,94 @@ class ErsatzautosModel {
     });
   }
 
+  // Anzahl aktiver UND nicht gesperrter Autos (berücksichtigt gesperrt_bis Datum)
+  static getAnzahlVerfuegbar(callback, datum = null) {
+    const heute = datum || new Date().toISOString().split('T')[0];
+    // Ein Auto ist verfügbar wenn:
+    // - manuell_gesperrt = 0 ODER
+    // - manuell_gesperrt = 1 aber gesperrt_bis < heute (Sperrung abgelaufen)
+    db.get(
+      `SELECT COUNT(*) as anzahl FROM ersatzautos 
+       WHERE aktiv = 1 
+       AND (
+         manuell_gesperrt = 0 
+         OR manuell_gesperrt IS NULL 
+         OR (manuell_gesperrt = 1 AND gesperrt_bis IS NOT NULL AND gesperrt_bis < ?)
+       )`,
+      [heute],
+      (err, row) => {
+        if (err) return callback(err);
+        callback(null, row.anzahl);
+      }
+    );
+  }
+
+  // Anzahl manuell gesperrter Autos (nur aktive Sperren)
+  static getAnzahlGesperrt(callback, datum = null) {
+    const heute = datum || new Date().toISOString().split('T')[0];
+    // Ein Auto ist gesperrt wenn:
+    // - manuell_gesperrt = 1 UND (gesperrt_bis ist NULL ODER gesperrt_bis >= heute)
+    db.get(
+      `SELECT COUNT(*) as anzahl FROM ersatzautos 
+       WHERE aktiv = 1 
+       AND manuell_gesperrt = 1
+       AND (gesperrt_bis IS NULL OR gesperrt_bis >= ?)`,
+      [heute],
+      (err, row) => {
+        if (err) return callback(err);
+        callback(null, row.anzahl);
+      }
+    );
+  }
+
   // Verfügbarkeit für ein bestimmtes Datum prüfen
-  // Berücksichtigt jetzt auch mehrtägige Buchungen
+  // Berücksichtigt jetzt auch mehrtägige Buchungen UND manuell gesperrte Autos
   static getVerfuegbarkeit(datum, callback) {
-    // Erst die Anzahl aktiver Autos holen
-    ErsatzautosModel.getAnzahlAktiv((err, gesamt) => {
+    // Erst die Anzahl aktiver UND nicht gesperrter Autos holen (für das spezifische Datum)
+    ErsatzautosModel.getAnzahlVerfuegbar((err, verfuegbareAutos) => {
       if (err) return callback(err);
       
-      // Zähle wie viele Ersatzautos an diesem Tag vergeben sind
-      // Ein Ersatzauto ist vergeben wenn:
-      // 1. Das Datum = Termindatum UND (kein End-Datum ODER End-Datum >= Datum)
-      // 2. ODER Termindatum < Datum UND End-Datum >= Datum
-      const query = `
-        SELECT COUNT(*) as vergeben FROM termine 
-        WHERE ersatzauto = 1 
-        AND status != 'storniert'
-        AND geloescht_am IS NULL
-        AND (
-          -- Eintägige Termine am gewählten Datum
-          (datum = ? AND ersatzauto_bis_datum IS NULL AND abholung_datum IS NULL)
-          -- Oder mehrtägige Termine, die das Datum einschließen
-          OR (datum <= ? AND (
-            ersatzauto_bis_datum >= ?
-            OR abholung_datum >= ?
-            OR (ersatzauto_tage IS NOT NULL AND date(datum, '+' || (ersatzauto_tage - 1) || ' days') >= ?)
-          ))
-        )
-      `;
-      
-      db.get(query, [datum, datum, datum, datum, datum], (err, row) => {
-        if (err) return callback(err);
+      // Auch Gesamtzahl aktiver Autos für Anzeige
+      ErsatzautosModel.getAnzahlAktiv((err2, gesamt) => {
+        if (err2) return callback(err2);
         
-        const vergeben = row?.vergeben || 0;
-        callback(null, {
-          gesamt,
-          vergeben,
-          verfuegbar: Math.max(0, gesamt - vergeben)
-        });
+        // Anzahl gesperrter Autos (für das spezifische Datum)
+        ErsatzautosModel.getAnzahlGesperrt((err3, gesperrt) => {
+          if (err3) return callback(err3);
+      
+          // Zähle wie viele Ersatzautos an diesem Tag vergeben sind
+          const query = `
+            SELECT COUNT(*) as vergeben FROM termine 
+            WHERE ersatzauto = 1 
+            AND status != 'storniert'
+            AND geloescht_am IS NULL
+            AND (
+              -- Eintägige Termine am gewählten Datum
+              (datum = ? AND ersatzauto_bis_datum IS NULL AND abholung_datum IS NULL)
+              -- Oder mehrtägige Termine, die das Datum einschließen
+              OR (datum <= ? AND (
+                ersatzauto_bis_datum >= ?
+                OR abholung_datum >= ?
+                OR (ersatzauto_tage IS NOT NULL AND date(datum, '+' || (ersatzauto_tage - 1) || ' days') >= ?)
+              ))
+            )
+          `;
+          
+          db.get(query, [datum, datum, datum, datum, datum], (err4, row) => {
+            if (err4) return callback(err4);
+            
+            const vergeben = row?.vergeben || 0;
+            // Verfügbar = nicht gesperrte Autos - vergebene Autos
+            callback(null, {
+              gesamt,
+              gesperrt,
+              vergeben,
+              verfuegbar: Math.max(0, verfuegbareAutos - vergeben)
+            });
+          });
+        }, datum);
       });
-    });
+    }, datum);
   }
 
   // Detaillierte Verfügbarkeit mit Fahrzeug-Info

@@ -274,6 +274,7 @@ class TermineController {
 
       const pufferzeit = einstellungen?.pufferzeit_minuten || fallbackSettings.pufferzeit_minuten;
       const servicezeit = einstellungen?.servicezeit_minuten || 10;
+      const globaleNebenzeit = einstellungen?.nebenzeit_prozent || 0; // Globale Nebenzeit
 
       // Lade alle aktiven Mitarbeiter
       console.log('👥 Lade aktive Mitarbeiter...');
@@ -442,27 +443,34 @@ class TermineController {
 
                   // Konvertiere Lehrlings-Auslastung in das gleiche Format wie Mitarbeiter-Auslastung
                   // WICHTIG: Stelle sicher, dass immer ein Array zurückgegeben wird
+                  // NEU: Globale Nebenzeit aus Einstellungen verwenden
+                  const nebenzeitFaktorGlobal = 1 + (globaleNebenzeit / 100);
                   const lehrlingeAuslastung = Array.isArray(auslastungProLehrling)
                     ? auslastungProLehrling.map(la => {
                         // Prüfe ob Lehrling abwesend ist
                         // Stelle sicher, dass die Lehrling-ID als Zahl verglichen wird
                         const lehrlingId = typeof la.lehrling_id === 'number' ? la.lehrling_id : parseInt(la.lehrling_id, 10);
                         const istAbwesend = abwesendeLehrlinge.has(lehrlingId);
-                        const verfuegbar = istAbwesend ? 0 : la.verfuegbar_minuten;
+                        const arbeitszeitMinuten = (la.arbeitsstunden_pro_tag || 8) * 60;
+                        const verfuegbar = istAbwesend ? 0 : arbeitszeitMinuten;
+                        // Belegte Zeit mit globaler Nebenzeit berechnen
+                        const belegtRoh = la.belegt_minuten_roh || la.belegt_minuten || 0;
+                        const belegtMitNebenzeit = Math.round(belegtRoh * nebenzeitFaktorGlobal);
                         const auslastung = verfuegbar > 0
-                          ? Math.round((la.belegt_minuten / verfuegbar) * 100)
+                          ? Math.round((belegtMitNebenzeit / verfuegbar) * 100)
                           : (istAbwesend ? 0 : 100);
 
                         return {
                           lehrling_id: la.lehrling_id,
                           lehrling_name: la.lehrling_name,
                           arbeitsstunden_pro_tag: la.arbeitsstunden_pro_tag,
-                          nebenzeit_prozent: la.nebenzeit_prozent,
+                          nebenzeit_prozent: globaleNebenzeit, // Globale Nebenzeit
                           aufgabenbewaeltigung_prozent: la.aufgabenbewaeltigung_prozent,
                           ist_abwesend: istAbwesend,
                           verfuegbar_minuten: verfuegbar,
-                          belegt_minuten: la.belegt_minuten,
-                          servicezeit_minuten: la.servicezeit_minuten,
+                          belegt_minuten: belegtMitNebenzeit,
+                          belegt_minuten_roh: belegtRoh,
+                          servicezeit_minuten: la.servicezeit_minuten || 0,
                           auslastung_prozent: auslastung,
                           geplant_minuten: la.geplant_minuten,
                           in_arbeit_minuten: la.in_arbeit_minuten,
@@ -534,8 +542,9 @@ class TermineController {
                           termin_anzahl: 0
                         };
                         const arbeitszeitMinuten = (m.arbeitsstunden_pro_tag || 8) * 60;
-                        const nebenzeitMinuten = arbeitszeitMinuten * ((m.nebenzeit_prozent || 0) / 100);
-                        let verfuegbar = arbeitszeitMinuten - nebenzeitMinuten;
+                        // NEU: Globale Nebenzeit aus Einstellungen verwenden
+                        const nebenzeitFaktor = 1 + (globaleNebenzeit / 100);
+                        let verfuegbar = arbeitszeitMinuten; // Volle Arbeitszeit als Kapazität
 
                         // Prüfe ob Mitarbeiter abwesend ist (Urlaub/Krank)
                         const istAbwesend = abwesendeMitarbeiter.has(mitarbeiterId);
@@ -550,7 +559,9 @@ class TermineController {
                         const nurService = m.nur_service === 1 || m.nur_service === true || m.nur_service === '1' || m.nur_service === 'true';
 
                         let servicezeitFuerMitarbeiter = 0;
-                        let belegt = ma.belegt_minuten || 0;
+                        let belegtRoh = ma.belegt_minuten || 0;
+                        // Nebenzeit auf belegte Zeit aufschlagen
+                        let belegt = Math.round(belegtRoh * nebenzeitFaktor);
                         let belegtMitService = belegt;
                         let verfuegbarNachService = verfuegbar;
 
@@ -583,7 +594,7 @@ class TermineController {
                           mitarbeiter_id: m.id,
                           mitarbeiter_name: m.name,
                           arbeitsstunden_pro_tag: m.arbeitsstunden_pro_tag,
-                          nebenzeit_prozent: m.nebenzeit_prozent,
+                          nebenzeit_prozent: globaleNebenzeit, // Globale Nebenzeit
                           nur_service: nurService,
                           ist_abwesend: istAbwesend,
                           verfuegbar_minuten: verfuegbarNachService,
@@ -597,7 +608,8 @@ class TermineController {
                         };
                       });
 
-                      // Lehrlinge erhöhen verfügbare Zeit (ihre Arbeitszeit minus Nebenzeit, reduziert durch Aufgabenbewältigung)
+                      // Lehrlinge erhöhen verfügbare Zeit (volle Arbeitszeit, reduziert durch Aufgabenbewältigung)
+                      // NEU: Nebenzeit reduziert NICHT die Kapazität, sondern erhöht die belegte Zeit
                       const lehrlingeVerfuegbar = (lehrlinge || []).reduce((sum, l) => {
                         // Prüfe ob Lehrling abwesend ist
                         // Stelle sicher, dass die Lehrling-ID als Zahl verglichen wird
@@ -607,12 +619,11 @@ class TermineController {
                           return sum; // Überspringe abwesende Lehrlinge
                         }
                         const arbeitszeitMinuten = (l.arbeitsstunden_pro_tag || 8) * 60;
-                        const nebenzeitMinuten = arbeitszeitMinuten * ((l.nebenzeit_prozent || 0) / 100);
-                        const nettoArbeitszeitMinuten = arbeitszeitMinuten - nebenzeitMinuten;
+                        // Volle Arbeitszeit als Kapazität (Nebenzeit wird bei belegter Zeit aufgeschlagen)
                         // Aufgabenbewältigung reduziert die effektive verfügbare Zeit
                         // 150% = braucht 1.5× länger → effektive Zeit = Arbeitszeit / 1.5
                         const aufgabenbewaeltigung = (l.aufgabenbewaeltigung_prozent || 100) / 100;
-                        const effektiveVerfuegbar = nettoArbeitszeitMinuten / aufgabenbewaeltigung;
+                        const effektiveVerfuegbar = arbeitszeitMinuten / aufgabenbewaeltigung;
                         return sum + effektiveVerfuegbar;
                       }, 0);
                       gesamtVerfuegbar = Math.max(gesamtVerfuegbar + lehrlingeVerfuegbar, 1);
@@ -688,27 +699,34 @@ class TermineController {
 
                         // Konvertiere Lehrlings-Auslastung in das gleiche Format wie Mitarbeiter-Auslastung
                         // WICHTIG: Stelle sicher, dass immer ein Array zurückgegeben wird
+                        // NEU: Globale Nebenzeit aus Einstellungen verwenden
+                        const nebenzeitFaktorGlobal2 = 1 + (globaleNebenzeit / 100);
                         const lehrlingeAuslastung2 = Array.isArray(auslastungProLehrling2)
                           ? auslastungProLehrling2.map(la => {
                               // Prüfe ob Lehrling abwesend ist
                               // Stelle sicher, dass die Lehrling-ID als Zahl verglichen wird
                               const lehrlingId = typeof la.lehrling_id === 'number' ? la.lehrling_id : parseInt(la.lehrling_id, 10);
                               const istAbwesend = abwesendeLehrlinge.has(lehrlingId);
-                              const verfuegbar = istAbwesend ? 0 : la.verfuegbar_minuten;
+                              const arbeitszeitMinuten = (la.arbeitsstunden_pro_tag || 8) * 60;
+                              const verfuegbar = istAbwesend ? 0 : arbeitszeitMinuten;
+                              // Belegte Zeit mit globaler Nebenzeit berechnen
+                              const belegtRoh = la.belegt_minuten_roh || la.belegt_minuten || 0;
+                              const belegtMitNebenzeit = Math.round(belegtRoh * nebenzeitFaktorGlobal2);
                               const auslastung = verfuegbar > 0
-                                ? Math.round((la.belegt_minuten / verfuegbar) * 100)
+                                ? Math.round((belegtMitNebenzeit / verfuegbar) * 100)
                                 : (istAbwesend ? 0 : 100);
 
                               return {
                               lehrling_id: la.lehrling_id,
                               lehrling_name: la.lehrling_name,
                               arbeitsstunden_pro_tag: la.arbeitsstunden_pro_tag,
-                              nebenzeit_prozent: la.nebenzeit_prozent,
+                              nebenzeit_prozent: globaleNebenzeit, // Globale Nebenzeit
                               aufgabenbewaeltigung_prozent: la.aufgabenbewaeltigung_prozent,
                               ist_abwesend: istAbwesend,
                               verfuegbar_minuten: verfuegbar,
-                              belegt_minuten: la.belegt_minuten,
-                              servicezeit_minuten: la.servicezeit_minuten,
+                              belegt_minuten: belegtMitNebenzeit,
+                              belegt_minuten_roh: belegtRoh,
+                              servicezeit_minuten: la.servicezeit_minuten || 0,
                               auslastung_prozent: auslastung,
                               geplant_minuten: la.geplant_minuten,
                               in_arbeit_minuten: la.in_arbeit_minuten,
@@ -818,8 +836,9 @@ class TermineController {
                       };
                       
                       const arbeitszeitMinuten = (m.arbeitsstunden_pro_tag || 8) * 60;
-                      const nebenzeitMinuten = arbeitszeitMinuten * ((m.nebenzeit_prozent || 0) / 100);
-                      let verfuegbar = arbeitszeitMinuten - nebenzeitMinuten;
+                      // NEU: Globale Nebenzeit aus Einstellungen verwenden
+                      const nebenzeitFaktor = 1 + (globaleNebenzeit / 100);
+                      let verfuegbar = arbeitszeitMinuten; // Volle Arbeitszeit als Kapazität
 
                       // Prüfe ob Mitarbeiter abwesend ist (Urlaub/Krank)
                       const istAbwesend = abwesendeMitarbeiter.has(mitarbeiterId);
@@ -832,7 +851,9 @@ class TermineController {
                       const nurService = m.nur_service === 1 || m.nur_service === true || m.nur_service === '1' || m.nur_service === 'true';
                       
                       let servicezeitFuerMitarbeiter = 0;
-                      let belegt = ma.belegt_minuten || 0;
+                      let belegtRoh = ma.belegt_minuten || 0;
+                      // Nebenzeit auf belegte Zeit aufschlagen
+                      let belegt = Math.round(belegtRoh * nebenzeitFaktor);
                       let belegtMitService = belegt;
                       let verfuegbarNachService = verfuegbar;
                       
@@ -865,7 +886,7 @@ class TermineController {
                         mitarbeiter_id: m.id,
                         mitarbeiter_name: m.name,
                         arbeitsstunden_pro_tag: m.arbeitsstunden_pro_tag,
-                        nebenzeit_prozent: m.nebenzeit_prozent,
+                        nebenzeit_prozent: globaleNebenzeit, // Globale Nebenzeit
                         nur_service: nurService,
                         ist_abwesend: istAbwesend,
                         verfuegbar_minuten: verfuegbarNachService,
@@ -879,7 +900,8 @@ class TermineController {
                       };
                     });
 
-                    // Lehrlinge erhöhen verfügbare Zeit (ihre Arbeitszeit minus Nebenzeit, reduziert durch Aufgabenbewältigung)
+                    // Lehrlinge erhöhen verfügbare Zeit (volle Arbeitszeit, reduziert durch Aufgabenbewältigung)
+                    // NEU: Nebenzeit reduziert NICHT die Kapazität, sondern erhöht die belegte Zeit
                     const lehrlingeVerfuegbar = (lehrlinge || []).reduce((sum, l) => {
                       // Prüfe ob Lehrling abwesend ist
                       // Stelle sicher, dass die Lehrling-ID als Zahl verglichen wird
@@ -889,12 +911,11 @@ class TermineController {
                         return sum; // Überspringe abwesende Lehrlinge
                       }
                       const arbeitszeitMinuten = (l.arbeitsstunden_pro_tag || 8) * 60;
-                      const nebenzeitMinuten = arbeitszeitMinuten * ((l.nebenzeit_prozent || 0) / 100);
-                      const nettoArbeitszeitMinuten = arbeitszeitMinuten - nebenzeitMinuten;
+                      // Volle Arbeitszeit als Kapazität (Nebenzeit wird bei belegter Zeit aufgeschlagen)
                       // Aufgabenbewältigung reduziert die effektive verfügbare Zeit
                       // 150% = braucht 1.5× länger → effektive Zeit = Arbeitszeit / 1.5
                       const aufgabenbewaeltigung = (l.aufgabenbewaeltigung_prozent || 100) / 100;
-                      const effektiveVerfuegbar = nettoArbeitszeitMinuten / aufgabenbewaeltigung;
+                      const effektiveVerfuegbar = arbeitszeitMinuten / aufgabenbewaeltigung;
                       return sum + effektiveVerfuegbar;
                     }, 0);
                     gesamtVerfuegbar = Math.max(gesamtVerfuegbar + lehrlingeVerfuegbar, 1);
@@ -1009,11 +1030,11 @@ class TermineController {
           const verfuegbareMitarbeiter = Math.max(mitarbeiterAnzahl - urlaub - krank, 0);
           
           // Berechne verfügbare Zeit aus allen Mitarbeitern
+          // NEU: Volle Arbeitszeit als Kapazität (Nebenzeit wird bei belegter Zeit aufgeschlagen)
           let arbeitszeit_pro_tag = 0;
           (mitarbeiter || []).forEach(ma => {
             const arbeitszeitMinuten = (ma.arbeitsstunden_pro_tag || 8) * 60;
-            const nebenzeitMinuten = arbeitszeitMinuten * ((ma.nebenzeit_prozent || 0) / 100);
-            arbeitszeit_pro_tag += arbeitszeitMinuten - nebenzeitMinuten;
+            arbeitszeit_pro_tag += arbeitszeitMinuten; // Volle Kapazität
           });
           arbeitszeit_pro_tag = Math.max(arbeitszeit_pro_tag, 1);
 
@@ -1110,11 +1131,11 @@ class TermineController {
           const verfuegbareMitarbeiter = Math.max(mitarbeiterAnzahl - urlaub - krank, 0);
           
           // Berechne verfügbare Zeit aus allen Mitarbeitern
+          // NEU: Volle Arbeitszeit als Kapazität (Nebenzeit wird bei belegter Zeit aufgeschlagen)
           let arbeitszeit_pro_tag = 0;
           (mitarbeiter || []).forEach(ma => {
             const arbeitszeitMinuten = (ma.arbeitsstunden_pro_tag || 8) * 60;
-            const nebenzeitMinuten = arbeitszeitMinuten * ((ma.nebenzeit_prozent || 0) / 100);
-            arbeitszeit_pro_tag += arbeitszeitMinuten - nebenzeitMinuten;
+            arbeitszeit_pro_tag += arbeitszeitMinuten; // Volle Kapazität
           });
           arbeitszeit_pro_tag = Math.max(arbeitszeit_pro_tag, 1);
 
@@ -1191,11 +1212,11 @@ class TermineController {
         const mitarbeiterAnzahl = (mitarbeiter || []).length;
         
         // Berechne verfügbare Zeit aus allen Mitarbeitern
+        // NEU: Volle Arbeitszeit als Kapazität (Nebenzeit wird bei belegter Zeit aufgeschlagen)
         let arbeitszeit_pro_tag = 0;
         (mitarbeiter || []).forEach(ma => {
           const arbeitszeitMinuten = (ma.arbeitsstunden_pro_tag || 8) * 60;
-          const nebenzeitMinuten = arbeitszeitMinuten * ((ma.nebenzeit_prozent || 0) / 100);
-          arbeitszeit_pro_tag += arbeitszeitMinuten - nebenzeitMinuten;
+          arbeitszeit_pro_tag += arbeitszeitMinuten; // Volle Kapazität
         });
         arbeitszeit_pro_tag = Math.max(arbeitszeit_pro_tag, 1);
 

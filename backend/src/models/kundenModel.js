@@ -6,20 +6,20 @@ class KundenModel {
   }
 
   static create(kunde, callback) {
-    const { name, telefon, email, adresse, locosoft_id } = kunde;
+    const { name, telefon, email, adresse, locosoft_id, kennzeichen, vin, fahrzeugtyp } = kunde;
     db.run(
-      'INSERT INTO kunden (name, telefon, email, adresse, locosoft_id) VALUES (?, ?, ?, ?, ?)',
-      [name, telefon, email, adresse, locosoft_id],
+      'INSERT INTO kunden (name, telefon, email, adresse, locosoft_id, kennzeichen, vin, fahrzeugtyp) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+      [name, telefon, email, adresse, locosoft_id, kennzeichen || null, vin || null, fahrzeugtyp || null],
       callback
     );
   }
 
   static importMultiple(kunden, callback) {
-    const stmt = db.prepare('INSERT INTO kunden (name, telefon, email, adresse, locosoft_id) VALUES (?, ?, ?, ?, ?)');
+    const stmt = db.prepare('INSERT INTO kunden (name, telefon, email, adresse, locosoft_id, kennzeichen, vin, fahrzeugtyp) VALUES (?, ?, ?, ?, ?, ?, ?, ?)');
 
     let imported = 0;
     kunden.forEach(kunde => {
-      stmt.run([kunde.name, kunde.telefon, kunde.email, kunde.adresse, kunde.locosoft_id], (err) => {
+      stmt.run([kunde.name, kunde.telefon, kunde.email, kunde.adresse, kunde.locosoft_id, kunde.kennzeichen || null, kunde.vin || null, kunde.fahrzeugtyp || null], (err) => {
         if (!err) imported++;
       });
     });
@@ -32,10 +32,10 @@ class KundenModel {
   }
 
   static update(id, kunde, callback) {
-    const { name, telefon, email, adresse, locosoft_id } = kunde;
+    const { name, telefon, email, adresse, locosoft_id, kennzeichen, vin, fahrzeugtyp } = kunde;
     db.run(
-      'UPDATE kunden SET name = ?, telefon = ?, email = ?, adresse = ?, locosoft_id = ? WHERE id = ?',
-      [name, telefon, email, adresse, locosoft_id, id],
+      'UPDATE kunden SET name = ?, telefon = ?, email = ?, adresse = ?, locosoft_id = ?, kennzeichen = ?, vin = ?, fahrzeugtyp = ? WHERE id = ?',
+      [name, telefon, email, adresse, locosoft_id, kennzeichen || null, vin || null, fahrzeugtyp || null, id],
       function(err) {
         if (err) {
           return callback(err);

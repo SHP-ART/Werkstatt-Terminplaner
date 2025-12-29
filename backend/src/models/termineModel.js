@@ -95,7 +95,10 @@ class TermineModel {
       ersatzauto_bis_zeit,
       abholung_datum,
       mitarbeiter_id,
-      arbeitszeiten_details
+      arbeitszeiten_details,
+      dringlichkeit,
+      vin,
+      fahrzeugtyp
     } = termin;
 
     // Generiere zuerst die Termin-Nummer
@@ -106,8 +109,8 @@ class TermineModel {
 
       db.run(
         `INSERT INTO termine
-         (termin_nr, kunde_id, kunde_name, kunde_telefon, kennzeichen, arbeit, umfang, geschaetzte_zeit, datum, abholung_typ, abholung_details, abholung_zeit, bring_zeit, kontakt_option, kilometerstand, ersatzauto, ersatzauto_tage, ersatzauto_bis_datum, ersatzauto_bis_zeit, abholung_datum, mitarbeiter_id, arbeitszeiten_details)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+         (termin_nr, kunde_id, kunde_name, kunde_telefon, kennzeichen, arbeit, umfang, geschaetzte_zeit, datum, abholung_typ, abholung_details, abholung_zeit, bring_zeit, kontakt_option, kilometerstand, ersatzauto, ersatzauto_tage, ersatzauto_bis_datum, ersatzauto_bis_zeit, abholung_datum, mitarbeiter_id, arbeitszeiten_details, dringlichkeit, vin, fahrzeugtyp)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           terminNr,
           kunde_id,
@@ -130,7 +133,10 @@ class TermineModel {
           ersatzauto_bis_zeit || null,
           abholung_datum || null,
           mitarbeiter_id || null,
-          arbeitszeiten_details || null
+          arbeitszeiten_details || null,
+          dringlichkeit || null,
+          vin || null,
+          fahrzeugtyp || null
         ],
         function(err) {
           if (err) {
@@ -144,7 +150,13 @@ class TermineModel {
   }
 
   static update(id, data, callback) {
-    const { tatsaechliche_zeit, status, geschaetzte_zeit, arbeit, arbeitszeiten_details, mitarbeiter_id } = data;
+    const { 
+      tatsaechliche_zeit, status, geschaetzte_zeit, arbeit, arbeitszeiten_details, 
+      mitarbeiter_id, dringlichkeit, kennzeichen, umfang, datum, abholung_typ,
+      abholung_details, abholung_zeit, abholung_datum, bring_zeit, kontakt_option,
+      kilometerstand, ersatzauto, ersatzauto_tage, ersatzauto_bis_datum, ersatzauto_bis_zeit,
+      vin, fahrzeugtyp
+    } = data;
     
     // Baue die SQL-Query dynamisch auf
     const updates = [];
@@ -173,6 +185,74 @@ class TermineModel {
     if (mitarbeiter_id !== undefined) {
       updates.push('mitarbeiter_id = ?');
       values.push(mitarbeiter_id || null);
+    }
+    if (dringlichkeit !== undefined) {
+      updates.push('dringlichkeit = ?');
+      values.push(dringlichkeit || null);
+    }
+    if (kennzeichen !== undefined) {
+      updates.push('kennzeichen = ?');
+      values.push(kennzeichen);
+    }
+    if (umfang !== undefined) {
+      updates.push('umfang = ?');
+      values.push(umfang);
+    }
+    if (datum !== undefined) {
+      updates.push('datum = ?');
+      values.push(datum);
+    }
+    if (abholung_typ !== undefined) {
+      updates.push('abholung_typ = ?');
+      values.push(abholung_typ);
+    }
+    if (abholung_details !== undefined) {
+      updates.push('abholung_details = ?');
+      values.push(abholung_details);
+    }
+    if (abholung_zeit !== undefined) {
+      updates.push('abholung_zeit = ?');
+      values.push(abholung_zeit);
+    }
+    if (abholung_datum !== undefined) {
+      updates.push('abholung_datum = ?');
+      values.push(abholung_datum);
+    }
+    if (bring_zeit !== undefined) {
+      updates.push('bring_zeit = ?');
+      values.push(bring_zeit);
+    }
+    if (kontakt_option !== undefined) {
+      updates.push('kontakt_option = ?');
+      values.push(kontakt_option);
+    }
+    if (kilometerstand !== undefined) {
+      updates.push('kilometerstand = ?');
+      values.push(kilometerstand);
+    }
+    if (ersatzauto !== undefined) {
+      updates.push('ersatzauto = ?');
+      values.push(ersatzauto ? 1 : 0);
+    }
+    if (ersatzauto_tage !== undefined) {
+      updates.push('ersatzauto_tage = ?');
+      values.push(ersatzauto_tage);
+    }
+    if (ersatzauto_bis_datum !== undefined) {
+      updates.push('ersatzauto_bis_datum = ?');
+      values.push(ersatzauto_bis_datum);
+    }
+    if (ersatzauto_bis_zeit !== undefined) {
+      updates.push('ersatzauto_bis_zeit = ?');
+      values.push(ersatzauto_bis_zeit);
+    }
+    if (vin !== undefined) {
+      updates.push('vin = ?');
+      values.push(vin);
+    }
+    if (fahrzeugtyp !== undefined) {
+      updates.push('fahrzeugtyp = ?');
+      values.push(fahrzeugtyp);
     }
 
     if (updates.length === 0) {
@@ -462,6 +542,7 @@ class TermineModel {
 
         // Konvertiere Map zu Array und berechne verfügbare Zeit und Auslastung
         // WICHTIG: Gib ALLE aktiven Lehrlinge zurück, auch wenn sie keine Termine haben
+        // NEU: Nebenzeit erhöht die belegte Zeit statt die Kapazität zu reduzieren
         const result = (lehrlinge || []).map(l => {
           const la = auslastungMap[l.id] || {
             lehrling_id: l.id,
@@ -477,9 +558,11 @@ class TermineModel {
           };
           
           const arbeitszeitMinuten = (la.arbeitsstunden_pro_tag || 8) * 60;
-          const nebenzeitMinuten = arbeitszeitMinuten * ((la.nebenzeit_prozent || 0) / 100);
-          const verfuegbar = arbeitszeitMinuten - nebenzeitMinuten;
-          const prozent = verfuegbar > 0 ? (la.belegt_minuten / verfuegbar) * 100 : 0;
+          // Nebenzeit wird auf die belegte Zeit aufgeschlagen, nicht von der Kapazität abgezogen
+          const nebenzeitFaktor = 1 + ((la.nebenzeit_prozent || 0) / 100);
+          const belegtMitNebenzeit = la.belegt_minuten * nebenzeitFaktor;
+          const verfuegbar = arbeitszeitMinuten; // Volle Arbeitszeit als Kapazität
+          const prozent = verfuegbar > 0 ? (belegtMitNebenzeit / verfuegbar) * 100 : 0;
 
           return {
             lehrling_id: la.lehrling_id,
@@ -488,7 +571,8 @@ class TermineModel {
             nebenzeit_prozent: la.nebenzeit_prozent,
             aufgabenbewaeltigung_prozent: la.aufgabenbewaeltigung_prozent,
             verfuegbar_minuten: verfuegbar,
-            belegt_minuten: la.belegt_minuten,
+            belegt_minuten: Math.round(belegtMitNebenzeit), // Belegte Zeit inkl. Nebenzeit-Aufschlag
+            belegt_minuten_roh: la.belegt_minuten, // Originale belegte Zeit ohne Aufschlag
             servicezeit_minuten: 0, // Lehrlinge haben keine Servicezeit
             auslastung_prozent: Math.round(prozent),
             geplant_minuten: la.geplant_minuten,
