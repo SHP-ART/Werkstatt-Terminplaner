@@ -1,7 +1,9 @@
-const { app, BrowserWindow, ipcMain } = require('electron');
+const { app, BrowserWindow, ipcMain, shell } = require('electron');
 const path = require('path');
 const os = require('os');
+const fs = require('fs');
 const { startServer } = require('./src/server');
+const BackupController = require('./src/controllers/backupController');
 
 let mainWindow;
 let statsInterval;
@@ -14,8 +16,8 @@ let serverStats = {
 
 function createWindow() {
   mainWindow = new BrowserWindow({
-    width: 320,
-    height: 420,
+    width: 350,
+    height: 520,
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
@@ -145,4 +147,108 @@ ipcMain.handle('get-server-url', async (event) => {
     return `http://${ipAddress}:${port}`;
   }
   return 'Server starting...';
+});
+
+// IPC Handler für Backup-Funktionen
+ipcMain.handle('backup-status', async () => {
+  try {
+    const dbPath = BackupController.getDbPath();
+    const backupDir = BackupController.getBackupDir();
+    const backups = BackupController.mapBackupFiles();
+    const dbStats = fs.existsSync(dbPath) ? fs.statSync(dbPath) : null;
+    
+    return {
+      success: true,
+      dbPath,
+      backupDir,
+      dbSizeBytes: dbStats ? dbStats.size : 0,
+      lastBackup: backups[0] || null,
+      backupCount: backups.length
+    };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('backup-list', async () => {
+  try {
+    const backups = BackupController.mapBackupFiles();
+    return { success: true, backups };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('backup-create', async () => {
+  try {
+    const backupDir = BackupController.getBackupDir();
+    const dbPath = BackupController.getDbPath();
+    
+    if (!fs.existsSync(path.dirname(backupDir))) {
+      fs.mkdirSync(path.dirname(backupDir), { recursive: true });
+    }
+    if (!fs.existsSync(backupDir)) {
+      fs.mkdirSync(backupDir, { recursive: true });
+    }
+    
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+    const backupName = `werkstatt-backup-${timestamp}.db`;
+    const dest = path.join(backupDir, backupName);
+    
+    fs.copyFileSync(dbPath, dest);
+    const stats = fs.statSync(dest);
+    
+    return {
+      success: true,
+      backup: { name: backupName, sizeBytes: stats.size, createdAt: stats.mtime }
+    };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('backup-restore', async (event, filename) => {
+  try {
+    const backupDir = BackupController.getBackupDir();
+    const dbPath = BackupController.getDbPath();
+    const source = path.join(backupDir, path.basename(filename));
+    
+    if (!fs.existsSync(source)) {
+      return { success: false, error: 'Backup nicht gefunden' };
+    }
+    
+    fs.copyFileSync(source, dbPath);
+    return { success: true, restored: path.basename(filename) };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('backup-delete', async (event, filename) => {
+  try {
+    const backupDir = BackupController.getBackupDir();
+    const filePath = path.join(backupDir, path.basename(filename));
+    
+    if (!fs.existsSync(filePath)) {
+      return { success: false, error: 'Backup nicht gefunden' };
+    }
+    
+    fs.unlinkSync(filePath);
+    return { success: true, deleted: path.basename(filename) };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('backup-open-folder', async () => {
+  try {
+    const backupDir = BackupController.getBackupDir();
+    if (!fs.existsSync(backupDir)) {
+      fs.mkdirSync(backupDir, { recursive: true });
+    }
+    shell.openPath(backupDir);
+    return { success: true };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
 });

@@ -144,7 +144,32 @@ const BackupController = {
       console.error('Backup Download Fehler:', error);
       res.status(500).json({ error: 'Backup konnte nicht geladen werden' });
     }
-  }
+  },
+
+  delete: (req, res) => {
+    try {
+      const { filename } = req.body;
+      if (!filename) {
+        return res.status(400).json({ error: 'Dateiname fehlt' });
+      }
+
+      const filePath = path.join(backupDir, path.basename(filename));
+      if (!fs.existsSync(filePath)) {
+        return res.status(404).json({ error: 'Backup nicht gefunden' });
+      }
+
+      fs.unlinkSync(filePath);
+      res.json({ message: 'Backup gelöscht', deleted: path.basename(filename) });
+    } catch (error) {
+      console.error('Backup Löschen Fehler:', error);
+      res.status(500).json({ error: 'Backup konnte nicht gelöscht werden' });
+    }
+  },
+
+  // Hilfsfunktionen für Electron IPC
+  getBackupDir: () => backupDir,
+  getDbPath: () => dbPath,
+  mapBackupFiles
 };
 
 module.exports = BackupController;

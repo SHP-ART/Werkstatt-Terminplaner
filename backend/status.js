@@ -86,3 +86,169 @@ document.addEventListener('DOMContentLoaded', () => {
         return `${hours}:${String(minutes).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
     }
 });
+
+// Tab-Wechsel
+function showTab(tabName) {
+    // Alle Tabs deaktivieren
+    document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+    document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+    
+    // Gewählten Tab aktivieren
+    document.querySelector(`[onclick="showTab('${tabName}')"]`).classList.add('active');
+    document.getElementById(`tab-${tabName}`).classList.add('active');
+    
+    // Bei Backup-Tab: Liste laden
+    if (tabName === 'backup') {
+        loadBackupStatus();
+        loadBackupList();
+    }
+}
+
+// Backup-Status laden
+async function loadBackupStatus() {
+    try {
+        const result = await window.electronAPI.getBackupStatus();
+        if (result.success) {
+            document.getElementById('dbSize').textContent = formatBytes(result.dbSizeBytes);
+            document.getElementById('backupCount').textContent = result.backupCount;
+        }
+    } catch (error) {
+        console.error('Fehler beim Laden des Backup-Status:', error);
+    }
+}
+
+// Backup-Liste laden
+async function loadBackupList() {
+    const listEl = document.getElementById('backupList');
+    
+    try {
+        const result = await window.electronAPI.getBackupList();
+        
+        if (!result.success) {
+            listEl.innerHTML = '<div class="empty-state">Fehler beim Laden</div>';
+            return;
+        }
+        
+        if (result.backups.length === 0) {
+            listEl.innerHTML = '<div class="empty-state">Keine Backups vorhanden</div>';
+            return;
+        }
+        
+        listEl.innerHTML = result.backups.map(backup => `
+            <div class="backup-item">
+                <span class="backup-name" title="${backup.name}">${formatBackupName(backup.name)}</span>
+                <span class="backup-size">${formatBytes(backup.sizeBytes)}</span>
+                <div class="backup-actions">
+                    <button class="btn-restore" onclick="restoreBackup('${backup.name}')" title="Wiederherstellen">↩️</button>
+                    <button class="btn-delete" onclick="deleteBackup('${backup.name}')" title="Löschen">🗑️</button>
+                </div>
+            </div>
+        `).join('');
+    } catch (error) {
+        listEl.innerHTML = '<div class="empty-state">Fehler beim Laden</div>';
+    }
+}
+
+// Backup erstellen
+async function createBackup() {
+    const btn = document.getElementById('btnCreateBackup');
+    const msgEl = document.getElementById('backupMessage');
+    
+    btn.disabled = true;
+    btn.textContent = '⏳ Erstelle Backup...';
+    
+    try {
+        const result = await window.electronAPI.createBackup();
+        
+        if (result.success) {
+            showBackupMessage('success', `✅ Backup erstellt: ${formatBackupName(result.backup.name)}`);
+            loadBackupList();
+            loadBackupStatus();
+        } else {
+            showBackupMessage('error', `❌ Fehler: ${result.error}`);
+        }
+    } catch (error) {
+        showBackupMessage('error', `❌ Fehler: ${error.message}`);
+    } finally {
+        btn.disabled = false;
+        btn.textContent = '✨ Backup jetzt erstellen';
+    }
+}
+
+// Backup wiederherstellen
+async function restoreBackup(filename) {
+    if (!confirm(`Backup "${formatBackupName(filename)}" wiederherstellen?\n\nDie aktuelle Datenbank wird überschrieben!`)) {
+        return;
+    }
+    
+    try {
+        const result = await window.electronAPI.restoreBackup(filename);
+        
+        if (result.success) {
+            showBackupMessage('success', `✅ Backup wiederhergestellt! Server-Neustart empfohlen.`);
+        } else {
+            showBackupMessage('error', `❌ Fehler: ${result.error}`);
+        }
+    } catch (error) {
+        showBackupMessage('error', `❌ Fehler: ${error.message}`);
+    }
+}
+
+// Backup löschen
+async function deleteBackup(filename) {
+    if (!confirm(`Backup "${formatBackupName(filename)}" wirklich löschen?`)) {
+        return;
+    }
+    
+    try {
+        const result = await window.electronAPI.deleteBackup(filename);
+        
+        if (result.success) {
+            showBackupMessage('success', `🗑️ Backup gelöscht`);
+            loadBackupList();
+            loadBackupStatus();
+        } else {
+            showBackupMessage('error', `❌ Fehler: ${result.error}`);
+        }
+    } catch (error) {
+        showBackupMessage('error', `❌ Fehler: ${error.message}`);
+    }
+}
+
+// Backup-Ordner öffnen
+async function openBackupFolder() {
+    try {
+        await window.electronAPI.openBackupFolder();
+    } catch (error) {
+        showBackupMessage('error', `❌ Fehler: ${error.message}`);
+    }
+}
+
+// Hilfsfunktionen
+function showBackupMessage(type, message) {
+    const msgEl = document.getElementById('backupMessage');
+    msgEl.className = `backup-status ${type}`;
+    msgEl.textContent = message;
+    msgEl.style.display = 'block';
+    
+    setTimeout(() => {
+        msgEl.style.display = 'none';
+    }, 5000);
+}
+
+function formatBytes(bytes) {
+    if (bytes === 0) return '0 B';
+    const k = 1024;
+    const sizes = ['B', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+}
+
+function formatBackupName(name) {
+    // werkstatt-backup-2025-12-29T10-30-00-000Z.db -> 29.12.2025 10:30
+    const match = name.match(/werkstatt-backup-(\d{4})-(\d{2})-(\d{2})T(\d{2})-(\d{2})/);
+    if (match) {
+        return `${match[3]}.${match[2]}.${match[1]} ${match[4]}:${match[5]}`;
+    }
+    return name;
+}
