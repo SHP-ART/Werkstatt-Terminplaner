@@ -29,4 +29,34 @@ router.get('/health', (req, res) => {
   res.json({ status: 'OK', timestamp: new Date().toISOString() });
 });
 
+// Server-Info Endpoint für automatische API-Erkennung
+router.get('/server-info', (req, res) => {
+  const os = require('os');
+  
+  // Ermittle die IP-Adresse des Servers
+  function getLocalIPAddress() {
+    const interfaces = os.networkInterfaces();
+    for (const name of Object.keys(interfaces)) {
+      for (const iface of interfaces[name]) {
+        if (iface.family === 'IPv4' && !iface.internal) {
+          return iface.address;
+        }
+      }
+    }
+    return 'localhost';
+  }
+  
+  const port = process.env.PORT || 3001;
+  const ip = getLocalIPAddress();
+  
+  res.json({
+    status: 'OK',
+    ip: ip,
+    port: port,
+    apiUrl: `http://${ip}:${port}/api`,
+    frontendUrl: `http://${ip}:${port}`,
+    timestamp: new Date().toISOString()
+  });
+});
+
 module.exports = router;
