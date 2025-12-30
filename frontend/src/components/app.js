@@ -100,13 +100,23 @@ class App {
     document.getElementById('alleTermineBtn').addEventListener('click', () => this.showAllTermine());
     document.getElementById('auslastungDatum').addEventListener('change', () => this.loadAuslastung());
 
+    // Auslastung Navigation Buttons
+    document.getElementById('auslastungPrevTag').addEventListener('click', () => this.navigateAuslastung(-1, 'day'));
+    document.getElementById('auslastungNextTag').addEventListener('click', () => this.navigateAuslastung(1, 'day'));
+    document.getElementById('auslastungPrevWoche').addEventListener('click', () => this.navigateAuslastung(-7, 'week'));
+    document.getElementById('auslastungNextWoche').addEventListener('click', () => this.navigateAuslastung(7, 'week'));
+    document.getElementById('auslastungHeuteBtn').addEventListener('click', () => this.goToAuslastungHeute());
+
     // Zeitverwaltung Navigation Buttons
     document.getElementById('prevDayBtn').addEventListener('click', () => this.navigateZeitverwaltung(-1, 'day'));
     document.getElementById('nextDayBtn').addEventListener('click', () => this.navigateZeitverwaltung(1, 'day'));
     document.getElementById('prevWeekBtn').addEventListener('click', () => this.navigateZeitverwaltung(-7, 'week'));
     document.getElementById('nextWeekBtn').addEventListener('click', () => this.navigateZeitverwaltung(7, 'week'));
     document.getElementById('todayBtn').addEventListener('click', () => this.goToToday());
+    document.getElementById('morgenBtn').addEventListener('click', () => this.goToMorgen());
+    document.getElementById('wocheBtn').addEventListener('click', () => this.showWocheTermine());
     document.getElementById('offeneTermineBtn').addEventListener('click', () => this.showOffeneTermine());
+    document.getElementById('schwebendeTermineBtn').addEventListener('click', () => this.showSchwebendeTermine());
 
     // Event-Listener für 7-Tage-Limit bei Krankmeldungen
     document.getElementById('krankVonDatum').addEventListener('change', () => this.validateKrankDatum());
@@ -143,14 +153,45 @@ class App {
       kundenSucheClearBtn.addEventListener('click', () => this.clearKundenSuche());
     }
     
-    document.getElementById('terminSchnellsuche').addEventListener('change', () => this.handleTerminSchnellsuche());
-    document.getElementById('terminSchnellsuche').addEventListener('input', () => this.updateSchnellsucheStatus());
-    document.getElementById('terminSchnellsuche').addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') {
-        e.preventDefault();
-        this.handleTerminSchnellsuche();
+    // Neue verbesserte Kundensuche mit getrennten Feldern
+    const terminNameSuche = document.getElementById('terminNameSuche');
+    if (terminNameSuche) {
+      terminNameSuche.addEventListener('input', () => this.handleNameSuche());
+      terminNameSuche.addEventListener('keydown', (e) => this.handleSucheKeydown(e, 'name'));
+      terminNameSuche.addEventListener('blur', () => setTimeout(() => this.hideVorschlaege('name'), 350));
+    }
+    
+    // Kennzeichen-Suche mit 3 Feldern
+    const kzFelder = ['kzSucheBezirk', 'kzSucheBuchstaben', 'kzSucheNummer'];
+    const kzFelderSet = new Set(kzFelder);
+    kzFelder.forEach(feldId => {
+      const feld = document.getElementById(feldId);
+      if (feld) {
+        feld.addEventListener('input', (e) => {
+          e.target.value = e.target.value.toUpperCase();
+          this.handleKennzeichenSuche();
+          // Auto-Tab zum nächsten Feld
+          if (feldId === 'kzSucheBezirk' && e.target.value.length >= 3) {
+            document.getElementById('kzSucheBuchstaben').focus();
+          } else if (feldId === 'kzSucheBuchstaben' && e.target.value.length >= 2) {
+            document.getElementById('kzSucheNummer').focus();
+          }
+        });
+        feld.addEventListener('keydown', (e) => this.handleSucheKeydown(e, 'kennzeichen'));
+        // Blur nur verstecken wenn Fokus nicht auf einem anderen KZ-Feld liegt
+        feld.addEventListener('blur', () => {
+          setTimeout(() => {
+            const aktivesElement = document.activeElement;
+            const aktivesId = aktivesElement ? aktivesElement.id : '';
+            // Nur verstecken wenn Fokus NICHT auf einem anderen KZ-Feld liegt
+            if (!kzFelderSet.has(aktivesId)) {
+              this.hideVorschlaege('kennzeichen');
+            }
+          }, 100);
+        });
       }
     });
+
     document.getElementById('abholung_typ').addEventListener('change', () => this.toggleAbholungDetails());
 
     // Ersatzauto Verfügbarkeit prüfen
@@ -293,6 +334,12 @@ class App {
     document.getElementById('closeTagesUebersicht').addEventListener('click', () => this.closeTagesUebersichtModal());
     document.getElementById('saveArbeitszeitenBtn').addEventListener('click', () => this.saveArbeitszeitenModal());
 
+    // Split-Modal Event-Listener
+    const closeSplitModal = document.getElementById('closeSplitModal');
+    if (closeSplitModal) {
+      closeSplitModal.addEventListener('click', () => this.closeSplitModal());
+    }
+
     // Modal Phasen Event-Listener
     const modalMehrtaegigCheckbox = document.getElementById('modalMehrtaegigCheckbox');
     if (modalMehrtaegigCheckbox) {
@@ -308,6 +355,7 @@ class App {
       const detailsModal = document.getElementById('terminDetailsModal');
       const arbeitszeitenModal = document.getElementById('arbeitszeitenModal');
       const tagesUebersichtModal = document.getElementById('tagesUebersichtModal');
+      const splitModal = document.getElementById('terminSplitModal');
       const autocomplete = document.getElementById('arbeitAutocomplete');
       const arbeitEingabe = document.getElementById('arbeitEingabe');
 
@@ -322,6 +370,9 @@ class App {
       }
       if (event.target === tagesUebersichtModal) {
         this.closeTagesUebersichtModal();
+      }
+      if (event.target === splitModal) {
+        this.closeSplitModal();
       }
 
       // Schließe Autocomplete wenn außerhalb geklickt wird
@@ -610,7 +661,23 @@ class App {
       kmStandInput.value = '';
     }
 
-    // Schnellsuche leeren
+    // Neue Suchfelder leeren
+    const terminNameSuche = document.getElementById('terminNameSuche');
+    if (terminNameSuche) {
+      terminNameSuche.value = '';
+    }
+    const kzSucheBezirk = document.getElementById('kzSucheBezirk');
+    if (kzSucheBezirk) kzSucheBezirk.value = '';
+    const kzSucheBuchstaben = document.getElementById('kzSucheBuchstaben');
+    if (kzSucheBuchstaben) kzSucheBuchstaben.value = '';
+    const kzSucheNummer = document.getElementById('kzSucheNummer');
+    if (kzSucheNummer) kzSucheNummer.value = '';
+    
+    // Vorschläge ausblenden
+    this.hideVorschlaege('name');
+    this.hideVorschlaege('kennzeichen');
+
+    // Schnellsuche leeren (falls noch vorhanden)
     const schnellsuche = document.getElementById('terminSchnellsuche');
     if (schnellsuche) {
       schnellsuche.value = '';
@@ -2612,7 +2679,10 @@ class App {
     };
 
     const kundeId = document.getElementById('kunde_id').value;
-    const kundeNameEingabe = document.getElementById('terminSchnellsuche').value.trim();
+    // Lese Kundenname aus neuem Feld oder Fallback auf altes
+    const kundeNameEingabe = document.getElementById('terminNameSuche')?.value.trim() 
+                           || document.getElementById('terminSchnellsuche')?.value.trim() 
+                           || '';
     const kundeTelefon = document.getElementById('neuer_kunde_telefon').value.trim();
 
     let resolvedKundeId = kundeId ? parseInt(kundeId, 10) : null;
@@ -2843,9 +2913,10 @@ class App {
         const statusClass = `status-${termin.status}`;
         const zeitAnzeige = termin.tatsaechliche_zeit || termin.geschaetzte_zeit;
 
-        // Zeit-Status: rot = nur geschätzt, grün = tatsächlich erfasst
+        // Zeit-Status: rot = nur geschätzt ODER muss noch bearbeitet werden, grün = tatsächlich erfasst UND nicht zur Bearbeitung markiert
         const hatTatsaechlicheZeit = termin.tatsaechliche_zeit && termin.tatsaechliche_zeit > 0;
-        const zeitStatusIcon = hatTatsaechlicheZeit ? '🟢' : '🔴';
+        const mussNochBearbeitet = termin.muss_bearbeitet_werden || false;
+        const zeitStatusIcon = (hatTatsaechlicheZeit && !mussNochBearbeitet) ? '🟢' : '🔴';
 
         // Dringlichkeit-Badge
         const terminDringlichkeit = this.getDringlichkeitBadge(termin.dringlichkeit);
@@ -2853,12 +2924,26 @@ class App {
         // Folgetermin-Badge
         const terminFolgetermin = this.getFolgeterminBadge(termin.arbeit);
         
+        // Schwebend-Badge
+        const schwebendBadge = termin.ist_schwebend ? '<span class="schwebend-badge">⏸️ Schwebend</span>' : '';
+        
+        // Split-Badge
+        const splitBadge = termin.split_teil ? `<span class="split-badge">Teil ${termin.split_teil}</span>` : '';
+        
+        // Teile-Status Badge (zeigt an wenn Teile bestellt werden müssen)
+        const teileStatusBadge = this.getTerminTeileStatusBadge(termin);
+        
         // Arbeit-Anzeige formatieren
         const arbeitAnzeige = this.formatArbeitAnzeige(termin.arbeit);
 
+        // Schwebende Termine visuell kennzeichnen
+        if (termin.ist_schwebend) {
+          row.classList.add('schwebend');
+        }
+
         row.innerHTML = `
           <td style="text-align: center; font-size: 20px;">${zeitStatusIcon}</td>
-          <td><strong>${termin.termin_nr || '-'}</strong>${terminDringlichkeit}${terminFolgetermin}</td>
+          <td><strong>${termin.termin_nr || '-'}</strong>${terminDringlichkeit}${terminFolgetermin}${schwebendBadge}${splitBadge}${teileStatusBadge}</td>
           <td>${termin.datum}</td>
           <td>${termin.kunde_name}</td>
           <td>${termin.kennzeichen}</td>
@@ -2947,15 +3032,147 @@ class App {
     this.updateZeitverwaltungDatumAnzeige();
   }
 
-  async showOffeneTermine() {
-    // Zeige alle Termine ohne tatsächliche Zeit (offene Termine)
+  goToMorgen() {
+    const filterDatum = document.getElementById('filterDatum');
+    let morgen = new Date();
+    morgen.setDate(morgen.getDate() + 1);
+    
+    // Falls morgen Sonntag ist, überspringe zu Montag
+    if (morgen.getDay() === 0) {
+      morgen.setDate(morgen.getDate() + 1);
+    }
+    
+    filterDatum.value = this.formatDateLocal(morgen);
+    this.loadTermine();
+    this.updateZeitverwaltungDatumAnzeige();
+  }
+
+  async showWocheTermine() {
+    // Zeige alle Termine der aktuellen Woche (Mo-Sa, ohne Sonntag)
     document.getElementById('filterDatum').value = '';
     
     try {
       const termine = await TermineService.getAll(null);
       
-      // Filtere nur Termine ohne tatsächliche Zeit
-      const offeneTermine = termine.filter(t => !t.tatsaechliche_zeit || t.tatsaechliche_zeit <= 0);
+      // Berechne Montag und Samstag der aktuellen Woche
+      const heute = new Date();
+      const tag = heute.getDay();
+      const diffToMontag = tag === 0 ? -6 : 1 - tag; // Sonntag = -6, sonst 1 - aktueller Tag
+      
+      const montag = new Date(heute);
+      montag.setDate(heute.getDate() + diffToMontag);
+      montag.setHours(0, 0, 0, 0);
+      
+      const samstag = new Date(montag);
+      samstag.setDate(montag.getDate() + 5);
+      samstag.setHours(23, 59, 59, 999);
+      
+      // Filtere Termine der Woche (Mo-Sa)
+      const wochenTermine = termine.filter(t => {
+        if (!t.datum) return false;
+        const terminDatum = new Date(t.datum);
+        terminDatum.setHours(12, 0, 0, 0);
+        return terminDatum >= montag && terminDatum <= samstag;
+      });
+      
+      // Sortiere nach Datum
+      wochenTermine.sort((a, b) => new Date(a.datum) - new Date(b.datum));
+      
+      this.termineCache = termine;
+      this.updateTerminSuchliste();
+      this.termineById = {};
+
+      const tbody = document.getElementById('termineTable').getElementsByTagName('tbody')[0];
+      tbody.innerHTML = '';
+
+      if (wochenTermine.length === 0) {
+        const row = tbody.insertRow();
+        row.innerHTML = '<td colspan="13" style="text-align: center; padding: 30px; color: #666;">📭 Keine Termine in dieser Woche (Mo-Sa)</td>';
+      } else {
+        wochenTermine.forEach(termin => {
+          this.termineById[termin.id] = termin;
+          const row = tbody.insertRow();
+          const statusClass = `status-${termin.status}`;
+          const zeitAnzeige = termin.tatsaechliche_zeit || termin.geschaetzte_zeit;
+
+          // Zeit-Status Icon
+          let zeitStatusIcon = '⚪';
+          if (termin.tatsaechliche_zeit && termin.tatsaechliche_zeit > 0) {
+            zeitStatusIcon = '✅';
+          } else if (termin.muss_bearbeitet_werden) {
+            zeitStatusIcon = '🔴';
+          }
+
+          // Dringlichkeit-Badge
+          const terminDringlichkeit = this.getDringlichkeitBadge(termin.dringlichkeit);
+          
+          // Folgetermin-Badge
+          const terminFolgetermin = this.getFolgeterminBadge(termin.arbeit);
+          
+          // Arbeit-Anzeige formatieren
+          const arbeitAnzeige = this.formatArbeitAnzeige(termin.arbeit);
+          
+          // Datum formatieren für Anzeige
+          const datumObj = new Date(termin.datum);
+          const wochentag = ['So', 'Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa'][datumObj.getDay()];
+          const datumAnzeige = `${wochentag}, ${termin.datum}`;
+
+          row.innerHTML = `
+            <td style="text-align: center; font-size: 20px;">${zeitStatusIcon}</td>
+            <td><strong>${termin.termin_nr || '-'}</strong>${terminDringlichkeit}${terminFolgetermin}</td>
+            <td><strong>${datumAnzeige}</strong></td>
+            <td>${termin.kunde_name}</td>
+            <td>${termin.kennzeichen}</td>
+            <td>${termin.kilometerstand || '-'}</td>
+            <td>${termin.ersatzauto ? 'Ja' : 'Nein'}</td>
+            <td title="${termin.arbeit || ''}">${arbeitAnzeige}</td>
+            <td>${this.formatZeit(zeitAnzeige)}</td>
+            <td>${termin.mitarbeiter_name || '-'}</td>
+            <td><span class="status-badge ${statusClass}">${termin.status}</span></td>
+            <td class="action-buttons-grid">
+              <button class="btn btn-edit action-btn-details" onclick="event.stopPropagation(); app.showTerminDetails(${termin.id})">
+                📄 Details
+              </button>
+              <button class="btn btn-delete-icon" onclick="event.stopPropagation(); app.deleteTermin(${termin.id})" title="Löschen">
+                🗑️
+              </button>
+            </td>
+          `;
+
+          row.style.cursor = 'pointer';
+          row.onclick = (e) => {
+            if (e.target.tagName === 'BUTTON' || e.target.closest('button')) {
+              return;
+            }
+            this.openArbeitszeitenModal(termin.id);
+          };
+        });
+      }
+      
+      // Aktualisiere die Datum-Anzeige
+      const datumAnzeige = document.getElementById('zeitverwaltungDatumText');
+      if (datumAnzeige) {
+        const montagStr = this.formatDateLocal(montag);
+        const samstagStr = this.formatDateLocal(samstag);
+        datumAnzeige.textContent = `🗓️ Woche: ${montagStr} - ${samstagStr} (${wochenTermine.length} Termine)`;
+        datumAnzeige.parentElement.style.borderLeftColor = '#17a2b8';
+      }
+    } catch (error) {
+      console.error('Fehler beim Laden der Wochentermine:', error);
+    }
+  }
+
+  async showOffeneTermine() {
+    // Zeige alle Termine ohne tatsächliche Zeit ODER mit "muss bearbeitet werden" Markierung
+    document.getElementById('filterDatum').value = '';
+    
+    try {
+      const termine = await TermineService.getAll(null);
+      
+      // Filtere Termine: ohne tatsächliche Zeit ODER mit "muss noch bearbeitet werden" Markierung
+      const offeneTermine = termine.filter(t => 
+        (!t.tatsaechliche_zeit || t.tatsaechliche_zeit <= 0) || t.muss_bearbeitet_werden
+      );
       
       this.termineCache = termine;
       this.updateTerminSuchliste();
@@ -2966,7 +3183,7 @@ class App {
 
       if (offeneTermine.length === 0) {
         const row = tbody.insertRow();
-        row.innerHTML = '<td colspan="12" style="text-align: center; padding: 30px; color: #27ae60;">✅ Keine offenen Termine - alle Zeiten sind erfasst!</td>';
+        row.innerHTML = '<td colspan="13" style="text-align: center; padding: 30px; color: #27ae60;">✅ Keine offenen Termine - alle Zeiten sind erfasst!</td>';
       } else {
         offeneTermine.forEach(termin => {
           this.termineById[termin.id] = termin;
@@ -3028,6 +3245,87 @@ class App {
     }
   }
 
+  async showSchwebendeTermine() {
+    // Zeige alle schwebenden Termine (ist_schwebend = 1)
+    document.getElementById('filterDatum').value = '';
+    
+    try {
+      const termine = await TermineService.getAll(null);
+      
+      // Filtere nur schwebende Termine
+      const schwebendeTermine = termine.filter(t => t.ist_schwebend);
+      
+      this.termineCache = termine;
+      this.updateTerminSuchliste();
+      this.termineById = {};
+
+      const tbody = document.getElementById('termineTable').getElementsByTagName('tbody')[0];
+      tbody.innerHTML = '';
+
+      if (schwebendeTermine.length === 0) {
+        const row = tbody.insertRow();
+        row.innerHTML = '<td colspan="13" style="text-align: center; padding: 30px; color: #27ae60;">✅ Keine schwebenden Termine vorhanden</td>';
+      } else {
+        schwebendeTermine.forEach(termin => {
+          this.termineById[termin.id] = termin;
+          const row = tbody.insertRow();
+          const statusClass = `status-${termin.status}`;
+          const zeitAnzeige = termin.tatsaechliche_zeit || termin.geschaetzte_zeit;
+
+          const zeitStatusIcon = '⏳';
+
+          // Dringlichkeit-Badge
+          const terminDringlichkeit = this.getDringlichkeitBadge(termin.dringlichkeit);
+          
+          // Folgetermin-Badge
+          const terminFolgetermin = this.getFolgeterminBadge(termin.arbeit);
+          
+          // Arbeit-Anzeige formatieren
+          const arbeitAnzeige = this.formatArbeitAnzeige(termin.arbeit);
+
+          row.innerHTML = `
+            <td style="text-align: center; font-size: 20px;">${zeitStatusIcon}</td>
+            <td><strong>${termin.termin_nr || '-'}</strong>${terminDringlichkeit}${terminFolgetermin}</td>
+            <td>${termin.datum}</td>
+            <td>${termin.kunde_name}</td>
+            <td>${termin.kennzeichen}</td>
+            <td>${termin.kilometerstand || '-'}</td>
+            <td>${termin.ersatzauto ? 'Ja' : 'Nein'}</td>
+            <td title="${termin.arbeit || ''}">${arbeitAnzeige}</td>
+            <td>${this.formatZeit(zeitAnzeige)}</td>
+            <td>${termin.mitarbeiter_name || '-'}</td>
+            <td><span class="status-badge ${statusClass}">${termin.status}</span></td>
+            <td class="action-buttons-grid">
+              <button class="btn btn-edit action-btn-details" onclick="event.stopPropagation(); app.showTerminDetails(${termin.id})">
+                📄 Details
+              </button>
+              <button class="btn btn-delete-icon" onclick="event.stopPropagation(); app.deleteTermin(${termin.id})" title="Löschen">
+                🗑️
+              </button>
+            </td>
+          `;
+
+          row.style.cursor = 'pointer';
+          row.onclick = (e) => {
+            if (e.target.tagName === 'BUTTON' || e.target.closest('button')) {
+              return;
+            }
+            this.openArbeitszeitenModal(termin.id);
+          };
+        });
+      }
+      
+      // Aktualisiere die Datum-Anzeige
+      const datumAnzeige = document.getElementById('zeitverwaltungDatumText');
+      if (datumAnzeige) {
+        datumAnzeige.textContent = `⏳ Schwebende Termine (${schwebendeTermine.length})`;
+        datumAnzeige.parentElement.style.borderLeftColor = '#ff9800';
+      }
+    } catch (error) {
+      console.error('Fehler beim Laden der schwebenden Termine:', error);
+    }
+  }
+
   updateZeitverwaltungDatumAnzeige() {
     const filterDatum = document.getElementById('filterDatum');
     const datumAnzeige = document.getElementById('zeitverwaltungDatumText');
@@ -3086,6 +3384,9 @@ class App {
     const termin = this.termineById[terminId];
     if (!termin) return;
 
+    // Speichere aktuelle Termin-ID für Split/Schwebend-Funktionen
+    this.currentDetailTerminId = terminId;
+
     // Prüfe ob ein Lehrling zugeordnet ist (aus arbeitszeiten_details)
     let zugeordneteLehrlingId = null;
     if (termin.arbeitszeiten_details) {
@@ -3138,32 +3439,143 @@ class App {
       'woche': '🟡 Laufe der Woche'
     }[termin.dringlichkeit] || '-';
 
+    // Schwebend-Status anzeigen
+    const schwebendBadge = termin.ist_schwebend 
+      ? '<span style="background: #ff9800; color: white; padding: 2px 8px; border-radius: 4px; font-size: 0.85em; margin-left: 10px;">⏸️ Schwebend</span>'
+      : '';
+    
+    // Split-Info anzeigen wenn vorhanden
+    const splitInfo = termin.split_teil 
+      ? `<p><strong>Aufgeteilter Termin:</strong> Teil ${termin.split_teil} ${termin.parent_termin_id ? '(Fortsetzung)' : ''}</p>`
+      : '';
+
+    // Status-Badge formatieren
+    const statusBadge = {
+      'geplant': '<span class="detail-status-badge status-geplant">📅 Geplant</span>',
+      'in_bearbeitung': '<span class="detail-status-badge status-bearbeitung">🔧 In Bearbeitung</span>',
+      'erledigt': '<span class="detail-status-badge status-erledigt">✅ Erledigt</span>',
+      'abgebrochen': '<span class="detail-status-badge status-abgebrochen">❌ Abgebrochen</span>'
+    }[termin.status] || `<span class="detail-status-badge">${termin.status}</span>`;
+
+    // Ersatzauto-Badge
+    const ersatzautoBadge = termin.ersatzauto 
+      ? '<span class="detail-badge badge-ja">✓ Ja</span>' 
+      : '<span class="detail-badge badge-nein">✗ Nein</span>';
+
+    // Datum formatieren (mit Wochentag)
+    const datumObj = new Date(termin.datum + 'T00:00:00');
+    const wochentage = ['So', 'Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa'];
+    const datumFormatiert = `${wochentage[datumObj.getDay()]}, ${termin.datum.split('-').reverse().join('.')}`;
+
     body.innerHTML = `
-      <p><strong>Termin-Nr:</strong> ${termin.termin_nr || '-'}</p>
-      <p><strong>Datum:</strong> ${termin.datum}</p>
-      <p><strong>Kunde:</strong> ${termin.kunde_name || '-'} (${termin.kunde_telefon || '-'})</p>
-      <p><strong>Kennzeichen:</strong> ${termin.kennzeichen || '-'}</p>
-      <p><strong>Arbeiten:</strong> ${termin.arbeit || '-'}</p>
-      <p><strong>Details/Wünsche:</strong> ${termin.umfang || '-'}</p>
-      ${termin.dringlichkeit ? `<p><strong>Dringlichkeit:</strong> ${dringlichkeitText}</p>` : ''}
-      <p><strong>Abholung/Bringen:</strong> ${abholungText}</p>
-      <p><strong>Bringzeit:</strong> ${termin.bring_zeit || '-'}</p>
-      <p><strong>Abholzeit:</strong> ${termin.abholung_zeit || '-'}</p>
-      <p><strong>Kontakt:</strong> ${kontaktText}</p>
-      <p><strong>Abhol-Details:</strong> ${termin.abholung_details || '-'}</p>
-      <p><strong>Kilometerstand:</strong> ${termin.kilometerstand || '-'}</p>
-      <p><strong>Ersatzauto:</strong> ${termin.ersatzauto ? 'Ja' : 'Nein'}</p>
-      <p><strong>Status:</strong> ${termin.status}</p>
-      <div style="margin-top: 15px; padding-top: 15px; border-top: 1px solid #ddd;">
-        <label><strong>Mitarbeiter/Lehrling zuordnen:</strong></label>
-        <select id="terminMitarbeiterSelect" style="width: 100%; padding: 8px; margin-top: 5px;">
+      <!-- Header-Bereich mit Termin-Nr und Status -->
+      <div class="detail-header">
+        <div class="detail-header-left">
+          <span class="detail-termin-nr">🎫 ${termin.termin_nr || '-'}</span>
+          ${schwebendBadge}
+        </div>
+        <div class="detail-header-right">
+          ${statusBadge}
+        </div>
+      </div>
+      ${splitInfo ? `<div class="detail-split-info">${splitInfo}</div>` : ''}
+
+      <!-- Kunde & Fahrzeug -->
+      <div class="detail-section">
+        <div class="detail-section-title">👤 Kunde & Fahrzeug</div>
+        <div class="detail-grid">
+          <div class="detail-item">
+            <span class="detail-label">Kunde</span>
+            <span class="detail-value">${termin.kunde_name || '-'}</span>
+          </div>
+          <div class="detail-item">
+            <span class="detail-label">Telefon</span>
+            <span class="detail-value">${termin.kunde_telefon || '-'}</span>
+          </div>
+          <div class="detail-item">
+            <span class="detail-label">Kennzeichen</span>
+            <span class="detail-value detail-value-highlight">${termin.kennzeichen || '-'}</span>
+          </div>
+          <div class="detail-item">
+            <span class="detail-label">Kilometerstand</span>
+            <span class="detail-value">${termin.kilometerstand ? termin.kilometerstand.toLocaleString('de-DE') + ' km' : '-'}</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Arbeitsdetails -->
+      <div class="detail-section">
+        <div class="detail-section-title">🔧 Arbeitsdetails</div>
+        <div class="detail-grid">
+          <div class="detail-item detail-item-full">
+            <span class="detail-label">Arbeiten</span>
+            <span class="detail-value">${termin.arbeit || '-'}</span>
+          </div>
+          <div class="detail-item">
+            <span class="detail-label">Geschätzte Zeit</span>
+            <span class="detail-value detail-value-highlight">${this.formatMinutesToHours(termin.geschaetzte_zeit || 0)}</span>
+          </div>
+          ${termin.dringlichkeit ? `
+          <div class="detail-item">
+            <span class="detail-label">Dringlichkeit</span>
+            <span class="detail-value">${dringlichkeitText}</span>
+          </div>` : ''}
+          <div class="detail-item detail-item-full">
+            <span class="detail-label">Details/Wünsche</span>
+            <span class="detail-value detail-value-notes">${termin.umfang || '-'}</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Termin & Abholung -->
+      <div class="detail-section">
+        <div class="detail-section-title">📆 Termin & Abholung</div>
+        <div class="detail-grid">
+          <div class="detail-item">
+            <span class="detail-label">Datum</span>
+            <span class="detail-value detail-value-highlight">${datumFormatiert}</span>
+          </div>
+          <div class="detail-item">
+            <span class="detail-label">Abholung/Bringen</span>
+            <span class="detail-value">${abholungText}</span>
+          </div>
+          <div class="detail-item">
+            <span class="detail-label">Bringzeit</span>
+            <span class="detail-value">${termin.bring_zeit || '-'}</span>
+          </div>
+          <div class="detail-item">
+            <span class="detail-label">Abholzeit</span>
+            <span class="detail-value">${termin.abholung_zeit || '-'}</span>
+          </div>
+          <div class="detail-item">
+            <span class="detail-label">Kontakt</span>
+            <span class="detail-value">${kontaktText}</span>
+          </div>
+          <div class="detail-item">
+            <span class="detail-label">Ersatzauto</span>
+            ${ersatzautoBadge}
+          </div>
+          <div class="detail-item detail-item-full">
+            <span class="detail-label">Abhol-Details</span>
+            <span class="detail-value detail-value-notes">${termin.abholung_details || '-'}</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Mitarbeiter-Zuordnung -->
+      <div class="detail-section detail-section-action">
+        <div class="detail-section-title">👷 Mitarbeiter-Zuordnung</div>
+        <select id="terminMitarbeiterSelect" class="detail-select">
           ${mitarbeiterOptions}
         </select>
-        <button class="btn btn-primary" onclick="app.updateTerminMitarbeiter(${termin.id})" style="margin-top: 10px; width: 100%;">
-          Zuordnung speichern
+        <button class="btn btn-primary detail-action-btn" onclick="app.updateTerminMitarbeiter(${termin.id})">
+          💾 Zuordnung speichern
         </button>
       </div>
     `;
+
+    // Schwebend-Button aktualisieren
+    this.updateSchwebendButton(termin.ist_schwebend);
 
     document.getElementById('terminDetailsModal').style.display = 'block';
   }
@@ -3217,6 +3629,303 @@ class App {
     document.getElementById('terminDetailsModal').style.display = 'none';
   }
 
+  // ============================================
+  // TERMIN-SPLIT & SCHWEBEND FUNKTIONEN
+  // ============================================
+
+  // Termin als schwebend markieren/aufheben
+  async toggleTerminSchwebend() {
+    if (!this.currentDetailTerminId) return;
+    
+    const termin = this.termineById[this.currentDetailTerminId];
+    if (!termin) return;
+
+    const neuerStatus = !termin.ist_schwebend;
+    
+    // Wenn Termin eingeplant wird (von schwebend auf fest), Datum abfragen
+    if (!neuerStatus) {
+      this.openEinplanenDatumModal(this.currentDetailTerminId, termin);
+      return;
+    }
+    
+    try {
+      await TermineService.setSchwebend(this.currentDetailTerminId, neuerStatus);
+      
+      // Aktualisiere lokalen Cache
+      termin.ist_schwebend = neuerStatus ? 1 : 0;
+      
+      // Button-Text aktualisieren
+      this.updateSchwebendButton(neuerStatus);
+      
+      alert(neuerStatus 
+        ? 'Termin als schwebend markiert (wird nicht in Auslastung gezählt)' 
+        : 'Termin fest eingeplant');
+      
+      this.loadTermine();
+      this.loadAuslastung();
+    } catch (error) {
+      console.error('Fehler beim Setzen des Schwebend-Status:', error);
+      alert('Fehler: ' + (error.message || 'Unbekannter Fehler'));
+    }
+  }
+
+  updateSchwebendButton(istSchwebend) {
+    const btn = document.getElementById('terminSchwebendBtn');
+    if (btn) {
+      if (istSchwebend) {
+        btn.innerHTML = '▶️ Einplanen';
+        btn.title = 'Termin fest einplanen (wird in Auslastung gezählt)';
+      } else {
+        btn.innerHTML = '⏸️ Schwebend';
+        btn.title = 'Termin als schwebend markieren (wird nicht in Auslastung gezählt)';
+      }
+    }
+  }
+
+  // Einplanen-Datum Modal öffnen
+  openEinplanenDatumModal(terminId, termin) {
+    // Prüfe ob Modal existiert, sonst erstelle es
+    let modal = document.getElementById('einplanenDatumModal');
+    if (!modal) {
+      modal = document.createElement('div');
+      modal.id = 'einplanenDatumModal';
+      modal.className = 'modal';
+      modal.innerHTML = `
+        <div class="modal-content" style="max-width: 400px;">
+          <span class="close-btn" onclick="app.closeEinplanenDatumModal()">&times;</span>
+          <h3 style="margin-bottom: 20px;">📅 Termin einplanen</h3>
+          <div id="einplanenTerminInfo" style="background: #f5f5f5; padding: 10px; border-radius: 8px; margin-bottom: 20px;"></div>
+          <div class="form-group">
+            <label for="einplanenDatum"><strong>Datum für den Termin wählen:</strong></label>
+            <input type="date" id="einplanenDatum" class="form-control" style="font-size: 16px; padding: 10px;">
+          </div>
+          <div style="display: flex; gap: 10px; margin-top: 20px;">
+            <button type="button" class="btn btn-primary" onclick="app.confirmEinplanenDatum()" style="flex: 1;">
+              ✅ Einplanen
+            </button>
+            <button type="button" class="btn btn-secondary" onclick="app.closeEinplanenDatumModal()" style="flex: 1;">
+              ❌ Abbrechen
+            </button>
+          </div>
+        </div>
+      `;
+      document.body.appendChild(modal);
+    }
+    
+    // Termin-Info anzeigen
+    document.getElementById('einplanenTerminInfo').innerHTML = `
+      <strong>${termin.termin_nr || '-'}</strong> - ${termin.kunde_name || '-'}<br>
+      <span style="color: #666;">${termin.arbeit || '-'}</span><br>
+      <span style="color: #999; font-size: 0.9em;">Aktuelles Datum: ${termin.datum || 'Nicht gesetzt'}</span>
+    `;
+    
+    // Datum vorbelegen (heute oder bestehendes Datum)
+    const datumInput = document.getElementById('einplanenDatum');
+    if (termin.datum) {
+      datumInput.value = termin.datum;
+    } else {
+      datumInput.value = new Date().toISOString().split('T')[0];
+    }
+    
+    // Speichere aktuelle Termin-ID
+    this.einplanenTerminId = terminId;
+    
+    // Modal anzeigen
+    modal.style.display = 'flex';
+  }
+
+  closeEinplanenDatumModal() {
+    const modal = document.getElementById('einplanenDatumModal');
+    if (modal) {
+      modal.style.display = 'none';
+    }
+  }
+
+  async confirmEinplanenDatum() {
+    const datumInput = document.getElementById('einplanenDatum');
+    const neuesDatum = datumInput.value;
+    
+    if (!neuesDatum) {
+      alert('Bitte ein Datum wählen!');
+      return;
+    }
+    
+    if (!this.einplanenTerminId) {
+      alert('Fehler: Kein Termin ausgewählt');
+      return;
+    }
+    
+    const termin = this.termineById[this.einplanenTerminId];
+    if (!termin) {
+      alert('Fehler: Termin nicht gefunden');
+      return;
+    }
+    
+    try {
+      // Erst Datum aktualisieren
+      await TermineService.update(this.einplanenTerminId, { datum: neuesDatum });
+      
+      // Dann Schwebend-Status aufheben
+      await TermineService.setSchwebend(this.einplanenTerminId, false);
+      
+      // Lokalen Cache aktualisieren
+      termin.datum = neuesDatum;
+      termin.ist_schwebend = 0;
+      
+      // Button-Text aktualisieren
+      this.updateSchwebendButton(false);
+      
+      // Modal schließen
+      this.closeEinplanenDatumModal();
+      
+      alert(`Termin wurde für ${neuesDatum} eingeplant!`);
+      
+      // Daten neu laden
+      this.loadTermine();
+      this.loadAuslastung();
+      
+      // Details-Modal aktualisieren
+      if (this.currentDetailTerminId === this.einplanenTerminId) {
+        this.showTerminDetails(this.einplanenTerminId);
+      }
+    } catch (error) {
+      console.error('Fehler beim Einplanen:', error);
+      alert('Fehler: ' + (error.message || 'Unbekannter Fehler'));
+    }
+  }
+
+  // Split-Modal öffnen
+  openSplitModal() {
+    if (!this.currentDetailTerminId) return;
+    
+    const termin = this.termineById[this.currentDetailTerminId];
+    if (!termin) return;
+
+    const gesamtzeit = termin.geschaetzte_zeit || 60;
+    
+    // Info-Box befüllen
+    document.getElementById('splitTerminInfo').innerHTML = `
+      <strong>${termin.termin_nr || '-'}</strong> - ${termin.kunde_name || '-'}<br>
+      <span style="color: #666;">${termin.arbeit || '-'}</span>
+    `;
+    document.getElementById('splitGesamtzeit').textContent = `${gesamtzeit} Min. (${this.formatMinutesToHours(gesamtzeit)})`;
+    
+    // Standard-Werte setzen (50/50 Split)
+    const teil1Zeit = Math.round(gesamtzeit / 2);
+    document.getElementById('splitTeil1Zeit').value = teil1Zeit;
+    document.getElementById('splitTeil1Zeit').max = gesamtzeit - 1;
+    document.getElementById('splitTeil1Range').max = gesamtzeit;
+    document.getElementById('splitTeil1Range').value = teil1Zeit;
+    
+    // Teil 2 Zeit berechnen
+    document.getElementById('splitTeil2Zeit').value = gesamtzeit - teil1Zeit;
+    
+    // Morgen als Standard-Datum für Teil 2
+    const morgen = new Date();
+    morgen.setDate(morgen.getDate() + 1);
+    // Sonntag überspringen
+    if (morgen.getDay() === 0) {
+      morgen.setDate(morgen.getDate() + 1);
+    }
+    document.getElementById('splitTeil2Datum').value = this.formatDateLocal(morgen);
+    document.getElementById('splitTeil2Datum').min = this.formatDateLocal(new Date());
+    
+    // Speichere Gesamtzeit für Range-Updates
+    this.splitGesamtzeit = gesamtzeit;
+    
+    // Preview aktualisieren
+    this.updateSplitPreview();
+    
+    // Split-Modal anzeigen
+    document.getElementById('terminSplitModal').style.display = 'block';
+    
+    // Event-Listener für Teil1-Input
+    document.getElementById('splitTeil1Zeit').oninput = () => this.updateSplitFromInput();
+  }
+
+  updateSplitPreview() {
+    const gesamtzeit = this.splitGesamtzeit || 60;
+    const range = document.getElementById('splitTeil1Range');
+    const teil1Zeit = parseInt(range.value) || 0;
+    const teil2Zeit = gesamtzeit - teil1Zeit;
+    
+    document.getElementById('splitTeil1Zeit').value = teil1Zeit;
+    document.getElementById('splitTeil2Zeit').value = teil2Zeit;
+    
+    document.getElementById('splitPreviewTeil1').textContent = `${teil1Zeit} Min. (${this.formatMinutesToHours(teil1Zeit)})`;
+    document.getElementById('splitPreviewTeil2').textContent = `${teil2Zeit} Min. (${this.formatMinutesToHours(teil2Zeit)})`;
+  }
+
+  updateSplitFromInput() {
+    const gesamtzeit = this.splitGesamtzeit || 60;
+    let teil1Zeit = parseInt(document.getElementById('splitTeil1Zeit').value) || 0;
+    
+    // Begrenzen auf gültigen Bereich
+    if (teil1Zeit < 1) teil1Zeit = 1;
+    if (teil1Zeit >= gesamtzeit) teil1Zeit = gesamtzeit - 1;
+    
+    const teil2Zeit = gesamtzeit - teil1Zeit;
+    
+    document.getElementById('splitTeil1Range').value = teil1Zeit;
+    document.getElementById('splitTeil2Zeit').value = teil2Zeit;
+    
+    document.getElementById('splitPreviewTeil1').textContent = `${teil1Zeit} Min. (${this.formatMinutesToHours(teil1Zeit)})`;
+    document.getElementById('splitPreviewTeil2').textContent = `${teil2Zeit} Min. (${this.formatMinutesToHours(teil2Zeit)})`;
+  }
+
+  closeSplitModal() {
+    document.getElementById('terminSplitModal').style.display = 'none';
+  }
+
+  async executeSplit() {
+    if (!this.currentDetailTerminId) return;
+    
+    const teil1Zeit = parseInt(document.getElementById('splitTeil1Zeit').value);
+    const teil2Datum = document.getElementById('splitTeil2Datum').value;
+    const teil2Zeit = parseInt(document.getElementById('splitTeil2Zeit').value);
+    
+    // Validierung
+    if (!teil1Zeit || teil1Zeit <= 0) {
+      alert('Bitte geben Sie eine gültige Zeit für Teil 1 an.');
+      return;
+    }
+    if (!teil2Datum) {
+      alert('Bitte wählen Sie ein Datum für Teil 2.');
+      return;
+    }
+    if (!teil2Zeit || teil2Zeit <= 0) {
+      alert('Teil 2 muss mindestens 1 Minute haben.');
+      return;
+    }
+    
+    if (!confirm(`Termin aufteilen?\n\nTeil 1: ${teil1Zeit} Min.\nTeil 2: ${teil2Zeit} Min. am ${teil2Datum}`)) {
+      return;
+    }
+    
+    try {
+      const result = await TermineService.splitTermin(
+        this.currentDetailTerminId, 
+        teil1Zeit, 
+        teil2Datum, 
+        teil2Zeit
+      );
+      
+      alert(`Termin erfolgreich aufgeteilt!\n\nTeil 1: ${result.teil1.zeit} Min.\nTeil 2: ${result.teil2.termin_nr} am ${result.teil2.datum} (${result.teil2.zeit} Min.)`);
+      
+      this.closeSplitModal();
+      this.closeTerminDetails();
+      this.loadTermine();
+      this.loadAuslastung();
+    } catch (error) {
+      console.error('Fehler beim Aufteilen des Termins:', error);
+      alert('Fehler beim Aufteilen: ' + (error.message || 'Unbekannter Fehler'));
+    }
+  }
+
+  // ============================================
+  // ENDE TERMIN-SPLIT & SCHWEBEND FUNKTIONEN
+  // ============================================
+
   async handleZeitAnpassungSubmit(e) {
     e.preventDefault();
 
@@ -3238,10 +3947,57 @@ class App {
     }
   }
 
+  // Auslastung Navigation
+  navigateAuslastung(days, type) {
+    const datumInput = document.getElementById('auslastungDatum');
+    if (!datumInput.value) {
+      datumInput.value = new Date().toISOString().split('T')[0];
+    }
+    const currentDate = new Date(datumInput.value);
+    currentDate.setDate(currentDate.getDate() + days);
+    datumInput.value = currentDate.toISOString().split('T')[0];
+    this.loadAuslastung();
+  }
+
+  goToAuslastungHeute() {
+    const datumInput = document.getElementById('auslastungDatum');
+    datumInput.value = new Date().toISOString().split('T')[0];
+    this.loadAuslastung();
+  }
+
+  updateAuslastungWocheInfo() {
+    const datumInput = document.getElementById('auslastungDatum');
+    const wocheInfoEl = document.getElementById('auslastungWocheInfo');
+    if (!datumInput.value || !wocheInfoEl) return;
+
+    const date = new Date(datumInput.value);
+    // Berechne Montag der Woche
+    const day = date.getDay();
+    const diff = date.getDate() - day + (day === 0 ? -6 : 1);
+    const monday = new Date(date);
+    monday.setDate(diff);
+    const friday = new Date(monday);
+    friday.setDate(monday.getDate() + 4);
+
+    const formatDate = (d) => {
+      return d.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' });
+    };
+
+    // Kalenderwoche berechnen
+    const startOfYear = new Date(date.getFullYear(), 0, 1);
+    const days = Math.floor((date - startOfYear) / (24 * 60 * 60 * 1000));
+    const weekNumber = Math.ceil((days + startOfYear.getDay() + 1) / 7);
+
+    wocheInfoEl.textContent = `KW ${weekNumber}: ${formatDate(monday)} - ${formatDate(friday)}`;
+  }
+
   async loadAuslastung() {
     const datum = document.getElementById('auslastungDatum').value;
 
     if (!datum) return;
+
+    // Aktualisiere Wocheninfo-Anzeige
+    this.updateAuslastungWocheInfo();
 
     try {
       const data = await AuslastungService.getByDatum(datum);
@@ -3346,6 +4102,28 @@ class App {
           inArbeit: !!inArbeitSegment,
           abgeschlossen: !!abgeschlossenSegment
         });
+      }
+
+      // Schwebende Termine anzeigen (GLOBAL - unabhängig vom Datum)
+      const schwebendDisplay = document.getElementById('schwebendDisplay');
+      const schwebendAnzahl = data.schwebend_anzahl || 0;
+      const schwebendMinuten = data.schwebend_minuten || 0;
+      
+      if (schwebendDisplay) {
+        if (schwebendAnzahl > 0) {
+          schwebendDisplay.style.display = 'block';
+          document.getElementById('schwebendAnzahl').textContent = schwebendAnzahl;
+          document.getElementById('schwebendZeit').textContent = this.formatMinutesToHours(schwebendMinuten);
+          
+          // Der Balken ist immer voll (100%), da er nicht relativ zur Tageskapazität ist
+          const progressSchwebend = document.getElementById('progressSchwebend');
+          if (progressSchwebend) {
+            progressSchwebend.style.width = '100%';
+            progressSchwebend.textContent = this.formatMinutesToHours(schwebendMinuten);
+          }
+        } else {
+          schwebendDisplay.style.display = 'none';
+        }
       }
 
       // Zeige pro-Mitarbeiter- und Lehrling-Auslastung zusammen
@@ -3772,9 +4550,12 @@ class App {
           // Folgetermin-Badge für Dashboard
           const folgeterminBadge = this.getFolgeterminBadge(termin.arbeit);
           const arbeitAnzeige = this.formatArbeitAnzeige(termin.arbeit);
+          
+          // Teile-Status Badge
+          const teileStatusBadge = this.getTerminTeileStatusBadge(termin);
 
           row.innerHTML = `
-            <td><strong>${termin.termin_nr || '-'}</strong>${folgeterminBadge}</td>
+            <td><strong>${termin.termin_nr || '-'}</strong>${folgeterminBadge}${teileStatusBadge}</td>
             <td>${termin.abholung_typ === 'warten' ? 'Ja' : 'Nein'}</td>
             <td>${termin.bring_zeit || '-'}</td>
             <td>${termin.abholung_zeit || '-'}</td>
@@ -3950,6 +4731,9 @@ class App {
 
     // Folgetermin-Badge erstellen
     const folgeterminBadge = this.getFolgeterminBadge(termin.arbeit);
+    
+    // Teile-Status Badge
+    const teileStatusBadge = this.getTerminTeileStatusBadge(termin);
 
     const aktuellerStatus = termin.status || 'geplant';
     const statusTexte = {
@@ -3969,7 +4753,7 @@ class App {
 
     row.innerHTML = `
       <td>${bringZeitDisplay}</td>
-      <td>${termin.kunde_name || '-'}${dringlichkeitBadge}${folgeterminBadge}</td>
+      <td>${termin.kunde_name || '-'}${dringlichkeitBadge}${folgeterminBadge}${teileStatusBadge}</td>
       <td>${termin.kunde_telefon || '-'}</td>
       <td>${termin.kennzeichen || '-'}</td>
       ${wartetCell}
@@ -4509,8 +5293,437 @@ class App {
     });
   }
 
+  // ================================================
+  // VERBESSERTE KUNDENSUCHE MIT GETRENNTEN FELDERN
+  // ================================================
+
+  // Namenssuche mit Live-Vorschlägen
+  handleNameSuche() {
+    const eingabe = document.getElementById('terminNameSuche')?.value.trim() || '';
+    const vorschlaegeDiv = document.getElementById('nameSucheVorschlaege');
+    
+    if (!vorschlaegeDiv) return;
+    
+    if (eingabe.length < 2) {
+      vorschlaegeDiv.classList.remove('aktiv');
+      vorschlaegeDiv.innerHTML = '';
+      return;
+    }
+    
+    const lower = eingabe.toLowerCase();
+    
+    // Suche in Kunden nach Name
+    const treffer = (this.kundenCache || []).filter(kunde => 
+      kunde.name && kunde.name.toLowerCase().includes(lower)
+    ).slice(0, 10); // Max 10 Ergebnisse
+    
+    if (treffer.length === 0) {
+      vorschlaegeDiv.innerHTML = '<div class="keine-vorschlaege">Kein Kunde gefunden</div>';
+      vorschlaegeDiv.classList.add('aktiv');
+      return;
+    }
+    
+    vorschlaegeDiv.innerHTML = treffer.map((kunde, idx) => `
+      <div class="vorschlag-item" data-index="${idx}" onmousedown="event.preventDefault(); app.selectKundeVorschlag(${kunde.id})">
+        <div>
+          <span class="vorschlag-name">${this.highlightMatch(kunde.name, eingabe)}</span>
+          ${kunde.telefon ? `<span class="vorschlag-telefon"> · ${kunde.telefon}</span>` : ''}
+        </div>
+        ${kunde.kennzeichen ? `<span class="vorschlag-kennzeichen">${kunde.kennzeichen}</span>` : ''}
+      </div>
+    `).join('');
+    
+    vorschlaegeDiv.classList.add('aktiv');
+    this.aktuelleVorschlaegeIndex = -1;
+    this.aktuelleVorschlaege = treffer;
+  }
+
+  // Kennzeichen-Suche mit 3 Feldern
+  handleKennzeichenSuche() {
+    const bezirk = document.getElementById('kzSucheBezirk')?.value.trim().toUpperCase() || '';
+    const buchstaben = document.getElementById('kzSucheBuchstaben')?.value.trim().toUpperCase() || '';
+    const nummer = document.getElementById('kzSucheNummer')?.value.trim().toUpperCase() || '';
+    const vorschlaegeDiv = document.getElementById('kennzeichenSucheVorschlaege');
+    
+    if (!vorschlaegeDiv) return;
+    
+    // Mindestens ein Feld muss ausgefüllt sein
+    if (!bezirk && !buchstaben && !nummer) {
+      vorschlaegeDiv.classList.remove('aktiv');
+      vorschlaegeDiv.innerHTML = '';
+      return;
+    }
+    
+    // Sammle alle Kennzeichen aus Kunden und Terminen
+    const alleKennzeichen = new Map(); // kennzeichen -> {kunde, terminCount}
+    
+    // Aus Kundentabelle
+    (this.kundenCache || []).forEach(kunde => {
+      if (kunde.kennzeichen) {
+        const kzNormalized = this.normalizeKennzeichen(kunde.kennzeichen);
+        if (!alleKennzeichen.has(kzNormalized)) {
+          alleKennzeichen.set(kzNormalized, {
+            kennzeichen: kunde.kennzeichen,
+            kundeId: kunde.id,
+            kundeName: kunde.name,
+            kundeTelefon: kunde.telefon,
+            fahrzeugtyp: kunde.fahrzeugtyp
+          });
+        }
+      }
+    });
+    
+    // Aus Terminen (falls Kennzeichen nicht in Kunden)
+    (this.termineCache || []).forEach(termin => {
+      if (termin.kennzeichen) {
+        const kzNormalized = this.normalizeKennzeichen(termin.kennzeichen);
+        if (!alleKennzeichen.has(kzNormalized)) {
+          alleKennzeichen.set(kzNormalized, {
+            kennzeichen: termin.kennzeichen,
+            kundeId: termin.kunde_id,
+            kundeName: termin.kunde_name,
+            kundeTelefon: null,
+            fahrzeugtyp: null
+          });
+        }
+      }
+    });
+    
+    // Filtern nach den eingegebenen Teilen
+    const treffer = [];
+    alleKennzeichen.forEach((data) => {
+      const kzParts = this.parseKennzeichen(data.kennzeichen);
+      
+      let match = true;
+      if (bezirk && !kzParts.bezirk.includes(bezirk)) match = false;
+      if (buchstaben && !kzParts.buchstaben.includes(buchstaben)) match = false;
+      if (nummer && !kzParts.nummer.includes(nummer)) match = false;
+      
+      if (match) {
+        treffer.push(data);
+      }
+    });
+    
+    // Sortieren: exaktere Matches zuerst
+    treffer.sort((a, b) => {
+      const aKz = this.parseKennzeichen(a.kennzeichen);
+      const bKz = this.parseKennzeichen(b.kennzeichen);
+      
+      // Exakte Bezirk-Matches bevorzugen
+      if (bezirk) {
+        const aExact = aKz.bezirk === bezirk;
+        const bExact = bKz.bezirk === bezirk;
+        if (aExact && !bExact) return -1;
+        if (!aExact && bExact) return 1;
+      }
+      
+      return a.kennzeichen.localeCompare(b.kennzeichen);
+    });
+    
+    const maxTreffer = treffer.slice(0, 10);
+    const weitereAnzahl = treffer.length - maxTreffer.length;
+    
+    if (maxTreffer.length === 0) {
+      vorschlaegeDiv.innerHTML = '<div class="keine-vorschlaege">Kein Kennzeichen gefunden</div>';
+      vorschlaegeDiv.classList.add('aktiv');
+      return;
+    }
+    
+    let html = maxTreffer.map((data, idx) => `
+      <div class="vorschlag-item" data-index="${idx}" onmousedown="event.preventDefault(); app.selectKennzeichenVorschlag('${data.kennzeichen.replace(/'/g, "\\'").replace(/"/g, '&quot;')}', ${data.kundeId || 'null'})">
+        <div>
+          <span class="vorschlag-kennzeichen" style="margin-right: 10px;">${this.formatKennzeichenHighlight(data.kennzeichen, bezirk, buchstaben, nummer)}</span>
+          <span class="vorschlag-name">${data.kundeName || 'Unbekannter Kunde'}</span>
+        </div>
+        ${data.kundeTelefon ? `<span class="vorschlag-telefon">${data.kundeTelefon}</span>` : ''}
+      </div>
+    `).join('');
+    
+    // Hinweis anzeigen wenn es mehr als 10 Treffer gibt
+    if (weitereAnzahl > 0) {
+      html += `<div class="weitere-treffer-hinweis">+ ${weitereAnzahl} weitere Treffer – bitte Suche eingrenzen</div>`;
+    }
+    
+    vorschlaegeDiv.innerHTML = html;
+    
+    vorschlaegeDiv.classList.add('aktiv');
+    this.aktuelleKzVorschlaegeIndex = -1;
+    this.aktuelleKzVorschlaege = maxTreffer;
+  }
+
+  // Kennzeichen normalisieren (ohne Leerzeichen und Bindestriche)
+  normalizeKennzeichen(kz) {
+    return (kz || '').toUpperCase().replace(/[\s\-]/g, '');
+  }
+
+  // Kennzeichen in Teile zerlegen
+  parseKennzeichen(kz) {
+    const normalized = this.normalizeKennzeichen(kz);
+    
+    // Versuche verschiedene Formate zu parsen
+    // Format: ABC-XY 123 oder ABCXY123 oder ABC XY 123
+    
+    // Versuche Bezirk (1-3 Buchstaben am Anfang)
+    const bezirkMatch = normalized.match(/^([A-ZÄÖÜ]{1,3})/);
+    const bezirk = bezirkMatch ? bezirkMatch[1] : '';
+    
+    // Rest nach Bezirk
+    const rest = normalized.substring(bezirk.length);
+    
+    // Buchstaben (1-2 Buchstaben nach Bezirk)
+    const buchstabenMatch = rest.match(/^([A-ZÄÖÜ]{1,2})/);
+    const buchstaben = buchstabenMatch ? buchstabenMatch[1] : '';
+    
+    // Nummer (Rest: Zahlen + evtl. E/H)
+    const nummer = rest.substring(buchstaben.length);
+    
+    return { bezirk, buchstaben, nummer };
+  }
+
+  // Kennzeichen mit Highlight formatieren
+  formatKennzeichenHighlight(kz, bezirk, buchstaben, nummer) {
+    const parts = this.parseKennzeichen(kz);
+    
+    let result = '';
+    
+    // Bezirk
+    if (bezirk && parts.bezirk.includes(bezirk)) {
+      result += `<span class="vorschlag-match">${parts.bezirk}</span>`;
+    } else {
+      result += parts.bezirk;
+    }
+    
+    result += '-';
+    
+    // Buchstaben
+    if (buchstaben && parts.buchstaben.includes(buchstaben)) {
+      result += `<span class="vorschlag-match">${parts.buchstaben}</span>`;
+    } else {
+      result += parts.buchstaben;
+    }
+    
+    result += ' ';
+    
+    // Nummer
+    if (nummer && parts.nummer.includes(nummer)) {
+      result += `<span class="vorschlag-match">${parts.nummer}</span>`;
+    } else {
+      result += parts.nummer;
+    }
+    
+    return result;
+  }
+
+  // Text mit Highlight für Suchmatch
+  highlightMatch(text, search) {
+    if (!text || !search) return text || '';
+    const regex = new RegExp(`(${search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
+    return text.replace(regex, '<span class="vorschlag-match">$1</span>');
+  }
+
+  // Kunde aus Namenssuche auswählen
+  selectKundeVorschlag(kundeId) {
+    const kunde = (this.kundenCache || []).find(k => k.id === kundeId);
+    if (!kunde) return;
+    
+    // Felder füllen
+    document.getElementById('kunde_id').value = kunde.id;
+    document.getElementById('terminNameSuche').value = kunde.name;
+    document.getElementById('neuer_kunde_telefon').value = kunde.telefon || '';
+    
+    // Kennzeichen setzen
+    if (kunde.kennzeichen) {
+      document.getElementById('kennzeichen').value = kunde.kennzeichen;
+      // Auch die Suchfelder füllen
+      const parts = this.parseKennzeichen(kunde.kennzeichen);
+      document.getElementById('kzSucheBezirk').value = parts.bezirk;
+      document.getElementById('kzSucheBuchstaben').value = parts.buchstaben;
+      document.getElementById('kzSucheNummer').value = parts.nummer;
+    }
+    
+    // Fahrzeugtyp setzen
+    if (kunde.fahrzeugtyp) {
+      document.getElementById('fahrzeugtyp').value = kunde.fahrzeugtyp;
+    }
+    
+    // Kunde gefunden anzeigen
+    this.showGefundenerKunde(kunde.name, kunde.telefon);
+    
+    // Letzten KM-Stand suchen
+    const letzterKmStand = this.findLetztenKmStand(kunde.id, kunde.name, kunde.kennzeichen);
+    const kmStandInput = document.getElementById('kilometerstand');
+    if (letzterKmStand && kmStandInput) {
+      kmStandInput.value = '';
+      kmStandInput.placeholder = `Letzter KM-Stand: ${letzterKmStand.toLocaleString('de-DE')} km`;
+      kmStandInput.classList.add('has-previous-value');
+    }
+    
+    // Vorschläge ausblenden
+    this.hideVorschlaege('name');
+  }
+
+  // Kennzeichen aus Kennzeichensuche auswählen
+  selectKennzeichenVorschlag(kennzeichen, kundeId) {
+    // Kennzeichen in das Hauptfeld setzen
+    document.getElementById('kennzeichen').value = kennzeichen;
+    
+    // Auch die Suchfelder aktualisieren
+    const parts = this.parseKennzeichen(kennzeichen);
+    document.getElementById('kzSucheBezirk').value = parts.bezirk;
+    document.getElementById('kzSucheBuchstaben').value = parts.buchstaben;
+    document.getElementById('kzSucheNummer').value = parts.nummer;
+    
+    // Wenn Kunde vorhanden, auch Kundendaten füllen
+    if (kundeId) {
+      const kunde = (this.kundenCache || []).find(k => k.id === kundeId);
+      if (kunde) {
+        document.getElementById('kunde_id').value = kunde.id;
+        document.getElementById('terminNameSuche').value = kunde.name;
+        document.getElementById('neuer_kunde_telefon').value = kunde.telefon || '';
+        
+        if (kunde.fahrzeugtyp) {
+          document.getElementById('fahrzeugtyp').value = kunde.fahrzeugtyp;
+        }
+        
+        this.showGefundenerKunde(kunde.name, kunde.telefon);
+        
+        // Letzten KM-Stand suchen
+        const letzterKmStand = this.findLetztenKmStand(kunde.id, kunde.name, kennzeichen);
+        const kmStandInput = document.getElementById('kilometerstand');
+        if (letzterKmStand && kmStandInput) {
+          kmStandInput.value = '';
+          kmStandInput.placeholder = `Letzter KM-Stand: ${letzterKmStand.toLocaleString('de-DE')} km`;
+          kmStandInput.classList.add('has-previous-value');
+        }
+      }
+    }
+    
+    // Vorschläge ausblenden
+    this.hideVorschlaege('kennzeichen');
+  }
+
+  // Tastatur-Navigation in Vorschlägen
+  handleSucheKeydown(e, type) {
+    const vorschlaegeDiv = type === 'name' 
+      ? document.getElementById('nameSucheVorschlaege')
+      : document.getElementById('kennzeichenSucheVorschlaege');
+    
+    if (!vorschlaegeDiv || !vorschlaegeDiv.classList.contains('aktiv')) return;
+    
+    const items = vorschlaegeDiv.querySelectorAll('.vorschlag-item');
+    if (items.length === 0) return;
+    
+    const indexKey = type === 'name' ? 'aktuelleVorschlaegeIndex' : 'aktuelleKzVorschlaegeIndex';
+    
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      this[indexKey] = Math.min(this[indexKey] + 1, items.length - 1);
+      this.updateVorschlaegeHighlight(items, this[indexKey]);
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      this[indexKey] = Math.max(this[indexKey] - 1, 0);
+      this.updateVorschlaegeHighlight(items, this[indexKey]);
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      if (this[indexKey] >= 0 && items[this[indexKey]]) {
+        items[this[indexKey]].click();
+      }
+    } else if (e.key === 'Escape') {
+      this.hideVorschlaege(type);
+    }
+  }
+
+  // Highlight in Vorschlägen aktualisieren
+  updateVorschlaegeHighlight(items, index) {
+    items.forEach((item, i) => {
+      item.classList.toggle('ausgewaehlt', i === index);
+    });
+    if (items[index]) {
+      items[index].scrollIntoView({ block: 'nearest' });
+    }
+  }
+
+  // Vorschläge ausblenden
+  hideVorschlaege(type) {
+    const vorschlaegeDiv = type === 'name' 
+      ? document.getElementById('nameSucheVorschlaege')
+      : document.getElementById('kennzeichenSucheVorschlaege');
+    
+    if (vorschlaegeDiv) {
+      vorschlaegeDiv.classList.remove('aktiv');
+    }
+  }
+
+  // Legacy-Funktion für alte Datalist (wird nicht mehr verwendet, aber für Kompatibilität behalten)
+  updateSuchListe() {
+    const liste = document.getElementById('terminSuchListe');
+    if (!liste) return;
+
+    const optionen = [];
+    const seen = new Set();
+
+    // Kundennamen hinzufügen
+    (this.kundenCache || []).forEach(kunde => {
+      if (kunde.name && !seen.has(kunde.name.toLowerCase())) {
+        optionen.push({ value: kunde.name, label: `${kunde.name}` });
+        seen.add(kunde.name.toLowerCase());
+      }
+      // Kennzeichen aus Kundentabelle hinzufügen
+      if (kunde.kennzeichen && !seen.has(kunde.kennzeichen.toLowerCase())) {
+        optionen.push({ value: kunde.kennzeichen, label: `${kunde.kennzeichen} (${kunde.name})` });
+        seen.add(kunde.kennzeichen.toLowerCase());
+      }
+    });
+
+    // Kennzeichen aus Terminen hinzufügen
+    (this.termineCache || []).forEach(termin => {
+      if (termin.kennzeichen && !seen.has(termin.kennzeichen.toLowerCase())) {
+        optionen.push({ value: termin.kennzeichen, label: `${termin.kennzeichen}` });
+        seen.add(termin.kennzeichen.toLowerCase());
+      }
+    });
+
+    liste.innerHTML = '';
+    optionen.forEach(opt => {
+      const option = document.createElement('option');
+      option.value = opt.value;
+      option.label = opt.label;
+      liste.appendChild(option);
+    });
+  }
+
   handleTerminSchnellsuche() {
-    const eingabe = document.getElementById('terminSchnellsuche').value.trim();
+    const eingabe = document.getElementById('terminSchnellsuche')?.value.trim() || '';
+    // Leite auf neue Suche um
+    if (!eingabe) {
+      this.hideGefundenerKunde();
+      return;
+    }
+    
+    // Prüfe ob es wie ein Kennzeichen aussieht
+    const siehtAusWieKennzeichen = /^[A-ZÄÖÜ]{1,3}[\s\-]?[A-ZÄÖÜ]{1,2}[\s\-]?\d/.test(eingabe.toUpperCase());
+    
+    if (siehtAusWieKennzeichen) {
+      // Setze in Kennzeichen-Felder
+      const parts = this.parseKennzeichen(eingabe);
+      document.getElementById('kzSucheBezirk').value = parts.bezirk;
+      document.getElementById('kzSucheBuchstaben').value = parts.buchstaben;
+      document.getElementById('kzSucheNummer').value = parts.nummer;
+      this.handleKennzeichenSuche();
+    } else {
+      // Setze in Namenssuche
+      document.getElementById('terminNameSuche').value = eingabe;
+      this.handleNameSuche();
+    }
+  }
+
+  // Original handleTerminSchnellsuche Logik (wird für Rückwärtskompatibilität behalten)
+  handleTerminSchnellsucheOld() {
+    const eingabe = document.getElementById('terminSchnellsuche')?.value.trim();
+    if (!eingabe) {
+      this.hideGefundenerKunde();
+      return;
+    }
     if (!eingabe) {
       this.hideGefundenerKunde();
       return;
@@ -4770,19 +5983,14 @@ class App {
   }
 
   async ensureArbeitenExistieren(arbeitenListe, totalMinuten) {
-    const durchschnitt = arbeitenListe.length > 0 ? Math.max(Math.floor((Number(totalMinuten) || 0) / arbeitenListe.length), 1) : 30;
-    for (const arbeit of arbeitenListe) {
-      const existiert = (this.arbeitszeiten || []).some(a => a.bezeichnung.toLowerCase() === arbeit.toLowerCase());
-      if (existiert) continue;
-      const matchZeit = this.findArbeitszeit(arbeit);
-      const standardMinuten = Number.isFinite(matchZeit) ? matchZeit : durchschnitt || 30;
-      try {
-        await ArbeitszeitenService.create({ bezeichnung: arbeit, standard_minuten: standardMinuten });
-      } catch (error) {
-        console.error('Fehler beim Anlegen der neuen Arbeit:', error);
-      }
+    // HINWEIS: Neue Arbeiten werden NICHT mehr automatisch als Standardzeiten angelegt
+    // Sie müssen manuell über die Arbeitszeiten-Verwaltung hinzugefügt werden
+    // Diese Funktion prüft nur, ob die Arbeiten existieren, legt sie aber nicht an
+    
+    // Nur Arbeitszeiten neu laden, falls nötig
+    if (!this.arbeitszeiten || this.arbeitszeiten.length === 0) {
+      await this.loadArbeitszeiten();
     }
-    await this.loadArbeitszeiten();
   }
 
   async updateTerminZeit(terminId) {
@@ -6177,6 +7385,41 @@ class App {
     return this.formatDateLocal(friday);
   }
 
+  // Toggle für Bearbeitungs-Status direkt in der Tabelle
+  async toggleBearbeitungStatus(terminId, mussBearbeitet) {
+    try {
+      const response = await TermineService.update(terminId, {
+        muss_bearbeitet_werden: mussBearbeitet
+      });
+      
+      // Cache aktualisieren
+      if (this.termineById[terminId]) {
+        this.termineById[terminId].muss_bearbeitet_werden = mussBearbeitet;
+      }
+      
+      console.log(`Termin ${terminId}: Bearbeitungs-Status auf ${mussBearbeitet ? 'Offen' : 'Erledigt'} gesetzt`, response);
+      
+      // Visuelles Feedback - kurz grün/rot aufleuchten
+      const checkbox = document.querySelector(`input[onchange*="toggleBearbeitungStatus(${terminId}"]`);
+      if (checkbox) {
+        const slider = checkbox.nextElementSibling;
+        if (slider) {
+          slider.style.boxShadow = mussBearbeitet 
+            ? '0 0 10px 3px rgba(220, 53, 69, 0.6)' 
+            : '0 0 10px 3px rgba(40, 167, 69, 0.6)';
+          setTimeout(() => {
+            slider.style.boxShadow = '';
+          }, 500);
+        }
+      }
+    } catch (error) {
+      console.error('Fehler beim Aktualisieren des Bearbeitungs-Status:', error);
+      alert('Fehler beim Speichern des Status: ' + (error.message || 'Unbekannter Fehler'));
+      // Toggle zurücksetzen bei Fehler
+      this.loadTermine();
+    }
+  }
+
   async openArbeitszeitenModal(terminId) {
     const termin = this.termineById[terminId];
     if (!termin) {
@@ -6192,6 +7435,12 @@ class App {
 
     // Status vorauswählen
     document.getElementById('modalTerminStatus').value = termin.status || 'geplant';
+
+    // "Muss bearbeitet werden" Checkbox setzen
+    const mussBearbeitetCheckbox = document.getElementById('modalMussBearbeitetCheckbox');
+    if (mussBearbeitetCheckbox) {
+      mussBearbeitetCheckbox.checked = termin.muss_bearbeitet_werden || false;
+    }
 
     // Lade Mitarbeiter und Lehrlinge für Dropdowns
     let mitarbeiter = [];
@@ -6266,12 +7515,14 @@ class App {
     arbeitenListe.forEach((arbeit, index) => {
       let zeitMinuten;
       let mitarbeiterId = '';
+      let teileStatus = ''; // Teile-Status
 
       // Prüfe zuerst ob individuelle Zeit für diese Arbeit gespeichert ist
       if (arbeitszeitenDetails[arbeit]) {
-        // Neue Struktur: {zeit: 30, mitarbeiter_id: 1, type: 'mitarbeiter'} oder alte Struktur: 30
+        // Neue Struktur: {zeit: 30, mitarbeiter_id: 1, type: 'mitarbeiter', teile_status: 'vorrätig'} oder alte Struktur: 30
         if (typeof arbeitszeitenDetails[arbeit] === 'object') {
           zeitMinuten = arbeitszeitenDetails[arbeit].zeit || arbeitszeitenDetails[arbeit];
+          teileStatus = arbeitszeitenDetails[arbeit].teile_status || '';
           if (arbeitszeitenDetails[arbeit].type === 'lehrling') {
             mitarbeiterId = `l_${arbeitszeitenDetails[arbeit].mitarbeiter_id || arbeitszeitenDetails[arbeit].lehrling_id}`;
           } else if (arbeitszeitenDetails[arbeit].mitarbeiter_id) {
@@ -6319,6 +7570,15 @@ class App {
         });
       }
 
+      // Teile-Status Optionen
+      const teileStatusOptions = `
+        <option value="" ${teileStatus === '' ? 'selected' : ''}>⚪ Keine Teile nötig</option>
+        <option value="vorraetig" ${teileStatus === 'vorraetig' ? 'selected' : ''}>✅ Teile vorrätig</option>
+        <option value="bestellt" ${teileStatus === 'bestellt' ? 'selected' : ''}>📦 Teile bestellt</option>
+        <option value="bestellen" ${teileStatus === 'bestellen' ? 'selected' : ''}>⚠️ Muss bestellt werden</option>
+        <option value="eingetroffen" ${teileStatus === 'eingetroffen' ? 'selected' : ''}>🚚 Teile eingetroffen</option>
+      `;
+
       const item = document.createElement('div');
       item.className = 'arbeitszeit-item';
       item.style.marginBottom = '15px';
@@ -6326,23 +7586,37 @@ class App {
         <div style="margin-bottom: 5px;">
           <label style="font-weight: 600;">📋 ${arbeit}:</label>
         </div>
-        <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 10px; margin-bottom: 5px;">
+        <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin-bottom: 5px;">
           <input type="number"
                  id="modal_zeit_${index}"
                  value="${zeitStunden}"
                  min="0.25"
                  step="0.25"
-                 placeholder="0"
+                 placeholder="Std."
                  onchange="app.updateModalGesamtzeit()"
                  onfocus="this.select()"
+                 title="Zeit in Stunden"
                  style="padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
           <select id="modal_mitarbeiter_${index}"
+                  title="Mitarbeiter zuordnen"
                   style="padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
             ${mitarbeiterOptions}
+          </select>
+          <select id="modal_teile_${index}"
+                  title="Teile-Status"
+                  onchange="app.updateTeileStatusStyle(this)"
+                  style="padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+            ${teileStatusOptions}
           </select>
         </div>
       `;
       liste.appendChild(item);
+      
+      // Style für Teile-Status setzen
+      const teileSelect = document.getElementById(`modal_teile_${index}`);
+      if (teileSelect) {
+        this.updateTeileStatusStyle(teileSelect);
+      }
     });
 
     this.updateModalGesamtzeit();
@@ -6594,7 +7868,7 @@ class App {
         const statusLabel = statusLabels[termin.status] || '⏳ Geplant';
 
         html += `
-          <div class="tages-termin-card ${statusClass} ${internClass}">
+          <div class="tages-termin-card ${statusClass} ${internClass}" data-termin-id="${termin.id}" style="cursor: pointer;" title="Klicken für Details">
             <div class="tages-termin-zeit">
               <span class="zeit">${uhrzeitAnzeige || '--:--'}</span>
               ${dauerText ? `<span class="dauer">${dauerText}</span>` : ''}
@@ -6612,6 +7886,23 @@ class App {
       }
 
       body.innerHTML = html;
+
+      // Click-Handler für Termin-Karten hinzufügen
+      body.querySelectorAll('.tages-termin-card[data-termin-id]').forEach(card => {
+        card.addEventListener('click', () => {
+          const terminId = parseInt(card.dataset.terminId);
+          if (terminId) {
+            // Speichere Termin in termineById falls nicht vorhanden
+            const termin = termineForDay.find(t => t.id === terminId);
+            if (termin) {
+              this.termineById[terminId] = termin;
+            }
+            // Schließe Tagesübersicht-Modal und öffne Termin-Details
+            this.closeTagesUebersichtModal();
+            this.showTerminDetails(terminId);
+          }
+        });
+      });
 
     } catch (error) {
       console.error('Fehler beim Laden der Tagesübersicht:', error);
@@ -6636,6 +7927,82 @@ class App {
     });
 
     document.getElementById('modalGesamtzeit').textContent = gesamtStunden.toFixed(2) + ' h';
+  }
+
+  // Visuelles Styling für Teile-Status Dropdown
+  updateTeileStatusStyle(selectElement) {
+    if (!selectElement) return;
+    
+    const value = selectElement.value;
+    const styles = {
+      '': { bg: '#f8f9fa', border: '#ddd', color: '#666' },           // Keine Teile nötig
+      'vorraetig': { bg: '#d4edda', border: '#28a745', color: '#155724' },  // Vorrätig - grün
+      'bestellt': { bg: '#cce5ff', border: '#007bff', color: '#004085' },   // Bestellt - blau
+      'bestellen': { bg: '#fff3cd', border: '#ffc107', color: '#856404' },  // Muss bestellt - gelb/orange
+      'eingetroffen': { bg: '#d1ecf1', border: '#17a2b8', color: '#0c5460' } // Eingetroffen - türkis
+    };
+    
+    const style = styles[value] || styles[''];
+    selectElement.style.backgroundColor = style.bg;
+    selectElement.style.borderColor = style.border;
+    selectElement.style.color = style.color;
+    selectElement.style.fontWeight = value ? '600' : 'normal';
+  }
+
+  // Teile-Status Badge für einzelne Arbeit
+  getTeileStatusBadge(teileStatus) {
+    const badges = {
+      'vorraetig': '<span class="teile-badge teile-vorraetig">✅ Teile vorrätig</span>',
+      'bestellt': '<span class="teile-badge teile-bestellt">📦 Teile bestellt</span>',
+      'bestellen': '<span class="teile-badge teile-bestellen">⚠️ Teile bestellen!</span>',
+      'eingetroffen': '<span class="teile-badge teile-eingetroffen">🚚 Teile da</span>'
+    };
+    return badges[teileStatus] || '';
+  }
+
+  // Teile-Status Badge für Termin-Übersicht (zeigt kritische Status an)
+  getTerminTeileStatusBadge(termin) {
+    if (!termin.arbeitszeiten_details) return '';
+    
+    try {
+      const details = typeof termin.arbeitszeiten_details === 'string' 
+        ? JSON.parse(termin.arbeitszeiten_details) 
+        : termin.arbeitszeiten_details;
+      
+      // Sammle alle Teile-Status
+      let hatBestellen = false;
+      let hatBestellt = false;
+      let bestellenArbeiten = [];
+      
+      for (const [key, data] of Object.entries(details)) {
+        if (key.startsWith('_')) continue; // Überspringe Meta-Felder
+        if (data && data.teile_status) {
+          if (data.teile_status === 'bestellen') {
+            hatBestellen = true;
+            bestellenArbeiten.push(key);
+          } else if (data.teile_status === 'bestellt') {
+            hatBestellt = true;
+          }
+        }
+      }
+      
+      // Priorität: "bestellen" ist am wichtigsten
+      if (hatBestellen) {
+        const anzahl = bestellenArbeiten.length;
+        const tooltip = bestellenArbeiten.join(', ');
+        return `<span class="teile-badge teile-bestellen" title="Teile bestellen für: ${tooltip}">⚠️ ${anzahl}x Teile fehlen</span>`;
+      }
+      
+      // Optional: Zeige "bestellt" an, wenn Teile unterwegs sind
+      if (hatBestellt) {
+        return '<span class="teile-badge teile-bestellt" title="Teile sind bestellt">📦 Warten auf Teile</span>';
+      }
+      
+      return '';
+    } catch (e) {
+      console.error('Fehler beim Parsen der arbeitszeiten_details:', e);
+      return '';
+    }
   }
 
   async saveArbeitszeitenModal() {
@@ -6675,23 +8042,35 @@ class App {
         const zeitMinuten = Math.round(stunden * 60);
         const mitarbeiterSelect = document.getElementById(`modal_mitarbeiter_${index}`);
         const mitarbeiterValue = mitarbeiterSelect ? mitarbeiterSelect.value : '';
+        
+        // NEU: Teile-Status auslesen
+        const teileSelect = document.getElementById(`modal_teile_${index}`);
+        const teileStatus = teileSelect ? teileSelect.value : '';
 
-        // Neue Struktur: {zeit: 30, mitarbeiter_id: 1, type: 'mitarbeiter'} oder {zeit: 30, lehrling_id: 1, type: 'lehrling'}
-        if (mitarbeiterValue) {
-          if (mitarbeiterValue.startsWith('ma_')) {
+        // Neue Struktur: {zeit: 30, mitarbeiter_id: 1, type: 'mitarbeiter', teile_status: 'vorraetig'}
+        if (mitarbeiterValue || teileStatus) {
+          if (mitarbeiterValue && mitarbeiterValue.startsWith('ma_')) {
             const id = parseInt(mitarbeiterValue.replace('ma_', ''), 10);
             arbeitszeitenDetails[arbeitenListe[index]] = {
               zeit: zeitMinuten,
               mitarbeiter_id: id,
-              type: 'mitarbeiter'
+              type: 'mitarbeiter',
+              teile_status: teileStatus
             };
-          } else if (mitarbeiterValue.startsWith('l_')) {
+          } else if (mitarbeiterValue && mitarbeiterValue.startsWith('l_')) {
             const id = parseInt(mitarbeiterValue.replace('l_', ''), 10);
             arbeitszeitenDetails[arbeitenListe[index]] = {
               zeit: zeitMinuten,
               lehrling_id: id,
               mitarbeiter_id: id, // Für Kompatibilität
-              type: 'lehrling'
+              type: 'lehrling',
+              teile_status: teileStatus
+            };
+          } else {
+            // Nur Teile-Status ohne Mitarbeiter
+            arbeitszeitenDetails[arbeitenListe[index]] = {
+              zeit: zeitMinuten,
+              teile_status: teileStatus
             };
           }
         } else {
@@ -6713,12 +8092,17 @@ class App {
       terminMitarbeiterId = parseInt(gesamtMitarbeiterValue.replace('ma_', ''), 10);
     }
 
+    // "Muss bearbeitet werden" Checkbox auslesen
+    const mussBearbeitetCheckbox = document.getElementById('modalMussBearbeitetCheckbox');
+    const mussBearbeitetWerden = mussBearbeitetCheckbox ? mussBearbeitetCheckbox.checked : false;
+
     try {
       await TermineService.update(this.currentTerminId, {
         tatsaechliche_zeit: gesamtzeitMinuten,
         arbeitszeiten_details: JSON.stringify(arbeitszeitenDetails),
         status: status,
-        mitarbeiter_id: terminMitarbeiterId
+        mitarbeiter_id: terminMitarbeiterId,
+        muss_bearbeitet_werden: mussBearbeitetWerden
       });
 
       // Speichere Phasen wenn mehrtägig aktiviert ist

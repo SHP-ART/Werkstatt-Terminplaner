@@ -215,6 +215,34 @@ function initializeDatabase() {
       }
     });
 
+    // Schwebender Termin (noch nicht fest eingeplant, wird nicht in Auslastung gezählt)
+    db.run(`ALTER TABLE termine ADD COLUMN ist_schwebend INTEGER DEFAULT 0`, (err) => {
+      if (err && !err.message.includes('duplicate column')) {
+        console.error('Fehler beim Hinzufügen von ist_schwebend:', err);
+      }
+    });
+
+    // Parent-Termin-ID für gesplittete Termine (verweist auf ursprünglichen Termin)
+    db.run(`ALTER TABLE termine ADD COLUMN parent_termin_id INTEGER`, (err) => {
+      if (err && !err.message.includes('duplicate column')) {
+        console.error('Fehler beim Hinzufügen von parent_termin_id:', err);
+      }
+    });
+
+    // Split-Teil-Nummer (1 = erster Teil, 2 = zweiter Teil, etc.)
+    db.run(`ALTER TABLE termine ADD COLUMN split_teil INTEGER`, (err) => {
+      if (err && !err.message.includes('duplicate column')) {
+        console.error('Fehler beim Hinzufügen von split_teil:', err);
+      }
+    });
+
+    // Bearbeitungs-Markierung (muss noch bearbeitet werden / Eingaben fehlen)
+    db.run(`ALTER TABLE termine ADD COLUMN muss_bearbeitet_werden INTEGER DEFAULT 0`, (err) => {
+      if (err && !err.message.includes('duplicate column')) {
+        console.error('Fehler beim Hinzufügen von muss_bearbeitet_werden:', err);
+      }
+    });
+
     // Mitarbeiter-Tabelle
     db.run(`CREATE TABLE IF NOT EXISTS mitarbeiter (
       id INTEGER PRIMARY KEY AUTOINCREMENT,

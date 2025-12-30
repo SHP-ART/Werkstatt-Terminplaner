@@ -155,7 +155,7 @@ class TermineModel {
       mitarbeiter_id, dringlichkeit, kennzeichen, umfang, datum, abholung_typ,
       abholung_details, abholung_zeit, abholung_datum, bring_zeit, kontakt_option,
       kilometerstand, ersatzauto, ersatzauto_tage, ersatzauto_bis_datum, ersatzauto_bis_zeit,
-      vin, fahrzeugtyp
+      vin, fahrzeugtyp, muss_bearbeitet_werden
     } = data;
     
     // Baue die SQL-Query dynamisch auf
@@ -254,6 +254,10 @@ class TermineModel {
       updates.push('fahrzeugtyp = ?');
       values.push(fahrzeugtyp);
     }
+    if (muss_bearbeitet_werden !== undefined) {
+      updates.push('muss_bearbeitet_werden = ?');
+      values.push(muss_bearbeitet_werden ? 1 : 0);
+    }
 
     if (updates.length === 0) {
       return callback(new Error('Keine Felder zum Aktualisieren'));
@@ -334,12 +338,55 @@ class TermineModel {
   }
 
   static getAuslastung(datum, callback) {
+    // Schwebende Termine (ist_schwebend = 1) werden NICHT in der Auslastung gezählt
     const query = `
       SELECT
         SUM(COALESCE(tatsaechliche_zeit, geschaetzte_zeit)) as gesamt_minuten,
         SUM(CASE WHEN COALESCE(status, 'geplant') = 'geplant' THEN COALESCE(tatsaechliche_zeit, geschaetzte_zeit) ELSE 0 END) as geplant_minuten,
         SUM(CASE WHEN status = 'in_arbeit' THEN COALESCE(tatsaechliche_zeit, geschaetzte_zeit) ELSE 0 END) as in_arbeit_minuten,
         SUM(CASE WHEN status = 'abgeschlossen' THEN COALESCE(tatsaechliche_zeit, geschaetzte_zeit) ELSE 0 END) as abgeschlossen_minuten,
+        COUNT(*) as termin_anzahl,
+        SUM(CASE WHEN COALESCE(ist_schwebend, 0) = 1 THEN COALESCE(tatsaechliche_zeit, geschaetzte_zeit) ELSE 0 END) as schwebend_minuten,
+        SUM(CASE WHEN COALESCE(ist_schwebend, 0) = 1 THEN 1 ELSE 0 END) as schwebend_anzahl
+      FROM termine
+      WHERE datum = ? AND geloescht_am IS NULL AND COALESCE(ist_schwebend, 0) = 0
+    `;
+    db.get(query, [datum], callback);
+  }
+
+  // Schwebende Termine separat abrufen (nur für die Anzeige)
+  static getSchwebendeTermine(datum, callback) {
+    const query = `
+      SELECT
+        COUNT(*) as schwebend_anzahl,
+        SUM(COALESCE(tatsaechliche_zeit, geschaetzte_zeit)) as schwebend_minuten
+      FROM termine
+      WHERE datum = ? AND geloescht_am IS NULL AND COALESCE(ist_schwebend, 0) = 1
+    `;
+    db.get(query, [datum], callback);
+  }
+
+  // ALLE schwebenden Termine global abrufen (unabhängig vom Datum)
+  static getAlleSchwebendenTermine(callback) {
+    const query = `
+      SELECT
+        COUNT(*) as schwebend_anzahl,
+        SUM(COALESCE(tatsaechliche_zeit, geschaetzte_zeit)) as schwebend_minuten
+      FROM termine
+      WHERE geloescht_am IS NULL AND COALESCE(ist_schwebend, 0) = 1
+    `;
+    db.get(query, [], callback);
+  }
+
+  // Auslastung inklusive schwebender Termine (für Übersicht)
+  static getAuslastungMitSchwebend(datum, callback) {
+    const query = `
+      SELECT
+        SUM(COALESCE(tatsaechliche_zeit, geschaetzte_zeit)) as gesamt_minuten,
+        SUM(CASE WHEN COALESCE(ist_schwebend, 0) = 0 THEN COALESCE(tatsaechliche_zeit, geschaetzte_zeit) ELSE 0 END) as fest_minuten,
+        SUM(CASE WHEN COALESCE(ist_schwebend, 0) = 1 THEN COALESCE(tatsaechliche_zeit, geschaetzte_zeit) ELSE 0 END) as schwebend_minuten,
+        SUM(CASE WHEN COALESCE(ist_schwebend, 0) = 0 THEN 1 ELSE 0 END) as fest_anzahl,
+        SUM(CASE WHEN COALESCE(ist_schwebend, 0) = 1 THEN 1 ELSE 0 END) as schwebend_anzahl,
         COUNT(*) as termin_anzahl
       FROM termine
       WHERE datum = ? AND geloescht_am IS NULL
@@ -348,7 +395,7 @@ class TermineModel {
   }
 
   static getAuslastungProMitarbeiter(datum, callback) {
-    // Berechnet Auslastung pro Mitarbeiter
+    // Berechnet Auslastung pro Mitarbeiter (ohne schwebende Termine)
     const query = `
       SELECT
         m.id as mitarbeiter_id,
@@ -362,7 +409,7 @@ class TermineModel {
         COALESCE(SUM(CASE WHEN t.status = 'abgeschlossen' THEN COALESCE(t.tatsaechliche_zeit, t.geschaetzte_zeit) ELSE 0 END), 0) as abgeschlossen_minuten,
         COUNT(t.id) as termin_anzahl
       FROM mitarbeiter m
-      LEFT JOIN termine t ON m.id = t.mitarbeiter_id AND t.datum = ? AND t.geloescht_am IS NULL
+      LEFT JOIN termine t ON m.id = t.mitarbeiter_id AND t.datum = ? AND t.geloescht_am IS NULL AND COALESCE(t.ist_schwebend, 0) = 0
       WHERE m.aktiv = 1
       GROUP BY m.id, m.name, m.arbeitsstunden_pro_tag, m.nebenzeit_prozent, m.nur_service
       ORDER BY m.name
@@ -371,7 +418,7 @@ class TermineModel {
   }
 
   static getAuslastungMitPuffer(datum, pufferzeitMinuten, callback) {
-    // Berechnet Auslastung mit Pufferzeiten zwischen Terminen
+    // Berechnet Auslastung mit Pufferzeiten zwischen Terminen (ohne schwebende Termine)
     // Pufferzeit wird nur für aktive Termine (nicht abgeschlossen) berücksichtigt
     const query = `
       SELECT
@@ -382,7 +429,7 @@ class TermineModel {
         COUNT(*) as termin_anzahl,
         SUM(CASE WHEN COALESCE(status, 'geplant') != 'abgeschlossen' THEN 1 ELSE 0 END) as aktive_termine
       FROM termine
-      WHERE datum = ? AND geloescht_am IS NULL
+      WHERE datum = ? AND geloescht_am IS NULL AND COALESCE(ist_schwebend, 0) = 0
     `;
     db.get(query, [datum], (err, row) => {
       if (err) {
@@ -585,6 +632,118 @@ class TermineModel {
         callback(null, result);
       });
     });
+  }
+
+  // Termin schwebend setzen/aufheben
+  static setSchwebend(id, istSchwebend, callback) {
+    db.run(
+      'UPDATE termine SET ist_schwebend = ? WHERE id = ?',
+      [istSchwebend ? 1 : 0, id],
+      function(err) {
+        if (err) return callback(err);
+        callback(null, { changes: this.changes });
+      }
+    );
+  }
+
+  // Termin aufteilen (Split)
+  static splitTermin(id, splitDaten, callback) {
+    // splitDaten: { 
+    //   teil1_zeit: 60 (Minuten für ersten Tag), 
+    //   teil2_datum: '2025-01-02' (Datum für Rest),
+    //   teil2_zeit: 120 (Restzeit in Minuten)
+    // }
+    const { teil1_zeit, teil2_datum, teil2_zeit } = splitDaten;
+    
+    // Erst den Original-Termin laden
+    this.getById(id, (err, termin) => {
+      if (err) return callback(err);
+      if (!termin) return callback(new Error('Termin nicht gefunden'));
+
+      // Original-Termin auf Teil 1 aktualisieren
+      db.run(
+        `UPDATE termine SET geschaetzte_zeit = ?, split_teil = 1 WHERE id = ?`,
+        [teil1_zeit, id],
+        function(updateErr) {
+          if (updateErr) return callback(updateErr);
+
+          // Generiere neue Termin-Nummer für Teil 2
+          TermineModel.generateTerminNr((genErr, terminNr) => {
+            if (genErr) return callback(genErr);
+
+            // Neuen Termin für Teil 2 erstellen
+            const teil2Termin = {
+              termin_nr: terminNr,
+              kunde_id: termin.kunde_id,
+              kunde_name: termin.kunde_name,
+              kunde_telefon: termin.kunde_telefon,
+              kennzeichen: termin.kennzeichen,
+              arbeit: termin.arbeit + ' (Fortsetzung)',
+              umfang: termin.umfang,
+              geschaetzte_zeit: teil2_zeit,
+              datum: teil2_datum,
+              status: 'geplant',
+              abholung_typ: termin.abholung_typ,
+              abholung_details: termin.abholung_details,
+              abholung_zeit: termin.abholung_zeit,
+              bring_zeit: termin.bring_zeit,
+              kontakt_option: termin.kontakt_option,
+              kilometerstand: termin.kilometerstand,
+              ersatzauto: termin.ersatzauto,
+              mitarbeiter_id: termin.mitarbeiter_id,
+              arbeitszeiten_details: termin.arbeitszeiten_details,
+              dringlichkeit: termin.dringlichkeit,
+              vin: termin.vin,
+              fahrzeugtyp: termin.fahrzeugtyp,
+              parent_termin_id: id,
+              split_teil: 2
+            };
+
+            db.run(
+              `INSERT INTO termine 
+               (termin_nr, kunde_id, kunde_name, kunde_telefon, kennzeichen, arbeit, umfang, 
+                geschaetzte_zeit, datum, status, abholung_typ, abholung_details, abholung_zeit,
+                bring_zeit, kontakt_option, kilometerstand, ersatzauto, mitarbeiter_id,
+                arbeitszeiten_details, dringlichkeit, vin, fahrzeugtyp, parent_termin_id, split_teil)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+              [
+                teil2Termin.termin_nr, teil2Termin.kunde_id, teil2Termin.kunde_name,
+                teil2Termin.kunde_telefon, teil2Termin.kennzeichen, teil2Termin.arbeit,
+                teil2Termin.umfang, teil2Termin.geschaetzte_zeit, teil2Termin.datum,
+                teil2Termin.status, teil2Termin.abholung_typ, teil2Termin.abholung_details,
+                teil2Termin.abholung_zeit, teil2Termin.bring_zeit, teil2Termin.kontakt_option,
+                teil2Termin.kilometerstand, teil2Termin.ersatzauto, teil2Termin.mitarbeiter_id,
+                teil2Termin.arbeitszeiten_details, teil2Termin.dringlichkeit, teil2Termin.vin,
+                teil2Termin.fahrzeugtyp, teil2Termin.parent_termin_id, teil2Termin.split_teil
+              ],
+              function(insertErr) {
+                if (insertErr) return callback(insertErr);
+                callback(null, {
+                  teil1: { id: id, zeit: teil1_zeit },
+                  teil2: { id: this.lastID, termin_nr: terminNr, datum: teil2_datum, zeit: teil2_zeit }
+                });
+              }
+            );
+          });
+        }
+      );
+    });
+  }
+
+  // Alle Folge-Termine eines gesplitteten Termins laden
+  static getSplitTermine(parentId, callback) {
+    const query = `
+      SELECT t.*,
+             COALESCE(k.name, t.kunde_name) as kunde_name,
+             COALESCE(k.telefon, t.kunde_telefon) as kunde_telefon,
+             m.name as mitarbeiter_name
+      FROM termine t
+      LEFT JOIN kunden k ON t.kunde_id = k.id
+      LEFT JOIN mitarbeiter m ON t.mitarbeiter_id = m.id
+      WHERE (t.id = ? OR t.parent_termin_id = ?) AND t.geloescht_am IS NULL
+      ORDER BY t.split_teil ASC, t.datum ASC
+    `;
+    db.all(query, [parentId, parentId], callback);
   }
 }
 

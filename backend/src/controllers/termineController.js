@@ -934,6 +934,16 @@ class TermineController {
                     const verfuegbar = Math.max(gesamtVerfuegbar - belegtMitService, 0);
                     const prozent = (belegtMitService / gesamtVerfuegbar) * 100;
 
+                    // Schwebende Termine GLOBAL abrufen (alle, unabhängig vom Datum)
+                    TermineModel.getAlleSchwebendenTermine((schwErr, schwebendRow) => {
+                      if (schwErr) {
+                        console.error('Fehler beim Laden der schwebenden Termine:', schwErr);
+                        // Bei Fehler ohne schwebende Termine fortfahren
+                      }
+
+                      const schwebendAnzahl = (schwebendRow && schwebendRow.schwebend_anzahl) ? schwebendRow.schwebend_anzahl : 0;
+                      const schwebendMinuten = (schwebendRow && schwebendRow.schwebend_minuten) ? schwebendRow.schwebend_minuten : 0;
+
                         const result = {
                           belegt_minuten: belegt,
                           belegt_minuten_mit_service: belegtMitService,
@@ -944,6 +954,8 @@ class TermineController {
                           geplant_minuten: geplant,
                           in_arbeit_minuten: inArbeit,
                           abgeschlossen_minuten: abgeschlossen,
+                          schwebend_minuten: schwebendMinuten,
+                          schwebend_anzahl: schwebendAnzahl,
                           mitarbeiter_auslastung: mitarbeiterAuslastung,
                           lehrlinge_auslastung: lehrlingeAuslastung2,
                           lehrlinge: (lehrlinge || []).map(l => ({
@@ -971,6 +983,7 @@ class TermineController {
                         setCachedAuslastung(datum, mitPuffer, result);
                         res.json(result);
                       });
+                    });
                     };
 
                   if (mitPuffer === 'true') {
@@ -1412,6 +1425,91 @@ class TermineController {
           res.json({ message: 'Termin permanent gelöscht', changes: result.changes });
         }
       });
+    });
+  }
+
+  // Termin als schwebend markieren/aufheben
+  static setSchwebend(req, res) {
+    const { id } = req.params;
+    const { ist_schwebend } = req.body;
+
+    // Hole den Termin zuerst, um das Datum für Cache-Invalidierung zu bekommen
+    TermineModel.getById(id, (err, termin) => {
+      if (err) {
+        return res.status(500).json({ error: err.message });
+      }
+
+      if (!termin) {
+        return res.status(404).json({ error: 'Termin nicht gefunden' });
+      }
+
+      TermineModel.setSchwebend(id, ist_schwebend, (updateErr, result) => {
+        if (updateErr) {
+          res.status(500).json({ error: updateErr.message });
+        } else {
+          // Cache invalidierten
+          invalidateAuslastungCache(termin.datum);
+          res.json({
+            message: ist_schwebend ? 'Termin als schwebend markiert' : 'Termin fest eingeplant',
+            changes: result.changes
+          });
+        }
+      });
+    });
+  }
+
+  // Termin aufteilen (Split)
+  static splitTermin(req, res) {
+    const { id } = req.params;
+    const { teil1_zeit, teil2_datum, teil2_zeit } = req.body;
+
+    // Validierung
+    if (!teil1_zeit || teil1_zeit <= 0) {
+      return res.status(400).json({ error: 'Zeit für Teil 1 muss angegeben werden' });
+    }
+    if (!teil2_datum) {
+      return res.status(400).json({ error: 'Datum für Teil 2 muss angegeben werden' });
+    }
+    if (!teil2_zeit || teil2_zeit <= 0) {
+      return res.status(400).json({ error: 'Zeit für Teil 2 muss angegeben werden' });
+    }
+
+    // Hole den Termin zuerst, um das Datum für Cache-Invalidierung zu bekommen
+    TermineModel.getById(id, (err, termin) => {
+      if (err) {
+        return res.status(500).json({ error: err.message });
+      }
+
+      if (!termin) {
+        return res.status(404).json({ error: 'Termin nicht gefunden' });
+      }
+
+      TermineModel.splitTermin(id, { teil1_zeit, teil2_datum, teil2_zeit }, (splitErr, result) => {
+        if (splitErr) {
+          res.status(500).json({ error: splitErr.message });
+        } else {
+          // Cache für beide Tage invalidierten
+          invalidateAuslastungCache(termin.datum);
+          invalidateAuslastungCache(teil2_datum);
+          res.json({
+            message: 'Termin erfolgreich aufgeteilt',
+            ...result
+          });
+        }
+      });
+    });
+  }
+
+  // Alle Teile eines gesplitteten Termins laden
+  static getSplitTermine(req, res) {
+    const { id } = req.params;
+
+    TermineModel.getSplitTermine(id, (err, termine) => {
+      if (err) {
+        res.status(500).json({ error: err.message });
+      } else {
+        res.json(termine);
+      }
     });
   }
 }

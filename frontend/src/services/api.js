@@ -128,6 +128,24 @@ class TermineService {
   static async getVorschlaege(datum, dauer) {
     return ApiService.get(`/termine/vorschlaege?datum=${datum}&dauer=${dauer}`);
   }
+
+  // Schwebend-Funktionen (Termin noch nicht fest eingeplant)
+  static async setSchwebend(id, istSchwebend) {
+    return ApiService.post(`/termine/${id}/schwebend`, { ist_schwebend: istSchwebend });
+  }
+
+  // Termin-Split-Funktionen (Termin aufteilen auf mehrere Tage)
+  static async splitTermin(id, teil1Zeit, teil2Datum, teil2Zeit) {
+    return ApiService.post(`/termine/${id}/split`, {
+      teil1_zeit: teil1Zeit,
+      teil2_datum: teil2Datum,
+      teil2_zeit: teil2Zeit
+    });
+  }
+
+  static async getSplitTermine(id) {
+    return ApiService.get(`/termine/${id}/split-termine`);
+  }
 }
 
 class ArbeitszeitenService {
