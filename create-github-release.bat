@@ -48,8 +48,8 @@ echo Sie sind bei GitHub eingeloggt!
 echo.
 
 REM Variablen setzen
-set TAG=v1.0.1
-set TITLE=Release v1.0.1 - ICU Error Fix
+set TAG=v1.0.2
+set TITLE=Release v1.0.2 - Datenbank neben EXE
 set REPO=SHP-ART/Werkstatt-Terminplaner
 
 echo Repository: %REPO%

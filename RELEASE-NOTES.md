@@ -1,12 +1,17 @@
-# Release Notes - Version 1.0.1
+# Release Notes - Version 1.0.2
 
-## 🐛 Bugfixes
+## 🐛 Bugfixes & Verbesserungen
 
-### Electron ICU Data Error behoben
-- **Problem**: Beim Start der Electron-App erschien der Fehler `Invalid file descriptor to ICU data received`
-- **Lösung**: Explizite Pfad-Konfiguration für gepackte Apps hinzugefügt
-- **Betroffene Datei**: `backend/electron-main.js`
-- **Auswirkung**: Die Standalone-Version (Werkstatt-Terminplaner-Complete.exe) startet jetzt fehlerfrei
+### Datenbank-Speicherort verbessert
+- **Änderung**: Die Datenbank wird jetzt IMMER im Ordner neben der EXE-Datei gespeichert
+- **Betrifft**: Werkstatt-Server.exe und Werkstatt-Terminplaner-Complete.exe
+- **Vorteil**: Einfacheres Backup, da alle Daten im gleichen Ordner wie die Anwendung liegen
+- **Struktur**: `[EXE-Ordner]/database/werkstatt.db`
+
+### Robustere Erkennung der Electron-App
+- Verbesserte Erkennung für gepackte Electron-Apps
+- Mehrere Fallback-Methoden für die Pfaderkennung
+- Besseres Logging beim Start
 
 ## 📦 Release-Dateien
 
@@ -82,9 +87,9 @@ Detaillierte Anleitung: [NETZWERK-INSTALLATION.md](https://github.com/SHP-ART/We
 
 ## 🆕 Seit letztem Release
 
-- Electron ICU-Fehler behoben
-- Verbessertes Start-Skript hinzugefügt (`start-electron-app.bat`)
-- Stabilität der gepackten App verbessert
+- Datenbank wird jetzt IMMER neben der EXE gespeichert
+- Robustere Erkennung der Electron-App-Umgebung
+- Verbessertes Logging beim Start
 
 ## 💡 Support
 
@@ -93,4 +98,5 @@ Bei Problemen bitte ein Issue auf GitHub erstellen: https://github.com/SHP-ART/W
 ---
 
 **Datum**: 30. Dezember 2025
+**Version**: 1.0.2
 **Build**: Complete App (All-in-One mit ICU-Fix)
