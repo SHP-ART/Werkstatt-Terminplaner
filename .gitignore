@@ -7,6 +7,9 @@ logs/
 .DS_Store
 .env
 
+# Lokale Testdaten (nicht hochladen)
+testdaten/
+
 # Build artifacts (will be distributed via GitHub Releases)
 /backend/dist/
 /frontend/dist/

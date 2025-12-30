@@ -68,8 +68,8 @@ function startServer(clientCountCallback, requestLogCallback) {
     };
 
     app.use(cors(corsOptions));
-    app.use(bodyParser.json());
-    app.use(bodyParser.urlencoded({ extended: true }));
+    app.use(bodyParser.json({ limit: '50mb' }));
+    app.use(bodyParser.urlencoded({ extended: true, limit: '50mb' }));
 
     // Request-Logging Middleware für Electron
     if (requestLogCallback) {

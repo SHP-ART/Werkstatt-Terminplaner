@@ -9,6 +9,15 @@ class App {
     this.init();
   }
 
+  // Hilfsfunktion: Datum lokal formatieren (YYYY-MM-DD) ohne Zeitzonenkonvertierung
+  formatDateLocal(date) {
+    const d = date instanceof Date ? date : new Date(date);
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  }
+
   init() {
     this.setupEventListeners();
     this.loadInitialData();
@@ -104,6 +113,36 @@ class App {
     document.getElementById('krankBisDatum').addEventListener('change', () => this.validateKrankDatum());
     document.getElementById('importBtn').addEventListener('click', () => this.importKunden());
     document.getElementById('testConnectionBtn').addEventListener('click', () => this.testConnection());
+    
+    // Excel Import Event-Listener
+    const excelFileInput = document.getElementById('excelFileInput');
+    if (excelFileInput) {
+      excelFileInput.addEventListener('change', (e) => this.handleExcelFileSelect(e));
+    }
+    const confirmImportBtn = document.getElementById('confirmImportBtn');
+    if (confirmImportBtn) {
+      confirmImportBtn.addEventListener('click', () => this.confirmExcelImport());
+    }
+    const cancelImportBtn = document.getElementById('cancelImportBtn');
+    if (cancelImportBtn) {
+      cancelImportBtn.addEventListener('click', () => this.cancelExcelImport());
+    }
+    
+    // Kundenliste-Suche Event-Listener
+    const kundenListeSuche = document.getElementById('kundenListeSuche');
+    if (kundenListeSuche) {
+      kundenListeSuche.addEventListener('input', () => this.filterKundenListe());
+      kundenListeSuche.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') {
+          this.clearKundenSuche();
+        }
+      });
+    }
+    const kundenSucheClearBtn = document.getElementById('kundenSucheClearBtn');
+    if (kundenSucheClearBtn) {
+      kundenSucheClearBtn.addEventListener('click', () => this.clearKundenSuche());
+    }
+    
     document.getElementById('terminSchnellsuche').addEventListener('change', () => this.handleTerminSchnellsuche());
     document.getElementById('terminSchnellsuche').addEventListener('input', () => this.updateSchnellsucheStatus());
     document.getElementById('terminSchnellsuche').addEventListener('keydown', (e) => {
@@ -434,7 +473,7 @@ class App {
   }
 
   setTodayDate() {
-    const today = new Date().toISOString().split('T')[0];
+    const today = this.formatDateLocal(new Date());
     document.getElementById('datum').value = today;
     document.getElementById('auslastungDatum').value = today;
     const abwesenheitDatum = document.getElementById('abwesenheitDatum');
@@ -447,7 +486,7 @@ class App {
   }
 
   setInternerTerminTodayDate() {
-    const today = new Date().toISOString().split('T')[0];
+    const today = this.formatDateLocal(new Date());
     const internDatum = document.getElementById('intern_datum');
     if (internDatum) {
       internDatum.value = today;
@@ -634,7 +673,7 @@ class App {
     
     // Setze heute als Standard wenn kein Datum
     if (!datumInput.value) {
-      datumInput.value = new Date().toISOString().split('T')[0];
+      datumInput.value = this.formatDateLocal(new Date());
     }
     
     const datum = datumInput.value;
@@ -1064,7 +1103,7 @@ class App {
   addPhase() {
     this.phasenCounter++;
     const phasenListe = document.getElementById('phasenListe');
-    const terminDatum = document.getElementById('datum').value || new Date().toISOString().split('T')[0];
+    const terminDatum = document.getElementById('datum').value || this.formatDateLocal(new Date());
     
     const phaseDiv = document.createElement('div');
     phaseDiv.className = 'phase-item';
@@ -1151,6 +1190,78 @@ class App {
     if (phasenSection) {
       phasenSection.style.display = 'none';
     }
+    // Reset Folgetermine-Checkbox
+    const folgetermineCheckbox = document.getElementById('erstelleFolgetermineCheckbox');
+    if (folgetermineCheckbox) {
+      folgetermineCheckbox.checked = true; // Standard: aktiviert
+    }
+  }
+
+  // Erstellt Folgetermine aus den Phasen (außer der ersten Phase = Haupttermin)
+  async erstelleFolgetermineAusPhasen(hauptTermin, phasen, hauptTerminNr) {
+    const ergebnisse = { erfolg: 0, fehler: 0, uebersprungen: 0 };
+    
+    // Lade existierende Termine für Duplikat-Prüfung
+    let existierendeTermine = [];
+    try {
+      existierendeTermine = await TermineService.getAll();
+    } catch (e) {
+      console.warn('Konnte existierende Termine nicht laden für Duplikat-Prüfung:', e);
+    }
+    
+    // Die erste Phase gehört zum Haupttermin, daher bei Index 1 starten
+    for (let i = 1; i < phasen.length; i++) {
+      const phase = phasen[i];
+      
+      // Folgetermin nur erstellen, wenn das Datum anders ist als der Haupttermin
+      if (phase.datum === hauptTermin.datum) {
+        continue; // Gleicher Tag - kein separater Termin nötig
+      }
+      
+      // Prüfe ob bereits ein Folgetermin für diese Phase/Datum existiert
+      const bereitsVorhanden = existierendeTermine.some(t => 
+        t.kennzeichen === hauptTermin.kennzeichen &&
+        t.datum === phase.datum &&
+        t.arbeit && t.arbeit.includes(`[Folgetermin zu ${hauptTerminNr}]`)
+      );
+      
+      if (bereitsVorhanden) {
+        ergebnisse.uebersprungen++;
+        continue;
+      }
+      
+      try {
+        const folgeTermin = {
+          kunde_id: hauptTermin.kunde_id || null,
+          kunde_name: hauptTermin.kunde_name,
+          kunde_telefon: hauptTermin.kunde_telefon,
+          kennzeichen: hauptTermin.kennzeichen,
+          arbeit: `[Folgetermin zu ${hauptTerminNr}] ${phase.bezeichnung}`,
+          umfang: phase.notizen || `Phase ${i + 1} von mehrtägiger Arbeit (${hauptTerminNr})`,
+          geschaetzte_zeit: phase.geschaetzte_zeit,
+          datum: phase.datum,
+          abholung_typ: 'warten', // Folgetermin - Fahrzeug ist bereits da
+          abholung_details: `Fortsetzung von ${hauptTerminNr}`,
+          abholung_zeit: null,
+          bring_zeit: null,
+          kontakt_option: null,
+          kilometerstand: null,
+          ersatzauto: false,
+          mitarbeiter_id: hauptTermin.mitarbeiter_id || null,
+          dringlichkeit: hauptTermin.dringlichkeit || null,
+          vin: hauptTermin.vin || null,
+          fahrzeugtyp: hauptTermin.fahrzeugtyp || null
+        };
+        
+        await TermineService.create(folgeTermin);
+        ergebnisse.erfolg++;
+      } catch (error) {
+        console.error(`Fehler beim Erstellen des Folgetermins für Phase ${i + 1}:`, error);
+        ergebnisse.fehler++;
+      }
+    }
+    
+    return ergebnisse;
   }
 
   // === ENDE PHASEN-SYSTEM METHODEN ===
@@ -1266,7 +1377,7 @@ class App {
       // Setze heute als Datum und lade Termine
       const datumInput = document.getElementById('editTerminDatum');
       if (datumInput && !datumInput.value) {
-        datumInput.value = new Date().toISOString().split('T')[0];
+        datumInput.value = this.formatDateLocal(new Date());
       }
       this.loadEditTermine();
     }
@@ -1338,29 +1449,123 @@ class App {
         });
       }
 
-      const tbody = document.getElementById('kundenTable').getElementsByTagName('tbody')[0];
-      tbody.innerHTML = '';
-      kunden.forEach(kunde => {
-        const row = tbody.insertRow();
-        row.innerHTML = `
-          <td>${kunde.name}</td>
-          <td>${kunde.telefon || '-'}</td>
-          <td>${kunde.email || '-'}</td>
-          <td>${kunde.kennzeichen || '-'}</td>
-          <td>${kunde.fahrzeugtyp || '-'}</td>
-          <td>${kunde.locosoft_id || '-'}</td>
-          <td>
-            <button class="btn btn-small btn-secondary" onclick="app.editKunde(${kunde.id})" title="Bearbeiten">✏️</button>
-            <button class="btn btn-small btn-danger" onclick="app.deleteKunde(${kunde.id}, '${kunde.name.replace(/'/g, "\\'")}')">🗑️</button>
-          </td>
-        `;
-      });
+      // Render die gefilterte Liste (oder alle wenn kein Suchbegriff)
+      const sucheInput = document.getElementById('kundenListeSuche');
+      const suchBegriff = sucheInput ? sucheInput.value.trim() : '';
+      this.renderKundenListe(kunden, suchBegriff);
 
       this.updateTerminSuchliste();
     } catch (error) {
       console.error('Fehler beim Laden der Kunden:', error);
       alert('Fehler beim Laden der Kunden. Ist das Backend gestartet?');
     }
+  }
+
+  renderKundenListe(kunden, suchBegriff = '') {
+    const tbody = document.getElementById('kundenTable')?.getElementsByTagName('tbody')[0];
+    if (!tbody) return;
+
+    // Update Badge
+    const badge = document.getElementById('kundenAnzahlBadge');
+    
+    // Clear-Button anzeigen/verstecken
+    const clearBtn = document.getElementById('kundenSucheClearBtn');
+    if (clearBtn) {
+      clearBtn.style.display = suchBegriff ? 'block' : 'none';
+    }
+
+    tbody.innerHTML = '';
+
+    // Ohne Suchbegriff: Zeige Hinweis statt voller Liste
+    if (!suchBegriff || suchBegriff.length < 2) {
+      if (badge) {
+        badge.textContent = `${kunden.length} Kunden gespeichert`;
+        badge.classList.remove('filtered');
+      }
+      const row = tbody.insertRow();
+      row.innerHTML = `<td colspan="7" class="suche-hinweis">🔍 Geben Sie mindestens 2 Zeichen ein, um Kunden zu suchen</td>`;
+      return;
+    }
+
+    // Filtere Kunden basierend auf Suchbegriff
+    const lower = suchBegriff.toLowerCase();
+    const gefilterteKunden = kunden.filter(kunde => {
+      return (kunde.name && kunde.name.toLowerCase().includes(lower)) ||
+             (kunde.telefon && kunde.telefon.toLowerCase().includes(lower)) ||
+             (kunde.email && kunde.email.toLowerCase().includes(lower)) ||
+             (kunde.kennzeichen && kunde.kennzeichen.toLowerCase().includes(lower)) ||
+             (kunde.fahrzeugtyp && kunde.fahrzeugtyp.toLowerCase().includes(lower)) ||
+             (kunde.locosoft_id && kunde.locosoft_id.toLowerCase().includes(lower));
+    });
+
+    if (badge) {
+      badge.textContent = `${gefilterteKunden.length} von ${kunden.length} Kunden`;
+      badge.classList.add('filtered');
+    }
+    
+    if (gefilterteKunden.length === 0) {
+      const row = tbody.insertRow();
+      row.innerHTML = `<td colspan="7" class="keine-ergebnisse">Keine Kunden gefunden für "${this.escapeHtml(suchBegriff)}"</td>`;
+      return;
+    }
+
+    // Begrenze auf max. 100 Ergebnisse für Performance
+    const maxResults = 100;
+    const anzeigeKunden = gefilterteKunden.slice(0, maxResults);
+
+    anzeigeKunden.forEach(kunde => {
+      const row = tbody.insertRow();
+      row.innerHTML = `
+        <td>${this.highlightMatch(kunde.name || '', suchBegriff)}</td>
+        <td>${this.highlightMatch(kunde.telefon || '-', suchBegriff)}</td>
+        <td>${this.highlightMatch(kunde.email || '-', suchBegriff)}</td>
+        <td>${this.highlightMatch(kunde.kennzeichen || '-', suchBegriff)}</td>
+        <td>${this.highlightMatch(kunde.fahrzeugtyp || '-', suchBegriff)}</td>
+        <td>${this.highlightMatch(kunde.locosoft_id || '-', suchBegriff)}</td>
+        <td>
+          <button class="btn btn-small btn-secondary" onclick="app.editKunde(${kunde.id})" title="Bearbeiten">✏️</button>
+          <button class="btn btn-small btn-danger" onclick="app.deleteKunde(${kunde.id}, '${(kunde.name || '').replace(/'/g, "\\'")}')">🗑️</button>
+        </td>
+      `;
+    });
+
+    // Hinweis wenn mehr Ergebnisse vorhanden
+    if (gefilterteKunden.length > maxResults) {
+      const row = tbody.insertRow();
+      row.innerHTML = `<td colspan="7" class="mehr-ergebnisse">... und ${gefilterteKunden.length - maxResults} weitere Treffer. Verfeinern Sie Ihre Suche.</td>`;
+    }
+  }
+
+  highlightMatch(text, suchBegriff) {
+    if (!suchBegriff || !text || text === '-') return this.escapeHtml(text);
+    
+    const escaped = this.escapeHtml(text);
+    const lower = escaped.toLowerCase();
+    const searchLower = suchBegriff.toLowerCase();
+    const index = lower.indexOf(searchLower);
+    
+    if (index === -1) return escaped;
+    
+    const before = escaped.substring(0, index);
+    const match = escaped.substring(index, index + suchBegriff.length);
+    const after = escaped.substring(index + suchBegriff.length);
+    
+    return `${before}<mark class="highlight">${match}</mark>${after}`;
+  }
+
+  filterKundenListe() {
+    const sucheInput = document.getElementById('kundenListeSuche');
+    const suchBegriff = sucheInput ? sucheInput.value.trim() : '';
+    this.renderKundenListe(this.kundenCache || [], suchBegriff);
+  }
+
+  clearKundenSuche() {
+    const sucheInput = document.getElementById('kundenListeSuche');
+    if (sucheInput) {
+      sucheInput.value = '';
+      sucheInput.focus();
+    }
+    this.filterKundenListe();
   }
 
   async handleKundenSubmit(e) {
@@ -1418,6 +1623,316 @@ class App {
       console.error('Fehler beim Import:', error);
       alert('Fehler beim Import. Bitte überprüfen Sie das JSON-Format.');
     }
+  }
+
+  // Excel Import Handler
+  async handleExcelFileSelect(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    const fileName = document.getElementById('selectedFileName');
+    fileName.textContent = `📄 ${file.name}`;
+
+    try {
+      const data = await this.readExcelFile(file);
+      await this.prepareImportPreview(data);
+    } catch (error) {
+      console.error('Fehler beim Lesen der Excel-Datei:', error);
+      alert('Fehler beim Lesen der Datei: ' + error.message);
+    }
+  }
+
+  readExcelFile(file) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        try {
+          const data = new Uint8Array(e.target.result);
+          const workbook = XLSX.read(data, { type: 'array' });
+          const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+          const jsonData = XLSX.utils.sheet_to_json(firstSheet, { defval: '' });
+          resolve(jsonData);
+        } catch (err) {
+          reject(err);
+        }
+      };
+      reader.onerror = reject;
+      reader.readAsArrayBuffer(file);
+    });
+  }
+
+  async prepareImportPreview(excelData) {
+    const preview = document.getElementById('importPreview');
+    const stats = document.getElementById('importStats');
+    const warnings = document.getElementById('importWarnings');
+    const tableContainer = document.getElementById('importPreviewTable');
+
+    // Lade existierende Kunden für Duplikat-Check
+    const existingKunden = this.kundenCache || [];
+    
+    // Normalisiere Spaltennamen (verschiedene Schreibweisen unterstützen)
+    const normalizedData = excelData.map(row => {
+      const normalized = {};
+      let fabrikat = '';
+      let modell = '';
+      let vorname = '';
+      
+      for (const [key, value] of Object.entries(row)) {
+        const lowerKey = key.toLowerCase().trim().replace(/\n/g, '');
+        const strValue = String(value || '').trim();
+        
+        if (lowerKey === 'name' || (lowerKey.includes('name') && !lowerKey.includes('datei') && !lowerKey.includes('vorname'))) {
+          normalized.name = strValue;
+        } else if (lowerKey === 'vorname' || lowerKey.includes('vorname')) {
+          vorname = strValue;
+        } else if (lowerKey.includes('telefon') || lowerKey.includes('tel') || lowerKey.includes('phone')) {
+          normalized.telefon = strValue;
+        } else if (lowerKey.includes('email') || lowerKey.includes('e-mail') || lowerKey.includes('mail')) {
+          normalized.email = strValue;
+        } else if (lowerKey.includes('adresse') || lowerKey.includes('address') || lowerKey.includes('anschrift')) {
+          normalized.adresse = strValue;
+        } else if (lowerKey.includes('kennzeichen') || lowerKey.includes('nummernschild') || lowerKey.includes('kfz')) {
+          normalized.kennzeichen = strValue.toUpperCase();
+        } else if (lowerKey.includes('fabrikat') || lowerKey.includes('marke') || lowerKey.includes('hersteller')) {
+          fabrikat = strValue;
+        } else if (lowerKey.includes('modell') || lowerKey.includes('typ')) {
+          modell = strValue;
+        } else if (lowerKey.includes('fahrzeug') || lowerKey.includes('auto')) {
+          normalized.fahrzeugtyp = strValue;
+        } else if (lowerKey.includes('vin') || lowerKey.includes('fahrgestell') || lowerKey.includes('fg-nr') || lowerKey === 'fg-nr') {
+          normalized.vin = strValue.replace(/\n/g, '');
+        } else if (lowerKey.includes('km') || lowerKey.includes('kilometer')) {
+          normalized.kmStand = strValue;
+        }
+      }
+      
+      // Kombiniere Fabrikat und Modell zu Fahrzeugtyp
+      if (!normalized.fahrzeugtyp && (fabrikat || modell)) {
+        normalized.fahrzeugtyp = [fabrikat, modell].filter(x => x && x.trim()).join(' ');
+      }
+      
+      // Kombiniere Name und Vorname wenn beide vorhanden
+      if (vorname && vorname.trim() && normalized.name) {
+        normalized.name = `${normalized.name}, ${vorname}`.trim();
+      }
+      
+      return normalized;
+    }).filter(row => row.name); // Nur Zeilen mit Namen
+
+    // Duplikate und Warnungen sammeln
+    const warningsList = [];
+    const existingNames = new Set(existingKunden.map(k => k.name?.toLowerCase()));
+    const existingKennzeichen = new Set(existingKunden.map(k => k.kennzeichen?.toUpperCase()).filter(k => k));
+    
+    // Sammle auch Kennzeichen aus Terminen
+    const termineKennzeichen = new Set();
+    if (this.termineCache) {
+      this.termineCache.forEach(t => {
+        if (t.kennzeichen) termineKennzeichen.add(t.kennzeichen.toUpperCase());
+      });
+    }
+
+    const importNamesCount = {};
+    const importKennzeichenCount = {};
+
+    normalizedData.forEach((row, index) => {
+      // Zähle Namen in Import-Daten
+      const nameLower = row.name.toLowerCase();
+      importNamesCount[nameLower] = (importNamesCount[nameLower] || 0) + 1;
+
+      // Zähle Kennzeichen in Import-Daten
+      if (row.kennzeichen) {
+        const kz = row.kennzeichen.toUpperCase();
+        importKennzeichenCount[kz] = (importKennzeichenCount[kz] || 0) + 1;
+      }
+
+      // Prüfe auf existierende Duplikate
+      if (existingNames.has(nameLower)) {
+        row._warnung = 'name_existiert';
+        warningsList.push(`⚠️ Zeile ${index + 1}: Name "${row.name}" existiert bereits in der Datenbank`);
+      }
+
+      if (row.kennzeichen && existingKennzeichen.has(row.kennzeichen)) {
+        row._warnung = (row._warnung || '') + '_kennzeichen_existiert';
+        warningsList.push(`⚠️ Zeile ${index + 1}: Kennzeichen "${row.kennzeichen}" existiert bereits bei einem Kunden`);
+      }
+
+      if (row.kennzeichen && termineKennzeichen.has(row.kennzeichen)) {
+        row._info = 'kennzeichen_in_terminen';
+      }
+    });
+
+    // Prüfe auf Duplikate innerhalb der Import-Datei
+    normalizedData.forEach((row, index) => {
+      const nameLower = row.name.toLowerCase();
+      if (importNamesCount[nameLower] > 1) {
+        row._mehrfach = true;
+        if (!row._warnung?.includes('mehrfach')) {
+          row._info = (row._info || '') + '_mehrfach_name';
+        }
+      }
+      
+      if (row.kennzeichen && importKennzeichenCount[row.kennzeichen] > 1) {
+        row._warnung = (row._warnung || '') + '_kennzeichen_mehrfach';
+        if (!warningsList.some(w => w.includes(`Kennzeichen "${row.kennzeichen}" mehrfach`))) {
+          warningsList.push(`⚠️ Kennzeichen "${row.kennzeichen}" kommt mehrfach in der Importdatei vor`);
+        }
+      }
+    });
+
+    // Speichere für späteren Import
+    this.pendingImportData = normalizedData;
+
+    // Statistik anzeigen
+    const uniqueNames = new Set(normalizedData.map(r => r.name.toLowerCase())).size;
+    const uniqueKennzeichen = new Set(normalizedData.filter(r => r.kennzeichen).map(r => r.kennzeichen)).size;
+    const kundenMitMehrfachFahrzeugen = Object.values(importNamesCount).filter(c => c > 1).length;
+
+    stats.innerHTML = `
+      <div class="stat-item">📋 <strong>${normalizedData.length}</strong> Zeilen gefunden</div>
+      <div class="stat-item">👥 <strong>${uniqueNames}</strong> verschiedene Kunden</div>
+      <div class="stat-item">🚗 <strong>${uniqueKennzeichen}</strong> verschiedene Kennzeichen</div>
+      ${kundenMitMehrfachFahrzeugen > 0 ? `<div class="stat-item">🔄 <strong>${kundenMitMehrfachFahrzeugen}</strong> Kunden mit mehreren Fahrzeugen</div>` : ''}
+    `;
+
+    // Warnungen anzeigen
+    if (warningsList.length > 0) {
+      warnings.innerHTML = `
+        <div class="warnings-header">⚠️ ${warningsList.length} Hinweise:</div>
+        <ul class="warnings-list">
+          ${warningsList.slice(0, 10).map(w => `<li>${w}</li>`).join('')}
+          ${warningsList.length > 10 ? `<li>... und ${warningsList.length - 10} weitere</li>` : ''}
+        </ul>
+      `;
+      warnings.style.display = 'block';
+    } else {
+      warnings.innerHTML = '<div class="no-warnings">✅ Keine Duplikate gefunden</div>';
+      warnings.style.display = 'block';
+    }
+
+    // Vorschau-Tabelle erstellen
+    tableContainer.innerHTML = `
+      <table class="preview-table">
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Name</th>
+            <th>Telefon</th>
+            <th>Email</th>
+            <th>Kennzeichen</th>
+            <th>Fahrzeug</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${normalizedData.slice(0, 50).map((row, i) => `
+            <tr class="${row._warnung ? 'warning-row' : ''} ${row._mehrfach ? 'mehrfach-row' : ''}">
+              <td>${i + 1}</td>
+              <td>${this.escapeHtml(row.name)}${row._mehrfach ? ' <span class="badge-mehrfach">👥 Mehrfach</span>' : ''}</td>
+              <td>${this.escapeHtml(row.telefon || '-')}</td>
+              <td>${this.escapeHtml(row.email || '-')}</td>
+              <td>${this.escapeHtml(row.kennzeichen || '-')}</td>
+              <td>${this.escapeHtml(row.fahrzeugtyp || '-')}</td>
+              <td>
+                ${row._warnung?.includes('name_existiert') ? '<span class="badge-warning">Name existiert</span>' : ''}
+                ${row._warnung?.includes('kennzeichen_existiert') ? '<span class="badge-warning">Kennz. existiert</span>' : ''}
+                ${row._warnung?.includes('kennzeichen_mehrfach') ? '<span class="badge-danger">Kennz. mehrfach!</span>' : ''}
+                ${!row._warnung ? '<span class="badge-ok">✓ OK</span>' : ''}
+              </td>
+            </tr>
+          `).join('')}
+          ${normalizedData.length > 50 ? `<tr><td colspan="7" class="more-rows">... und ${normalizedData.length - 50} weitere Zeilen</td></tr>` : ''}
+        </tbody>
+      </table>
+    `;
+
+    preview.style.display = 'block';
+  }
+
+  async confirmExcelImport() {
+    if (!this.pendingImportData || this.pendingImportData.length === 0) {
+      alert('Keine Daten zum Importieren');
+      return;
+    }
+
+    // Gruppiere nach Kundenname für intelligenten Import
+    const kundenMap = new Map();
+    
+    this.pendingImportData.forEach(row => {
+      const nameLower = row.name.toLowerCase();
+      if (!kundenMap.has(nameLower)) {
+        kundenMap.set(nameLower, {
+          name: row.name,
+          telefon: row.telefon,
+          email: row.email,
+          adresse: row.adresse,
+          fahrzeuge: []
+        });
+      }
+      
+      const kunde = kundenMap.get(nameLower);
+      // Ergänze fehlende Kontaktdaten
+      if (!kunde.telefon && row.telefon) kunde.telefon = row.telefon;
+      if (!kunde.email && row.email) kunde.email = row.email;
+      if (!kunde.adresse && row.adresse) kunde.adresse = row.adresse;
+      
+      // Füge Fahrzeug hinzu wenn vorhanden
+      if (row.kennzeichen) {
+        kunde.fahrzeuge.push({
+          kennzeichen: row.kennzeichen,
+          fahrzeugtyp: row.fahrzeugtyp || '',
+          vin: row.vin || ''
+        });
+      }
+    });
+
+    // Bestätigungsdialog
+    const kundenCount = kundenMap.size;
+    const fahrzeugCount = Array.from(kundenMap.values()).reduce((sum, k) => sum + k.fahrzeuge.length, 0);
+    
+    if (!confirm(`Import starten?\n\n${kundenCount} Kunden mit ${fahrzeugCount} Fahrzeugen werden importiert.\n\nHinweis: Bei Kunden mit mehreren Fahrzeugen wird das erste Fahrzeug als Hauptkennzeichen gespeichert.`)) {
+      return;
+    }
+
+    try {
+      // Bereite Kunden für API-Import vor
+      const kundenZuImportieren = [];
+      
+      kundenMap.forEach((kundeData) => {
+        const ersteFahrzeug = kundeData.fahrzeuge[0] || {};
+        kundenZuImportieren.push({
+          name: kundeData.name,
+          telefon: kundeData.telefon || '',
+          email: kundeData.email || '',
+          adresse: kundeData.adresse || '',
+          kennzeichen: ersteFahrzeug.kennzeichen || '',
+          fahrzeugtyp: ersteFahrzeug.fahrzeugtyp || '',
+          vin: ersteFahrzeug.vin || '',
+          // Speichere alle Fahrzeuge als Info in Notizen falls mehrere
+          notizen: kundeData.fahrzeuge.length > 1 
+            ? 'Weitere Fahrzeuge: ' + kundeData.fahrzeuge.slice(1).map(f => f.kennzeichen).join(', ')
+            : ''
+        });
+      });
+
+      const result = await KundenService.import(kundenZuImportieren);
+      alert(`✅ Import erfolgreich!\n\n${result.message}`);
+      
+      // Aufräumen
+      this.cancelExcelImport();
+      this.loadKunden();
+      
+    } catch (error) {
+      console.error('Fehler beim Import:', error);
+      alert('❌ Fehler beim Import: ' + error.message);
+    }
+  }
+
+  cancelExcelImport() {
+    this.pendingImportData = null;
+    document.getElementById('importPreview').style.display = 'none';
+    document.getElementById('excelFileInput').value = '';
+    document.getElementById('selectedFileName').textContent = '';
   }
 
   // Kunde bearbeiten
@@ -2163,22 +2678,45 @@ class App {
       await this.ensureArbeitenExistieren(arbeitenListe, termin.geschaetzte_zeit);
       const createdTermin = await TermineService.create(termin);
       
-      // Wenn Phasen aktiviert sind, speichere diese
+      // Wenn Phasen aktiviert sind, speichere diese und erstelle ggf. Folgetermine
       const mehrtaegigCheckbox = document.getElementById('mehrtaegigCheckbox');
       if (mehrtaegigCheckbox && mehrtaegigCheckbox.checked) {
         const phasen = this.getPhasenFromForm();
+        const erstelleFolgetermine = document.getElementById('erstelleFolgetermineCheckbox')?.checked;
+        
         if (phasen.length > 0 && createdTermin && createdTermin.id) {
           try {
+            // Speichere Phasen für den Haupttermin
             await PhasenService.syncPhasen(createdTermin.id, phasen);
+            
+            // Wenn Folgetermine erstellt werden sollen
+            if (erstelleFolgetermine && phasen.length > 1) {
+              const folgetermineErgebnisse = await this.erstelleFolgetermineAusPhasen(
+                termin, 
+                phasen, 
+                createdTermin.terminNr
+              );
+              
+              if (folgetermineErgebnisse.erfolg > 0) {
+                alert(`Termin erfolgreich erstellt!\n\n` +
+                      `✅ Haupttermin: ${createdTermin.terminNr}\n` +
+                      `📅 ${folgetermineErgebnisse.erfolg} Folgetermin(e) erstellt für weitere Phasen.`);
+              } else {
+                alert('Termin erfolgreich erstellt!');
+              }
+            } else {
+              alert('Termin erfolgreich erstellt!');
+            }
           } catch (phasenError) {
             console.error('Fehler beim Speichern der Phasen:', phasenError);
-            // Termin wurde erstellt, Phasen aber nicht - warnen aber nicht abbrechen
             alert('Termin erstellt, aber Phasen konnten nicht gespeichert werden: ' + phasenError.message);
           }
+        } else {
+          alert('Termin erfolgreich erstellt!');
         }
+      } else {
+        alert('Termin erfolgreich erstellt!');
       }
-      
-      alert('Termin erfolgreich erstellt!');
 
       // Kalender-Auslastungs-Cache leeren, damit neue Daten geladen werden
       this.kalenderAuslastungCache = {};
@@ -2311,16 +2849,22 @@ class App {
 
         // Dringlichkeit-Badge
         const terminDringlichkeit = this.getDringlichkeitBadge(termin.dringlichkeit);
+        
+        // Folgetermin-Badge
+        const terminFolgetermin = this.getFolgeterminBadge(termin.arbeit);
+        
+        // Arbeit-Anzeige formatieren
+        const arbeitAnzeige = this.formatArbeitAnzeige(termin.arbeit);
 
         row.innerHTML = `
           <td style="text-align: center; font-size: 20px;">${zeitStatusIcon}</td>
-          <td><strong>${termin.termin_nr || '-'}</strong>${terminDringlichkeit}</td>
+          <td><strong>${termin.termin_nr || '-'}</strong>${terminDringlichkeit}${terminFolgetermin}</td>
           <td>${termin.datum}</td>
           <td>${termin.kunde_name}</td>
           <td>${termin.kennzeichen}</td>
           <td>${termin.kilometerstand || '-'}</td>
           <td>${termin.ersatzauto ? 'Ja' : 'Nein'}</td>
-          <td>${termin.arbeit}</td>
+          <td title="${termin.arbeit || ''}">${arbeitAnzeige}</td>
           <td>${this.formatZeit(zeitAnzeige)}</td>
           <td>${termin.mitarbeiter_name || '-'}</td>
           <td><span class="status-badge ${statusClass}">${termin.status}</span></td>
@@ -2384,7 +2928,7 @@ class App {
       }
     }
     
-    filterDatum.value = currentDate.toISOString().split('T')[0];
+    filterDatum.value = this.formatDateLocal(currentDate);
     this.loadTermine();
     this.updateZeitverwaltungDatumAnzeige();
   }
@@ -2398,7 +2942,7 @@ class App {
       today.setDate(today.getDate() + 1);
     }
     
-    filterDatum.value = today.toISOString().split('T')[0];
+    filterDatum.value = this.formatDateLocal(today);
     this.loadTermine();
     this.updateZeitverwaltungDatumAnzeige();
   }
@@ -2434,16 +2978,22 @@ class App {
 
           // Dringlichkeit-Badge
           const offeneTerminDringlichkeit = this.getDringlichkeitBadge(termin.dringlichkeit);
+          
+          // Folgetermin-Badge
+          const offeneTerminFolgetermin = this.getFolgeterminBadge(termin.arbeit);
+          
+          // Arbeit-Anzeige formatieren
+          const arbeitAnzeige = this.formatArbeitAnzeige(termin.arbeit);
 
           row.innerHTML = `
             <td style="text-align: center; font-size: 20px;">${zeitStatusIcon}</td>
-            <td><strong>${termin.termin_nr || '-'}</strong>${offeneTerminDringlichkeit}</td>
+            <td><strong>${termin.termin_nr || '-'}</strong>${offeneTerminDringlichkeit}${offeneTerminFolgetermin}</td>
             <td>${termin.datum}</td>
             <td>${termin.kunde_name}</td>
             <td>${termin.kennzeichen}</td>
             <td>${termin.kilometerstand || '-'}</td>
             <td>${termin.ersatzauto ? 'Ja' : 'Nein'}</td>
-            <td>${termin.arbeit}</td>
+            <td title="${termin.arbeit || ''}">${arbeitAnzeige}</td>
             <td>${this.formatZeit(zeitAnzeige)}</td>
             <td>${termin.mitarbeiter_name || '-'}</td>
             <td><span class="status-badge ${statusClass}">${termin.status}</span></td>
@@ -2917,8 +3467,167 @@ class App {
           section.style.display = 'none';
         }
       }
+
+      // Lade nicht zugeordnete Termine für diesen Tag
+      await this.loadNichtZugeordneteTermine(datum, data);
+
     } catch (error) {
       console.error('Fehler beim Laden der Auslastung:', error);
+    }
+  }
+
+  async loadNichtZugeordneteTermine(datum, auslastungData) {
+    const section = document.getElementById('nichtZugeordnetSection');
+    const container = document.getElementById('nichtZugeordnetContainer');
+    const restkapazitaetDetails = document.getElementById('restkapazitaetDetails');
+    
+    if (!section || !container) return;
+
+    try {
+      // Hole alle Termine für den Tag
+      const allTermine = await TermineService.getAll();
+      const termineAmTag = allTermine.filter(t => t.datum === datum);
+      
+      // Finde Termine ohne Mitarbeiter-Zuordnung
+      const nichtZugeordnet = termineAmTag.filter(termin => {
+        // Prüfe ob mitarbeiter_id gesetzt ist
+        if (termin.mitarbeiter_id) return false;
+        
+        // Prüfe auch arbeitszeiten_details auf Zuordnungen
+        if (termin.arbeitszeiten_details) {
+          try {
+            const details = JSON.parse(termin.arbeitszeiten_details);
+            if (details._gesamt_mitarbeiter_id) return false;
+            // Prüfe auch einzelne Arbeiten
+            for (const key in details) {
+              if (!key.startsWith('_') && typeof details[key] === 'object' && details[key].mitarbeiter_id) {
+                return false;
+              }
+            }
+          } catch (e) {
+            // Ignoriere Parse-Fehler
+          }
+        }
+        
+        return true;
+      });
+
+      // Zeige nicht zugeordnete Termine
+      if (nichtZugeordnet.length > 0) {
+        section.style.display = 'block';
+        
+        let html = `<div class="nicht-zugeordnet-liste">`;
+        let gesamtNichtZugeordnetMinuten = 0;
+        
+        nichtZugeordnet.forEach(termin => {
+          const zeit = termin.tatsaechliche_zeit || termin.geschaetzte_zeit || 0;
+          gesamtNichtZugeordnetMinuten += zeit;
+          
+          const kundenName = termin.kunde_name || 'Unbekannt';
+          const uhrzeitAnzeige = termin.bring_zeit || termin.abholung_zeit || '';
+          
+          html += `
+            <div class="nicht-zugeordnet-item">
+              <div class="nz-info">
+                <span class="nz-zeit">${uhrzeitAnzeige || '--:--'}</span>
+                <span class="nz-kunde">${this.escapeHtml(kundenName)}</span>
+                <span class="nz-kennzeichen">${this.escapeHtml(termin.kennzeichen || '-')}</span>
+              </div>
+              <div class="nz-arbeit">${this.escapeHtml(termin.arbeit || '-')}</div>
+              <div class="nz-dauer">${this.formatMinutesToHours(zeit)}</div>
+            </div>
+          `;
+        });
+        
+        html += `</div>`;
+        html += `<div class="nz-gesamt">
+          <strong>Gesamt nicht zugeordnet:</strong> ${this.formatMinutesToHours(gesamtNichtZugeordnetMinuten)} 
+          (${nichtZugeordnet.length} ${nichtZugeordnet.length === 1 ? 'Termin' : 'Termine'})
+        </div>`;
+        
+        container.innerHTML = html;
+      } else {
+        // Keine nicht zugeordneten Termine
+        section.style.display = 'block';
+        container.innerHTML = `<div class="alle-zugeordnet">✅ Alle Termine sind Mitarbeitern zugeordnet</div>`;
+      }
+
+      // Berechne Restkapazität pro Mitarbeiter
+      if (restkapazitaetDetails && auslastungData) {
+        let restHtml = '<div class="restkapazitaet-grid">';
+        let gesamtRestkapazitaet = 0;
+        
+        // Mitarbeiter Restkapazität
+        if (auslastungData.mitarbeiter_auslastung && Array.isArray(auslastungData.mitarbeiter_auslastung)) {
+          auslastungData.mitarbeiter_auslastung.forEach(ma => {
+            if (ma.ist_abwesend) return;
+            
+            const rest = Math.max(0, (ma.verfuegbar_minuten || 0) - (ma.belegt_minuten || 0));
+            gesamtRestkapazitaet += rest;
+            
+            const restColor = rest > 120 ? '#2e7d32' : rest > 60 ? '#f57c00' : '#c62828';
+            
+            restHtml += `
+              <div class="restkapazitaet-item">
+                <span class="rk-name">👤 ${ma.mitarbeiter_name}</span>
+                <span class="rk-rest" style="color: ${restColor}; font-weight: bold;">${this.formatMinutesToHours(rest)} frei</span>
+              </div>
+            `;
+          });
+        }
+        
+        // Lehrlinge Restkapazität
+        const lehrlingeAuslastung = auslastungData.lehrlinge_auslastung || [];
+        if (Array.isArray(lehrlingeAuslastung)) {
+          lehrlingeAuslastung.forEach(la => {
+            if (la.ist_abwesend) return;
+            
+            const rest = Math.max(0, (la.verfuegbar_minuten || 0) - (la.belegt_minuten || 0));
+            gesamtRestkapazitaet += rest;
+            
+            const restColor = rest > 120 ? '#2e7d32' : rest > 60 ? '#f57c00' : '#c62828';
+            
+            restHtml += `
+              <div class="restkapazitaet-item">
+                <span class="rk-name">🎓 ${la.lehrling_name || la.name}</span>
+                <span class="rk-rest" style="color: ${restColor}; font-weight: bold;">${this.formatMinutesToHours(rest)} frei</span>
+              </div>
+            `;
+          });
+        }
+        
+        restHtml += '</div>';
+        
+        // Gesamt Restkapazität des Tages
+        const gesamtVerfuegbar = auslastungData.verfuegbar_minuten || 0;
+        const gesamtBelegt = (auslastungData.geplant_minuten || 0) + (auslastungData.in_arbeit_minuten || 0) + (auslastungData.abgeschlossen_minuten || 0);
+        const tagesRest = Math.max(0, gesamtVerfuegbar);
+        
+        restHtml += `
+          <div class="restkapazitaet-gesamt">
+            <div class="rkg-item">
+              <span>Gesamtkapazität:</span>
+              <strong>${this.formatMinutesToHours(auslastungData.gesamt_minuten || 0)}</strong>
+            </div>
+            <div class="rkg-item">
+              <span>Bereits verplant:</span>
+              <strong>${this.formatMinutesToHours(gesamtBelegt)}</strong>
+            </div>
+            <div class="rkg-item highlight">
+              <span>🕐 Noch verfügbar:</span>
+              <strong style="color: ${tagesRest > 120 ? '#2e7d32' : tagesRest > 60 ? '#f57c00' : '#c62828'}">
+                ${this.formatMinutesToHours(tagesRest)}
+              </strong>
+            </div>
+          </div>
+        `;
+        
+        restkapazitaetDetails.innerHTML = restHtml;
+      }
+
+    } catch (error) {
+      console.error('Fehler beim Laden nicht zugeordneter Termine:', error);
+      section.style.display = 'none';
     }
   }
 
@@ -3002,7 +3711,7 @@ class App {
 
   async loadDashboardStats() {
     try {
-      const today = new Date().toISOString().split('T')[0];
+      const today = this.formatDateLocal(new Date());
 
       const termineHeute = await TermineService.getAll(today);
       const allKunden = await KundenService.getAll();
@@ -3038,7 +3747,7 @@ class App {
 
   async loadDashboardTermineHeute() {
     try {
-      const today = new Date().toISOString().split('T')[0];
+      const today = this.formatDateLocal(new Date());
       const termine = await TermineService.getAll(today);
       termine.forEach(t => {
         this.termineById[t.id] = t;
@@ -3059,15 +3768,19 @@ class App {
           const row = tbody.insertRow();
           const statusClass = `status-${termin.status}`;
           const zeitAnzeige = termin.tatsaechliche_zeit || termin.geschaetzte_zeit;
+          
+          // Folgetermin-Badge für Dashboard
+          const folgeterminBadge = this.getFolgeterminBadge(termin.arbeit);
+          const arbeitAnzeige = this.formatArbeitAnzeige(termin.arbeit);
 
           row.innerHTML = `
-            <td><strong>${termin.termin_nr || '-'}</strong></td>
+            <td><strong>${termin.termin_nr || '-'}</strong>${folgeterminBadge}</td>
             <td>${termin.abholung_typ === 'warten' ? 'Ja' : 'Nein'}</td>
             <td>${termin.bring_zeit || '-'}</td>
             <td>${termin.abholung_zeit || '-'}</td>
             <td>${termin.kunde_name}</td>
             <td>${termin.kennzeichen}</td>
-            <td>${termin.arbeit}</td>
+            <td title="${termin.arbeit || ''}">${arbeitAnzeige}</td>
             <td>${this.formatZeit(zeitAnzeige)}</td>
             <td class="dashboard-action-cell">
               <div class="dashboard-action-grid">
@@ -3130,7 +3843,7 @@ class App {
 
   async loadHeuteTermine() {
     try {
-      const today = new Date().toISOString().split('T')[0];
+      const today = this.formatDateLocal(new Date());
       const heuteDatumEl = document.getElementById('heuteDatum');
       if (heuteDatumEl) {
         const date = new Date(today);
@@ -3147,11 +3860,8 @@ class App {
         this.termineById[t.id] = t;
       });
 
-      // Filtere abgeschlossene Termine aus
-      const aktiveTermine = termine.filter(t => t.status !== 'abgeschlossen');
-
       // Sortiere nach Bringzeit (Termine mit Bringzeit zuerst, dann nach Zeit sortiert)
-      const sortedTermine = aktiveTermine.sort((a, b) => {
+      const sortedTermine = [...termine].sort((a, b) => {
         const zeitA = a.bring_zeit || '';
         const zeitB = b.bring_zeit || '';
         
@@ -3164,9 +3874,12 @@ class App {
         return zeitA.localeCompare(zeitB);
       });
 
-      this.heuteTermine = sortedTermine;
-      this.renderHeuteTabelle(sortedTermine);
-      this.renderHeuteKarten(sortedTermine);
+      // Für Karten nur offene Termine
+      const aktiveTermine = termine.filter(t => t.status !== 'abgeschlossen');
+
+      this.heuteTermine = aktiveTermine;
+      this.renderHeuteTabelle(sortedTermine); // Alle Termine (getrennt nach Status)
+      this.renderHeuteKarten(aktiveTermine);  // Nur offene Termine für Karten
       this.updateHeuteInfoKacheln(sortedTermine);
     } catch (error) {
       console.error('Fehler beim Laden der heutigen Termine:', error);
@@ -3183,94 +3896,123 @@ class App {
 
   renderHeuteTabelle(termine) {
     const tbody = document.querySelector('#heuteTermineTable tbody');
+    const abgeschlossenSection = document.getElementById('abgeschlossenSection');
+    const abgeschlossenTbody = document.querySelector('#heuteAbgeschlossenTable tbody');
+    
     if (!tbody) return;
 
     tbody.innerHTML = '';
+    if (abgeschlossenTbody) abgeschlossenTbody.innerHTML = '';
 
-    if (termine.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="9" class="loading">Keine Termine für heute</td></tr>';
-      return;
+    // Trenne offene und abgeschlossene Termine
+    const offeneTermine = termine.filter(t => t.status !== 'abgeschlossen');
+    const abgeschlosseneTermine = termine.filter(t => t.status === 'abgeschlossen');
+
+    // Rendere offene Termine
+    if (offeneTermine.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="9" class="loading">Keine offenen Termine für heute 🎉</td></tr>';
+    } else {
+      offeneTermine.forEach(termin => {
+        this.renderHeuteTerminRow(tbody, termin, true);
+      });
     }
 
-    termine.forEach(termin => {
-      const row = tbody.insertRow();
-      const statusClass = `status-${termin.status || 'geplant'}`;
-      const zeitAnzeige = termin.tatsaechliche_zeit || termin.geschaetzte_zeit;
-      const abholungTypText = {
-        'bringen': 'Kunde bringt/holt selbst',
-        'hol_bring': 'Hol- und Bringservice',
-        'ruecksprache': 'Telefonische Rücksprache',
-        'warten': 'Kunde wartet'
-      }[termin.abholung_typ] || termin.abholung_typ || '-';
-
-      // Hervorhebung für Bringzeit
-      const bringZeitDisplay = termin.bring_zeit
-        ? `<strong style="color: var(--accent); font-size: 1.1em;">${termin.bring_zeit}</strong>`
-        : '<span style="color: #999;">-</span>';
-
-      // Kunde wartet Anzeige
-      const kundeWartet = termin.abholung_typ === 'warten'
-        ? '<span style="color: #28a745; font-size: 1.2em; font-weight: bold;">✓</span>'
-        : '';
-
-      // Dringlichkeit-Badge erstellen
-      const dringlichkeitBadge = this.getDringlichkeitBadge(termin.dringlichkeit);
-
-      const aktuellerStatus = termin.status || 'geplant';
-      const statusTexte = {
-        'geplant': 'Geplant',
-        'in_arbeit': 'In Arbeit',
-        'abgeschlossen': 'Abgeschlossen',
-        'abgesagt': 'Abgesagt'
-      };
-
-      row.innerHTML = `
-        <td>${bringZeitDisplay}</td>
-        <td>${termin.kunde_name || '-'}${dringlichkeitBadge}</td>
-        <td>${termin.kunde_telefon || '-'}</td>
-        <td>${termin.kennzeichen || '-'}</td>
-        <td style="text-align: center;">${kundeWartet}</td>
-        <td style="max-width: 150px; overflow: hidden; text-overflow: ellipsis;" title="${termin.arbeit || ''}">${termin.arbeit || '-'}</td>
-        <td>${this.formatZeit(zeitAnzeige)}</td>
-        <td>
-          <span class="status-badge ${statusClass}" data-termin-id="${termin.id}" data-status="${aktuellerStatus}" style="cursor: pointer; user-select: none;">
-            ${statusTexte[aktuellerStatus]}
-          </span>
-          <select class="status-select-dropdown" data-termin-id="${termin.id}" style="display: none; padding: 6px 10px; border-radius: 4px; border: 1px solid #ddd; font-size: 0.9em; min-width: 120px;">
-            <option value="geplant" ${aktuellerStatus === 'geplant' ? 'selected' : ''}>Geplant</option>
-            <option value="in_arbeit" ${aktuellerStatus === 'in_arbeit' ? 'selected' : ''}>In Arbeit</option>
-            <option value="abgeschlossen" ${aktuellerStatus === 'abgeschlossen' ? 'selected' : ''}>Abgeschlossen</option>
-            <option value="abgesagt" ${aktuellerStatus === 'abgesagt' ? 'selected' : ''}>Abgesagt</option>
-          </select>
-        </td>
-        <td>
-          <button class="btn btn-edit" onclick="app.showTerminDetails(${termin.id})">Details</button>
-        </td>
-      `;
-
-      // Event-Listener für Status-Badge Klick
-      const statusBadge = row.querySelector('.status-badge');
-      const statusDropdown = row.querySelector('.status-select-dropdown');
-
-      if (statusBadge && statusDropdown) {
-        statusBadge.addEventListener('click', () => {
-          statusBadge.style.display = 'none';
-          statusDropdown.style.display = 'inline-block';
-          statusDropdown.focus();
+    // Rendere abgeschlossene Termine in separate Tabelle
+    if (abgeschlossenSection && abgeschlossenTbody) {
+      if (abgeschlosseneTermine.length > 0) {
+        abgeschlossenSection.style.display = 'block';
+        abgeschlosseneTermine.forEach(termin => {
+          this.renderHeuteTerminRow(abgeschlossenTbody, termin, false);
         });
-
-        statusDropdown.addEventListener('change', async (e) => {
-          const terminId = parseInt(e.target.dataset.terminId);
-          const neuerStatus = e.target.value;
-          await this.updateTerminStatus(terminId, neuerStatus);
-        });
-
-        statusDropdown.addEventListener('blur', () => {
-          statusDropdown.style.display = 'none';
-          statusBadge.style.display = 'inline-block';
-        });
+      } else {
+        abgeschlossenSection.style.display = 'none';
       }
-    });
+    }
+  }
+
+  renderHeuteTerminRow(tbody, termin, showWartet = true) {
+    const row = tbody.insertRow();
+    const statusClass = `status-${termin.status || 'geplant'}`;
+    const zeitAnzeige = termin.tatsaechliche_zeit || termin.geschaetzte_zeit;
+
+    // Hervorhebung für Bringzeit
+    const bringZeitDisplay = termin.bring_zeit
+      ? `<strong style="color: var(--accent); font-size: 1.1em;">${termin.bring_zeit}</strong>`
+      : '<span style="color: #999;">-</span>';
+
+    // Kunde wartet Anzeige
+    const kundeWartet = termin.abholung_typ === 'warten'
+      ? '<span style="color: #28a745; font-size: 1.2em; font-weight: bold;">✓</span>'
+      : '';
+
+    // Dringlichkeit-Badge erstellen
+    const dringlichkeitBadge = this.getDringlichkeitBadge(termin.dringlichkeit);
+
+    // Folgetermin-Badge erstellen
+    const folgeterminBadge = this.getFolgeterminBadge(termin.arbeit);
+
+    const aktuellerStatus = termin.status || 'geplant';
+    const statusTexte = {
+      'geplant': 'Geplant',
+      'in_arbeit': 'In Arbeit',
+      'abgeschlossen': 'Abgeschlossen',
+      'abgesagt': 'Abgesagt'
+    };
+
+    // Arbeit-Anzeige (ohne Folgetermin-Prefix für bessere Lesbarkeit)
+    const arbeitAnzeige = this.formatArbeitAnzeige(termin.arbeit);
+
+    // Wartet-Spalte nur bei offenen Terminen
+    const wartetCell = showWartet 
+      ? `<td style="text-align: center;">${kundeWartet}</td>` 
+      : '';
+
+    row.innerHTML = `
+      <td>${bringZeitDisplay}</td>
+      <td>${termin.kunde_name || '-'}${dringlichkeitBadge}${folgeterminBadge}</td>
+      <td>${termin.kunde_telefon || '-'}</td>
+      <td>${termin.kennzeichen || '-'}</td>
+      ${wartetCell}
+      <td style="max-width: 150px; overflow: hidden; text-overflow: ellipsis;" title="${termin.arbeit || ''}">${arbeitAnzeige}</td>
+      <td>${this.formatZeit(zeitAnzeige)}</td>
+      <td>
+        <span class="status-badge ${statusClass}" data-termin-id="${termin.id}" data-status="${aktuellerStatus}" style="cursor: pointer; user-select: none;">
+          ${statusTexte[aktuellerStatus]}
+        </span>
+        <select class="status-select-dropdown" data-termin-id="${termin.id}" style="display: none; padding: 6px 10px; border-radius: 4px; border: 1px solid #ddd; font-size: 0.9em; min-width: 120px;">
+          <option value="geplant" ${aktuellerStatus === 'geplant' ? 'selected' : ''}>Geplant</option>
+          <option value="in_arbeit" ${aktuellerStatus === 'in_arbeit' ? 'selected' : ''}>In Arbeit</option>
+          <option value="abgeschlossen" ${aktuellerStatus === 'abgeschlossen' ? 'selected' : ''}>Abgeschlossen</option>
+          <option value="abgesagt" ${aktuellerStatus === 'abgesagt' ? 'selected' : ''}>Abgesagt</option>
+        </select>
+      </td>
+      <td>
+        <button class="btn btn-edit" onclick="app.showTerminDetails(${termin.id})">Details</button>
+      </td>
+    `;
+
+    // Event-Listener für Status-Badge Klick
+    const statusBadge = row.querySelector('.status-badge');
+    const statusDropdown = row.querySelector('.status-select-dropdown');
+
+    if (statusBadge && statusDropdown) {
+      statusBadge.addEventListener('click', () => {
+        statusBadge.style.display = 'none';
+        statusDropdown.style.display = 'inline-block';
+        statusDropdown.focus();
+      });
+
+      statusDropdown.addEventListener('change', async (e) => {
+        const terminId = parseInt(e.target.dataset.terminId);
+        const neuerStatus = e.target.value;
+        await this.updateTerminStatus(terminId, neuerStatus);
+      });
+
+      statusDropdown.addEventListener('blur', () => {
+        statusDropdown.style.display = 'none';
+        statusBadge.style.display = 'inline-block';
+      });
+    }
   }
 
   renderHeuteKarten(termine) {
@@ -3309,11 +4051,21 @@ class App {
         ? '<div style="background: #28a745; color: white; padding: 8px; text-align: center; font-weight: bold; border-radius: 5px 5px 0 0;">⚠️ KUNDE WARTET ⚠️</div>'
         : '';
 
+      // Folgetermin-Banner (wenn es ein Folgetermin ist)
+      const folgeterminMatch = termin.arbeit ? termin.arbeit.match(/\[Folgetermin zu (T-\d{4}-\d{3})\]/) : null;
+      const folgeterminBanner = folgeterminMatch
+        ? `<div style="background: #ff9800; color: white; padding: 8px; text-align: center; font-weight: bold; border-radius: ${termin.abholung_typ === 'warten' ? '0' : '5px 5px 0 0'};">🔗 FOLGETERMIN von ${folgeterminMatch[1]}</div>`
+        : '';
+
       // Dringlichkeit-Badge für Karten
       const karteDringlichkeitBadge = this.getDringlichkeitBadge(termin.dringlichkeit);
+      
+      // Arbeit-Anzeige formatieren
+      const arbeitAnzeige = this.formatArbeitAnzeige(termin.arbeit);
 
       karte.innerHTML = `
         ${kundeWartetBanner}
+        ${folgeterminBanner}
         <div class="heute-karte-header">
           <div class="heute-karte-nr"><strong>${termin.termin_nr || '-'}</strong>${karteDringlichkeitBadge}</div>
           <div class="status-container" style="position: relative;">
@@ -3342,7 +4094,7 @@ class App {
           </div>
           <div class="heute-karte-section">
             <h4>Reparatur</h4>
-            <p><strong>Arbeit(en):</strong> ${termin.arbeit || '-'}</p>
+            <p><strong>Arbeit(en):</strong> ${arbeitAnzeige}</p>
             <p><strong>Umfang/Details:</strong> ${termin.umfang || '-'}</p>
             <p><strong>Zeit:</strong> ${this.formatZeit(zeitAnzeige)}</p>
           </div>
@@ -3538,7 +4290,7 @@ class App {
     try {
       const allTermine = await TermineService.getAll();
       const weekDays = this.getWeekDays();
-      const today = new Date().toISOString().split('T')[0];
+      const today = this.formatDateLocal(new Date());
 
       for (const [index, day] of weekDays.entries()) {
         const dayName = ['montag', 'dienstag', 'mittwoch', 'donnerstag', 'freitag', 'samstag'][index];
@@ -3591,7 +4343,7 @@ class App {
       }
 
       days.push({
-        datum: day.toISOString().split('T')[0],
+        datum: this.formatDateLocal(day),
         formatted: day.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' }),
         weekday: day.toLocaleDateString('de-DE', { weekday: 'short' })
       });
@@ -3621,7 +4373,7 @@ class App {
         const monthNames = ['Jan', 'Feb', 'Mär', 'Apr', 'Mai', 'Jun', 'Jul', 'Aug', 'Sep', 'Okt', 'Nov', 'Dez'];
         
         week.push({
-          datum: day.toISOString().split('T')[0],
+          datum: this.formatDateLocal(day),
           dayNum: day.getDate(),
           monthShort: monthNames[day.getMonth()],
           dayOfWeek: day.getDay() // 1=Mo, 2=Di, ..., 6=Sa
@@ -3641,7 +4393,7 @@ class App {
     try {
       const allTermine = await TermineService.getAll();
       const weeks = this.getWeeksForMonthView();
-      const today = new Date().toISOString().split('T')[0];
+      const today = this.formatDateLocal(new Date());
 
       // Sammle alle Tage für Auslastungsabfrage
       const allDays = weeks.flat();
@@ -3727,16 +4479,23 @@ class App {
     const optionen = [];
     const seen = new Set();
 
+    // Kundennamen hinzufügen
     (this.kundenCache || []).forEach(kunde => {
       if (kunde.name && !seen.has(kunde.name.toLowerCase())) {
-        optionen.push({ value: kunde.name, label: `Kunde: ${kunde.name}` });
+        optionen.push({ value: kunde.name, label: `${kunde.name}` });
         seen.add(kunde.name.toLowerCase());
+      }
+      // Kennzeichen aus Kundentabelle hinzufügen
+      if (kunde.kennzeichen && !seen.has(kunde.kennzeichen.toLowerCase())) {
+        optionen.push({ value: kunde.kennzeichen, label: `${kunde.kennzeichen} (${kunde.name})` });
+        seen.add(kunde.kennzeichen.toLowerCase());
       }
     });
 
+    // Kennzeichen aus Terminen hinzufügen
     (this.termineCache || []).forEach(termin => {
       if (termin.kennzeichen && !seen.has(termin.kennzeichen.toLowerCase())) {
-        optionen.push({ value: termin.kennzeichen, label: `Kennzeichen: ${termin.kennzeichen}` });
+        optionen.push({ value: termin.kennzeichen, label: `${termin.kennzeichen}` });
         seen.add(termin.kennzeichen.toLowerCase());
       }
     });
@@ -3758,28 +4517,57 @@ class App {
     }
 
     const lower = eingabe.toLowerCase();
-    const kundeMatch = (this.kundenCache || []).find(kunde => kunde.name && kunde.name.toLowerCase() === lower);
+    
+    // Erst exakter Match versuchen
+    let kundeMatch = (this.kundenCache || []).find(kunde => kunde.name && kunde.name.toLowerCase() === lower);
+    
+    // Falls kein exakter Match, Teilsuche (beginnt mit oder enthält)
+    if (!kundeMatch) {
+      kundeMatch = (this.kundenCache || []).find(kunde => 
+        kunde.name && kunde.name.toLowerCase().includes(lower)
+      );
+    }
+    
+    // Suche auch nach Kennzeichen in Kundendaten
+    if (!kundeMatch) {
+      kundeMatch = (this.kundenCache || []).find(kunde => 
+        kunde.kennzeichen && kunde.kennzeichen.toLowerCase() === lower
+      );
+    }
+    
     if (kundeMatch) {
       document.getElementById('kunde_id').value = kundeMatch.id;
       document.getElementById('neuer_kunde_telefon').value = kundeMatch.telefon || '';
       this.showGefundenerKunde(kundeMatch.name, kundeMatch.telefon);
 
-      const letztesKennzeichen = this.findLetztesKennzeichen(kundeMatch.id, kundeMatch.name);
-      if (letztesKennzeichen) {
-        document.getElementById('kennzeichen').value = letztesKennzeichen;
-
-        // Finde und zeige letzten KM-Stand als Hinweis (grau)
-        const letzterKmStand = this.findLetztenKmStand(kundeMatch.id, kundeMatch.name, letztesKennzeichen);
-        const kmStandInput = document.getElementById('kilometerstand');
-        if (letzterKmStand && kmStandInput) {
-          kmStandInput.value = ''; // Leeres value - wird nicht submitted
-          kmStandInput.placeholder = `Letzter KM-Stand: ${letzterKmStand.toLocaleString('de-DE')} km`;
-          kmStandInput.classList.add('has-previous-value');
-        }
+      // Erst Kennzeichen aus Kundendaten prüfen, dann aus Terminen
+      let kennzeichen = kundeMatch.kennzeichen || null;
+      if (!kennzeichen) {
+        kennzeichen = this.findLetztesKennzeichen(kundeMatch.id, kundeMatch.name);
       }
+      
+      if (kennzeichen) {
+        document.getElementById('kennzeichen').value = kennzeichen;
+      }
+      
+      // Fahrzeugtyp aus Kundendaten setzen
+      if (kundeMatch.fahrzeugtyp) {
+        document.getElementById('fahrzeugtyp').value = kundeMatch.fahrzeugtyp;
+      }
+
+      // Finde und zeige letzten KM-Stand als Hinweis (grau)
+      const letzterKmStand = this.findLetztenKmStand(kundeMatch.id, kundeMatch.name, kennzeichen);
+      const kmStandInput = document.getElementById('kilometerstand');
+      if (letzterKmStand && kmStandInput) {
+        kmStandInput.value = ''; // Leeres value - wird nicht submitted
+        kmStandInput.placeholder = `Letzter KM-Stand: ${letzterKmStand.toLocaleString('de-DE')} km`;
+        kmStandInput.classList.add('has-previous-value');
+      }
+      
       return;
     }
 
+    // Suche Kennzeichen in Terminen
     const terminMatch = (this.termineCache || []).find(termin =>
       termin.kennzeichen && termin.kennzeichen.toLowerCase() === lower
     );
@@ -3791,6 +4579,11 @@ class App {
           document.getElementById('kunde_id').value = kunde.id;
           document.getElementById('neuer_kunde_telefon').value = kunde.telefon || '';
           this.showGefundenerKunde(kunde.name, kunde.telefon);
+          
+          // Fahrzeugtyp aus Kundendaten setzen
+          if (kunde.fahrzeugtyp) {
+            document.getElementById('fahrzeugtyp').value = kunde.fahrzeugtyp;
+          }
 
           // Finde und zeige letzten KM-Stand als Hinweis (grau)
           const letzterKmStand = this.findLetztenKmStand(kunde.id, kunde.name, terminMatch.kennzeichen);
@@ -3806,6 +4599,33 @@ class App {
         document.getElementById('terminSchnellsuche').value = terminMatch.kunde_name;
         this.showGefundenerKunde(terminMatch.kunde_name, null);
       }
+      return;
+    }
+    
+    // Suche Kennzeichen direkt in Kundentabelle (für importierte Kunden ohne Termine)
+    const kundeByKennzeichen = (this.kundenCache || []).find(kunde =>
+      kunde.kennzeichen && kunde.kennzeichen.toLowerCase() === lower
+    );
+    if (kundeByKennzeichen) {
+      document.getElementById('kennzeichen').value = kundeByKennzeichen.kennzeichen;
+      document.getElementById('kunde_id').value = kundeByKennzeichen.id;
+      document.getElementById('neuer_kunde_telefon').value = kundeByKennzeichen.telefon || '';
+      this.showGefundenerKunde(kundeByKennzeichen.name, kundeByKennzeichen.telefon);
+      
+      // Fahrzeugtyp aus Kundendaten setzen
+      if (kundeByKennzeichen.fahrzeugtyp) {
+        document.getElementById('fahrzeugtyp').value = kundeByKennzeichen.fahrzeugtyp;
+      }
+      
+      // Finde und zeige letzten KM-Stand als Hinweis (grau)
+      const letzterKmStand = this.findLetztenKmStand(kundeByKennzeichen.id, kundeByKennzeichen.name, kundeByKennzeichen.kennzeichen);
+      const kmStandInput = document.getElementById('kilometerstand');
+      if (letzterKmStand && kmStandInput) {
+        kmStandInput.value = '';
+        kmStandInput.placeholder = `Letzter KM-Stand: ${letzterKmStand.toLocaleString('de-DE')} km`;
+        kmStandInput.classList.add('has-previous-value');
+      }
+      
       return;
     }
 
@@ -3857,10 +4677,21 @@ class App {
     
     const lower = eingabe.toLowerCase();
     
-    // Prüfe ob Kunde existiert
-    const kundeMatch = (this.kundenCache || []).find(kunde => 
+    // Prüfe ob Kunde existiert (exakt oder Teilmatch)
+    let kundeMatch = (this.kundenCache || []).find(kunde => 
       kunde.name && kunde.name.toLowerCase() === lower
     );
+    if (!kundeMatch) {
+      kundeMatch = (this.kundenCache || []).find(kunde => 
+        kunde.name && kunde.name.toLowerCase().includes(lower)
+      );
+    }
+    // Suche auch nach Kennzeichen in Kundendaten
+    if (!kundeMatch) {
+      kundeMatch = (this.kundenCache || []).find(kunde => 
+        kunde.kennzeichen && kunde.kennzeichen.toLowerCase() === lower
+      );
+    }
     
     if (kundeMatch) {
       statusEl.textContent = '✓ Kunde gefunden';
@@ -3869,7 +4700,7 @@ class App {
       return;
     }
     
-    // Prüfe ob Kennzeichen existiert
+    // Prüfe ob Kennzeichen existiert in Terminen
     const terminMatch = (this.termineCache || []).find(termin =>
       termin.kennzeichen && termin.kennzeichen.toLowerCase() === lower
     );
@@ -4107,7 +4938,7 @@ class App {
     try {
       const [autos, heuteVerfuegbarkeit] = await Promise.all([
         ErsatzautosService.getAll(),
-        ErsatzautosService.getVerfuegbarkeit(new Date().toISOString().split('T')[0])
+        ErsatzautosService.getVerfuegbarkeit(this.formatDateLocal(new Date()))
       ]);
       
       // Dashboard-Karten aktualisieren
@@ -4151,7 +4982,7 @@ class App {
       return;
     }
     
-    const heute = new Date().toISOString().split('T')[0];
+    const heute = this.formatDateLocal(new Date());
     
     container.innerHTML = autos.map(auto => {
       // Prüfen ob Sperrung abgelaufen ist
@@ -4224,7 +5055,7 @@ class App {
     const heute = new Date();
     const morgen = new Date(heute);
     morgen.setDate(morgen.getDate() + 1);
-    const minDatum = heute.toISOString().split('T')[0];
+    const minDatum = this.formatDateLocal(heute);
     
     const modal = document.createElement('div');
     modal.id = 'sperrenModal';
@@ -4319,7 +5150,7 @@ class App {
   async sperrenFuerTage(id, tage) {
     const bisDatum = new Date();
     bisDatum.setDate(bisDatum.getDate() + tage);
-    const bisDatumStr = bisDatum.toISOString().split('T')[0];
+    const bisDatumStr = this.formatDateLocal(bisDatum);
     
     // Datum-Input setzen und Vorschau aktualisieren
     const datumInput = document.getElementById('sperrenBisDatum');
@@ -4378,7 +5209,7 @@ class App {
         return;
       }
       
-      const heute = new Date().toISOString().split('T')[0];
+      const heute = this.formatDateLocal(new Date());
       
       container.innerHTML = buchungen.map(buchung => {
         const vonDatum = new Date(buchung.datum);
@@ -4560,7 +5391,7 @@ class App {
     try {
       // Generiere die nächsten 30 Tage (Mo-Sa)
       const days = this.getWeeksForMonthView().flat();
-      const today = new Date().toISOString().split('T')[0];
+      const today = this.formatDateLocal(new Date());
       
       // Lade Verfügbarkeit für alle Tage parallel
       const verfuegbarkeitPromises = days.map(day => 
@@ -4843,7 +5674,7 @@ class App {
     const maxDatum = new Date(heute);
     maxDatum.setDate(maxDatum.getDate() + 7);
 
-    const maxDatumString = maxDatum.toISOString().split('T')[0];
+    const maxDatumString = this.formatDateLocal(maxDatum);
 
     // Setze max-Attribut
     vonDatumInput.setAttribute('max', maxDatumString);
@@ -5336,14 +6167,14 @@ class App {
     const diff = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
     const monday = new Date(today);
     monday.setDate(today.getDate() + diff);
-    return monday.toISOString().split('T')[0];
+    return this.formatDateLocal(monday);
   }
 
   getWeekEnd() {
     const weekStart = new Date(this.getWeekStart());
     const friday = new Date(weekStart);
     friday.setDate(weekStart.getDate() + 4);
-    return friday.toISOString().split('T')[0];
+    return this.formatDateLocal(friday);
   }
 
   async openArbeitszeitenModal(terminId) {
@@ -5563,7 +6394,7 @@ class App {
       const phasenListe = document.getElementById('modalPhasenListe');
       if (phasenListe.children.length === 0) {
         const termin = this.termineById[this.currentTerminId];
-        this.addModalPhase({ datum: termin ? termin.datum : new Date().toISOString().split('T')[0] });
+        this.addModalPhase({ datum: termin ? termin.datum : this.formatDateLocal(new Date()) });
       }
     } else {
       section.style.display = 'none';
@@ -5576,7 +6407,7 @@ class App {
     const phaseId = this.modalPhasenCounter;
     
     const termin = this.termineById[this.currentTerminId];
-    const defaultDatum = existingPhase?.datum || (termin ? termin.datum : new Date().toISOString().split('T')[0]);
+    const defaultDatum = existingPhase?.datum || (termin ? termin.datum : this.formatDateLocal(new Date()));
     const bezeichnung = existingPhase?.bezeichnung || `Phase ${phaseId}`;
     const zeit = existingPhase?.geschaetzte_zeit || 60;
     const zeitStunden = (zeit / 60).toFixed(2);
@@ -5705,10 +6536,10 @@ class App {
         return;
       }
 
-      // Sortiere Termine nach Uhrzeit
+      // Sortiere Termine nach Uhrzeit (verwende bring_zeit oder abholung_zeit)
       termineForDay.sort((a, b) => {
-        const zeitA = a.uhrzeit || '23:59';
-        const zeitB = b.uhrzeit || '23:59';
+        const zeitA = a.bring_zeit || a.abholung_zeit || '23:59';
+        const zeitB = b.bring_zeit || b.abholung_zeit || '23:59';
         return zeitA.localeCompare(zeitB);
       });
 
@@ -5718,12 +6549,16 @@ class App {
         const isIntern = termin.ist_intern === 1 || termin.ist_intern === true;
         const statusClass = `status-${termin.status || 'geplant'}`;
         const internClass = isIntern ? 'intern' : '';
+        
+        // Uhrzeit ermitteln (bring_zeit hat Vorrang)
+        const uhrzeitAnzeige = termin.bring_zeit || termin.abholung_zeit || '';
 
-        // Berechne Dauer
+        // Berechne Dauer - verwende tatsächliche Zeit wenn vorhanden, sonst geschätzte Zeit
         let dauerText = '';
-        if (termin.geschaetzte_zeit) {
-          const stunden = Math.floor(termin.geschaetzte_zeit / 60);
-          const minuten = termin.geschaetzte_zeit % 60;
+        const arbeitszeit = termin.tatsaechliche_zeit || termin.geschaetzte_zeit;
+        if (arbeitszeit && arbeitszeit > 0) {
+          const stunden = Math.floor(arbeitszeit / 60);
+          const minuten = arbeitszeit % 60;
           if (stunden > 0 && minuten > 0) {
             dauerText = `${stunden}h ${minuten}min`;
           } else if (stunden > 0) {
@@ -5761,7 +6596,7 @@ class App {
         html += `
           <div class="tages-termin-card ${statusClass} ${internClass}">
             <div class="tages-termin-zeit">
-              <span class="zeit">${termin.uhrzeit || '--:--'}</span>
+              <span class="zeit">${uhrzeitAnzeige || '--:--'}</span>
               ${dauerText ? `<span class="dauer">${dauerText}</span>` : ''}
             </div>
             <div class="tages-termin-info">
@@ -5892,6 +6727,33 @@ class App {
         const phasen = this.getModalPhasenFromForm();
         if (phasen.length > 0) {
           await PhasenService.syncPhasen(this.currentTerminId, phasen);
+          
+          // Prüfe ob Folgetermine erstellt werden sollen
+          const erstelleFolgetermineCheckbox = document.getElementById('modalErstelleFolgetermineCheckbox');
+          if (erstelleFolgetermineCheckbox && erstelleFolgetermineCheckbox.checked && phasen.length > 1) {
+            // Erstelle Folgetermine für Phasen an anderen Tagen
+            const hauptTermin = {
+              kunde_id: termin.kunde_id,
+              kunde_name: termin.kunde_name,
+              kunde_telefon: termin.kunde_telefon,
+              kennzeichen: termin.kennzeichen,
+              datum: termin.datum,
+              mitarbeiter_id: terminMitarbeiterId,
+              dringlichkeit: termin.dringlichkeit,
+              vin: termin.vin,
+              fahrzeugtyp: termin.fahrzeugtyp
+            };
+            
+            const ergebnisse = await this.erstelleFolgetermineAusPhasen(
+              hauptTermin,
+              phasen,
+              termin.termin_nr
+            );
+            
+            if (ergebnisse.erfolg > 0) {
+              alert(`Zeiten & Status gespeichert!\n\n📅 ${ergebnisse.erfolg} Folgetermin(e) für neue Phasen erstellt.`);
+            }
+          }
         }
       } else {
         // Wenn mehrtägig deaktiviert, lösche alle Phasen
@@ -6237,7 +7099,7 @@ class App {
       const day = new Date(weekStart);
       day.setDate(weekStart.getDate() + i);
       days.push({
-        datum: day.toISOString().split('T')[0],
+        datum: this.formatDateLocal(day),
         formatted: day.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' })
       });
     }
@@ -6384,6 +7246,27 @@ class App {
     return badges[dringlichkeit] || '';
   }
 
+  // Folgetermin-Badge HTML generieren
+  getFolgeterminBadge(arbeitText) {
+    if (!arbeitText) return '';
+    
+    // Prüfe ob es ein Folgetermin ist
+    const match = arbeitText.match(/\[Folgetermin zu (T-\d{4}-\d{3})\]/);
+    if (match) {
+      return `<span style="display: inline-block; margin-left: 5px; padding: 2px 6px; background: #ff9800; color: white; border-radius: 4px; font-size: 0.75em; font-weight: bold;" title="Folgetermin von ${match[1]}">🔗 Folge</span>`;
+    }
+    return '';
+  }
+
+  // Arbeit-Anzeige formatieren (Folgetermin-Prefix entfernen für bessere Lesbarkeit)
+  formatArbeitAnzeige(arbeitText) {
+    if (!arbeitText) return '-';
+    
+    // Entferne Folgetermin-Prefix für kürzere Anzeige
+    const cleaned = arbeitText.replace(/\[Folgetermin zu T-\d{4}-\d{3}\]\s*/, '');
+    return cleaned || '-';
+  }
+
   getStatusColor(status) {
     const colors = {
       'geplant': '#4a90e2',
@@ -6483,7 +7366,7 @@ class App {
     const heute = new Date();
     const datumInput = document.getElementById('datum');
     if (datumInput) {
-      datumInput.value = heute.toISOString().split('T')[0];
+      datumInput.value = this.formatDateLocal(heute);
       datumInput.dispatchEvent(new Event('change'));
     }
     this.closeAuslastungKalender();
@@ -6533,7 +7416,7 @@ class App {
     // Tage des Monats
     for (let tag = 1; tag <= letzterTag.getDate(); tag++) {
       const datum = new Date(jahr, monat, tag);
-      const datumStr = datum.toISOString().split('T')[0];
+      const datumStr = this.formatDateLocal(datum);
       const istHeute = datum.getTime() === heute.getTime();
       const istVergangen = datum < heute;
       const istWochenende = datum.getDay() === 0 || datum.getDay() === 6;
@@ -6596,7 +7479,7 @@ class App {
         // Überspringe Wochenende
         if (datum.getDay() === 0 || datum.getDay() === 6) continue;
         
-        const datumStr = datum.toISOString().split('T')[0];
+        const datumStr = this.formatDateLocal(datum);
         promises.push(
           AuslastungService.getByDatum(datumStr)
             .then(data => {

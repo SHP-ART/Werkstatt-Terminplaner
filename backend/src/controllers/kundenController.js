@@ -28,11 +28,20 @@ class KundenController {
       return res.status(400).json({ error: 'Erwarte ein Array von Kunden' });
     }
 
-    KundenModel.importMultiple(kunden, (err, imported) => {
+    KundenModel.importMultiple(kunden, (err, result) => {
       if (err) {
         res.status(500).json({ error: err.message });
       } else {
-        res.json({ message: `${imported} Kunden importiert` });
+        let message = `${result.imported} Kunden importiert`;
+        if (result.skipped > 0) {
+          message += `, ${result.skipped} übersprungen (Duplikate)`;
+        }
+        res.json({ 
+          message, 
+          imported: result.imported, 
+          skipped: result.skipped,
+          errors: result.errors 
+        });
       }
     });
   }

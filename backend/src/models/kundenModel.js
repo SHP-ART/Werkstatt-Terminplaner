@@ -18,13 +18,59 @@ class KundenModel {
     const stmt = db.prepare('INSERT INTO kunden (name, telefon, email, adresse, locosoft_id, kennzeichen, vin, fahrzeugtyp) VALUES (?, ?, ?, ?, ?, ?, ?, ?)');
 
     let imported = 0;
-    kunden.forEach(kunde => {
-      stmt.run([kunde.name, kunde.telefon, kunde.email, kunde.adresse, kunde.locosoft_id, kunde.kennzeichen || null, kunde.vin || null, kunde.fahrzeugtyp || null], (err) => {
-        if (!err) imported++;
-      });
-    });
+    let skipped = 0;
+    const errors = [];
 
-    stmt.finalize(() => callback(null, imported));
+    // Prüfe auf existierende Namen und Kennzeichen
+    db.all('SELECT name, kennzeichen FROM kunden', [], (err, existingKunden) => {
+      if (err) {
+        return callback(err);
+      }
+
+      const existingNames = new Set(existingKunden.map(k => k.name?.toLowerCase()).filter(n => n));
+      const existingKennzeichen = new Set(existingKunden.map(k => k.kennzeichen?.toUpperCase()).filter(k => k));
+
+      kunden.forEach((kunde, index) => {
+        const nameLower = kunde.name?.toLowerCase();
+        const kennzeichenUpper = kunde.kennzeichen?.toUpperCase();
+
+        // Prüfe Duplikate
+        if (nameLower && existingNames.has(nameLower)) {
+          skipped++;
+          errors.push(`Zeile ${index + 1}: Name "${kunde.name}" existiert bereits`);
+          return;
+        }
+
+        if (kennzeichenUpper && existingKennzeichen.has(kennzeichenUpper)) {
+          skipped++;
+          errors.push(`Zeile ${index + 1}: Kennzeichen "${kunde.kennzeichen}" existiert bereits`);
+          return;
+        }
+
+        stmt.run([
+          kunde.name, 
+          kunde.telefon, 
+          kunde.email, 
+          kunde.adresse, 
+          kunde.locosoft_id, 
+          kunde.kennzeichen || null, 
+          kunde.vin || null, 
+          kunde.fahrzeugtyp || null
+        ], (err) => {
+          if (!err) {
+            imported++;
+            // Füge zum Set hinzu um Duplikate innerhalb des Imports zu verhindern
+            if (nameLower) existingNames.add(nameLower);
+            if (kennzeichenUpper) existingKennzeichen.add(kennzeichenUpper);
+          } else {
+            skipped++;
+            errors.push(`Zeile ${index + 1}: ${err.message}`);
+          }
+        });
+      });
+
+      stmt.finalize(() => callback(null, { imported, skipped, errors }));
+    });
   }
 
   static getById(id, callback) {

@@ -4,7 +4,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Werkstatt Terminplaner</title>
-    <link rel="stylesheet" href="src/styles/style.css?v=48">
+    <link rel="stylesheet" href="src/styles/style.css?v=52">
+    <!-- SheetJS für Excel-Import -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 </head>
 <body>
     <div class="container">
@@ -240,6 +242,7 @@
             </div>
 
             <div id="heuteTabellenContainer" style="display: block;">
+                <h3 class="heute-section-header">📋 Offene Termine</h3>
                 <div class="table-scroll-container">
                     <table id="heuteTermineTable">
                         <thead>
@@ -261,6 +264,27 @@
                             </tr>
                         </tbody>
                     </table>
+                </div>
+
+                <div id="abgeschlossenSection" class="abgeschlossen-section" style="display: none;">
+                    <h3 class="heute-section-header abgeschlossen-header">✅ Abgeschlossene Termine</h3>
+                    <div class="table-scroll-container">
+                        <table id="heuteAbgeschlossenTable">
+                            <thead>
+                                <tr>
+                                    <th>Bring</th>
+                                    <th>Kunde</th>
+                                    <th>Tel.</th>
+                                    <th>Kennzeichen</th>
+                                    <th>Arbeit</th>
+                                    <th>Zeit</th>
+                                    <th>Status</th>
+                                    <th>Aktionen</th>
+                                </tr>
+                            </thead>
+                            <tbody></tbody>
+                        </table>
+                    </div>
                 </div>
             </div>
 
@@ -482,6 +506,15 @@
                         </div>
                         <p style="color: #666; font-size: 0.9em; margin-bottom: 15px;">Für Unfallreparaturen oder mehrtägige Arbeiten: Jede Phase kann ein eigenes Datum haben.</p>
                         <div id="phasenListe"></div>
+                        
+                        <!-- Option für automatische Folgetermine -->
+                        <div style="margin-top: 15px; padding: 12px; background: #e8f5e9; border-radius: 6px; border: 1px solid #a5d6a7;">
+                            <label class="checkbox-inline" style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                                <input type="checkbox" id="erstelleFolgetermineCheckbox" checked>
+                                <span style="font-weight: 500; color: #2e7d32;">📅 Automatisch Folgetermine für jede Phase erstellen</span>
+                            </label>
+                            <p style="color: #666; font-size: 0.85em; margin: 8px 0 0 24px;">Jede Phase wird als separater Termin mit gleichem Kunden/Kennzeichen erstellt. Die Termine werden verknüpft angezeigt.</p>
+                        </div>
                     </div>
 
                     <div class="form-group" style="margin-top: 15px;">
@@ -1260,6 +1293,17 @@
                 <div id="mitarbeiterAuslastungContainer"></div>
             </div>
 
+            <!-- Nicht zugeordnete Termine und Restkapazität -->
+            <div class="form-section" id="nichtZugeordnetSection" style="display: none;">
+                <h3>⚠️ Nicht zugeordnete Arbeiten</h3>
+                <p class="section-hint">Diese Termine haben noch keinen Mechaniker/Lehrling zugewiesen:</p>
+                <div id="nichtZugeordnetContainer"></div>
+                <div id="restkapazitaetInfo" class="restkapazitaet-box">
+                    <h4>📊 Restkapazität des Tages</h4>
+                    <div id="restkapazitaetDetails"></div>
+                </div>
+            </div>
+
             <div class="auslastung-display">
                 <h3>Wochenüberblick (Mo-Fr)</h3>
                 <div class="auslastung-info">
@@ -1453,14 +1497,47 @@
                 </div>
 
                 <div class="import-section">
-                    <h3>Locosoft Import</h3>
-                    <p>Format: JSON-Array mit Feldern: name, telefon, email, adresse, locosoft_id</p>
-                    <textarea id="importData" rows="5" placeholder='[{"name":"Max Mustermann","telefon":"030123456","email":"max@example.com","adresse":"Musterstr. 1","locosoft_id":"LS001"}]'></textarea>
-                    <button id="importBtn" class="btn btn-secondary">Import starten</button>
+                    <h3>📥 Kunden Import</h3>
+                    <p>Excel-Datei (.xlsx) mit Spalten: <strong>Name, Telefon, Email, Adresse, Kennzeichen, Fahrzeugtyp</strong></p>
+                    <p class="import-hint">💡 Ein Kunde kann mehrere Fahrzeuge haben - einfach mehrere Zeilen mit gleichem Namen anlegen.</p>
+                    
+                    <div class="import-file-section">
+                        <label class="file-upload-label">
+                            <input type="file" id="excelFileInput" accept=".xlsx,.xls,.csv" style="display:none">
+                            <span class="btn btn-primary">📁 Excel-Datei auswählen</span>
+                        </label>
+                        <span id="selectedFileName" class="selected-file-name"></span>
+                    </div>
+                    
+                    <div id="importPreview" class="import-preview" style="display:none">
+                        <h4>📋 Import-Vorschau</h4>
+                        <div id="importStats" class="import-stats"></div>
+                        <div id="importWarnings" class="import-warnings"></div>
+                        <div id="importPreviewTable" class="import-preview-table"></div>
+                        <div class="import-actions">
+                            <button id="confirmImportBtn" class="btn btn-success">✅ Import bestätigen</button>
+                            <button id="cancelImportBtn" class="btn btn-secondary">❌ Abbrechen</button>
+                        </div>
+                    </div>
+                    
+                    <details class="json-import-details">
+                        <summary>Alternativer JSON-Import</summary>
+                        <textarea id="importData" rows="5" placeholder='[{"name":"Max Mustermann","telefon":"030123456","email":"max@example.com","adresse":"Musterstr. 1","kennzeichen":"B-XX 1234"}]'></textarea>
+                        <button id="importBtn" class="btn btn-secondary">JSON Import starten</button>
+                    </details>
                 </div>
 
                 <div class="table-section">
                     <h3>Kundenliste</h3>
+                    <div class="kunden-suche-container">
+                        <div class="kunden-suche-wrapper">
+                            <input type="text" id="kundenListeSuche" class="kunden-suche-input" 
+                                   placeholder="🔍 Kunde suchen (Name, Kennzeichen, Telefon...)" 
+                                   autocomplete="off">
+                            <button id="kundenSucheClearBtn" class="kunden-suche-clear" style="display:none">✕</button>
+                        </div>
+                        <span id="kundenAnzahlBadge" class="kunden-anzahl-badge"></span>
+                    </div>
                     <table id="kundenTable">
                         <thead>
                             <tr>
@@ -1586,6 +1663,15 @@
                     </div>
                     <p style="color: #666; font-size: 0.9em; margin-bottom: 15px;">Für Unfallreparaturen oder mehrtägige Arbeiten: Jede Phase hat ein eigenes Datum für die Auslastung.</p>
                     <div id="modalPhasenListe"></div>
+                    
+                    <!-- Option für automatische Folgetermine -->
+                    <div style="margin-top: 15px; padding: 12px; background: #e8f5e9; border-radius: 6px; border: 1px solid #a5d6a7;">
+                        <label class="checkbox-inline" style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                            <input type="checkbox" id="modalErstelleFolgetermineCheckbox">
+                            <span style="font-weight: 500; color: #2e7d32;">📅 Folgetermine für neue Phasen erstellen</span>
+                        </label>
+                        <p style="color: #666; font-size: 0.85em; margin: 8px 0 0 24px;">Erstellt separate Termine für neue Phasen (an anderen Tagen).</p>
+                    </div>
                 </div>
 
                 <div style="margin-top: 15px;">
@@ -1601,6 +1687,6 @@
 
     <script src="config.js"></script>
     <script src="src/services/api.js?v=36"></script>
-    <script src="src/components/app.js?v=48"></script>
+    <script src="src/components/app.js?v=56"></script>
 </body>
 </html>

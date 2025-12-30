@@ -3510,3 +3510,551 @@ tr:hover {
         margin: 10px;
     }
 }
+
+/* ================================================
+   EXCEL IMPORT STYLES
+   ================================================ */
+
+.import-section h3 {
+    margin-bottom: 10px;
+    color: var(--steel);
+}
+
+.import-hint {
+    font-size: 0.9em;
+    color: var(--muted);
+    margin-bottom: 15px;
+    padding: 10px;
+    background: #f0f9ff;
+    border-radius: 6px;
+    border-left: 3px solid #3b82f6;
+}
+
+.import-file-section {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    margin-bottom: 20px;
+}
+
+.file-upload-label {
+    cursor: pointer;
+}
+
+.file-upload-label:hover .btn {
+    background: var(--accent-strong);
+}
+
+.selected-file-name {
+    color: var(--steel);
+    font-weight: 500;
+}
+
+.import-preview {
+    background: white;
+    border: 2px solid #e5e7eb;
+    border-radius: 12px;
+    padding: 20px;
+    margin-top: 20px;
+}
+
+.import-preview h4 {
+    margin-bottom: 15px;
+    color: var(--steel);
+}
+
+.import-stats {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 15px;
+    margin-bottom: 20px;
+    padding: 15px;
+    background: #f8fafc;
+    border-radius: 8px;
+}
+
+.stat-item {
+    padding: 8px 15px;
+    background: white;
+    border-radius: 6px;
+    border: 1px solid #e5e7eb;
+}
+
+.import-warnings {
+    margin-bottom: 20px;
+}
+
+.warnings-header {
+    font-weight: 600;
+    color: #f59e0b;
+    margin-bottom: 10px;
+}
+
+.warnings-list {
+    list-style: none;
+    padding: 10px 15px;
+    background: #fffbeb;
+    border: 1px solid #fcd34d;
+    border-radius: 8px;
+    max-height: 150px;
+    overflow-y: auto;
+}
+
+.warnings-list li {
+    padding: 5px 0;
+    font-size: 0.9em;
+    border-bottom: 1px solid #fef3c7;
+}
+
+.warnings-list li:last-child {
+    border-bottom: none;
+}
+
+.no-warnings {
+    padding: 10px 15px;
+    background: #ecfdf5;
+    border: 1px solid #6ee7b7;
+    border-radius: 8px;
+    color: #059669;
+    font-weight: 500;
+}
+
+.import-preview-table {
+    max-height: 400px;
+    overflow-y: auto;
+    margin-bottom: 20px;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+}
+
+.preview-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.9em;
+}
+
+.preview-table th {
+    background: var(--steel);
+    color: white;
+    padding: 12px 10px;
+    text-align: left;
+    position: sticky;
+    top: 0;
+}
+
+.preview-table td {
+    padding: 10px;
+    border-bottom: 1px solid #e5e7eb;
+}
+
+.preview-table tbody tr:hover {
+    background: #f8fafc;
+}
+
+.preview-table .warning-row {
+    background: #fffbeb;
+}
+
+.preview-table .warning-row:hover {
+    background: #fef3c7;
+}
+
+.preview-table .mehrfach-row td:first-child {
+    border-left: 3px solid #3b82f6;
+}
+
+.badge-mehrfach {
+    font-size: 0.75em;
+    background: #dbeafe;
+    color: #1d4ed8;
+    padding: 2px 6px;
+    border-radius: 4px;
+    margin-left: 5px;
+}
+
+.badge-warning {
+    font-size: 0.75em;
+    background: #fef3c7;
+    color: #b45309;
+    padding: 2px 6px;
+    border-radius: 4px;
+    display: inline-block;
+    margin: 2px;
+}
+
+.badge-danger {
+    font-size: 0.75em;
+    background: #fee2e2;
+    color: #dc2626;
+    padding: 2px 6px;
+    border-radius: 4px;
+    display: inline-block;
+    margin: 2px;
+}
+
+.badge-ok {
+    font-size: 0.75em;
+    background: #d1fae5;
+    color: #059669;
+    padding: 2px 6px;
+    border-radius: 4px;
+}
+
+.more-rows {
+    text-align: center;
+    color: var(--muted);
+    font-style: italic;
+    padding: 15px !important;
+}
+
+.import-actions {
+    display: flex;
+    gap: 15px;
+    justify-content: flex-end;
+    padding-top: 15px;
+    border-top: 1px solid #e5e7eb;
+}
+
+.btn-success {
+    background: #059669;
+    color: white;
+    border: none;
+}
+
+.btn-success:hover {
+    background: #047857;
+}
+
+.json-import-details {
+    margin-top: 20px;
+    padding: 10px 15px;
+    background: #f8fafc;
+    border-radius: 8px;
+}
+
+.json-import-details summary {
+    cursor: pointer;
+    font-weight: 500;
+    color: var(--muted);
+    padding: 5px 0;
+}
+
+.json-import-details summary:hover {
+    color: var(--steel);
+}
+
+.json-import-details textarea {
+    margin-top: 15px;
+}
+
+/* ================================================
+   KUNDENLISTE SUCHE
+   ================================================ */
+
+.kunden-suche-container {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    margin-bottom: 15px;
+    flex-wrap: wrap;
+}
+
+.kunden-suche-wrapper {
+    position: relative;
+    flex: 1;
+    min-width: 250px;
+    max-width: 500px;
+}
+
+.kunden-suche-input {
+    width: 100%;
+    padding: 12px 40px 12px 15px;
+    font-size: 16px;
+    border: 2px solid #e5e7eb;
+    border-radius: 10px;
+    transition: all 0.2s;
+    background: white;
+}
+
+.kunden-suche-input:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px rgba(210, 20, 44, 0.1);
+    outline: none;
+}
+
+.kunden-suche-input::placeholder {
+    color: #9ca3af;
+}
+
+.kunden-suche-clear {
+    position: absolute;
+    right: 10px;
+    top: 50%;
+    transform: translateY(-50%);
+    background: #e5e7eb;
+    border: none;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    cursor: pointer;
+    font-size: 14px;
+    color: #64748b;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+}
+
+.kunden-suche-clear:hover {
+    background: var(--accent);
+    color: white;
+}
+
+.kunden-anzahl-badge {
+    padding: 8px 15px;
+    background: #f1f5f9;
+    border-radius: 20px;
+    font-size: 14px;
+    color: #64748b;
+    font-weight: 500;
+    white-space: nowrap;
+}
+
+.kunden-anzahl-badge.filtered {
+    background: #fef3c7;
+    color: #b45309;
+}
+
+.keine-ergebnisse {
+    text-align: center;
+    padding: 30px !important;
+    color: #9ca3af;
+    font-style: italic;
+}
+
+.suche-hinweis {
+    text-align: center;
+    padding: 40px !important;
+    color: #64748b;
+    font-size: 15px;
+    background: #f8fafc;
+}
+
+.mehr-ergebnisse {
+    text-align: center;
+    padding: 15px !important;
+    color: #b45309;
+    background: #fef3c7;
+    font-size: 14px;
+}
+
+mark.highlight {
+    background: #fef08a;
+    padding: 1px 3px;
+    border-radius: 3px;
+    color: inherit;
+}
+
+/* ================================================
+   NICHT ZUGEORDNETE TERMINE & RESTKAPAZITÄT
+   ================================================ */
+
+#nichtZugeordnetSection {
+    background: linear-gradient(135deg, #fff8e1 0%, #ffecb3 100%);
+    border: 2px solid #ffc107;
+    border-radius: 12px;
+    padding: 20px;
+}
+
+#nichtZugeordnetSection h3 {
+    color: #f57c00;
+    margin-bottom: 10px;
+}
+
+.section-hint {
+    color: #795548;
+    font-size: 0.9em;
+    margin-bottom: 15px;
+}
+
+.nicht-zugeordnet-liste {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.nicht-zugeordnet-item {
+    background: white;
+    border-radius: 8px;
+    padding: 12px 15px;
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 10px;
+    align-items: center;
+    border-left: 4px solid #ff9800;
+}
+
+.nz-info {
+    display: flex;
+    gap: 15px;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+.nz-zeit {
+    font-weight: bold;
+    color: var(--steel);
+    min-width: 50px;
+}
+
+.nz-kunde {
+    font-weight: 600;
+    color: #333;
+}
+
+.nz-kennzeichen {
+    color: #666;
+    font-size: 0.9em;
+    background: #f1f5f9;
+    padding: 2px 8px;
+    border-radius: 4px;
+}
+
+.nz-arbeit {
+    grid-column: 1;
+    color: #666;
+    font-size: 0.9em;
+}
+
+.nz-dauer {
+    font-weight: bold;
+    color: #f57c00;
+    background: #fff3e0;
+    padding: 5px 12px;
+    border-radius: 6px;
+}
+
+.nz-gesamt {
+    margin-top: 15px;
+    padding: 12px 15px;
+    background: #fff3e0;
+    border-radius: 8px;
+    color: #e65100;
+    font-size: 1.1em;
+}
+
+.alle-zugeordnet {
+    padding: 20px;
+    background: #e8f5e9;
+    border-radius: 8px;
+    color: #2e7d32;
+    text-align: center;
+    font-weight: 500;
+}
+
+.restkapazitaet-box {
+    margin-top: 20px;
+    background: white;
+    border-radius: 10px;
+    padding: 15px 20px;
+    border: 1px solid #e0e0e0;
+}
+
+.restkapazitaet-box h4 {
+    margin: 0 0 15px 0;
+    color: var(--steel);
+}
+
+.restkapazitaet-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 10px;
+    margin-bottom: 15px;
+}
+
+.restkapazitaet-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 15px;
+    background: #f8f9fa;
+    border-radius: 6px;
+}
+
+.rk-name {
+    color: #333;
+}
+
+.rk-rest {
+    font-size: 0.95em;
+}
+
+.restkapazitaet-gesamt {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 15px;
+    padding-top: 15px;
+    border-top: 2px solid #e0e0e0;
+}
+
+.rkg-item {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    padding: 8px 15px;
+    background: #f1f5f9;
+    border-radius: 6px;
+}
+
+.rkg-item.highlight {
+    background: linear-gradient(135deg, #e8f5e9 0%, #c8e6c9 100%);
+    border: 1px solid #4caf50;
+}
+
+.rkg-item span {
+    color: #666;
+}
+
+.rkg-item strong {
+    font-size: 1.1em;
+}
+
+/* ================================================
+   HEUTE TERMINE - GETRENNTE TABELLEN
+   ================================================ */
+
+.heute-section-header {
+    margin: 0 0 15px 0;
+    padding: 10px 15px;
+    background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%);
+    border-radius: 8px;
+    color: #1565c0;
+    font-size: 1.1em;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.heute-section-header.abgeschlossen-header {
+    background: linear-gradient(135deg, #e8f5e9 0%, #c8e6c9 100%);
+    color: #2e7d32;
+    margin-top: 30px;
+}
+
+.abgeschlossen-section {
+    margin-top: 20px;
+    padding-top: 20px;
+    border-top: 2px dashed #e0e0e0;
+}
+
+#heuteAbgeschlossenTable {
+    opacity: 0.85;
+}
+
+#heuteAbgeschlossenTable tbody tr {
+    background: #f8f9fa;
+}
+
+#heuteAbgeschlossenTable tbody tr:hover {
+    background: #e8f5e9;
+}
