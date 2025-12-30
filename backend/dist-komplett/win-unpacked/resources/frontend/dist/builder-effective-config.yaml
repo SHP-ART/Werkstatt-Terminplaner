@@ -1,0 +1,18 @@
+directories:
+  output: dist
+  buildResources: build
+appId: com.example.werkstatt-terminplaner
+productName: Werkstatt Terminplaner
+files:
+  - filter:
+      - index.html
+      - main.js
+      - preload.js
+      - src/
+      - config.js
+win:
+  target: nsis
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+electronVersion: 28.3.3

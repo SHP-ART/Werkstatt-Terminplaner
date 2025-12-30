@@ -5,12 +5,32 @@ const fs = require('fs');
 
 // Setze das Datenverzeichnis auf den Ordner der EXE-Datei
 // Dies muss VOR dem Laden des Servers geschehen!
+// Die Datenbank soll IMMER neben der EXE liegen (im Unterordner 'database')
 if (app.isPackaged) {
   // Bei gepackter App: Verzeichnis der EXE-Datei verwenden
   const exeDir = path.dirname(process.execPath);
   process.env.ELECTRON_EXE_DIR = exeDir;
   process.env.DATA_DIR = exeDir;
-  console.log('Gepackte Electron-App - Datenverzeichnis:', exeDir);
+  
+  // Expliziter Datenbank-Pfad neben der EXE
+  const dbDir = path.join(exeDir, 'database');
+  const dbPath = path.join(dbDir, 'werkstatt.db');
+  process.env.DB_PATH = dbPath;
+  
+  // Erstelle database-Ordner falls nicht vorhanden
+  if (!fs.existsSync(dbDir)) {
+    fs.mkdirSync(dbDir, { recursive: true });
+    console.log('Datenbank-Ordner erstellt:', dbDir);
+  }
+  
+  console.log('=== Gepackte Electron-App ===');
+  console.log('EXE-Pfad:', process.execPath);
+  console.log('Datenverzeichnis:', exeDir);
+  console.log('Datenbank-Pfad:', dbPath);
+  console.log('=============================');
+} else {
+  console.log('=== Entwicklungsmodus ===');
+  console.log('Arbeitsverzeichnis:', process.cwd());
 }
 
 const { startServer } = require('./src/server');

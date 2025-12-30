@@ -4,34 +4,57 @@ const fs = require('fs');
 
 // Bestimme das Datenverzeichnis:
 // Priorität:
-// 1. Umgebungsvariable DATA_DIR
-// 2. Bei gepackter Electron-App: Verzeichnis der EXE-Datei
-// 3. Ansonsten: Das Verzeichnis, in dem der Server gestartet wurde (process.cwd())
+// 1. Umgebungsvariable DATA_DIR (wird von electron-main.js gesetzt)
+// 2. Umgebungsvariable ELECTRON_EXE_DIR (Fallback)
+// 3. Bei gepackter Electron-App: Verzeichnis der EXE-Datei
+// 4. Ansonsten: Das Verzeichnis, in dem der Server gestartet wurde (process.cwd())
 function getDataDirectory() {
-  // 1. Umgebungsvariable hat höchste Priorität
+  // 1. Umgebungsvariable DATA_DIR hat höchste Priorität (von electron-main.js gesetzt)
   if (process.env.DATA_DIR) {
+    console.log('DATA_DIR Umgebungsvariable gefunden:', process.env.DATA_DIR);
     return process.env.DATA_DIR;
   }
   
-  // 2. Prüfe ob wir in einer gepackten Electron-App laufen
-  // In gepackten Apps ist app.isPackaged = true und resources befinden sich in app.asar
-  const isPackaged = process.mainModule && 
-    process.mainModule.filename && 
-    process.mainModule.filename.includes('app.asar');
+  // 2. Fallback: ELECTRON_EXE_DIR
+  if (process.env.ELECTRON_EXE_DIR) {
+    console.log('ELECTRON_EXE_DIR Umgebungsvariable gefunden:', process.env.ELECTRON_EXE_DIR);
+    return process.env.ELECTRON_EXE_DIR;
+  }
   
-  // Alternative Erkennung über process.resourcesPath (existiert nur in Electron)
-  const isElectronPackaged = process.resourcesPath && 
-    process.resourcesPath.includes('app.asar') === false &&
-    fs.existsSync(path.join(process.resourcesPath, 'app.asar'));
+  // 3. Prüfe ob wir in einer gepackten Electron-App laufen
+  // Erkennungsmethoden für gepackte Electron-Apps:
   
-  if (isPackaged || isElectronPackaged || process.env.ELECTRON_EXE_DIR) {
-    // Bei gepackter Electron-App: Verzeichnis der ausführbaren Datei verwenden
-    const exeDir = process.env.ELECTRON_EXE_DIR || path.dirname(process.execPath);
-    console.log('Electron gepackte App erkannt, EXE-Verzeichnis:', exeDir);
+  // Methode A: process.resourcesPath existiert und app.asar ist vorhanden
+  if (process.resourcesPath) {
+    const asarPath = path.join(process.resourcesPath, 'app.asar');
+    if (fs.existsSync(asarPath)) {
+      const exeDir = path.dirname(process.execPath);
+      console.log('Electron gepackte App erkannt (resourcesPath), EXE-Verzeichnis:', exeDir);
+      return exeDir;
+    }
+  }
+  
+  // Methode B: process.mainModule enthält app.asar im Pfad
+  if (process.mainModule && 
+      process.mainModule.filename && 
+      process.mainModule.filename.includes('app.asar')) {
+    const exeDir = path.dirname(process.execPath);
+    console.log('Electron gepackte App erkannt (mainModule), EXE-Verzeichnis:', exeDir);
     return exeDir;
   }
   
-  // 3. Standard: Arbeitsverzeichnis
+  // Methode C: Prüfe ob execPath eine .exe ist und resources-Ordner daneben existiert
+  if (process.execPath && process.execPath.endsWith('.exe')) {
+    const exeDir = path.dirname(process.execPath);
+    const resourcesDir = path.join(exeDir, 'resources');
+    if (fs.existsSync(resourcesDir)) {
+      console.log('Electron gepackte App erkannt (exe+resources), EXE-Verzeichnis:', exeDir);
+      return exeDir;
+    }
+  }
+  
+  // 4. Standard: Arbeitsverzeichnis (für Entwicklungsmodus)
+  console.log('Entwicklungsmodus - verwende Arbeitsverzeichnis:', process.cwd());
   return process.cwd();
 }
 
