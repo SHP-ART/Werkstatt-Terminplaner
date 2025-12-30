@@ -3,11 +3,39 @@ const path = require('path');
 const fs = require('fs');
 
 // Bestimme das Datenverzeichnis:
-// 1. Umgebungsvariable DATA_DIR hat Priorität
-// 2. Ansonsten: Das Verzeichnis, in dem der Server gestartet wurde (process.cwd())
-// Hinweis: Bei Start aus backend/ wird process.cwd() = backend/
-// Bei Start aus dem Root-Verzeichnis wird process.cwd() = Root
-const dataDir = process.env.DATA_DIR || process.cwd();
+// Priorität:
+// 1. Umgebungsvariable DATA_DIR
+// 2. Bei gepackter Electron-App: Verzeichnis der EXE-Datei
+// 3. Ansonsten: Das Verzeichnis, in dem der Server gestartet wurde (process.cwd())
+function getDataDirectory() {
+  // 1. Umgebungsvariable hat höchste Priorität
+  if (process.env.DATA_DIR) {
+    return process.env.DATA_DIR;
+  }
+  
+  // 2. Prüfe ob wir in einer gepackten Electron-App laufen
+  // In gepackten Apps ist app.isPackaged = true und resources befinden sich in app.asar
+  const isPackaged = process.mainModule && 
+    process.mainModule.filename && 
+    process.mainModule.filename.includes('app.asar');
+  
+  // Alternative Erkennung über process.resourcesPath (existiert nur in Electron)
+  const isElectronPackaged = process.resourcesPath && 
+    process.resourcesPath.includes('app.asar') === false &&
+    fs.existsSync(path.join(process.resourcesPath, 'app.asar'));
+  
+  if (isPackaged || isElectronPackaged || process.env.ELECTRON_EXE_DIR) {
+    // Bei gepackter Electron-App: Verzeichnis der ausführbaren Datei verwenden
+    const exeDir = process.env.ELECTRON_EXE_DIR || path.dirname(process.execPath);
+    console.log('Electron gepackte App erkannt, EXE-Verzeichnis:', exeDir);
+    return exeDir;
+  }
+  
+  // 3. Standard: Arbeitsverzeichnis
+  return process.cwd();
+}
+
+const dataDir = getDataDirectory();
 const dbPath = process.env.DB_PATH || path.join(dataDir, 'database', 'werkstatt.db');
 const dbDir = path.dirname(dbPath);
 

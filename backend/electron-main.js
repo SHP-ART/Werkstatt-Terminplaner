@@ -2,6 +2,17 @@ const { app, BrowserWindow, ipcMain, shell } = require('electron');
 const path = require('path');
 const os = require('os');
 const fs = require('fs');
+
+// Setze das Datenverzeichnis auf den Ordner der EXE-Datei
+// Dies muss VOR dem Laden des Servers geschehen!
+if (app.isPackaged) {
+  // Bei gepackter App: Verzeichnis der EXE-Datei verwenden
+  const exeDir = path.dirname(process.execPath);
+  process.env.ELECTRON_EXE_DIR = exeDir;
+  process.env.DATA_DIR = exeDir;
+  console.log('Gepackte Electron-App - Datenverzeichnis:', exeDir);
+}
+
 const { startServer } = require('./src/server');
 const BackupController = require('./src/controllers/backupController');
 
