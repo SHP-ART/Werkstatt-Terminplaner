@@ -4,7 +4,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Werkstatt Terminplaner</title>
-    <link rel="stylesheet" href="src/styles/style.css?v=48">
+    <link rel="stylesheet" href="src/styles/style.css?v=110">
+    <!-- SheetJS für Excel-Import -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 </head>
 <body>
     <div class="container">
@@ -240,6 +242,7 @@
             </div>
 
             <div id="heuteTabellenContainer" style="display: block;">
+                <h3 class="heute-section-header">📋 Offene Termine</h3>
                 <div class="table-scroll-container">
                     <table id="heuteTermineTable">
                         <thead>
@@ -261,6 +264,27 @@
                             </tr>
                         </tbody>
                     </table>
+                </div>
+
+                <div id="abgeschlossenSection" class="abgeschlossen-section" style="display: none;">
+                    <h3 class="heute-section-header abgeschlossen-header">✅ Abgeschlossene Termine</h3>
+                    <div class="table-scroll-container">
+                        <table id="heuteAbgeschlossenTable">
+                            <thead>
+                                <tr>
+                                    <th>Bring</th>
+                                    <th>Kunde</th>
+                                    <th>Tel.</th>
+                                    <th>Kennzeichen</th>
+                                    <th>Arbeit</th>
+                                    <th>Zeit</th>
+                                    <th>Status</th>
+                                    <th>Aktionen</th>
+                                </tr>
+                            </thead>
+                            <tbody></tbody>
+                        </table>
+                    </div>
                 </div>
             </div>
 
@@ -284,13 +308,35 @@
                 <div class="form-section">
                     <h3>Neuer Termin</h3>
                     <form id="terminForm">
-                    <div class="form-group">
-                        <label>Schnellsuche (Name oder Kennzeichen):</label>
-                        <div style="position: relative;">
-                            <input type="text" id="terminSchnellsuche" list="terminSuchListe" placeholder="z.B. Max Mustermann oder B-AB 1234">
-                            <span id="schnellsucheStatus" class="schnellsuche-status" style="display: none;"></span>
+                    
+                    <!-- Verbesserte Kundensuche -->
+                    <div class="kunde-suche-bereich">
+                        <!-- Namenssuche -->
+                        <div class="form-group">
+                            <label>👤 Kundenname suchen:</label>
+                            <div class="suche-input-wrapper">
+                                <input type="text" id="terminNameSuche" placeholder="z.B. Mustermann, Max..." autocomplete="off">
+                                <div id="nameSucheVorschlaege" class="suche-vorschlaege"></div>
+                            </div>
                         </div>
-                        <datalist id="terminSuchListe"></datalist>
+                        
+                        <!-- ODER Trenner -->
+                        <div class="suche-oder-trenner">
+                            <span>oder</span>
+                        </div>
+                        
+                        <!-- Kennzeichen-Suche mit 3 Feldern -->
+                        <div class="form-group">
+                            <label>🚗 Kennzeichen suchen:</label>
+                            <div class="kennzeichen-suche-felder">
+                                <input type="text" id="kzSucheBezirk" class="kz-feld kz-bezirk" placeholder="OSL" maxlength="3" autocomplete="off">
+                                <div class="kz-siegel"></div>
+                                <input type="text" id="kzSucheBuchstaben" class="kz-feld kz-buchstaben" placeholder="KI" maxlength="2" autocomplete="off">
+                                <input type="text" id="kzSucheNummer" class="kz-feld kz-nummer" placeholder="123" maxlength="4" autocomplete="off">
+                            </div>
+                            <div id="kennzeichenSucheVorschlaege" class="suche-vorschlaege kennzeichen-vorschlaege"></div>
+                            <small class="kz-hinweis">💡 Jedes Feld durchsucht separat - auch Teileingaben möglich!</small>
+                        </div>
                     </div>
 
                     <!-- Gefundener Kunde Anzeige -->
@@ -482,6 +528,15 @@
                         </div>
                         <p style="color: #666; font-size: 0.9em; margin-bottom: 15px;">Für Unfallreparaturen oder mehrtägige Arbeiten: Jede Phase kann ein eigenes Datum haben.</p>
                         <div id="phasenListe"></div>
+                        
+                        <!-- Option für automatische Folgetermine -->
+                        <div style="margin-top: 15px; padding: 12px; background: #e8f5e9; border-radius: 6px; border: 1px solid #a5d6a7;">
+                            <label class="checkbox-inline" style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                                <input type="checkbox" id="erstelleFolgetermineCheckbox" checked>
+                                <span style="font-weight: 500; color: #2e7d32;">📅 Automatisch Folgetermine für jede Phase erstellen</span>
+                            </label>
+                            <p style="color: #666; font-size: 0.85em; margin: 8px 0 0 24px;">Jede Phase wird als separater Termin mit gleichem Kunden/Kennzeichen erstellt. Die Termine werden verknüpft angezeigt.</p>
+                        </div>
                     </div>
 
                     <div class="form-group" style="margin-top: 15px;">
@@ -983,6 +1038,14 @@
                             <span class="btn-icon">📅</span>
                             <span>Heute</span>
                         </button>
+                        <button id="morgenBtn" class="action-btn primary-light" title="Morgen (So→Mo)">
+                            <span class="btn-icon">📆</span>
+                            <span>Morgen</span>
+                        </button>
+                        <button id="wocheBtn" class="action-btn info" title="Diese Woche (Mo-Sa)">
+                            <span class="btn-icon">🗓️</span>
+                            <span>Woche</span>
+                        </button>
                         <button id="alleTermineBtn" class="action-btn secondary" title="Alle Termine anzeigen">
                             <span class="btn-icon">📋</span>
                             <span>Alle</span>
@@ -990,6 +1053,10 @@
                         <button id="offeneTermineBtn" class="action-btn warning" title="Termine ohne erfasste Zeit">
                             <span class="btn-icon">🔴</span>
                             <span>Offene</span>
+                        </button>
+                        <button id="schwebendeTermineBtn" class="action-btn schwebend" title="Schwebende Termine anzeigen">
+                            <span class="btn-icon">⏳</span>
+                            <span>Schwebend</span>
                         </button>
                     </div>
                 </div>
@@ -1005,18 +1072,18 @@
                     <table id="termineTable" class="modern-table">
                         <thead>
                             <tr>
-                                <th>Status</th>
+                                <th style="width: 50px;">Status</th>
                                 <th>Termin-Nr</th>
-                                <th>Datum</th>
+                                <th style="width: 90px;">Datum</th>
                                 <th>Kunde</th>
                                 <th>Kennzeichen</th>
-                                <th>KM</th>
-                                <th>Ersatzauto</th>
+                                <th style="width: 60px;">KM</th>
+                                <th style="width: 40px;">EA</th>
                                 <th>Arbeit</th>
-                                <th>Zeit (Min)</th>
-                                <th>Mitarbeiter</th>
-                                <th>Termin-Status</th>
-                                <th>Aktionen</th>
+                                <th style="width: 70px;">Zeit</th>
+                                <th style="width: 70px;">MA</th>
+                                <th style="width: 90px;">Status</th>
+                                <th style="width: 120px;">Aktionen</th>
                             </tr>
                         </thead>
                         <tbody></tbody>
@@ -1203,9 +1270,20 @@
         <div id="auslastung" class="tab-content">
             <h2>Auslastungsanzeige</h2>
 
-            <div class="form-group">
-                <label>Datum wählen:</label>
-                <input type="date" id="auslastungDatum">
+            <div class="auslastung-navigation">
+                <div class="nav-row">
+                    <button type="button" id="auslastungPrevTag" class="btn btn-nav" title="Vorheriger Tag">◀ Tag</button>
+                    <div class="form-group" style="margin: 0;">
+                        <input type="date" id="auslastungDatum">
+                    </div>
+                    <button type="button" id="auslastungNextTag" class="btn btn-nav" title="Nächster Tag">Tag ▶</button>
+                    <button type="button" id="auslastungHeuteBtn" class="btn btn-today" title="Heute">Heute</button>
+                </div>
+                <div class="nav-row">
+                    <button type="button" id="auslastungPrevWoche" class="btn btn-nav-week" title="Vorherige Woche">◀◀ Woche</button>
+                    <span id="auslastungWocheInfo" class="woche-info"></span>
+                    <button type="button" id="auslastungNextWoche" class="btn btn-nav-week" title="Nächste Woche">Woche ▶▶</button>
+                </div>
             </div>
 
             <div class="auslastung-display">
@@ -1239,6 +1317,28 @@
                     <div id="progressEmpty" class="progress-empty" style="position: absolute; width: 100%; text-align: center; line-height: 50px; color: #999; pointer-events: none;">Keine Termine</div>
                 </div>
 
+                <!-- Schwebende Termine Anzeige (GLOBAL - alle schwebenden Termine) -->
+                <div class="schwebend-display" id="schwebendDisplay" style="display: none;">
+                    <div class="schwebend-header">
+                        <span class="schwebend-icon">⏳</span>
+                        <span class="schwebend-title">Schwebende Termine (Gesamt)</span>
+                    </div>
+                    <div class="schwebend-info">
+                        <div class="info-item">
+                            <span class="label">Anzahl:</span>
+                            <span id="schwebendAnzahl" class="value">0</span>
+                        </div>
+                        <div class="info-item">
+                            <span class="label">Zeit:</span>
+                            <span id="schwebendZeit" class="value">0 h</span>
+                        </div>
+                    </div>
+                    <div class="progress-bar progress-bar-schwebend">
+                        <div id="progressSchwebend" class="progress-segment progress-schwebend" style="width: 100%;"></div>
+                    </div>
+                    <p class="schwebend-hint">Alle noch nicht fest eingeplanten Termine – unabhängig vom gewählten Datum.</p>
+                </div>
+
                 <div class="auslastung-legende">
                     <div class="legende-item">
                         <span class="color-box status-geplant"></span>
@@ -1252,12 +1352,27 @@
                         <span class="color-box status-abgeschlossen"></span>
                         <span>Abgeschlossen</span>
                     </div>
+                    <div class="legende-item">
+                        <span class="color-box status-schwebend"></span>
+                        <span>Schwebend</span>
+                    </div>
                 </div>
             </div>
 
             <div class="form-section" id="mitarbeiterAuslastungSection" style="display: none;">
                 <h3>Auslastung pro Mitarbeiter und Lehrling</h3>
                 <div id="mitarbeiterAuslastungContainer"></div>
+            </div>
+
+            <!-- Nicht zugeordnete Termine und Restkapazität -->
+            <div class="form-section" id="nichtZugeordnetSection" style="display: none;">
+                <h3>⚠️ Nicht zugeordnete Arbeiten</h3>
+                <p class="section-hint">Diese Termine haben noch keinen Mechaniker/Lehrling zugewiesen:</p>
+                <div id="nichtZugeordnetContainer"></div>
+                <div id="restkapazitaetInfo" class="restkapazitaet-box">
+                    <h4>📊 Restkapazität des Tages</h4>
+                    <div id="restkapazitaetDetails"></div>
+                </div>
             </div>
 
             <div class="auslastung-display">
@@ -1453,14 +1568,47 @@
                 </div>
 
                 <div class="import-section">
-                    <h3>Locosoft Import</h3>
-                    <p>Format: JSON-Array mit Feldern: name, telefon, email, adresse, locosoft_id</p>
-                    <textarea id="importData" rows="5" placeholder='[{"name":"Max Mustermann","telefon":"030123456","email":"max@example.com","adresse":"Musterstr. 1","locosoft_id":"LS001"}]'></textarea>
-                    <button id="importBtn" class="btn btn-secondary">Import starten</button>
+                    <h3>📥 Kunden Import</h3>
+                    <p>Excel-Datei (.xlsx) mit Spalten: <strong>Name, Telefon, Email, Adresse, Kennzeichen, Fahrzeugtyp</strong></p>
+                    <p class="import-hint">💡 Ein Kunde kann mehrere Fahrzeuge haben - einfach mehrere Zeilen mit gleichem Namen anlegen.</p>
+                    
+                    <div class="import-file-section">
+                        <label class="file-upload-label">
+                            <input type="file" id="excelFileInput" accept=".xlsx,.xls,.csv" style="display:none">
+                            <span class="btn btn-primary">📁 Excel-Datei auswählen</span>
+                        </label>
+                        <span id="selectedFileName" class="selected-file-name"></span>
+                    </div>
+                    
+                    <div id="importPreview" class="import-preview" style="display:none">
+                        <h4>📋 Import-Vorschau</h4>
+                        <div id="importStats" class="import-stats"></div>
+                        <div id="importWarnings" class="import-warnings"></div>
+                        <div id="importPreviewTable" class="import-preview-table"></div>
+                        <div class="import-actions">
+                            <button id="confirmImportBtn" class="btn btn-success">✅ Import bestätigen</button>
+                            <button id="cancelImportBtn" class="btn btn-secondary">❌ Abbrechen</button>
+                        </div>
+                    </div>
+                    
+                    <details class="json-import-details">
+                        <summary>Alternativer JSON-Import</summary>
+                        <textarea id="importData" rows="5" placeholder='[{"name":"Max Mustermann","telefon":"030123456","email":"max@example.com","adresse":"Musterstr. 1","kennzeichen":"B-XX 1234"}]'></textarea>
+                        <button id="importBtn" class="btn btn-secondary">JSON Import starten</button>
+                    </details>
                 </div>
 
                 <div class="table-section">
                     <h3>Kundenliste</h3>
+                    <div class="kunden-suche-container">
+                        <div class="kunden-suche-wrapper">
+                            <input type="text" id="kundenListeSuche" class="kunden-suche-input" 
+                                   placeholder="🔍 Kunde suchen (Name, Kennzeichen, Telefon...)" 
+                                   autocomplete="off">
+                            <button id="kundenSucheClearBtn" class="kunden-suche-clear" style="display:none">✕</button>
+                        </div>
+                        <span id="kundenAnzahlBadge" class="kunden-anzahl-badge"></span>
+                    </div>
                     <table id="kundenTable">
                         <thead>
                             <tr>
@@ -1532,6 +1680,82 @@
             <span class="close" id="closeDetails">&times;</span>
             <h3>Termin-Details</h3>
             <div id="terminDetailsBody"></div>
+            <div style="margin-top: 20px; padding-top: 15px; border-top: 1px solid #ddd; display: flex; gap: 10px; flex-wrap: wrap;">
+                <button class="btn btn-secondary" id="terminSchwebendBtn" onclick="app.toggleTerminSchwebend()">
+                    ⏸️ Schwebend
+                </button>
+                <button class="btn btn-secondary" id="terminSplitBtn" onclick="app.openSplitModal()">
+                    ✂️ Aufteilen
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Termin-Split Modal -->
+    <div id="terminSplitModal" class="modal">
+        <div class="modal-content">
+            <span class="close" id="closeSplitModal">&times;</span>
+            <h3>✂️ Termin aufteilen</h3>
+            <div id="terminSplitBody">
+                <p style="color: #666; margin-bottom: 20px;">
+                    Teilen Sie den Termin auf, wenn die Arbeit nicht an einem Tag abgeschlossen werden kann. 
+                    Der Rest wird auf einen anderen Tag verschoben.
+                </p>
+                
+                <div class="split-info-box" style="background: #e3f2fd; padding: 15px; border-radius: 8px; margin-bottom: 20px;">
+                    <strong>Original-Termin:</strong>
+                    <div id="splitTerminInfo"></div>
+                    <div style="margin-top: 10px;">
+                        <strong>Gesamtzeit:</strong> <span id="splitGesamtzeit">0 Min.</span>
+                    </div>
+                </div>
+                
+                <div class="form-group">
+                    <label for="splitTeil1Zeit"><strong>Zeit für Tag 1 (heute):</strong></label>
+                    <div style="display: flex; align-items: center; gap: 10px;">
+                        <input type="number" id="splitTeil1Zeit" min="1" style="width: 100px; padding: 8px;">
+                        <span>Minuten</span>
+                        <input type="range" id="splitTeil1Range" min="0" max="100" value="50" 
+                               style="flex: 1;" oninput="app.updateSplitPreview()">
+                    </div>
+                </div>
+                
+                <div class="form-group" style="margin-top: 15px;">
+                    <label for="splitTeil2Datum"><strong>Datum für Restarbeit:</strong></label>
+                    <input type="date" id="splitTeil2Datum" style="width: 100%; padding: 8px;">
+                </div>
+                
+                <div class="form-group" style="margin-top: 15px;">
+                    <label><strong>Zeit für Tag 2 (Rest):</strong></label>
+                    <div style="display: flex; align-items: center; gap: 10px;">
+                        <input type="number" id="splitTeil2Zeit" min="1" style="width: 100px; padding: 8px;" readonly>
+                        <span>Minuten</span>
+                    </div>
+                </div>
+                
+                <div class="split-preview" style="margin-top: 20px; padding: 15px; background: #f5f5f5; border-radius: 8px;">
+                    <h4 style="margin-top: 0;">Vorschau:</h4>
+                    <div style="display: flex; gap: 20px;">
+                        <div style="flex: 1; padding: 10px; background: #fff; border-radius: 5px; border-left: 4px solid #2196f3;">
+                            <strong>Teil 1</strong><br>
+                            <span id="splitPreviewTeil1">0 Min.</span>
+                        </div>
+                        <div style="flex: 1; padding: 10px; background: #fff; border-radius: 5px; border-left: 4px solid #ff9800;">
+                            <strong>Teil 2</strong><br>
+                            <span id="splitPreviewTeil2">0 Min.</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <div style="margin-top: 20px; display: flex; gap: 10px;">
+                    <button class="btn btn-primary" onclick="app.executeSplit()">
+                        ✂️ Termin aufteilen
+                    </button>
+                    <button class="btn btn-secondary" onclick="app.closeSplitModal()">
+                        Abbrechen
+                    </button>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -1586,6 +1810,15 @@
                     </div>
                     <p style="color: #666; font-size: 0.9em; margin-bottom: 15px;">Für Unfallreparaturen oder mehrtägige Arbeiten: Jede Phase hat ein eigenes Datum für die Auslastung.</p>
                     <div id="modalPhasenListe"></div>
+                    
+                    <!-- Option für automatische Folgetermine -->
+                    <div style="margin-top: 15px; padding: 12px; background: #e8f5e9; border-radius: 6px; border: 1px solid #a5d6a7;">
+                        <label class="checkbox-inline" style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                            <input type="checkbox" id="modalErstelleFolgetermineCheckbox">
+                            <span style="font-weight: 500; color: #2e7d32;">📅 Folgetermine für neue Phasen erstellen</span>
+                        </label>
+                        <p style="color: #666; font-size: 0.85em; margin: 8px 0 0 24px;">Erstellt separate Termine für neue Phasen (an anderen Tagen).</p>
+                    </div>
                 </div>
 
                 <div style="margin-top: 15px;">
@@ -1594,13 +1827,22 @@
                     </label>
                 </div>
 
+                <!-- Bearbeitungs-Markierung -->
+                <div style="margin-top: 20px; padding: 15px; background: #fff8e1; border-radius: 8px; border-left: 4px solid #ffc107;">
+                    <label style="display: flex; align-items: center; gap: 12px; cursor: pointer;">
+                        <input type="checkbox" id="modalMussBearbeitetCheckbox" style="width: 20px; height: 20px; cursor: pointer;">
+                        <span style="font-weight: 600; color: #f57c00;">✏️ Muss noch bearbeitet werden</span>
+                    </label>
+                    <small style="display: block; color: #666; margin-top: 8px; margin-left: 32px;">Markiere diesen Termin, wenn noch Daten ergänzt werden müssen. Erscheint dann bei "Offene Termine".</small>
+                </div>
+
                 <button id="saveArbeitszeitenBtn" class="btn btn-primary" style="margin-top: 20px;">Zeiten & Status speichern</button>
             </div>
         </div>
     </div>
 
     <script src="config.js"></script>
-    <script src="src/services/api.js?v=36"></script>
-    <script src="src/components/app.js?v=48"></script>
+    <script src="src/services/api.js?v=38"></script>
+    <script src="src/components/app.js?v=116"></script>
 </body>
 </html>

@@ -1,0 +1,18 @@
+directories:
+  output: dist-client
+  buildResources: build
+appId: com.werkstatt.terminplaner-client
+productName: Werkstatt Terminplaner Client
+files:
+  - filter:
+      - index.html
+      - main.js
+      - preload.js
+      - src/
+      - config.js
+win:
+  target: portable
+  icon: null
+portable:
+  artifactName: Werkstatt-Client-${version}.${ext}
+electronVersion: 28.3.3
