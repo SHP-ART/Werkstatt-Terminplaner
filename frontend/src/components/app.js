@@ -719,6 +719,12 @@ class App {
     if (ersatzautoStatus) {
       ersatzautoStatus.style.display = 'none';
     }
+    
+    // Teile-Bestellen Checkbox zurücksetzen
+    const teileBestellenCheckbox = document.getElementById('teileBestellenCheckbox');
+    if (teileBestellenCheckbox) {
+      teileBestellenCheckbox.checked = false;
+    }
 
     // Warnung verstecken
     this.hideTerminWarnung();
@@ -1467,6 +1473,10 @@ class App {
 
     if (subTabName === 'settingsKunden') {
       this.loadKunden();
+    }
+
+    if (subTabName === 'teileStatus') {
+      this.loadTeileStatusUebersicht();
     }
   }
 
@@ -2746,6 +2756,20 @@ class App {
       }
 
       await this.ensureArbeitenExistieren(arbeitenListe, termin.geschaetzte_zeit);
+      
+      // Prüfe ob Teile bestellt werden müssen
+      const teileBestellenChecked = document.getElementById('teileBestellenCheckbox')?.checked;
+      if (teileBestellenChecked && arbeitenListe.length > 0) {
+        // Setze teile_status für alle Arbeiten auf "bestellen"
+        const arbeitszeitenDetails = {};
+        for (const arbeit of arbeitenListe) {
+          arbeitszeitenDetails[arbeit] = {
+            teile_status: 'bestellen'
+          };
+        }
+        termin.arbeitszeiten_details = JSON.stringify(arbeitszeitenDetails);
+      }
+      
       const createdTermin = await TermineService.create(termin);
       
       // Wenn Phasen aktiviert sind, speichere diese und erstelle ggf. Folgetermine
@@ -7430,6 +7454,9 @@ class App {
     this.currentTerminId = terminId;
     const arbeitenListe = this.parseArbeiten(termin.arbeit || '');
 
+    // Reset Teile-Status-Daten für separaten Bereich
+    this.modalTeileStatusData = [];
+
     document.getElementById('modalTerminInfo').textContent =
       `${termin.termin_nr || '-'} - ${termin.kunde_name} - ${termin.datum}`;
 
@@ -7570,7 +7597,7 @@ class App {
         });
       }
 
-      // Teile-Status Optionen
+      // Teile-Status Optionen - werden später separat angezeigt
       const teileStatusOptions = `
         <option value="" ${teileStatus === '' ? 'selected' : ''}>⚪ Keine Teile nötig</option>
         <option value="vorraetig" ${teileStatus === 'vorraetig' ? 'selected' : ''}>✅ Teile vorrätig</option>
@@ -7579,6 +7606,15 @@ class App {
         <option value="eingetroffen" ${teileStatus === 'eingetroffen' ? 'selected' : ''}>🚚 Teile eingetroffen</option>
       `;
 
+      // Speichere Teile-Status für separaten Bereich
+      this.modalTeileStatusData = this.modalTeileStatusData || [];
+      this.modalTeileStatusData.push({
+        index: index,
+        arbeit: arbeit,
+        teileStatus: teileStatus,
+        teileStatusOptions: teileStatusOptions
+      });
+
       const item = document.createElement('div');
       item.className = 'arbeitszeit-item';
       item.style.marginBottom = '15px';
@@ -7586,7 +7622,7 @@ class App {
         <div style="margin-bottom: 5px;">
           <label style="font-weight: 600;">📋 ${arbeit}:</label>
         </div>
-        <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin-bottom: 5px;">
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 5px;">
           <input type="number"
                  id="modal_zeit_${index}"
                  value="${zeitStunden}"
@@ -7602,22 +7638,13 @@ class App {
                   style="padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
             ${mitarbeiterOptions}
           </select>
-          <select id="modal_teile_${index}"
-                  title="Teile-Status"
-                  onchange="app.updateTeileStatusStyle(this)"
-                  style="padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
-            ${teileStatusOptions}
-          </select>
         </div>
       `;
       liste.appendChild(item);
-      
-      // Style für Teile-Status setzen
-      const teileSelect = document.getElementById(`modal_teile_${index}`);
-      if (teileSelect) {
-        this.updateTeileStatusStyle(teileSelect);
-      }
     });
+
+    // Erstelle separaten Teile-Status Bereich
+    this.renderModalTeileStatusSection();
 
     this.updateModalGesamtzeit();
     
@@ -7929,6 +7956,58 @@ class App {
     document.getElementById('modalGesamtzeit').textContent = gesamtStunden.toFixed(2) + ' h';
   }
 
+  // Rendert den separaten Teile-Status-Bereich im Modal
+  renderModalTeileStatusSection() {
+    // Finde oder erstelle den Container
+    let teileSection = document.getElementById('modalTeileStatusSection');
+    
+    if (!teileSection) {
+      // Erstelle den Bereich nach der Arbeitszeiten-Liste
+      const gesamtzeitDiv = document.getElementById('modalGesamtzeit').closest('div');
+      teileSection = document.createElement('div');
+      teileSection.id = 'modalTeileStatusSection';
+      gesamtzeitDiv.insertAdjacentElement('afterend', teileSection);
+    }
+
+    // Prüfe ob überhaupt Teile-Status-Daten vorhanden sind
+    if (!this.modalTeileStatusData || this.modalTeileStatusData.length === 0) {
+      teileSection.innerHTML = '';
+      return;
+    }
+
+    teileSection.innerHTML = `
+      <div style="margin-top: 20px; padding: 15px; background: linear-gradient(135deg, #fff8e1 0%, #fffde7 100%); border-radius: 8px; border-left: 4px solid #ff9800;">
+        <h4 style="margin: 0 0 15px 0; color: #e65100; display: flex; align-items: center; gap: 8px;">
+          📦 Teile-Status
+        </h4>
+        <div class="teile-status-grid" style="display: grid; gap: 12px;">
+          ${this.modalTeileStatusData.map(item => `
+            <div class="teile-status-row" style="display: grid; grid-template-columns: 1fr 200px; gap: 10px; align-items: center; padding: 8px; background: white; border-radius: 6px; border: 1px solid #e0e0e0;">
+              <span style="font-weight: 500; color: #333;">📋 ${item.arbeit}</span>
+              <select id="modal_teile_${item.index}"
+                      title="Teile-Status für ${item.arbeit}"
+                      onchange="app.updateTeileStatusStyle(this)"
+                      style="padding: 8px; border: 2px solid #ddd; border-radius: 4px; cursor: pointer;">
+                ${item.teileStatusOptions}
+              </select>
+            </div>
+          `).join('')}
+        </div>
+        <small style="display: block; margin-top: 12px; color: #666;">
+          💡 Wählen Sie den Teile-Status für jede Arbeit aus. Bei "Muss bestellt werden" erscheint der Termin in der Teile-Übersicht.
+        </small>
+      </div>
+    `;
+
+    // Styles für alle Teile-Status-Selects anwenden
+    this.modalTeileStatusData.forEach(item => {
+      const select = document.getElementById(`modal_teile_${item.index}`);
+      if (select) {
+        this.updateTeileStatusStyle(select);
+      }
+    });
+  }
+
   // Visuelles Styling für Teile-Status Dropdown
   updateTeileStatusStyle(selectElement) {
     if (!selectElement) return;
@@ -8148,6 +8227,12 @@ class App {
       this.loadTermine();
       this.loadDashboard();
       this.loadAuslastung();
+      
+      // Aktualisiere Teile-Status-Übersicht wenn sichtbar
+      const teileStatusTab = document.getElementById('teileStatus');
+      if (teileStatusTab && teileStatusTab.classList.contains('active')) {
+        this.loadTeileStatusUebersicht();
+      }
     } catch (error) {
       console.error('Fehler beim Speichern:', error);
       alert('Fehler beim Speichern der Zeiten & Status');
@@ -8903,6 +8988,245 @@ class App {
     const div = document.createElement('div');
     div.textContent = text;
     return div.innerHTML;
+  }
+
+  // ==========================================
+  // TEILE-STATUS ÜBERSICHT
+  // ==========================================
+
+  async loadTeileStatusUebersicht() {
+    const tbody = document.getElementById('teileStatusTableBody');
+    if (!tbody) return;
+
+    tbody.innerHTML = `
+      <tr>
+        <td colspan="6" style="text-align: center; padding: 30px; color: #666;">
+          <span style="font-size: 24px;">⏳</span><br>
+          Lade Teile-Status...
+        </td>
+      </tr>
+    `;
+
+    try {
+      const termine = await TermineService.getAll();
+      
+      // Filtere Termine mit Teile-Status
+      const termineWithTeile = [];
+      
+      for (const termin of termine) {
+        if (termin.arbeitszeiten_details) {
+          try {
+            const details = typeof termin.arbeitszeiten_details === 'string' 
+              ? JSON.parse(termin.arbeitszeiten_details) 
+              : termin.arbeitszeiten_details;
+            
+            // Prüfe jeden Arbeitsschritt auf Teile-Status
+            for (const [arbeit, data] of Object.entries(details)) {
+              if (arbeit.startsWith('_')) continue; // Interne Felder überspringen
+              
+              const teileStatus = typeof data === 'object' && data.teile_status 
+                ? data.teile_status 
+                : null;
+              
+              if (teileStatus && teileStatus !== '') {
+                termineWithTeile.push({
+                  ...termin,
+                  arbeit_name: arbeit,
+                  teile_status: teileStatus
+                });
+              }
+            }
+          } catch (e) {
+            console.error('JSON Parse Fehler für Termin', termin.termin_nr, e);
+          }
+        }
+      }
+
+      // Statistiken berechnen
+      const stats = {
+        bestellen: termineWithTeile.filter(t => t.teile_status === 'bestellen').length,
+        bestellt: termineWithTeile.filter(t => t.teile_status === 'bestellt').length,
+        eingetroffen: termineWithTeile.filter(t => t.teile_status === 'eingetroffen').length,
+        vorraetig: termineWithTeile.filter(t => t.teile_status === 'vorraetig').length
+      };
+
+      // Statistik-Karten aktualisieren
+      const bestellenEl = document.getElementById('teileBestellenCount');
+      const bestelltEl = document.getElementById('teileBestelltCount');
+      const eingetroffenEl = document.getElementById('teileEingetroffenCount');
+      const vorraetigEl = document.getElementById('teileVorraetigCount');
+      
+      if (bestellenEl) bestellenEl.textContent = stats.bestellen;
+      if (bestelltEl) bestelltEl.textContent = stats.bestellt;
+      if (eingetroffenEl) eingetroffenEl.textContent = stats.eingetroffen;
+      if (vorraetigEl) vorraetigEl.textContent = stats.vorraetig;
+
+      // Speichern für Filter
+      this.teileStatusData = termineWithTeile;
+
+      // Tabelle rendern
+      this.renderTeileStatusTable(termineWithTeile);
+
+    } catch (error) {
+      console.error('Fehler beim Laden der Teile-Status-Übersicht:', error);
+      tbody.innerHTML = `
+        <tr>
+          <td colspan="6" style="text-align: center; padding: 30px; color: #c62828;">
+            <span style="font-size: 24px;">❌</span><br>
+            Fehler beim Laden
+          </td>
+        </tr>
+      `;
+    }
+  }
+
+  renderTeileStatusTable(termine) {
+    const tbody = document.getElementById('teileStatusTableBody');
+    if (!tbody) return;
+
+    if (termine.length === 0) {
+      tbody.innerHTML = `
+        <tr>
+          <td colspan="6" style="text-align: center; padding: 30px; color: #666;">
+            <span style="font-size: 24px;">✅</span><br>
+            Keine Termine mit Teile-Status gefunden
+          </td>
+        </tr>
+      `;
+      return;
+    }
+
+    // Sortiere nach Datum (neueste zuerst) und dann nach Teile-Status Priorität
+    const statusPriority = { 'bestellen': 1, 'bestellt': 2, 'eingetroffen': 3, 'vorraetig': 4 };
+    termine.sort((a, b) => {
+      const priorityDiff = (statusPriority[a.teile_status] || 99) - (statusPriority[b.teile_status] || 99);
+      if (priorityDiff !== 0) return priorityDiff;
+      return new Date(b.datum) - new Date(a.datum);
+    });
+
+    tbody.innerHTML = termine.map(termin => {
+      const datum = new Date(termin.datum).toLocaleDateString('de-DE', {
+        weekday: 'short',
+        day: '2-digit',
+        month: '2-digit'
+      });
+
+      const statusMap = {
+        'bestellen': { icon: '⚠️', text: 'Muss bestellt werden', class: 'teile-bestellen' },
+        'bestellt': { icon: '📦', text: 'Bestellt', class: 'teile-bestellt' },
+        'eingetroffen': { icon: '🚚', text: 'Eingetroffen', class: 'teile-eingetroffen' },
+        'vorraetig': { icon: '✅', text: 'Vorrätig', class: 'teile-vorraetig' }
+      };
+
+      const status = statusMap[termin.teile_status] || { icon: '❓', text: termin.teile_status, class: '' };
+
+      // Escape den Arbeit-Namen für JavaScript
+      const arbeitNameEscaped = (termin.arbeit_name || '').replace(/'/g, "\\'").replace(/"/g, '\\"');
+
+      return `
+        <tr class="teile-row" data-status="${termin.teile_status}" data-termin-id="${termin.id}">
+          <td>${datum}</td>
+          <td>${this.escapeHtml(termin.kunde_name || 'Unbekannt')}</td>
+          <td><strong>${this.escapeHtml(termin.kennzeichen || '-')}</strong></td>
+          <td>${this.escapeHtml(termin.arbeit_name || termin.arbeiten || '-')}</td>
+          <td>
+            <select class="teile-status-select ${status.class}" 
+                    onchange="app.updateTeileStatusDirekt(${termin.id}, '${arbeitNameEscaped}', this.value)">
+              <option value="bestellen" ${termin.teile_status === 'bestellen' ? 'selected' : ''}>⚠️ Muss bestellt werden</option>
+              <option value="bestellt" ${termin.teile_status === 'bestellt' ? 'selected' : ''}>📦 Bestellt</option>
+              <option value="eingetroffen" ${termin.teile_status === 'eingetroffen' ? 'selected' : ''}>🚚 Eingetroffen</option>
+              <option value="vorraetig" ${termin.teile_status === 'vorraetig' ? 'selected' : ''}>✅ Vorrätig</option>
+              <option value="" ${!termin.teile_status ? 'selected' : ''}>⚪ Keine Teile nötig</option>
+            </select>
+          </td>
+          <td>
+            <button class="btn btn-small" onclick="app.openArbeitszeitenModal(${termin.id})" title="Termin bearbeiten">
+              ✏️ Bearbeiten
+            </button>
+          </td>
+        </tr>
+      `;
+    }).join('');
+  }
+
+  filterTeileStatus(filter) {
+    // Buttons aktiv/inaktiv setzen
+    document.querySelectorAll('.teile-filter-btn').forEach(btn => {
+      btn.classList.toggle('active', btn.dataset.filter === filter);
+    });
+
+    if (!this.teileStatusData) return;
+
+    let filteredData = this.teileStatusData;
+    if (filter !== 'alle') {
+      filteredData = this.teileStatusData.filter(t => t.teile_status === filter);
+    }
+
+    this.renderTeileStatusTable(filteredData);
+  }
+
+  async updateTeileStatusDirekt(terminId, arbeitName, neuerStatus) {
+    try {
+      // Lade aktuelle Termin-Daten
+      const termin = await TermineService.getById(terminId);
+      if (!termin) {
+        alert('Termin nicht gefunden');
+        return;
+      }
+
+      let details = {};
+      if (termin.arbeitszeiten_details) {
+        try {
+          details = typeof termin.arbeitszeiten_details === 'string'
+            ? JSON.parse(termin.arbeitszeiten_details)
+            : termin.arbeitszeiten_details;
+        } catch (e) {
+          details = {};
+        }
+      }
+
+      // Update den Teile-Status für die spezifische Arbeit
+      if (details[arbeitName]) {
+        if (typeof details[arbeitName] === 'object') {
+          details[arbeitName].teile_status = neuerStatus;
+        } else {
+          // Alte Struktur (nur Zahl) - konvertiere zu neuer Struktur
+          details[arbeitName] = {
+            zeit: details[arbeitName],
+            teile_status: neuerStatus
+          };
+        }
+      } else {
+        details[arbeitName] = {
+          zeit: 0,
+          teile_status: neuerStatus
+        };
+      }
+
+      // Speichern
+      await TermineService.update(terminId, {
+        arbeitszeiten_details: JSON.stringify(details)
+      });
+
+      // Style des Selects aktualisieren
+      const select = document.querySelector(`tr[data-termin-id="${terminId}"] .teile-status-select`);
+      if (select) {
+        select.className = 'teile-status-select';
+        if (neuerStatus === 'bestellen') select.classList.add('teile-bestellen');
+        else if (neuerStatus === 'bestellt') select.classList.add('teile-bestellt');
+        else if (neuerStatus === 'eingetroffen') select.classList.add('teile-eingetroffen');
+        else if (neuerStatus === 'vorraetig') select.classList.add('teile-vorraetig');
+      }
+
+      // Daten neu laden für korrekte Statistiken
+      await this.loadTeileStatusUebersicht();
+
+      this.showToast('Teile-Status aktualisiert', 'success');
+
+    } catch (error) {
+      console.error('Fehler beim Aktualisieren des Teile-Status:', error);
+      alert('Fehler beim Aktualisieren: ' + error.message);
+    }
   }
 }
 

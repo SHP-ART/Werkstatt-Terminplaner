@@ -42,12 +42,13 @@ mkdir -p logs
 
 # Speichere aktuelles Verzeichnis für DATA_DIR
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+BACKEND_DIR="$SCRIPT_DIR/backend"
 
-# Starte Backend mit DATA_DIR auf das aktuelle Verzeichnis gesetzt
+# Starte Backend mit DATA_DIR auf das Backend-Verzeichnis gesetzt (dort liegt die Datenbank)
 echo -e "${BLUE}[START]${NC} Starte Backend-Server auf Port 3001..."
-echo -e "${BLUE}[INFO]${NC} Daten-Verzeichnis: $SCRIPT_DIR"
+echo -e "${BLUE}[INFO]${NC} Daten-Verzeichnis: $BACKEND_DIR"
 cd backend
-DATA_DIR="$SCRIPT_DIR" nohup npm start > ../logs/backend.log 2>&1 &
+DATA_DIR="$BACKEND_DIR" nohup npm start > ../logs/backend.log 2>&1 &
 BACKEND_PID=$!
 echo $BACKEND_PID > ../logs/backend.pid
 cd ..
