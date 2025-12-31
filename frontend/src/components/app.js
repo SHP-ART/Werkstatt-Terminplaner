@@ -3992,6 +3992,7 @@ class App {
   updateAuslastungWocheInfo() {
     const datumInput = document.getElementById('auslastungDatum');
     const wocheInfoEl = document.getElementById('auslastungWocheInfo');
+    const aktuellerTagEl = document.getElementById('auslastungAktuellerTag');
     if (!datumInput.value || !wocheInfoEl) return;
 
     const date = new Date(datumInput.value);
@@ -4004,7 +4005,9 @@ class App {
     friday.setDate(monday.getDate() + 4);
 
     const formatDate = (d) => {
-      return d.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' });
+      const wochentag = d.toLocaleDateString('de-DE', { weekday: 'short' });
+      const datum = d.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' });
+      return `${wochentag} ${datum}`;
     };
 
     // Kalenderwoche berechnen
@@ -4013,6 +4016,13 @@ class App {
     const weekNumber = Math.ceil((days + startOfYear.getDay() + 1) / 7);
 
     wocheInfoEl.textContent = `KW ${weekNumber}: ${formatDate(monday)} - ${formatDate(friday)}`;
+
+    // Aktueller Tag Badge
+    if (aktuellerTagEl) {
+      const wochentagLang = date.toLocaleDateString('de-DE', { weekday: 'long' });
+      const datumFormatiert = date.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' });
+      aktuellerTagEl.innerHTML = `📅 ${wochentagLang} <span class="tag-datum">${datumFormatiert}</span>`;
+    }
   }
 
   async loadAuslastung() {
@@ -4026,6 +4036,9 @@ class App {
     try {
       const data = await AuslastungService.getByDatum(datum);
       await this.loadAuslastungWoche();
+      
+      // Lade Zeitleiste
+      await this.loadZeitleiste(datum);
 
       // Zeige die Zeiten nach Status
       document.getElementById('geplant').textContent = this.formatMinutesToHours(data.geplant_minuten || 0);
@@ -4953,6 +4966,9 @@ class App {
     // Nächster Kunde berechnen
     this.updateNaechsterKunde(termine);
     
+    // Auslastung für heute berechnen
+    this.updateHeuteAuslastung(termine);
+    
     // Uhrzeit jede Sekunde aktualisieren
     if (this.uhrzeitInterval) {
       clearInterval(this.uhrzeitInterval);
@@ -4961,6 +4977,53 @@ class App {
       this.updateAktuelleUhrzeit();
       this.updateNaechsterKunde(termine);
     }, 1000);
+  }
+
+  async updateHeuteAuslastung(termine) {
+    const wertEl = document.getElementById('heuteAuslastungWert');
+    const detailEl = document.getElementById('heuteAuslastungDetail');
+    
+    if (!wertEl || !detailEl) return;
+    
+    try {
+      // Berechne Gesamtzeit der Termine (ohne schwebende)
+      let gesamtMinuten = 0;
+      termine.forEach(termin => {
+        if (termin.ist_schwebend) return;
+        const zeit = termin.geschaetzte_zeit || 0;
+        gesamtMinuten += zeit;
+      });
+      
+      // Lade Einstellungen für verfügbare Kapazität
+      const einstellungen = await EinstellungenService.getWerkstatt();
+      const mitarbeiterZahl = parseInt(einstellungen.mitarbeiter_anzahl) || 2;
+      const stundenProTag = parseFloat(einstellungen.stunden_pro_tag) || 8;
+      
+      const verfuegbareMinuten = mitarbeiterZahl * stundenProTag * 60;
+      const auslastungProzent = verfuegbareMinuten > 0 
+        ? Math.round((gesamtMinuten / verfuegbareMinuten) * 100) 
+        : 0;
+      
+      // Werte anzeigen
+      wertEl.textContent = `${auslastungProzent}%`;
+      
+      const gesamtStunden = (gesamtMinuten / 60).toFixed(1);
+      const verfuegbareStunden = (verfuegbareMinuten / 60).toFixed(1);
+      detailEl.textContent = `${gesamtStunden} von ${verfuegbareStunden} Stunden`;
+      
+      // Farbe je nach Auslastung
+      if (auslastungProzent >= 100) {
+        wertEl.style.color = '#e53935';
+      } else if (auslastungProzent >= 80) {
+        wertEl.style.color = '#ff9800';
+      } else {
+        wertEl.style.color = '#4caf50';
+      }
+    } catch (error) {
+      console.error('Fehler bei Auslastungsberechnung:', error);
+      wertEl.textContent = '--%';
+      detailEl.textContent = 'Fehler beim Laden';
+    }
   }
 
   updateAktuelleUhrzeit() {
@@ -7457,8 +7520,15 @@ class App {
     // Reset Teile-Status-Daten für separaten Bereich
     this.modalTeileStatusData = [];
 
-    document.getElementById('modalTerminInfo').textContent =
-      `${termin.termin_nr || '-'} - ${termin.kunde_name} - ${termin.datum}`;
+    // Bringzeit und Datum formatieren
+    const bringzeitText = termin.bring_zeit ? termin.bring_zeit.substring(0, 5) : '—';
+    const datumFormatiert = new Date(termin.datum).toLocaleDateString('de-DE', { weekday: 'short', day: '2-digit', month: '2-digit', year: 'numeric' });
+
+    document.getElementById('modalTerminInfo').innerHTML =
+      `<strong>${termin.termin_nr || '-'}</strong> - ${termin.kunde_name} - ${datumFormatiert}
+       <span style="margin-left: 15px; padding: 4px 10px; background: #e3f2fd; border-radius: 4px; font-size: 0.9em;">
+         🕐 Bringzeit: <strong>${bringzeitText}</strong>
+       </span>`;
 
     // Status vorauswählen
     document.getElementById('modalTerminStatus').value = termin.status || 'geplant';
@@ -7469,15 +7539,35 @@ class App {
       mussBearbeitetCheckbox.checked = termin.muss_bearbeitet_werden || false;
     }
 
-    // Lade Mitarbeiter und Lehrlinge für Dropdowns
+    // Lade Mitarbeiter, Lehrlinge und Abwesenheiten für das Datum
     let mitarbeiter = [];
     let lehrlinge = [];
+    let abwesenheiten = [];
     try {
-      mitarbeiter = await MitarbeiterService.getAktive();
-      lehrlinge = await LehrlingeService.getAktive();
+      [mitarbeiter, lehrlinge, abwesenheiten] = await Promise.all([
+        MitarbeiterService.getAktive(),
+        LehrlingeService.getAktive(),
+        EinstellungenService.getAbwesenheitenByDateRange(termin.datum, termin.datum)
+      ]);
     } catch (error) {
-      console.error('Fehler beim Laden der Mitarbeiter/Lehrlinge:', error);
+      console.error('Fehler beim Laden der Mitarbeiter/Lehrlinge/Abwesenheiten:', error);
     }
+
+    // Erstelle Set von abwesenden Personen für schnellen Lookup
+    // API-Format: {mitarbeiter_id: 2, lehrling_id: null, ...} oder {mitarbeiter_id: null, lehrling_id: 1, ...}
+    const abwesendeIds = new Set();
+    if (Array.isArray(abwesenheiten)) {
+      abwesenheiten.forEach(a => {
+        if (a.mitarbeiter_id) {
+          abwesendeIds.add(`ma_${a.mitarbeiter_id}`);
+        }
+        if (a.lehrling_id) {
+          abwesendeIds.add(`l_${a.lehrling_id}`);
+        }
+      });
+    }
+    console.log('Abwesenheiten für', termin.datum, ':', abwesenheiten);
+    console.log('Abwesende IDs:', [...abwesendeIds]);
 
     // Befülle Gesamt-Mitarbeiter-Dropdown (mit Mitarbeitern und Lehrlingen)
     const gesamtMitarbeiterSelect = document.getElementById('modalGesamtMitarbeiter');
@@ -7488,7 +7578,12 @@ class App {
       mitarbeiter.forEach(ma => {
         const option = document.createElement('option');
         option.value = `ma_${ma.id}`;
-        option.textContent = `👤 ${ma.name}`;
+        const istAbwesend = abwesendeIds.has(`ma_${ma.id}`);
+        option.textContent = istAbwesend ? `🚫 ${ma.name} (ABWESEND)` : `👤 ${ma.name}`;
+        option.style.color = istAbwesend ? '#c62828' : '';
+        if (istAbwesend) {
+          option.disabled = true;
+        }
         gesamtMitarbeiterSelect.appendChild(option);
       });
     }
@@ -7498,10 +7593,20 @@ class App {
       lehrlinge.forEach(l => {
         const option = document.createElement('option');
         option.value = `l_${l.id}`;
-        option.textContent = `🎓 ${l.name} (Lehrling)`;
+        const istAbwesend = abwesendeIds.has(`l_${l.id}`);
+        option.textContent = istAbwesend ? `🚫 ${l.name} (ABWESEND)` : `🎓 ${l.name} (Lehrling)`;
+        option.style.color = istAbwesend ? '#c62828' : '';
+        if (istAbwesend) {
+          option.disabled = true;
+        }
         gesamtMitarbeiterSelect.appendChild(option);
       });
     }
+
+    // Speichere abwesendeIds für die einzelnen Arbeits-Dropdowns
+    this.modalAbwesendeIds = abwesendeIds;
+    this.modalMitarbeiter = mitarbeiter;
+    this.modalLehrlinge = lehrlinge;
 
     const liste = document.getElementById('modalArbeitszeitenListe');
     liste.innerHTML = '';
@@ -7545,11 +7650,13 @@ class App {
       let teileStatus = ''; // Teile-Status
 
       // Prüfe zuerst ob individuelle Zeit für diese Arbeit gespeichert ist
+      let startzeit = '';
       if (arbeitszeitenDetails[arbeit]) {
-        // Neue Struktur: {zeit: 30, mitarbeiter_id: 1, type: 'mitarbeiter', teile_status: 'vorrätig'} oder alte Struktur: 30
+        // Neue Struktur: {zeit: 30, mitarbeiter_id: 1, type: 'mitarbeiter', teile_status: 'vorrätig', startzeit: '09:00'} oder alte Struktur: 30
         if (typeof arbeitszeitenDetails[arbeit] === 'object') {
           zeitMinuten = arbeitszeitenDetails[arbeit].zeit || arbeitszeitenDetails[arbeit];
           teileStatus = arbeitszeitenDetails[arbeit].teile_status || '';
+          startzeit = arbeitszeitenDetails[arbeit].startzeit || '';
           if (arbeitszeitenDetails[arbeit].type === 'lehrling') {
             mitarbeiterId = `l_${arbeitszeitenDetails[arbeit].mitarbeiter_id || arbeitszeitenDetails[arbeit].lehrling_id}`;
           } else if (arbeitszeitenDetails[arbeit].mitarbeiter_id) {
@@ -7577,6 +7684,8 @@ class App {
       const zeitStunden = (zeitMinuten / 60).toFixed(2);
 
       // Erstelle Dropdown für diese Aufgabe (mit Mitarbeitern und Lehrlingen)
+      // Verwende gespeicherte Abwesenheiten
+      const abwesendeIds = this.modalAbwesendeIds || new Set();
       let mitarbeiterOptions = '<option value="">-- Keine Zuordnung --</option>';
       
       // Mitarbeiter
@@ -7584,7 +7693,11 @@ class App {
         mitarbeiter.forEach(ma => {
           const value = `ma_${ma.id}`;
           const selected = value === mitarbeiterId ? 'selected' : '';
-          mitarbeiterOptions += `<option value="${value}" ${selected}>👤 ${ma.name}</option>`;
+          const istAbwesend = abwesendeIds.has(value);
+          const disabled = istAbwesend ? 'disabled' : '';
+          const label = istAbwesend ? `🚫 ${ma.name} (ABWESEND)` : `👤 ${ma.name}`;
+          const style = istAbwesend ? 'style="color: #c62828;"' : '';
+          mitarbeiterOptions += `<option value="${value}" ${selected} ${disabled} ${style}>${label}</option>`;
         });
       }
       
@@ -7593,7 +7706,11 @@ class App {
         lehrlinge.forEach(l => {
           const value = `l_${l.id}`;
           const selected = value === mitarbeiterId ? 'selected' : '';
-          mitarbeiterOptions += `<option value="${value}" ${selected}>🎓 ${l.name} (Lehrling)</option>`;
+          const istAbwesend = abwesendeIds.has(value);
+          const disabled = istAbwesend ? 'disabled' : '';
+          const label = istAbwesend ? `🚫 ${l.name} (ABWESEND)` : `🎓 ${l.name} (Lehrling)`;
+          const style = istAbwesend ? 'style="color: #c62828;"' : '';
+          mitarbeiterOptions += `<option value="${value}" ${selected} ${disabled} ${style}>${label}</option>`;
         });
       }
 
@@ -7622,7 +7739,12 @@ class App {
         <div style="margin-bottom: 5px;">
           <label style="font-weight: 600;">📋 ${arbeit}:</label>
         </div>
-        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 5px;">
+        <div style="display: grid; grid-template-columns: 80px 1fr 1fr; gap: 10px; margin-bottom: 5px;">
+          <input type="time"
+                 id="modal_startzeit_${index}"
+                 value="${startzeit}"
+                 title="Startzeit (Arbeitsbeginn)"
+                 style="padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
           <input type="number"
                  id="modal_zeit_${index}"
                  value="${zeitStunden}"
@@ -7631,7 +7753,7 @@ class App {
                  placeholder="Std."
                  onchange="app.updateModalGesamtzeit()"
                  onfocus="this.select()"
-                 title="Zeit in Stunden"
+                 title="Dauer in Stunden"
                  style="padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
           <select id="modal_mitarbeiter_${index}"
                   title="Mitarbeiter zuordnen"
@@ -8125,16 +8247,21 @@ class App {
         // NEU: Teile-Status auslesen
         const teileSelect = document.getElementById(`modal_teile_${index}`);
         const teileStatus = teileSelect ? teileSelect.value : '';
+        
+        // NEU: Startzeit auslesen
+        const startzeitInput = document.getElementById(`modal_startzeit_${index}`);
+        const startzeit = startzeitInput ? startzeitInput.value : '';
 
-        // Neue Struktur: {zeit: 30, mitarbeiter_id: 1, type: 'mitarbeiter', teile_status: 'vorraetig'}
-        if (mitarbeiterValue || teileStatus) {
+        // Neue Struktur: {zeit: 30, mitarbeiter_id: 1, type: 'mitarbeiter', teile_status: 'vorraetig', startzeit: '09:00'}
+        if (mitarbeiterValue || teileStatus || startzeit) {
           if (mitarbeiterValue && mitarbeiterValue.startsWith('ma_')) {
             const id = parseInt(mitarbeiterValue.replace('ma_', ''), 10);
             arbeitszeitenDetails[arbeitenListe[index]] = {
               zeit: zeitMinuten,
               mitarbeiter_id: id,
               type: 'mitarbeiter',
-              teile_status: teileStatus
+              teile_status: teileStatus,
+              startzeit: startzeit
             };
           } else if (mitarbeiterValue && mitarbeiterValue.startsWith('l_')) {
             const id = parseInt(mitarbeiterValue.replace('l_', ''), 10);
@@ -8143,13 +8270,15 @@ class App {
               lehrling_id: id,
               mitarbeiter_id: id, // Für Kompatibilität
               type: 'lehrling',
-              teile_status: teileStatus
+              teile_status: teileStatus,
+              startzeit: startzeit
             };
           } else {
-            // Nur Teile-Status ohne Mitarbeiter
+            // Nur Teile-Status/Startzeit ohne Mitarbeiter
             arbeitszeitenDetails[arbeitenListe[index]] = {
               zeit: zeitMinuten,
-              teile_status: teileStatus
+              teile_status: teileStatus,
+              startzeit: startzeit
             };
           }
         } else {
@@ -9228,6 +9357,402 @@ class App {
       alert('Fehler beim Aktualisieren: ' + error.message);
     }
   }
+
+  // ==========================================
+  // ZEITLEISTEN-ANSICHT (8-18 Uhr)
+  // ==========================================
+
+  async loadZeitleiste(datum) {
+    const body = document.getElementById('zeitleisteBody');
+    if (!body) return;
+
+    body.innerHTML = '<div class="zeitleiste-loading"><span>⏳</span> Lade Zeitleiste...</div>';
+
+    try {
+      // Lade alle Termine für dieses Datum
+      const termine = await TermineService.getAll(datum);
+      
+      // Lade Mitarbeiter und Lehrlinge
+      const [mitarbeiter, lehrlinge] = await Promise.all([
+        MitarbeiterService.getAktive(),
+        LehrlingeService.getAktive()
+      ]);
+
+      // Erstelle Arbeiten-Map nach Mitarbeiter/Lehrling
+      const arbeitenMap = new Map();
+      const ohneZuordnung = [];
+
+      // Verarbeite alle Termine
+      for (const termin of termine) {
+        const arbeitenListe = this.parseArbeiten(termin.arbeit || '');
+        let details = {};
+        
+        if (termin.arbeitszeiten_details) {
+          try {
+            details = typeof termin.arbeitszeiten_details === 'string' 
+              ? JSON.parse(termin.arbeitszeiten_details) 
+              : termin.arbeitszeiten_details;
+          } catch (e) {}
+        }
+
+        // Für jede Arbeit im Termin
+        for (const arbeit of arbeitenListe) {
+          const arbeitDetails = typeof details[arbeit] === 'object' ? details[arbeit] : { zeit: details[arbeit] || 0 };
+          const zeitMinuten = arbeitDetails.zeit || (termin.geschaetzte_zeit / arbeitenListe.length) || 60;
+          const startzeit = arbeitDetails.startzeit || null;
+          const zuordnungsTyp = arbeitDetails.type || null; // 'mitarbeiter' oder 'lehrling'
+          const mitarbeiterId = arbeitDetails.mitarbeiter_id || termin.mitarbeiter_id;
+          const lehrlingId = arbeitDetails.lehrling_id || null;
+
+          const arbeitEntry = {
+            terminId: termin.id,
+            terminNr: termin.termin_nr,
+            kunde: termin.kunde_name,
+            kennzeichen: termin.kennzeichen,
+            arbeit: arbeit,
+            zeitMinuten: zeitMinuten,
+            startzeit: startzeit,
+            status: termin.status || 'geplant',
+            istIntern: !termin.kennzeichen || termin.abholung_details === 'Interner Termin'
+          };
+
+          // Zuordnung zu Mitarbeiter oder Lehrling basierend auf dem expliziten type-Feld
+          if (zuordnungsTyp === 'lehrling' && lehrlingId) {
+            // Explizit als Lehrling markiert
+            const key = `l_${lehrlingId}`;
+            if (!arbeitenMap.has(key)) {
+              arbeitenMap.set(key, { typ: 'lehrling', id: lehrlingId, arbeiten: [] });
+            }
+            arbeitenMap.get(key).arbeiten.push(arbeitEntry);
+          } else if (zuordnungsTyp === 'mitarbeiter' && mitarbeiterId) {
+            // Explizit als Mitarbeiter markiert
+            const key = `m_${mitarbeiterId}`;
+            if (!arbeitenMap.has(key)) {
+              arbeitenMap.set(key, { typ: 'mitarbeiter', id: mitarbeiterId, arbeiten: [] });
+            }
+            arbeitenMap.get(key).arbeiten.push(arbeitEntry);
+          } else if (mitarbeiterId) {
+            // Fallback: Alte Daten ohne type-Feld
+            const key = `m_${mitarbeiterId}`;
+            if (!arbeitenMap.has(key)) {
+              arbeitenMap.set(key, { typ: 'mitarbeiter', id: mitarbeiterId, arbeiten: [] });
+            }
+            arbeitenMap.get(key).arbeiten.push(arbeitEntry);
+          } else if (lehrlingId) {
+            // Fallback: Lehrling ohne type-Feld
+            const key = `l_${lehrlingId}`;
+            if (!arbeitenMap.has(key)) {
+              arbeitenMap.set(key, { typ: 'lehrling', id: lehrlingId, arbeiten: [] });
+            }
+            arbeitenMap.get(key).arbeiten.push(arbeitEntry);
+          } else {
+            ohneZuordnung.push(arbeitEntry);
+          }
+        }
+      }
+
+      // Rendere die Zeitleiste
+      this.renderZeitleiste(body, arbeitenMap, ohneZuordnung, mitarbeiter, lehrlinge);
+
+    } catch (error) {
+      console.error('Fehler beim Laden der Zeitleiste:', error);
+      body.innerHTML = '<div class="zeitleiste-leer"><span class="zeitleiste-leer-icon">❌</span><p>Fehler beim Laden</p></div>';
+    }
+  }
+
+  renderZeitleiste(container, arbeitenMap, ohneZuordnung, mitarbeiter, lehrlinge) {
+    // Keine Arbeiten?
+    if (arbeitenMap.size === 0 && ohneZuordnung.length === 0) {
+      container.innerHTML = `
+        <div class="zeitleiste-leer">
+          <span class="zeitleiste-leer-icon">📅</span>
+          <p>Keine Termine für diesen Tag</p>
+        </div>
+      `;
+      return;
+    }
+
+    const START_HOUR = 8;
+    const END_HOUR = 18;
+    const TOTAL_HOURS = END_HOUR - START_HOUR; // 10 Stunden
+
+    let html = '';
+
+    // Aktuelle Zeit Marker Position berechnen (falls heute)
+    const heute = this.formatDateLocal(new Date());
+    const selectedDatum = document.getElementById('auslastungDatum').value;
+    let jetztMarkerHtml = '';
+    
+    if (selectedDatum === heute) {
+      const now = new Date();
+      const currentHour = now.getHours() + now.getMinutes() / 60;
+      if (currentHour >= START_HOUR && currentHour <= END_HOUR) {
+        const jetztPosition = ((currentHour - START_HOUR) / TOTAL_HOURS) * 100;
+        jetztMarkerHtml = `<div class="zeitleiste-jetzt-marker" style="left: ${jetztPosition}%;"></div>`;
+      }
+    }
+
+    // Mitarbeiter-Zeilen
+    for (const ma of mitarbeiter) {
+      const key = `m_${ma.id}`;
+      const data = arbeitenMap.get(key);
+      const arbeiten = data ? data.arbeiten : [];
+      
+      html += this.renderZeitleisteRow(ma.name, 'Mitarbeiter', arbeiten, START_HOUR, END_HOUR, TOTAL_HOURS, jetztMarkerHtml);
+    }
+
+    // Lehrling-Zeilen
+    for (const lehrling of lehrlinge) {
+      const key = `l_${lehrling.id}`;
+      const data = arbeitenMap.get(key);
+      const arbeiten = data ? data.arbeiten : [];
+      
+      html += this.renderZeitleisteRow(lehrling.name, 'Lehrling', arbeiten, START_HOUR, END_HOUR, TOTAL_HOURS, jetztMarkerHtml);
+    }
+
+    // Nicht zugeordnete Arbeiten
+    if (ohneZuordnung.length > 0) {
+      html += this.renderZeitleisteRow('⚠️ Nicht zugeordnet', '', ohneZuordnung, START_HOUR, END_HOUR, TOTAL_HOURS, jetztMarkerHtml, true);
+    }
+
+    container.innerHTML = html;
+  }
+
+  renderZeitleisteRow(name, typ, arbeiten, startHour, endHour, totalHours, jetztMarkerHtml, isWarning = false) {
+    const rowClass = isWarning ? 'zeitleiste-row nicht-zugeordnet' : 'zeitleiste-row';
+    
+    // Gitter erstellen
+    let gitterHtml = '<div class="zeitleiste-gitter">';
+    for (let h = startHour; h <= endHour; h++) {
+      gitterHtml += '<div class="zeitleiste-gitter-stunde"></div>';
+    }
+    gitterHtml += '</div>';
+
+    // Arbeitsblöcke erstellen
+    let bloeckeHtml = '<div class="zeitleiste-arbeiten">';
+    
+    // Sortiere Arbeiten nach Startzeit
+    const sortedArbeiten = [...arbeiten].sort((a, b) => {
+      if (!a.startzeit && !b.startzeit) return 0;
+      if (!a.startzeit) return 1;
+      if (!b.startzeit) return -1;
+      return a.startzeit.localeCompare(b.startzeit);
+    });
+
+    // Berechne Positionen für überlappende Blöcke
+    let currentEndMinutes = startHour * 60;
+    
+    for (const arbeit of sortedArbeiten) {
+      let leftPercent, widthPercent;
+      let startMinutes, endMinutes;
+      
+      if (arbeit.startzeit) {
+        // Mit Startzeit
+        const [startH, startM] = arbeit.startzeit.split(':').map(Number);
+        startMinutes = startH * 60 + startM;
+        endMinutes = startMinutes + arbeit.zeitMinuten;
+        
+        // Begrenzen auf 8-18 Uhr
+        const displayStart = Math.max(startMinutes, startHour * 60);
+        const displayEnd = Math.min(endMinutes, endHour * 60);
+        
+        leftPercent = ((displayStart - startHour * 60) / (totalHours * 60)) * 100;
+        widthPercent = ((displayEnd - displayStart) / (totalHours * 60)) * 100;
+      } else {
+        // Ohne Startzeit: Platziere nach letzter Arbeit
+        startMinutes = currentEndMinutes;
+        endMinutes = startMinutes + arbeit.zeitMinuten;
+        
+        // Begrenzen auf 8-18 Uhr
+        const displayStart = Math.max(startMinutes, startHour * 60);
+        const displayEnd = Math.min(endMinutes, endHour * 60);
+        
+        leftPercent = ((displayStart - startHour * 60) / (totalHours * 60)) * 100;
+        widthPercent = ((displayEnd - displayStart) / (totalHours * 60)) * 100;
+      }
+
+      currentEndMinutes = endMinutes;
+      
+      // Nur anzeigen wenn im sichtbaren Bereich
+      if (widthPercent <= 0) continue;
+
+      const statusClass = arbeit.startzeit ? `status-${arbeit.status}` : 'status-keine-zeit';
+      const internClass = arbeit.istIntern ? 'intern-termin' : '';
+      const startZeitText = arbeit.startzeit || '—';
+      const endZeitText = this.minutesToTime(endMinutes);
+      const dauerText = this.formatMinutesToHours(arbeit.zeitMinuten);
+      
+      // Hauptanzeige: Kennzeichen bevorzugt, sonst Name (bei internen Terminen)
+      const hauptAnzeige = arbeit.kennzeichen ? arbeit.kennzeichen : (arbeit.istIntern ? '🔧 ' + arbeit.kunde : arbeit.kunde);
+
+      bloeckeHtml += `
+        <div class="zeitleiste-block ${statusClass} ${internClass}" 
+             style="left: ${leftPercent}%; width: ${Math.max(widthPercent, 3)}%;"
+             onclick="app.openZeitleisteKontextmenu(event, ${arbeit.terminId}, '${this.escapeHtml(arbeit.kunde)}', '${this.escapeHtml(arbeit.arbeit)}', '${arbeit.terminNr}')"
+             title="${arbeit.kunde}${arbeit.kennzeichen ? ' - ' + arbeit.kennzeichen : ''}&#10;${arbeit.arbeit}&#10;${startZeitText} - ${endZeitText} (${dauerText})">
+          <span class="zeitleiste-block-haupt">${this.escapeHtml(hauptAnzeige)}</span>
+          <span class="zeitleiste-block-zeit">${startZeitText} - ${endZeitText}</span>
+        </div>
+      `;
+    }
+
+    bloeckeHtml += '</div>';
+
+    return `
+      <div class="${rowClass}">
+        <div class="zeitleiste-mitarbeiter">
+          <span class="zeitleiste-mitarbeiter-name">${this.escapeHtml(name)}</span>
+          ${typ ? `<span class="zeitleiste-mitarbeiter-typ">${typ}</span>` : ''}
+        </div>
+        <div class="zeitleiste-timeline">
+          ${gitterHtml}
+          ${jetztMarkerHtml}
+          ${bloeckeHtml}
+        </div>
+      </div>
+    `;
+  }
+
+  minutesToTime(totalMinutes) {
+    const hours = Math.floor(totalMinutes / 60);
+    const minutes = totalMinutes % 60;
+    return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
+  }
+
+  // ==========================================
+  // ZEITLEISTE KONTEXTMENÜ
+  // ==========================================
+
+  openZeitleisteKontextmenu(event, terminId, kunde, arbeit, terminNr) {
+    event.stopPropagation();
+    
+    const menu = document.getElementById('zeitleisteKontextmenu');
+    const header = document.getElementById('zeitleisteKontextmenuHeader');
+    
+    // Speichere aktuelle Termin-Info
+    this.zeitleisteKontextTerminId = terminId;
+    
+    // Header befüllen
+    header.innerHTML = `
+      <strong>${terminNr}</strong> - ${kunde}
+      <small>${arbeit}</small>
+    `;
+    
+    // Position berechnen
+    let x = event.clientX;
+    let y = event.clientY;
+    
+    // Menü anzeigen (temporär für Größenmessung)
+    menu.style.display = 'block';
+    menu.style.visibility = 'hidden';
+    
+    const menuRect = menu.getBoundingClientRect();
+    const viewportWidth = window.innerWidth;
+    const viewportHeight = window.innerHeight;
+    
+    // Sicherstellen, dass Menü im Viewport bleibt
+    if (x + menuRect.width > viewportWidth) {
+      x = viewportWidth - menuRect.width - 10;
+    }
+    if (y + menuRect.height > viewportHeight) {
+      y = viewportHeight - menuRect.height - 10;
+    }
+    
+    menu.style.left = `${x}px`;
+    menu.style.top = `${y}px`;
+    menu.style.visibility = 'visible';
+    
+    // Click außerhalb schließt Menü
+    setTimeout(() => {
+      document.addEventListener('click', this.closeZeitleisteKontextmenuHandler);
+    }, 10);
+  }
+
+  closeZeitleisteKontextmenuHandler = (event) => {
+    const menu = document.getElementById('zeitleisteKontextmenu');
+    if (menu && !menu.contains(event.target)) {
+      menu.style.display = 'none';
+      document.removeEventListener('click', this.closeZeitleisteKontextmenuHandler);
+    }
+  }
+
+  closeZeitleisteKontextmenu() {
+    const menu = document.getElementById('zeitleisteKontextmenu');
+    if (menu) {
+      menu.style.display = 'none';
+    }
+    document.removeEventListener('click', this.closeZeitleisteKontextmenuHandler);
+  }
+
+  zeitleisteKontextZeiten() {
+    this.closeZeitleisteKontextmenu();
+    if (this.zeitleisteKontextTerminId) {
+      this.openArbeitszeitenModal(this.zeitleisteKontextTerminId);
+    }
+  }
+
+  zeitleisteKontextDetails() {
+    this.closeZeitleisteKontextmenu();
+    if (this.zeitleisteKontextTerminId) {
+      this.showTerminDetails(this.zeitleisteKontextTerminId);
+    }
+  }
+
+  zeitleisteKontextSplit() {
+    this.closeZeitleisteKontextmenu();
+    if (!this.zeitleisteKontextTerminId) return;
+    
+    const termin = this.termineById[this.zeitleisteKontextTerminId];
+    if (!termin) {
+      alert('Termin nicht gefunden');
+      return;
+    }
+
+    // Setze currentDetailTerminId für die Split-Funktion
+    this.currentDetailTerminId = this.zeitleisteKontextTerminId;
+
+    const gesamtzeit = termin.geschaetzte_zeit || 60;
+    
+    // Info-Box befüllen
+    document.getElementById('splitTerminInfo').innerHTML = `
+      <strong>${termin.termin_nr || '-'}</strong> - ${termin.kunde_name || '-'}<br>
+      <span style="color: #666;">${termin.arbeit || '-'}</span>
+    `;
+    document.getElementById('splitGesamtzeit').textContent = `${gesamtzeit} Min. (${this.formatMinutesToHours(gesamtzeit)})`;
+    
+    // Standard-Werte setzen (50/50 Split)
+    const teil1Zeit = Math.round(gesamtzeit / 2);
+    document.getElementById('splitTeil1Zeit').value = teil1Zeit;
+    document.getElementById('splitTeil1Zeit').max = gesamtzeit - 1;
+    document.getElementById('splitTeil1Range').max = gesamtzeit;
+    document.getElementById('splitTeil1Range').value = teil1Zeit;
+    
+    // Teil 2 Zeit berechnen
+    document.getElementById('splitTeil2Zeit').value = gesamtzeit - teil1Zeit;
+    
+    // Morgen als Standard-Datum für Teil 2
+    const morgen = new Date();
+    morgen.setDate(morgen.getDate() + 1);
+    // Sonntag überspringen
+    if (morgen.getDay() === 0) {
+      morgen.setDate(morgen.getDate() + 1);
+    }
+    document.getElementById('splitTeil2Datum').value = this.formatDateLocal(morgen);
+    document.getElementById('splitTeil2Datum').min = this.formatDateLocal(new Date());
+    
+    // Speichere Gesamtzeit für Range-Updates
+    this.splitGesamtzeit = gesamtzeit;
+    
+    // Preview aktualisieren
+    this.updateSplitPreview();
+    
+    // Split-Modal anzeigen
+    document.getElementById('terminSplitModal').style.display = 'block';
+    
+    // Event-Listener für Teil1-Input
+    document.getElementById('splitTeil1Zeit').oninput = () => this.updateSplitFromInput();
+  }
 }
+
 
 const app = new App();
