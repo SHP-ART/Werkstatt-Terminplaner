@@ -1,0 +1,20 @@
+directories:
+  output: dist-server
+  buildResources: build
+appId: com.werkstatt.terminplaner-server
+productName: Werkstatt Terminplaner Server
+files:
+  - filter:
+      - electron-main.js
+      - electron-preload.js
+      - status.html
+      - status.js
+      - src/
+      - database/
+      - .env
+win:
+  target: portable
+  icon: null
+portable:
+  artifactName: Werkstatt-Server-${version}.${ext}
+electronVersion: 39.2.7

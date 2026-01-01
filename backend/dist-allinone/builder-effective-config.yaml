@@ -1,0 +1,41 @@
+directories:
+  output: dist-allinone
+  buildResources: build
+appId: com.werkstatt.terminplaner
+productName: Werkstatt Terminplaner
+files:
+  - filter:
+      - electron-main.js
+      - electron-preload.js
+      - status.html
+      - status.js
+      - src/
+      - database/
+      - .env
+extraResources:
+  - from: ../frontend
+    to: frontend
+    filter:
+      - '**/*'
+      - '!node_modules/**'
+      - '!*.md'
+win:
+  target:
+    - target: nsis
+      arch:
+        - x64
+    - target: dir
+      arch:
+        - x64
+  icon: null
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: Werkstatt Terminplaner
+  installerIcon: null
+  uninstallerIcon: null
+  installerHeaderIcon: null
+  deleteAppDataOnUninstall: false
+electronVersion: 39.2.7

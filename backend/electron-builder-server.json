@@ -1,0 +1,23 @@
+{
+  "appId": "com.werkstatt.terminplaner-server",
+  "productName": "Werkstatt Terminplaner Server",
+  "directories": {
+    "output": "dist-server"
+  },
+  "files": [
+    "electron-main.js",
+    "electron-preload.js",
+    "status.html",
+    "status.js",
+    "src/",
+    "database/",
+    ".env"
+  ],
+  "win": {
+    "target": "portable",
+    "icon": null
+  },
+  "portable": {
+    "artifactName": "Werkstatt-Server-${version}.${ext}"
+  }
+}
