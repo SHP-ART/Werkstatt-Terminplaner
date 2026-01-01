@@ -6,7 +6,7 @@ class EinstellungenModel {
   }
 
   static updateWerkstatt(data, callback) {
-    const { pufferzeit_minuten, servicezeit_minuten, ersatzauto_anzahl, nebenzeit_prozent } = data;
+    const { pufferzeit_minuten, servicezeit_minuten, ersatzauto_anzahl, nebenzeit_prozent, mittagspause_minuten } = data;
     
     // Lade erst die aktuellen Werte, um unveränderte Felder beizubehalten
     this.getWerkstatt((err, current) => {
@@ -27,12 +27,15 @@ class EinstellungenModel {
       const nebenzeit = nebenzeit_prozent !== undefined
         ? parseFloat(nebenzeit_prozent)
         : (current && current.nebenzeit_prozent !== undefined ? current.nebenzeit_prozent : 0);
+      const mittagspause = mittagspause_minuten !== undefined
+        ? parseInt(mittagspause_minuten, 10)
+        : (current && current.mittagspause_minuten !== undefined ? current.mittagspause_minuten : 30);
 
       db.run(
         `UPDATE werkstatt_einstellungen
-         SET pufferzeit_minuten = ?, servicezeit_minuten = ?, ersatzauto_anzahl = ?, nebenzeit_prozent = ?
+         SET pufferzeit_minuten = ?, servicezeit_minuten = ?, ersatzauto_anzahl = ?, nebenzeit_prozent = ?, mittagspause_minuten = ?
          WHERE id = 1`,
-        [pufferzeit, servicezeit, ersatzautos, nebenzeit],
+        [pufferzeit, servicezeit, ersatzautos, nebenzeit, mittagspause],
         function(err) {
           if (err) {
             callback(err);
@@ -43,9 +46,9 @@ class EinstellungenModel {
           if (this.changes === 0) {
             db.run(
               `INSERT OR REPLACE INTO werkstatt_einstellungen
-               (id, pufferzeit_minuten, servicezeit_minuten, ersatzauto_anzahl, nebenzeit_prozent)
-               VALUES (1, ?, ?, ?, ?)`,
-              [pufferzeit, servicezeit, ersatzautos, nebenzeit],
+               (id, pufferzeit_minuten, servicezeit_minuten, ersatzauto_anzahl, nebenzeit_prozent, mittagspause_minuten)
+               VALUES (1, ?, ?, ?, ?, ?)`,
+              [pufferzeit, servicezeit, ersatzautos, nebenzeit, mittagspause],
               callback
             );
           } else {

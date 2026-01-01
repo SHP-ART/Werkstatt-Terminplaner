@@ -14,10 +14,10 @@ class LehrlingeModel {
   }
 
   static create(data, callback) {
-    const { name, nebenzeit_prozent, aufgabenbewaeltigung_prozent, aktiv } = data;
+    const { name, nebenzeit_prozent, aufgabenbewaeltigung_prozent, aktiv, mittagspause_start } = data;
     db.run(
-      'INSERT INTO lehrlinge (name, nebenzeit_prozent, aufgabenbewaeltigung_prozent, aktiv) VALUES (?, ?, ?, ?)',
-      [name, nebenzeit_prozent || 0, aufgabenbewaeltigung_prozent || 100, aktiv !== undefined ? aktiv : 1],
+      'INSERT INTO lehrlinge (name, nebenzeit_prozent, aufgabenbewaeltigung_prozent, aktiv, mittagspause_start) VALUES (?, ?, ?, ?, ?)',
+      [name, nebenzeit_prozent || 0, aufgabenbewaeltigung_prozent || 100, aktiv !== undefined ? aktiv : 1, mittagspause_start || '12:00'],
       function(err) {
         if (err) {
           return callback(err);
@@ -28,7 +28,7 @@ class LehrlingeModel {
   }
 
   static update(id, data, callback) {
-    const { name, nebenzeit_prozent, aufgabenbewaeltigung_prozent, aktiv } = data;
+    const { name, nebenzeit_prozent, aufgabenbewaeltigung_prozent, aktiv, mittagspause_start } = data;
     const updates = [];
     const values = [];
 
@@ -47,6 +47,10 @@ class LehrlingeModel {
     if (aktiv !== undefined) {
       updates.push('aktiv = ?');
       values.push(aktiv);
+    }
+    if (mittagspause_start !== undefined) {
+      updates.push('mittagspause_start = ?');
+      values.push(mittagspause_start);
     }
 
     if (updates.length === 0) {

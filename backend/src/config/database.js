@@ -337,6 +337,13 @@ function initializeDatabase() {
       }
     });
 
+    // Mittagspause-Startzeit für jeden Mitarbeiter (z.B. '12:00')
+    db.run(`ALTER TABLE mitarbeiter ADD COLUMN mittagspause_start TEXT DEFAULT '12:00'`, (err) => {
+      if (err && !err.message.includes('duplicate column')) {
+        console.error('Fehler beim Hinzufügen von mittagspause_start:', err);
+      }
+    });
+
     // Lehrlinge-Tabelle
     db.run(`CREATE TABLE IF NOT EXISTS lehrlinge (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -370,6 +377,13 @@ function initializeDatabase() {
     db.run(`ALTER TABLE lehrlinge ADD COLUMN arbeitsstunden_pro_tag INTEGER DEFAULT 8`, (err) => {
       if (err && !err.message.includes('duplicate column')) {
         console.error('Fehler beim Hinzufügen von arbeitsstunden_pro_tag:', err);
+      }
+    });
+
+    // Mittagspause-Startzeit für Lehrlinge (z.B. '12:00')
+    db.run(`ALTER TABLE lehrlinge ADD COLUMN mittagspause_start TEXT DEFAULT '12:00'`, (err) => {
+      if (err && !err.message.includes('duplicate column')) {
+        console.error('Fehler beim Hinzufügen von mittagspause_start:', err);
       }
     });
 
@@ -443,6 +457,13 @@ function initializeDatabase() {
     db.run(`ALTER TABLE werkstatt_einstellungen ADD COLUMN nebenzeit_prozent REAL DEFAULT 0`, (err) => {
       if (err && !err.message.includes('duplicate column')) {
         console.error('Fehler beim Hinzufügen von nebenzeit_prozent:', err);
+      }
+    });
+
+    // Füge Mittagspause-Dauer Spalte hinzu (in Minuten, global für alle)
+    db.run(`ALTER TABLE werkstatt_einstellungen ADD COLUMN mittagspause_minuten INTEGER DEFAULT 30`, (err) => {
+      if (err && !err.message.includes('duplicate column')) {
+        console.error('Fehler beim Hinzufügen von mittagspause_minuten:', err);
       }
     });
 

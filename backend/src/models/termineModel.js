@@ -39,6 +39,8 @@ class TermineModel {
       LEFT JOIN kunden k ON t.kunde_id = k.id
       LEFT JOIN mitarbeiter m ON t.mitarbeiter_id = m.id
       WHERE t.geloescht_am IS NULL
+        AND t.arbeit != 'Fahrzeug aus Import'
+        AND t.arbeit != 'Fahrzeug hinzugefügt'
       ORDER BY t.datum DESC
     `;
     db.all(query, callback);
@@ -54,6 +56,8 @@ class TermineModel {
       LEFT JOIN kunden k ON t.kunde_id = k.id
       LEFT JOIN mitarbeiter m ON t.mitarbeiter_id = m.id
       WHERE t.datum = ? AND t.geloescht_am IS NULL
+        AND t.arbeit != 'Fahrzeug aus Import'
+        AND t.arbeit != 'Fahrzeug hinzugefügt'
       ORDER BY t.erstellt_am
     `;
     db.all(query, [datum], callback);

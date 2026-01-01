@@ -1222,6 +1222,11 @@
                             <small style="display: block; color: #666; margin-top: 5px;">Aufschlag auf zugeordnete Arbeit (Holen, Waschen etc.)</small>
                         </div>
                         <div class="form-group">
+                            <label>Mittagspause (Minuten):</label>
+                            <input type="number" id="mittagspause_minuten" min="0" max="120" value="30" required>
+                            <small style="display: block; color: #666; margin-top: 5px;">Dauer der Mittagspause (gilt für alle)</small>
+                        </div>
+                        <div class="form-group">
                             <label>&nbsp;</label>
                             <button type="submit" class="btn btn-primary">Speichern</button>
                         </div>
@@ -1239,6 +1244,7 @@
                             <tr>
                                 <th>Name</th>
                                 <th>Arbeitsstunden/Tag</th>
+                                <th>Mittagspause</th>
                                 <th>Nur Service</th>
                                 <th>Aktiv</th>
                                 <th>Aktionen</th>
@@ -1258,6 +1264,7 @@
                             <tr>
                                 <th>Name</th>
                                 <th>Aufgabenbewältigung (%)</th>
+                                <th>Mittagspause</th>
                                 <th>Aktiv</th>
                                 <th>Aktionen</th>
                             </tr>
@@ -1428,6 +1435,10 @@
                     <div class="legende-item">
                         <span class="color-box" style="background: #9e9e9e;"></span>
                         <span>Ohne Startzeit</span>
+                    </div>
+                    <div class="legende-item">
+                        <span class="color-box" style="background: linear-gradient(135deg, rgba(198, 40, 40, 0.25) 0%, rgba(198, 40, 40, 0.35) 100%); border-left: 2px solid #c62828; border-right: 2px solid #c62828;"></span>
+                        <span>🍽️ Mittagspause</span>
                     </div>
                 </div>
             </div>
@@ -1807,6 +1818,44 @@
             <div id="fahrzeugAuswahlListe" style="max-height: 400px; overflow-y: auto;"></div>
             <div style="margin-top: 15px; padding-top: 15px; border-top: 1px solid #ddd; display: flex; gap: 10px;">
                 <button type="button" class="btn btn-secondary" id="fahrzeugAuswahlZurueck">← Zurück</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Fahrzeugverwaltung Modal -->
+    <div id="fahrzeugVerwaltungModal" class="modal">
+        <div class="modal-content" style="max-width: 600px;">
+            <span class="close" id="closeFahrzeugVerwaltung">&times;</span>
+            <h3>🚗 Fahrzeuge verwalten</h3>
+            <p id="fahrzeugVerwaltungKunde" style="color: #666; margin-bottom: 15px;"></p>
+            
+            <!-- Fahrzeugliste -->
+            <div id="fahrzeugVerwaltungListe" style="max-height: 300px; overflow-y: auto; margin-bottom: 20px;"></div>
+            
+            <!-- Neues Fahrzeug hinzufügen -->
+            <div style="background: #f8f9fa; padding: 15px; border-radius: 8px; border: 2px dashed #dee2e6;">
+                <h4 style="margin: 0 0 15px 0; color: #4a90e2;">➕ Neues Fahrzeug hinzufügen</h4>
+                <div class="form-row" style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                    <div class="form-group" style="margin: 0;">
+                        <label style="font-size: 0.85em;">Kennzeichen: *</label>
+                        <input type="text" id="neuesFahrzeugKennzeichen" placeholder="z.B. K-AB 1234" style="text-transform: uppercase;">
+                    </div>
+                    <div class="form-group" style="margin: 0;">
+                        <label style="font-size: 0.85em;">Fahrzeugtyp:</label>
+                        <input type="text" id="neuesFahrzeugTyp" placeholder="z.B. VW Golf">
+                    </div>
+                </div>
+                <div class="form-group" style="margin: 10px 0 0 0;">
+                    <label style="font-size: 0.85em;">VIN:</label>
+                    <input type="text" id="neuesFahrzeugVin" placeholder="z.B. WVWZZZ3CZWE123456" maxlength="17" style="text-transform: uppercase;">
+                </div>
+                <button type="button" class="btn btn-success" id="fahrzeugHinzufuegenBtn" style="margin-top: 10px;">
+                    ➕ Fahrzeug hinzufügen
+                </button>
+            </div>
+            
+            <div style="margin-top: 15px; padding-top: 15px; border-top: 1px solid #ddd;">
+                <button type="button" class="btn btn-secondary" id="fahrzeugVerwaltungSchliessen">Schließen</button>
             </div>
         </div>
     </div>

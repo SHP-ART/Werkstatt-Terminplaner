@@ -33,12 +33,16 @@ class KundenController {
         res.status(500).json({ error: err.message });
       } else {
         let message = `${result.imported} Kunden importiert`;
+        if (result.fahrzeugeHinzugefuegt > 0) {
+          message += `, ${result.fahrzeugeHinzugefuegt} zusätzliche Fahrzeuge hinzugefügt`;
+        }
         if (result.skipped > 0) {
-          message += `, ${result.skipped} übersprungen (Duplikate)`;
+          message += `, ${result.skipped} übersprungen`;
         }
         res.json({ 
           message, 
           imported: result.imported, 
+          fahrzeugeHinzugefuegt: result.fahrzeugeHinzugefuegt || 0,
           skipped: result.skipped,
           errors: result.errors 
         });
@@ -99,6 +103,66 @@ class KundenController {
       } else {
         console.log('Search results:', results.length, 'customers found');
         res.json(results);
+      }
+    });
+  }
+
+  // Alle Fahrzeuge (Kennzeichen) eines Kunden abrufen
+  static getFahrzeuge(req, res) {
+    const kundeId = req.params.id;
+    
+    KundenModel.getFahrzeuge(kundeId, (err, fahrzeuge) => {
+      if (err) {
+        console.error('Fehler beim Abrufen der Fahrzeuge:', err);
+        res.status(500).json({ error: err.message });
+      } else {
+        res.json(fahrzeuge);
+      }
+    });
+  }
+
+  // Fahrzeug zu einem Kunden hinzufügen
+  static addFahrzeug(req, res) {
+    const kundeId = req.params.id;
+    const fahrzeug = req.body;
+    
+    KundenModel.addFahrzeug(kundeId, fahrzeug, (err, result) => {
+      if (err) {
+        console.error('Fehler beim Hinzufügen des Fahrzeugs:', err);
+        res.status(400).json({ error: err.message });
+      } else {
+        res.json(result);
+      }
+    });
+  }
+
+  // Fahrzeug eines Kunden löschen
+  static deleteFahrzeug(req, res) {
+    const kundeId = req.params.id;
+    const kennzeichen = decodeURIComponent(req.params.kennzeichen);
+    
+    KundenModel.deleteFahrzeug(kundeId, kennzeichen, (err, result) => {
+      if (err) {
+        console.error('Fehler beim Löschen des Fahrzeugs:', err);
+        res.status(500).json({ error: err.message });
+      } else {
+        res.json(result);
+      }
+    });
+  }
+
+  // Fahrzeugdaten aktualisieren
+  static updateFahrzeug(req, res) {
+    const kundeId = req.params.id;
+    const altesKennzeichen = decodeURIComponent(req.params.kennzeichen);
+    const neuesDaten = req.body;
+    
+    KundenModel.updateFahrzeug(kundeId, altesKennzeichen, neuesDaten, (err, result) => {
+      if (err) {
+        console.error('Fehler beim Aktualisieren des Fahrzeugs:', err);
+        res.status(500).json({ error: err.message });
+      } else {
+        res.json(result);
       }
     });
   }

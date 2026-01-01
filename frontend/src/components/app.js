@@ -148,6 +148,20 @@ class App {
       fahrzeugAuswahlZurueck.addEventListener('click', () => this.closeFahrzeugAuswahlModal());
     }
     
+    // Fahrzeugverwaltung Modal Event-Listener
+    const closeFahrzeugVerwaltung = document.getElementById('closeFahrzeugVerwaltung');
+    if (closeFahrzeugVerwaltung) {
+      closeFahrzeugVerwaltung.addEventListener('click', () => this.closeFahrzeugVerwaltungModal());
+    }
+    const fahrzeugVerwaltungSchliessen = document.getElementById('fahrzeugVerwaltungSchliessen');
+    if (fahrzeugVerwaltungSchliessen) {
+      fahrzeugVerwaltungSchliessen.addEventListener('click', () => this.closeFahrzeugVerwaltungModal());
+    }
+    const fahrzeugHinzufuegenBtn = document.getElementById('fahrzeugHinzufuegenBtn');
+    if (fahrzeugHinzufuegenBtn) {
+      fahrzeugHinzufuegenBtn.addEventListener('click', () => this.addFahrzeugFromModal());
+    }
+    
     // Kundenliste-Suche Event-Listener
     const kundenListeSuche = document.getElementById('kundenListeSuche');
     if (kundenListeSuche) {
@@ -1737,6 +1751,7 @@ class App {
         <td>${this.highlightMatch(kunde.fahrzeugtyp || '-', suchBegriff)}</td>
         <td>${this.highlightMatch(kunde.locosoft_id || '-', suchBegriff)}</td>
         <td>
+          <button class="btn btn-small btn-primary" onclick="app.openFahrzeugVerwaltung(${kunde.id}, '${(kunde.name || '').replace(/'/g, "\\'")}')" title="Fahrzeuge verwalten">🚗</button>
           <button class="btn btn-small btn-secondary" onclick="app.editKunde(${kunde.id})" title="Bearbeiten">✏️</button>
           <button class="btn btn-small btn-danger" onclick="app.deleteKunde(${kunde.id}, '${(kunde.name || '').replace(/'/g, "\\'")}')">🗑️</button>
         </td>
@@ -2069,68 +2084,49 @@ class App {
       return;
     }
 
-    // Gruppiere nach Kundenname für intelligenten Import
-    const kundenMap = new Map();
+    // Zähle eindeutige Kunden und Fahrzeuge für die Vorschau
+    const kundenNamen = new Set();
+    const fahrzeugeSet = new Set();
     
     this.pendingImportData.forEach(row => {
-      const nameLower = row.name.toLowerCase();
-      if (!kundenMap.has(nameLower)) {
-        kundenMap.set(nameLower, {
-          name: row.name,
-          telefon: row.telefon,
-          email: row.email,
-          adresse: row.adresse,
-          fahrzeuge: []
-        });
-      }
-      
-      const kunde = kundenMap.get(nameLower);
-      // Ergänze fehlende Kontaktdaten
-      if (!kunde.telefon && row.telefon) kunde.telefon = row.telefon;
-      if (!kunde.email && row.email) kunde.email = row.email;
-      if (!kunde.adresse && row.adresse) kunde.adresse = row.adresse;
-      
-      // Füge Fahrzeug hinzu wenn vorhanden
-      if (row.kennzeichen) {
-        kunde.fahrzeuge.push({
-          kennzeichen: row.kennzeichen,
-          fahrzeugtyp: row.fahrzeugtyp || '',
-          vin: row.vin || ''
-        });
-      }
+      if (row.name) kundenNamen.add(row.name.toLowerCase());
+      if (row.kennzeichen) fahrzeugeSet.add(row.kennzeichen.toUpperCase().replace(/[\s\-]/g, ''));
     });
 
     // Bestätigungsdialog
-    const kundenCount = kundenMap.size;
-    const fahrzeugCount = Array.from(kundenMap.values()).reduce((sum, k) => sum + k.fahrzeuge.length, 0);
+    const kundenCount = kundenNamen.size;
+    const fahrzeugCount = fahrzeugeSet.size;
     
-    if (!confirm(`Import starten?\n\n${kundenCount} Kunden mit ${fahrzeugCount} Fahrzeugen werden importiert.\n\nHinweis: Bei Kunden mit mehreren Fahrzeugen wird das erste Fahrzeug als Hauptkennzeichen gespeichert.`)) {
+    if (!confirm(`Import starten?\n\n${kundenCount} eindeutige Kunden mit ${fahrzeugCount} Fahrzeugen.\n\nHinweis: Kunden mit mehreren Fahrzeugen werden automatisch erkannt und alle Kennzeichen zugeordnet.`)) {
       return;
     }
 
     try {
-      // Bereite Kunden für API-Import vor
-      const kundenZuImportieren = [];
-      
-      kundenMap.forEach((kundeData) => {
-        const ersteFahrzeug = kundeData.fahrzeuge[0] || {};
-        kundenZuImportieren.push({
-          name: kundeData.name,
-          telefon: kundeData.telefon || '',
-          email: kundeData.email || '',
-          adresse: kundeData.adresse || '',
-          kennzeichen: ersteFahrzeug.kennzeichen || '',
-          fahrzeugtyp: ersteFahrzeug.fahrzeugtyp || '',
-          vin: ersteFahrzeug.vin || '',
-          // Speichere alle Fahrzeuge als Info in Notizen falls mehrere
-          notizen: kundeData.fahrzeuge.length > 1 
-            ? 'Weitere Fahrzeuge: ' + kundeData.fahrzeuge.slice(1).map(f => f.kennzeichen).join(', ')
-            : ''
-        });
-      });
+      // Sende alle Zeilen - das Backend gruppiert Kunden mit gleichem Namen
+      // und erstellt automatisch Fahrzeug-Einträge für zusätzliche Kennzeichen
+      const kundenZuImportieren = this.pendingImportData.map(row => ({
+        name: row.name,
+        telefon: row.telefon || '',
+        email: row.email || '',
+        adresse: row.adresse || '',
+        kennzeichen: row.kennzeichen || '',
+        fahrzeugtyp: row.fahrzeugtyp || '',
+        vin: row.vin || ''
+      }));
 
       const result = await KundenService.import(kundenZuImportieren);
-      alert(`✅ Import erfolgreich!\n\n${result.message}`);
+      
+      // Detaillierte Erfolgsmeldung
+      let message = `✅ Import erfolgreich!\n\n`;
+      message += `📋 ${result.imported} Kunden importiert\n`;
+      if (result.fahrzeugeHinzugefuegt > 0) {
+        message += `🚗 ${result.fahrzeugeHinzugefuegt} zusätzliche Fahrzeuge hinzugefügt\n`;
+      }
+      if (result.skipped > 0) {
+        message += `⏭️ ${result.skipped} übersprungen\n`;
+      }
+      
+      alert(message);
       
       // Aufräumen
       this.cancelExcelImport();
@@ -2198,6 +2194,154 @@ class App {
       console.error('Fehler beim Löschen des Kunden:', error);
       alert('Fehler beim Löschen des Kunden');
     }
+  }
+
+  // ================================================
+  // FAHRZEUGVERWALTUNG
+  // ================================================
+
+  // Fahrzeugverwaltung Modal öffnen
+  async openFahrzeugVerwaltung(kundeId, kundeName) {
+    this.fahrzeugVerwaltungKundeId = kundeId;
+    this.fahrzeugVerwaltungKundeName = kundeName;
+    
+    const modal = document.getElementById('fahrzeugVerwaltungModal');
+    const kundeInfo = document.getElementById('fahrzeugVerwaltungKunde');
+    
+    kundeInfo.innerHTML = `<strong>${kundeName}</strong> (ID: ${kundeId})`;
+    
+    // Lade Fahrzeuge
+    await this.loadFahrzeugVerwaltungListe();
+    
+    // Formular zurücksetzen
+    document.getElementById('neuesFahrzeugKennzeichen').value = '';
+    document.getElementById('neuesFahrzeugTyp').value = '';
+    document.getElementById('neuesFahrzeugVin').value = '';
+    
+    modal.style.display = 'block';
+  }
+
+  // Fahrzeugliste im Modal laden
+  async loadFahrzeugVerwaltungListe() {
+    const liste = document.getElementById('fahrzeugVerwaltungListe');
+    
+    try {
+      const fahrzeuge = await KundenService.getFahrzeuge(this.fahrzeugVerwaltungKundeId);
+      
+      if (fahrzeuge.length === 0) {
+        liste.innerHTML = `
+          <div style="text-align: center; padding: 30px; color: #666; background: #f8f9fa; border-radius: 8px;">
+            <p style="font-size: 1.2em;">🚗 Keine Fahrzeuge vorhanden</p>
+            <p style="font-size: 0.9em;">Fügen Sie unten ein neues Fahrzeug hinzu.</p>
+          </div>
+        `;
+        return;
+      }
+      
+      liste.innerHTML = fahrzeuge.map((fz, idx) => {
+        const letzterTermin = fz.letzter_termin || fz.letzterTermin;
+        const letzterKmStand = fz.letzter_km_stand || fz.letzterKmStand;
+        
+        return `
+          <div class="fahrzeug-verwaltung-item" style="
+            padding: 15px;
+            margin-bottom: 10px;
+            background: ${idx === 0 ? '#e8f5e9' : '#f8f9fa'};
+            border-radius: 8px;
+            border: 2px solid ${idx === 0 ? '#4caf50' : '#dee2e6'};
+          ">
+            <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+              <div style="flex: 1;">
+                <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 5px;">
+                  <span style="font-size: 1.1em; font-weight: bold;">🚗 ${fz.kennzeichen}</span>
+                  ${idx === 0 ? '<span style="background: #4caf50; color: white; padding: 2px 8px; border-radius: 4px; font-size: 0.75em;">Zuletzt</span>' : ''}
+                  <span style="background: ${fz.quelle === 'kundenstamm' ? '#2196f3' : '#ff9800'}; color: white; padding: 2px 6px; border-radius: 4px; font-size: 0.7em;">${fz.quelle === 'kundenstamm' ? 'Hauptfahrzeug' : 'Aus Terminen'}</span>
+                </div>
+                ${fz.fahrzeugtyp ? `<div style="color: #666; font-size: 0.9em;">Typ: ${fz.fahrzeugtyp}</div>` : ''}
+                ${fz.vin ? `<div style="color: #888; font-size: 0.85em;">VIN: ${fz.vin}</div>` : ''}
+                <div style="color: #888; font-size: 0.85em; margin-top: 5px;">
+                  ${letzterTermin ? `Letzter Termin: ${this.formatDatum(letzterTermin)}` : 'Keine Termine'}
+                  ${letzterKmStand ? ` · ${Number(letzterKmStand).toLocaleString('de-DE')} km` : ''}
+                </div>
+              </div>
+              <div style="display: flex; gap: 5px;">
+                <button class="btn btn-small btn-danger" onclick="app.deleteFahrzeugFromModal('${fz.kennzeichen.replace(/'/g, "\\'")}')" title="Fahrzeug löschen">🗑️</button>
+              </div>
+            </div>
+          </div>
+        `;
+      }).join('');
+      
+    } catch (error) {
+      console.error('Fehler beim Laden der Fahrzeuge:', error);
+      liste.innerHTML = `<div style="color: red; padding: 15px;">Fehler beim Laden der Fahrzeuge</div>`;
+    }
+  }
+
+  // Fahrzeug aus Modal hinzufügen
+  async addFahrzeugFromModal() {
+    const kennzeichen = document.getElementById('neuesFahrzeugKennzeichen').value.trim().toUpperCase();
+    const fahrzeugtyp = document.getElementById('neuesFahrzeugTyp').value.trim();
+    const vin = document.getElementById('neuesFahrzeugVin').value.trim().toUpperCase();
+    
+    if (!kennzeichen) {
+      alert('Bitte geben Sie ein Kennzeichen ein.');
+      document.getElementById('neuesFahrzeugKennzeichen').focus();
+      return;
+    }
+    
+    try {
+      await KundenService.addFahrzeug(this.fahrzeugVerwaltungKundeId, {
+        kennzeichen,
+        fahrzeugtyp,
+        vin
+      });
+      
+      // Formular zurücksetzen
+      document.getElementById('neuesFahrzeugKennzeichen').value = '';
+      document.getElementById('neuesFahrzeugTyp').value = '';
+      document.getElementById('neuesFahrzeugVin').value = '';
+      
+      // Liste neu laden
+      await this.loadFahrzeugVerwaltungListe();
+      
+      // Auch Termin-Cache aktualisieren
+      this.loadTermineCache();
+      
+    } catch (error) {
+      console.error('Fehler beim Hinzufügen des Fahrzeugs:', error);
+      alert('Fehler: ' + (error.message || 'Fahrzeug konnte nicht hinzugefügt werden'));
+    }
+  }
+
+  // Fahrzeug aus Modal löschen
+  async deleteFahrzeugFromModal(kennzeichen) {
+    if (!confirm(`Möchten Sie das Fahrzeug "${kennzeichen}" wirklich löschen?\n\nAchtung: Alle Termine mit diesem Kennzeichen werden ebenfalls gelöscht!`)) {
+      return;
+    }
+    
+    try {
+      await KundenService.deleteFahrzeug(this.fahrzeugVerwaltungKundeId, kennzeichen);
+      
+      // Liste neu laden
+      await this.loadFahrzeugVerwaltungListe();
+      
+      // Auch Termin-Cache und Kundenliste aktualisieren
+      this.loadTermineCache();
+      this.loadKunden();
+      
+    } catch (error) {
+      console.error('Fehler beim Löschen des Fahrzeugs:', error);
+      alert('Fehler: ' + (error.message || 'Fahrzeug konnte nicht gelöscht werden'));
+    }
+  }
+
+  // Fahrzeugverwaltung Modal schließen
+  closeFahrzeugVerwaltungModal() {
+    const modal = document.getElementById('fahrzeugVerwaltungModal');
+    modal.style.display = 'none';
+    this.fahrzeugVerwaltungKundeId = null;
+    this.fahrzeugVerwaltungKundeName = null;
   }
 
   async loadArbeitszeiten() {
@@ -3676,6 +3820,10 @@ class App {
           <div class="detail-item">
             <span class="detail-label">Geschätzte Zeit</span>
             <span class="detail-value detail-value-highlight">${this.formatMinutesToHours(termin.geschaetzte_zeit || 0)}</span>
+          </div>
+          <div class="detail-item">
+            <span class="detail-label">Interne Auftragsnr.</span>
+            <span class="detail-value detail-value-highlight">${termin.interne_auftragsnummer || '-'}</span>
           </div>
           ${termin.dringlichkeit ? `
           <div class="detail-item">
@@ -5228,16 +5376,16 @@ class App {
         const diffStunden = Math.floor(diffMinuten / 60);
         const diffMin = diffMinuten % 60;
         
-        if (diffStunden > 0) {
-          zeitEl.textContent = `${String(diffStunden).padStart(2, '0')}:${String(diffMin).padStart(2, '0')}`;
-        } else {
-          zeitEl.textContent = `00:${String(diffMin).padStart(2, '0')}`;
-        }
+        const countdown = diffStunden > 0 
+          ? `${String(diffStunden).padStart(2, '0')}:${String(diffMin).padStart(2, '0')}`
+          : `00:${String(diffMin).padStart(2, '0')}`;
+        
+        zeitEl.textContent = `in: ${countdown} um: ${naechsterTermin.bring_zeit}`;
         zeitEl.style.color = diffMinuten <= 15 ? 'var(--accent)' : 'inherit';
-        infoEl.textContent = `${naechsterTermin.kunde_name || 'Kunde'} - ${naechsterTermin.kennzeichen || ''} (${naechsterTermin.bring_zeit})`;
+        infoEl.textContent = `${naechsterTermin.kunde_name || 'Kunde'} - ${naechsterTermin.kennzeichen || ''}`;
       }
     } else {
-      zeitEl.textContent = '--:--';
+      zeitEl.textContent = 'in: --:-- um: --:--';
       zeitEl.style.color = 'inherit';
       infoEl.textContent = 'Keine weiteren Termine heute';
     }
@@ -5808,23 +5956,38 @@ class App {
   }
 
   // Kunde aus Namenssuche auswählen
-  selectKundeVorschlag(kundeId) {
+  async selectKundeVorschlag(kundeId) {
     const kunde = (this.kundenCache || []).find(k => k.id === kundeId);
     if (!kunde) return;
     
-    // Alle Fahrzeuge des Kunden sammeln
-    const fahrzeuge = this.getKundeFahrzeuge(kundeId, kunde.name);
-    
-    // Wenn mehr als ein Fahrzeug vorhanden ist, Auswahl-Popup zeigen
-    if (fahrzeuge.length > 1) {
-      this.showFahrzeugAuswahlModal(kunde, fahrzeuge);
+    // Fahrzeuge direkt vom Backend laden (inkl. aller Termine-Kennzeichen)
+    try {
+      const fahrzeuge = await KundenService.getFahrzeuge(kundeId);
+      
+      console.log(`Kunde ${kunde.name} ausgewählt:`, {
+        kundeId,
+        kundeKennzeichen: kunde.kennzeichen,
+        gefundeneFahrzeuge: fahrzeuge.length,
+        fahrzeuge: fahrzeuge.map(f => f.kennzeichen)
+      });
+      
+      // Wenn mehr als ein Fahrzeug vorhanden ist, Auswahl-Popup zeigen
+      if (fahrzeuge.length > 1) {
+        console.log('Zeige Fahrzeugauswahl-Modal...');
+        this.showFahrzeugAuswahlModal(kunde, fahrzeuge);
+        this.hideVorschlaege('name');
+        return;
+      }
+      
+      // Nur ein oder kein Fahrzeug - direkt auswählen
+      this.applyKundeAuswahl(kunde, fahrzeuge.length > 0 ? fahrzeuge[0] : null);
       this.hideVorschlaege('name');
-      return;
+    } catch (error) {
+      console.error('Fehler beim Laden der Fahrzeuge:', error);
+      // Fallback: Nur den Kunden ohne Fahrzeugauswahl übernehmen
+      this.applyKundeAuswahl(kunde, null);
+      this.hideVorschlaege('name');
     }
-    
-    // Nur ein oder kein Fahrzeug - direkt auswählen
-    this.applyKundeAuswahl(kunde, fahrzeuge.length > 0 ? fahrzeuge[0] : null);
-    this.hideVorschlaege('name');
   }
 
   // Fahrzeug-Auswahl Modal anzeigen
@@ -5836,7 +5999,12 @@ class App {
     kundeInfo.innerHTML = `<strong>${kunde.name}</strong>${kunde.telefon ? ` · ${kunde.telefon}` : ''}<br>
       <span style="font-size: 0.9em;">Dieser Kunde hat ${fahrzeuge.length} Fahrzeuge:</span>`;
     
-    liste.innerHTML = fahrzeuge.map((fz, idx) => `
+    liste.innerHTML = fahrzeuge.map((fz, idx) => {
+      // Unterstütze beide Feldnamen (API: letzter_termin, Cache: letzterTermin)
+      const letzterTermin = fz.letzter_termin || fz.letzterTermin;
+      const letzterKmStand = fz.letzter_km_stand || fz.letzterKmStand;
+      
+      return `
       <div class="fahrzeug-auswahl-item" onclick="app.selectFahrzeugFromModal(${kunde.id}, ${idx})" style="
         padding: 15px;
         margin-bottom: 10px;
@@ -5856,11 +6024,11 @@ class App {
         </div>
         ${fz.vin ? `<div style="font-size: 0.85em; color: #888; margin-top: 5px;">VIN: ${fz.vin}</div>` : ''}
         <div style="font-size: 0.85em; color: #666; margin-top: 5px;">
-          ${fz.letzterTermin ? `Letzter Termin: ${this.formatDatum(fz.letzterTermin)}` : 'Aus Kundenstamm'}
-          ${fz.letzterKmStand ? ` · ${fz.letzterKmStand.toLocaleString('de-DE')} km` : ''}
+          ${letzterTermin ? `Letzter Termin: ${this.formatDatum(letzterTermin)}` : 'Aus Kundenstamm'}
+          ${letzterKmStand ? ` · ${Number(letzterKmStand).toLocaleString('de-DE')} km` : ''}
         </div>
       </div>
-    `).join('');
+    `}).join('');
     
     // Speichere die Daten für späteren Zugriff
     this.fahrzeugAuswahlData = { kunde, fahrzeuge };
@@ -5913,11 +6081,12 @@ class App {
         document.getElementById('vin').value = fahrzeug.vin;
       }
       
-      // KM-Stand als Placeholder setzen
+      // KM-Stand als Placeholder setzen (unterstütze beide Feldnamen)
       const kmStandInput = document.getElementById('kilometerstand');
-      if (fahrzeug.letzterKmStand && kmStandInput) {
+      const letzterKmStand = fahrzeug.letzter_km_stand || fahrzeug.letzterKmStand;
+      if (letzterKmStand && kmStandInput) {
         kmStandInput.value = '';
-        kmStandInput.placeholder = `Letzter KM-Stand: ${fahrzeug.letzterKmStand.toLocaleString('de-DE')} km`;
+        kmStandInput.placeholder = `Letzter KM-Stand: ${Number(letzterKmStand).toLocaleString('de-DE')} km`;
         kmStandInput.classList.add('has-previous-value');
       }
     } else if (kunde.kennzeichen) {
@@ -6522,6 +6691,10 @@ class App {
     const nebenzeitField = document.getElementById('nebenzeit_prozent');
     if (nebenzeitField) {
       nebenzeitField.value = einstellungen.nebenzeit_prozent || 0;
+    }
+    const mittagspauseField = document.getElementById('mittagspause_minuten');
+    if (mittagspauseField) {
+      mittagspauseField.value = einstellungen.mittagspause_minuten || 30;
     }
   }
 
@@ -7430,6 +7603,7 @@ class App {
     const servicezeitField = document.getElementById('servicezeit_minuten');
     const ersatzautoField = document.getElementById('ersatzauto_anzahl');
     const nebenzeitField = document.getElementById('nebenzeit_prozent');
+    const mittagspauseField = document.getElementById('mittagspause_minuten');
     
     if (!servicezeitField) {
       alert('Servicezeit-Feld nicht gefunden.');
@@ -7439,6 +7613,7 @@ class App {
     const servicezeit = parseInt(servicezeitField.value, 10);
     const ersatzautoAnzahl = ersatzautoField ? parseInt(ersatzautoField.value, 10) : 2;
     const nebenzeit = nebenzeitField ? parseFloat(nebenzeitField.value) : 0;
+    const mittagspause = mittagspauseField ? parseInt(mittagspauseField.value, 10) : 30;
 
     if (!Number.isFinite(servicezeit) || servicezeit < 0) {
       alert('Bitte eine gültige Servicezeit eingeben.');
@@ -7455,6 +7630,11 @@ class App {
       return;
     }
 
+    if (!Number.isFinite(mittagspause) || mittagspause < 0 || mittagspause > 120) {
+      alert('Bitte eine gültige Mittagspause eingeben (0-120 Minuten).');
+      return;
+    }
+
     try {
       // Lade aktuelle Einstellungen, um Pufferzeit beizubehalten
       const aktuelleEinstellungen = await EinstellungenService.getWerkstatt();
@@ -7463,7 +7643,8 @@ class App {
         pufferzeit_minuten: aktuelleEinstellungen?.pufferzeit_minuten || 15,
         servicezeit_minuten: servicezeit,
         ersatzauto_anzahl: ersatzautoAnzahl,
-        nebenzeit_prozent: nebenzeit
+        nebenzeit_prozent: nebenzeit,
+        mittagspause_minuten: mittagspause
       });
       alert('Einstellungen gespeichert.');
       this.loadAuslastung();
@@ -7483,7 +7664,7 @@ class App {
       tbody.innerHTML = '';
 
       if (mitarbeiter.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="5" class="loading">Keine Mitarbeiter vorhanden</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="6" class="loading">Keine Mitarbeiter vorhanden</td></tr>';
         return;
       }
 
@@ -7492,6 +7673,7 @@ class App {
         row.innerHTML = `
           <td><input type="text" id="mitarbeiter_name_${ma.id}" value="${ma.name || ''}" style="width: 100%; padding: 5px;"></td>
           <td><input type="number" id="mitarbeiter_stunden_${ma.id}" value="${ma.arbeitsstunden_pro_tag || 8}" min="1" max="24" style="width: 100%; padding: 5px;"></td>
+          <td><input type="time" id="mitarbeiter_mittagspause_${ma.id}" value="${ma.mittagspause_start || '12:00'}" style="width: 100%; padding: 5px;" title="Startzeit der Mittagspause"></td>
           <td><input type="checkbox" id="mitarbeiter_nur_service_${ma.id}" ${ma.nur_service === 1 || ma.nur_service === true ? 'checked' : ''} title="Nur Service (Annahme/Rechnung)"></td>
           <td><input type="checkbox" id="mitarbeiter_aktiv_${ma.id}" ${ma.aktiv !== 0 ? 'checked' : ''}></td>
           <td>
@@ -7512,7 +7694,7 @@ class App {
       tbody.innerHTML = '';
 
       if (lehrlinge.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="4" class="loading">Keine Lehrlinge vorhanden</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="5" class="loading">Keine Lehrlinge vorhanden</td></tr>';
         return;
       }
 
@@ -7521,6 +7703,7 @@ class App {
         row.innerHTML = `
           <td><input type="text" id="lehrling_name_${l.id}" value="${l.name || ''}" style="width: 100%; padding: 5px;"></td>
           <td><input type="number" id="lehrling_aufgabe_${l.id}" value="${l.aufgabenbewaeltigung_prozent || 100}" min="0" max="500" step="1" style="width: 100%; padding: 5px;"></td>
+          <td><input type="time" id="lehrling_mittagspause_${l.id}" value="${l.mittagspause_start || '12:00'}" style="width: 100%; padding: 5px;" title="Startzeit der Mittagspause"></td>
           <td><input type="checkbox" id="lehrling_aktiv_${l.id}" ${l.aktiv !== 0 ? 'checked' : ''}></td>
           <td>
             <button class="btn btn-primary" onclick="app.saveLehrling(${l.id})">💾</button>
@@ -7540,6 +7723,7 @@ class App {
     row.innerHTML = `
       <td><input type="text" id="new_mitarbeiter_name" placeholder="Name" style="width: 100%; padding: 5px;"></td>
       <td><input type="number" id="new_mitarbeiter_stunden" value="8" min="1" max="24" style="width: 100%; padding: 5px;"></td>
+      <td><input type="time" id="new_mitarbeiter_mittagspause" value="12:00" style="width: 100%; padding: 5px;" title="Startzeit der Mittagspause"></td>
       <td><input type="checkbox" id="new_mitarbeiter_nur_service" title="Nur Service (Annahme/Rechnung)"></td>
       <td><input type="checkbox" id="new_mitarbeiter_aktiv" checked></td>
       <td>
@@ -7560,6 +7744,7 @@ class App {
   async saveNewMitarbeiter() {
     const name = document.getElementById('new_mitarbeiter_name').value.trim();
     const stunden = parseInt(document.getElementById('new_mitarbeiter_stunden').value, 10);
+    const mittagspause = document.getElementById('new_mitarbeiter_mittagspause').value || '12:00';
     const nurService = document.getElementById('new_mitarbeiter_nur_service').checked;
     const aktiv = document.getElementById('new_mitarbeiter_aktiv').checked;
 
@@ -7572,6 +7757,7 @@ class App {
       await MitarbeiterService.create({
         name,
         arbeitsstunden_pro_tag: stunden || 8,
+        mittagspause_start: mittagspause,
         nur_service: nurService,
         aktiv: aktiv ? 1 : 0
       });
@@ -7586,6 +7772,7 @@ class App {
   async saveMitarbeiter(id) {
     const name = document.getElementById(`mitarbeiter_name_${id}`).value.trim();
     const stunden = parseInt(document.getElementById(`mitarbeiter_stunden_${id}`).value, 10);
+    const mittagspause = document.getElementById(`mitarbeiter_mittagspause_${id}`).value || '12:00';
     const nurService = document.getElementById(`mitarbeiter_nur_service_${id}`).checked;
     const aktiv = document.getElementById(`mitarbeiter_aktiv_${id}`).checked;
 
@@ -7598,6 +7785,7 @@ class App {
       await MitarbeiterService.update(id, {
         name,
         arbeitsstunden_pro_tag: stunden || 8,
+        mittagspause_start: mittagspause,
         nur_service: nurService,
         aktiv: aktiv ? 1 : 0
       });
@@ -7633,6 +7821,7 @@ class App {
     row.innerHTML = `
       <td><input type="text" id="new_lehrling_name" placeholder="Name" style="width: 100%; padding: 5px;"></td>
       <td><input type="number" id="new_lehrling_aufgabe" value="100" min="0" max="500" step="1" style="width: 100%; padding: 5px;"></td>
+      <td><input type="time" id="new_lehrling_mittagspause" value="12:00" style="width: 100%; padding: 5px;" title="Startzeit der Mittagspause"></td>
       <td><input type="checkbox" id="new_lehrling_aktiv" checked></td>
       <td>
         <button class="btn btn-primary" onclick="app.saveNewLehrling()">💾</button>
@@ -7652,6 +7841,7 @@ class App {
   async saveNewLehrling() {
     const name = document.getElementById('new_lehrling_name').value.trim();
     const aufgabe = parseFloat(document.getElementById('new_lehrling_aufgabe').value);
+    const mittagspause = document.getElementById('new_lehrling_mittagspause').value || '12:00';
     const aktiv = document.getElementById('new_lehrling_aktiv').checked;
 
     if (!name) {
@@ -7663,6 +7853,7 @@ class App {
       await LehrlingeService.create({
         name,
         aufgabenbewaeltigung_prozent: aufgabe || 100,
+        mittagspause_start: mittagspause,
         aktiv: aktiv ? 1 : 0
       });
       await this.loadLehrlinge();
@@ -7676,6 +7867,7 @@ class App {
   async saveLehrling(id) {
     const name = document.getElementById(`lehrling_name_${id}`).value.trim();
     const aufgabe = parseFloat(document.getElementById(`lehrling_aufgabe_${id}`).value);
+    const mittagspause = document.getElementById(`lehrling_mittagspause_${id}`).value || '12:00';
     const aktiv = document.getElementById(`lehrling_aktiv_${id}`).checked;
 
     if (!name) {
@@ -7687,6 +7879,7 @@ class App {
       await LehrlingeService.update(id, {
         name,
         aufgabenbewaeltigung_prozent: aufgabe || 100,
+        mittagspause_start: mittagspause,
         aktiv: aktiv ? 1 : 0
       });
       await this.loadLehrlinge();
@@ -9680,11 +9873,20 @@ class App {
       // Lade alle Termine für dieses Datum
       const termine = await TermineService.getAll(datum);
       
-      // Lade Mitarbeiter und Lehrlinge
-      const [mitarbeiter, lehrlinge] = await Promise.all([
+      // Befülle termineById-Cache für Details-Popup
+      for (const termin of termine) {
+        this.termineById[termin.id] = termin;
+      }
+      
+      // Lade Mitarbeiter, Lehrlinge und Einstellungen
+      const [mitarbeiter, lehrlinge, einstellungen] = await Promise.all([
         MitarbeiterService.getAktive(),
-        LehrlingeService.getAktive()
+        LehrlingeService.getAktive(),
+        EinstellungenService.getWerkstatt()
       ]);
+
+      // Mittagspause-Dauer aus Einstellungen (Standard 30 Min)
+      const mittagspauseDauer = einstellungen?.mittagspause_minuten || 30;
 
       // Erstelle Arbeiten-Map nach Mitarbeiter/Lehrling
       const arbeitenMap = new Map();
@@ -9721,7 +9923,8 @@ class App {
             zeitMinuten: zeitMinuten,
             startzeit: startzeit,
             status: termin.status || 'geplant',
-            istIntern: !termin.kennzeichen || termin.abholung_details === 'Interner Termin'
+            istIntern: !termin.kennzeichen || termin.abholung_details === 'Interner Termin',
+            interneAuftragsnummer: termin.interne_auftragsnummer || ''
           };
 
           // Zuordnung zu Mitarbeiter oder Lehrling basierend auf dem expliziten type-Feld
@@ -9760,7 +9963,7 @@ class App {
       }
 
       // Rendere die Zeitleiste
-      this.renderZeitleiste(body, arbeitenMap, ohneZuordnung, mitarbeiter, lehrlinge);
+      this.renderZeitleiste(body, arbeitenMap, ohneZuordnung, mitarbeiter, lehrlinge, mittagspauseDauer);
 
     } catch (error) {
       console.error('Fehler beim Laden der Zeitleiste:', error);
@@ -9768,13 +9971,16 @@ class App {
     }
   }
 
-  renderZeitleiste(container, arbeitenMap, ohneZuordnung, mitarbeiter, lehrlinge) {
-    // Keine Arbeiten?
-    if (arbeitenMap.size === 0 && ohneZuordnung.length === 0) {
+  renderZeitleiste(container, arbeitenMap, ohneZuordnung, mitarbeiter, lehrlinge, mittagspauseDauer = 30) {
+    // Prüfe ob es überhaupt Mitarbeiter oder Lehrlinge gibt
+    const hatPersonal = mitarbeiter.length > 0 || lehrlinge.length > 0;
+    
+    // Keine Arbeiten und kein Personal?
+    if (!hatPersonal) {
       container.innerHTML = `
         <div class="zeitleiste-leer">
           <span class="zeitleiste-leer-icon">📅</span>
-          <p>Keine Termine für diesen Tag</p>
+          <p>Keine Mitarbeiter oder Lehrlinge vorhanden</p>
         </div>
       `;
       return;
@@ -9805,8 +10011,9 @@ class App {
       const key = `m_${ma.id}`;
       const data = arbeitenMap.get(key);
       const arbeiten = data ? data.arbeiten : [];
+      const mittagspauseStart = ma.mittagspause_start || '12:00';
       
-      html += this.renderZeitleisteRow(ma.name, 'Mitarbeiter', arbeiten, START_HOUR, END_HOUR, TOTAL_HOURS, jetztMarkerHtml);
+      html += this.renderZeitleisteRow(ma.name, 'Mitarbeiter', arbeiten, START_HOUR, END_HOUR, TOTAL_HOURS, jetztMarkerHtml, false, mittagspauseStart, mittagspauseDauer);
     }
 
     // Lehrling-Zeilen
@@ -9814,19 +10021,20 @@ class App {
       const key = `l_${lehrling.id}`;
       const data = arbeitenMap.get(key);
       const arbeiten = data ? data.arbeiten : [];
+      const mittagspauseStart = lehrling.mittagspause_start || '12:00';
       
-      html += this.renderZeitleisteRow(lehrling.name, 'Lehrling', arbeiten, START_HOUR, END_HOUR, TOTAL_HOURS, jetztMarkerHtml);
+      html += this.renderZeitleisteRow(lehrling.name, 'Lehrling', arbeiten, START_HOUR, END_HOUR, TOTAL_HOURS, jetztMarkerHtml, false, mittagspauseStart, mittagspauseDauer);
     }
 
     // Nicht zugeordnete Arbeiten
     if (ohneZuordnung.length > 0) {
-      html += this.renderZeitleisteRow('⚠️ Nicht zugeordnet', '', ohneZuordnung, START_HOUR, END_HOUR, TOTAL_HOURS, jetztMarkerHtml, true);
+      html += this.renderZeitleisteRow('⚠️ Nicht zugeordnet', '', ohneZuordnung, START_HOUR, END_HOUR, TOTAL_HOURS, jetztMarkerHtml, true, null, 0);
     }
 
     container.innerHTML = html;
   }
 
-  renderZeitleisteRow(name, typ, arbeiten, startHour, endHour, totalHours, jetztMarkerHtml, isWarning = false) {
+  renderZeitleisteRow(name, typ, arbeiten, startHour, endHour, totalHours, jetztMarkerHtml, isWarning = false, mittagspauseStart = null, mittagspauseDauer = 30) {
     const rowClass = isWarning ? 'zeitleiste-row nicht-zugeordnet' : 'zeitleiste-row';
     
     // Gitter erstellen
@@ -9835,6 +10043,32 @@ class App {
       gitterHtml += '<div class="zeitleiste-gitter-stunde"></div>';
     }
     gitterHtml += '</div>';
+
+    // Mittagspause-Block erstellen (falls vorhanden und Dauer > 0)
+    let mittagspauseHtml = '';
+    if (mittagspauseStart && mittagspauseDauer > 0) {
+      const [pauseH, pauseM] = mittagspauseStart.split(':').map(Number);
+      const pauseStartMinuten = pauseH * 60 + pauseM;
+      const pauseEndMinuten = pauseStartMinuten + mittagspauseDauer;
+      
+      // Nur anzeigen wenn im sichtbaren Bereich (8-18 Uhr)
+      const displayStart = Math.max(pauseStartMinuten, startHour * 60);
+      const displayEnd = Math.min(pauseEndMinuten, endHour * 60);
+      
+      if (displayEnd > displayStart) {
+        const leftPercent = ((displayStart - startHour * 60) / (totalHours * 60)) * 100;
+        const widthPercent = ((displayEnd - displayStart) / (totalHours * 60)) * 100;
+        const pauseEndZeit = this.minutesToTime(pauseEndMinuten);
+        
+        mittagspauseHtml = `
+          <div class="zeitleiste-mittagspause" 
+               style="left: ${leftPercent}%; width: ${widthPercent}%;"
+               title="Mittagspause: ${mittagspauseStart} - ${pauseEndZeit} (${mittagspauseDauer} Min.)">
+            <span class="zeitleiste-mittagspause-text">🍽️</span>
+          </div>
+        `;
+      }
+    }
 
     // Arbeitsblöcke erstellen
     let bloeckeHtml = '<div class="zeitleiste-arbeiten">';
@@ -9889,15 +10123,17 @@ class App {
       const startZeitText = arbeit.startzeit || '—';
       const endZeitText = this.minutesToTime(endMinutes);
       const dauerText = this.formatMinutesToHours(arbeit.zeitMinuten);
+      const auftragsnrText = arbeit.interneAuftragsnummer ? `&#10;Auftrag: ${arbeit.interneAuftragsnummer}` : '';
       
       // Hauptanzeige: Kennzeichen bevorzugt, sonst Name (bei internen Terminen)
       const hauptAnzeige = arbeit.kennzeichen ? arbeit.kennzeichen : (arbeit.istIntern ? '🔧 ' + arbeit.kunde : arbeit.kunde);
+      const auftragsnrEscaped = arbeit.interneAuftragsnummer ? this.escapeHtml(arbeit.interneAuftragsnummer) : '';
 
       bloeckeHtml += `
         <div class="zeitleiste-block ${statusClass} ${internClass}" 
              style="left: ${leftPercent}%; width: ${Math.max(widthPercent, 3)}%;"
-             onclick="app.openZeitleisteKontextmenu(event, ${arbeit.terminId}, '${this.escapeHtml(arbeit.kunde)}', '${this.escapeHtml(arbeit.arbeit)}', '${arbeit.terminNr}')"
-             title="${arbeit.kunde}${arbeit.kennzeichen ? ' - ' + arbeit.kennzeichen : ''}&#10;${arbeit.arbeit}&#10;${startZeitText} - ${endZeitText} (${dauerText})">
+             onclick="app.openZeitleisteKontextmenu(event, ${arbeit.terminId}, '${this.escapeHtml(arbeit.kunde)}', '${this.escapeHtml(arbeit.arbeit)}', '${arbeit.terminNr}', '${auftragsnrEscaped}')"
+             title="${arbeit.kunde}${arbeit.kennzeichen ? ' - ' + arbeit.kennzeichen : ''}&#10;${arbeit.arbeit}&#10;${startZeitText} - ${endZeitText} (${dauerText})${auftragsnrText}">
           <span class="zeitleiste-block-haupt">${this.escapeHtml(hauptAnzeige)}</span>
           <span class="zeitleiste-block-zeit">${startZeitText} - ${endZeitText}</span>
         </div>
@@ -9914,6 +10150,7 @@ class App {
         </div>
         <div class="zeitleiste-timeline">
           ${gitterHtml}
+          ${mittagspauseHtml}
           ${jetztMarkerHtml}
           ${bloeckeHtml}
         </div>
@@ -9931,7 +10168,7 @@ class App {
   // ZEITLEISTE KONTEXTMENÜ
   // ==========================================
 
-  openZeitleisteKontextmenu(event, terminId, kunde, arbeit, terminNr) {
+  openZeitleisteKontextmenu(event, terminId, kunde, arbeit, terminNr, interneAuftragsnummer = '') {
     event.stopPropagation();
     
     const menu = document.getElementById('zeitleisteKontextmenu');
@@ -9940,10 +10177,12 @@ class App {
     // Speichere aktuelle Termin-Info
     this.zeitleisteKontextTerminId = terminId;
     
-    // Header befüllen
+    // Header befüllen mit Auftragsnummer
+    const auftragsnrHtml = interneAuftragsnummer ? `<small class="kontextmenu-auftragsnr">Interne Auftragsnr.: ${interneAuftragsnummer}</small>` : '';
     header.innerHTML = `
       <strong>${terminNr}</strong> - ${kunde}
       <small>${arbeit}</small>
+      ${auftragsnrHtml}
     `;
     
     // Position berechnen

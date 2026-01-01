@@ -84,6 +84,26 @@ class KundenService {
   static async search(searchTerm) {
     return ApiService.get(`/kunden/search?search=${encodeURIComponent(searchTerm)}`);
   }
+
+  // Alle Fahrzeuge (Kennzeichen) eines Kunden abrufen
+  static async getFahrzeuge(kundeId) {
+    return ApiService.get(`/kunden/${kundeId}/fahrzeuge`);
+  }
+
+  // Fahrzeug zu einem Kunden hinzufügen
+  static async addFahrzeug(kundeId, fahrzeug) {
+    return ApiService.post(`/kunden/${kundeId}/fahrzeuge`, fahrzeug);
+  }
+
+  // Fahrzeug eines Kunden löschen
+  static async deleteFahrzeug(kundeId, kennzeichen) {
+    return ApiService.delete(`/kunden/${kundeId}/fahrzeuge/${encodeURIComponent(kennzeichen)}`);
+  }
+
+  // Fahrzeugdaten aktualisieren
+  static async updateFahrzeug(kundeId, altesKennzeichen, neuesDaten) {
+    return ApiService.put(`/kunden/${kundeId}/fahrzeuge/${encodeURIComponent(altesKennzeichen)}`, neuesDaten);
+  }
 }
 
 class TermineService {

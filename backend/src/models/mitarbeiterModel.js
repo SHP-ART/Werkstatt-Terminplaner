@@ -14,10 +14,10 @@ class MitarbeiterModel {
   }
 
   static create(data, callback) {
-    const { name, arbeitsstunden_pro_tag, nebenzeit_prozent, aktiv, nur_service } = data;
+    const { name, arbeitsstunden_pro_tag, nebenzeit_prozent, aktiv, nur_service, mittagspause_start } = data;
     db.run(
-      'INSERT INTO mitarbeiter (name, arbeitsstunden_pro_tag, nebenzeit_prozent, aktiv, nur_service) VALUES (?, ?, ?, ?, ?)',
-      [name, arbeitsstunden_pro_tag || 8, nebenzeit_prozent || 0, aktiv !== undefined ? aktiv : 1, nur_service ? 1 : 0],
+      'INSERT INTO mitarbeiter (name, arbeitsstunden_pro_tag, nebenzeit_prozent, aktiv, nur_service, mittagspause_start) VALUES (?, ?, ?, ?, ?, ?)',
+      [name, arbeitsstunden_pro_tag || 8, nebenzeit_prozent || 0, aktiv !== undefined ? aktiv : 1, nur_service ? 1 : 0, mittagspause_start || '12:00'],
       function(err) {
         if (err) {
           return callback(err);
@@ -28,7 +28,7 @@ class MitarbeiterModel {
   }
 
   static update(id, data, callback) {
-    const { name, arbeitsstunden_pro_tag, nebenzeit_prozent, aktiv, nur_service } = data;
+    const { name, arbeitsstunden_pro_tag, nebenzeit_prozent, aktiv, nur_service, mittagspause_start } = data;
     const updates = [];
     const values = [];
 
@@ -51,6 +51,10 @@ class MitarbeiterModel {
     if (nur_service !== undefined) {
       updates.push('nur_service = ?');
       values.push(nur_service ? 1 : 0);
+    }
+    if (mittagspause_start !== undefined) {
+      updates.push('mittagspause_start = ?');
+      values.push(mittagspause_start);
     }
 
     if (updates.length === 0) {
