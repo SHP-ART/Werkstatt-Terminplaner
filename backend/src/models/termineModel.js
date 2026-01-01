@@ -155,7 +155,7 @@ class TermineModel {
       mitarbeiter_id, dringlichkeit, kennzeichen, umfang, datum, abholung_typ,
       abholung_details, abholung_zeit, abholung_datum, bring_zeit, kontakt_option,
       kilometerstand, ersatzauto, ersatzauto_tage, ersatzauto_bis_datum, ersatzauto_bis_zeit,
-      vin, fahrzeugtyp, muss_bearbeitet_werden
+      vin, fahrzeugtyp, muss_bearbeitet_werden, interne_auftragsnummer
     } = data;
     
     // Baue die SQL-Query dynamisch auf
@@ -257,6 +257,10 @@ class TermineModel {
     if (muss_bearbeitet_werden !== undefined) {
       updates.push('muss_bearbeitet_werden = ?');
       values.push(muss_bearbeitet_werden ? 1 : 0);
+    }
+    if (interne_auftragsnummer !== undefined) {
+      updates.push('interne_auftragsnummer = ?');
+      values.push(interne_auftragsnummer || null);
     }
 
     if (updates.length === 0) {

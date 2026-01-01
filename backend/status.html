@@ -213,11 +213,28 @@
             color: #999;
             padding: 20px;
         }
+        
+        /* Database Path Styles */
+        .db-path-box {
+            font-family: monospace;
+            background: #e9ecef;
+            padding: 8px;
+            border-radius: 4px;
+            font-size: 0.8em;
+            word-break: break-all;
+            margin-bottom: 8px;
+            border: 1px solid #dee2e6;
+        }
+        .db-path-box.custom {
+            background: #d4edda;
+            border-color: #28a745;
+        }
     </style>
 </head>
 <body>
     <div class="tabs">
         <button class="tab-btn active" onclick="showTab('status')">📊 Status</button>
+        <button class="tab-btn" onclick="showTab('database')">🗄️ Datenbank</button>
         <button class="tab-btn" onclick="showTab('backup')">💾 Backup</button>
     </div>
 
@@ -311,6 +328,44 @@
             <div id="backupList" class="backup-list">
                 <div class="empty-state">Wird geladen...</div>
             </div>
+        </div>
+    </div>
+
+    <!-- Datenbank Tab -->
+    <div id="tab-database" class="tab-content">
+        <div class="status-box">
+            <h2>🗄️ Datenbank-Pfad</h2>
+            <div id="dbMessage" class="backup-status info" style="display: none;"></div>
+            
+            <div class="db-path-box" id="currentDbPath">
+                Wird geladen...
+            </div>
+            
+            <div class="info-row" style="margin-top: 8px;">
+                <span class="info-label">Status</span>
+                <span class="info-value" id="dbStatus">-</span>
+            </div>
+            
+            <button class="backup-btn primary" onclick="selectDatabase()" id="btnSelectDb">
+                📂 Datenbank auswählen
+            </button>
+            <button class="backup-btn secondary" onclick="openDbFolder()">
+                📁 Datenbank-Ordner öffnen
+            </button>
+            <button class="backup-btn secondary" onclick="resetDbPath()" id="btnResetDb">
+                🔄 Auf Standard zurücksetzen
+            </button>
+        </div>
+
+        <div class="status-box">
+            <h2>ℹ️ Hinweis</h2>
+            <p style="font-size: 0.85em; color: #666; margin: 0;">
+                Nach dem Ändern des Datenbank-Pfads muss die Anwendung neu gestartet werden. 
+                Der gewählte Pfad wird gespeichert und bei jedem Start automatisch verwendet.
+            </p>
+            <button class="backup-btn primary" onclick="restartApp()" style="margin-top: 10px;">
+                🔁 Anwendung neu starten
+            </button>
         </div>
     </div>
 

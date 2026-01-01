@@ -1,5 +1,5 @@
 {
-  "appId": "com.example.werkstatt-terminplaner-complete",
+  "appId": "com.werkstatt.terminplaner",
   "productName": "Werkstatt Terminplaner",
   "directories": {
     "output": "dist-allinone"
@@ -25,7 +25,27 @@
     }
   ],
   "win": {
-    "target": "portable",
+    "target": [
+      {
+        "target": "nsis",
+        "arch": ["x64"]
+      },
+      {
+        "target": "dir",
+        "arch": ["x64"]
+      }
+    ],
     "icon": null
+  },
+  "nsis": {
+    "oneClick": false,
+    "allowToChangeInstallationDirectory": true,
+    "createDesktopShortcut": true,
+    "createStartMenuShortcut": true,
+    "shortcutName": "Werkstatt Terminplaner",
+    "installerIcon": null,
+    "uninstallerIcon": null,
+    "installerHeaderIcon": null,
+    "deleteAppDataOnUninstall": false
   }
 }

@@ -138,6 +138,16 @@ class App {
       cancelImportBtn.addEventListener('click', () => this.cancelExcelImport());
     }
     
+    // Fahrzeug-Auswahl Modal Event-Listener
+    const closeFahrzeugAuswahl = document.getElementById('closeFahrzeugAuswahl');
+    if (closeFahrzeugAuswahl) {
+      closeFahrzeugAuswahl.addEventListener('click', () => this.closeFahrzeugAuswahlModal());
+    }
+    const fahrzeugAuswahlZurueck = document.getElementById('fahrzeugAuswahlZurueck');
+    if (fahrzeugAuswahlZurueck) {
+      fahrzeugAuswahlZurueck.addEventListener('click', () => this.closeFahrzeugAuswahlModal());
+    }
+    
     // Kundenliste-Suche Event-Listener
     const kundenListeSuche = document.getElementById('kundenListeSuche');
     if (kundenListeSuche) {
@@ -734,6 +744,123 @@ class App {
     
     // Phasen zurücksetzen
     this.resetPhasen();
+    
+    // Auslastungsanzeige verstecken
+    const terminAuslastungAnzeige = document.getElementById('terminAuslastungAnzeige');
+    if (terminAuslastungAnzeige) {
+      terminAuslastungAnzeige.style.display = 'none';
+    }
+    
+    // Kalender-Popup verstecken
+    const auslastungKalenderPopup = document.getElementById('auslastungKalenderPopup');
+    if (auslastungKalenderPopup) {
+      auslastungKalenderPopup.style.display = 'none';
+    }
+    
+    // Autocomplete-Dropdown für Arbeiten verstecken
+    const arbeitAutocomplete = document.getElementById('arbeitAutocomplete');
+    if (arbeitAutocomplete) {
+      arbeitAutocomplete.style.display = 'none';
+      arbeitAutocomplete.innerHTML = '';
+    }
+    
+    // Fahrzeug-Auswahl Modal verstecken (falls offen)
+    const fahrzeugAuswahlModal = document.getElementById('fahrzeugAuswahlModal');
+    if (fahrzeugAuswahlModal) {
+      fahrzeugAuswahlModal.style.display = 'none';
+    }
+    this.fahrzeugAuswahlData = null;
+  }
+
+  // Alle schwebenden/floating Elemente verstecken (bei Tab-Wechsel)
+  hideAllFloatingElements() {
+    // Auslastungsanzeige
+    const terminAuslastungAnzeige = document.getElementById('terminAuslastungAnzeige');
+    if (terminAuslastungAnzeige) {
+      terminAuslastungAnzeige.style.display = 'none';
+    }
+    
+    // Kalender-Popup
+    const auslastungKalenderPopup = document.getElementById('auslastungKalenderPopup');
+    if (auslastungKalenderPopup) {
+      auslastungKalenderPopup.style.display = 'none';
+    }
+    
+    // Autocomplete-Dropdowns
+    const arbeitAutocomplete = document.getElementById('arbeitAutocomplete');
+    if (arbeitAutocomplete) {
+      arbeitAutocomplete.style.display = 'none';
+    }
+    
+    // Namenssuche-Vorschläge
+    const nameSucheVorschlaege = document.getElementById('nameSucheVorschlaege');
+    if (nameSucheVorschlaege) {
+      nameSucheVorschlaege.classList.remove('aktiv');
+    }
+    
+    // Kennzeichen-Vorschläge
+    const kennzeichenSucheVorschlaege = document.getElementById('kennzeichenSucheVorschlaege');
+    if (kennzeichenSucheVorschlaege) {
+      kennzeichenSucheVorschlaege.classList.remove('aktiv');
+    }
+    
+    // Fahrzeug-Auswahl Modal
+    const fahrzeugAuswahlModal = document.getElementById('fahrzeugAuswahlModal');
+    if (fahrzeugAuswahlModal) {
+      fahrzeugAuswahlModal.style.display = 'none';
+    }
+    
+    // Gefundener Kunde Anzeige
+    const gefundenerKundeAnzeige = document.getElementById('gefundenerKundeAnzeige');
+    if (gefundenerKundeAnzeige) {
+      gefundenerKundeAnzeige.style.display = 'none';
+    }
+    
+    // Alle Modals verstecken
+    document.querySelectorAll('.modal').forEach(modal => {
+      modal.style.display = 'none';
+    });
+  }
+
+  // Setzt die Sub-Tabs im "termine" Container auf den Standardzustand zurück
+  resetTermineSubTabs() {
+    const termineContainer = document.getElementById('termine');
+    if (!termineContainer) return;
+    
+    // Alle Sub-Tab-Contents deaktivieren und verstecken
+    termineContainer.querySelectorAll('.sub-tab-content').forEach(content => {
+      content.classList.remove('active');
+      content.style.display = 'none';
+    });
+    
+    // Alle Sub-Tab-Buttons deaktivieren
+    termineContainer.querySelectorAll('.sub-tab-button').forEach(btn => {
+      btn.classList.remove('active');
+    });
+    
+    // Ersten Sub-Tab (neuerTermin) aktivieren und anzeigen
+    const neuerTerminContent = document.getElementById('neuerTermin');
+    if (neuerTerminContent) {
+      neuerTerminContent.classList.add('active');
+      neuerTerminContent.style.display = 'block';
+    }
+    
+    const neuerTerminButton = termineContainer.querySelector('.sub-tab-button[data-subtab="neuerTermin"]');
+    if (neuerTerminButton) {
+      neuerTerminButton.classList.add('active');
+    }
+    
+    // Auch das Formular für internen Termin zurücksetzen
+    const internerTerminForm = document.getElementById('internerTerminForm');
+    if (internerTerminForm) {
+      internerTerminForm.reset();
+    }
+    
+    // Extra: Interner Termin explizit verstecken
+    const internerTerminDiv = document.getElementById('internerTermin');
+    if (internerTerminDiv) {
+      internerTerminDiv.style.display = 'none';
+    }
   }
 
   // === TERMIN BEARBEITEN METHODEN ===
@@ -1347,6 +1474,7 @@ class App {
     const tabName = button.dataset.tab;
     if (!tabName) return;
 
+    // Alle Tab-Inhalte verstecken
     document.querySelectorAll('.tab-content').forEach(content => {
       content.classList.remove('active');
     });
@@ -1355,8 +1483,15 @@ class App {
       button.classList.remove('active');
     });
 
+    // Gewählten Tab aktivieren
     document.getElementById(tabName).classList.add('active');
     button.classList.add('active');
+
+    // Bei Tab-Wechsel: Alle schwebenden Elemente verstecken
+    this.hideAllFloatingElements();
+    
+    // Bei JEDEM Tab-Wechsel: Sub-Tabs im "termine" Container zurücksetzen
+    this.resetTermineSubTabs();
 
     if (tabName === 'termine') {
       // Formular komplett zurücksetzen beim Öffnen des Termine-Tabs
@@ -1419,10 +1554,11 @@ class App {
     const subTabsContainer = button.closest('.sub-tabs');
     const parentContainer = subTabsContainer.parentElement;
 
-    // Entferne active nur von Geschwister-Elementen (siblings)
+    // Entferne active und verstecke alle Sub-Tab-Contents
     Array.from(parentContainer.children).forEach(child => {
       if (child.classList.contains('sub-tab-content')) {
         child.classList.remove('active');
+        child.style.display = 'none';
       }
     });
 
@@ -1435,6 +1571,7 @@ class App {
     const targetContent = document.getElementById(subTabName);
     if (targetContent) {
       targetContent.classList.add('active');
+      targetContent.style.display = 'block';
     }
     button.classList.add('active');
 
@@ -2904,9 +3041,10 @@ class App {
       console.log('Termin erfolgreich erstellt!');
       alert('Interner Termin erfolgreich erstellt!');
 
-      // Formular zurücksetzen
+      // Formular zurücksetzen und zum "Neuer Termin" Sub-Tab wechseln
       document.getElementById('internerTerminForm').reset();
       this.setInternerTerminTodayDate();
+      this.resetTermineSubTabs();
 
       this.loadTermine();
       this.loadDashboard();
@@ -5608,45 +5746,204 @@ class App {
     return text.replace(regex, '<span class="vorschlag-match">$1</span>');
   }
 
+  // Alle Fahrzeuge eines Kunden sammeln (aus Kunden-Daten und Terminen)
+  getKundeFahrzeuge(kundeId, kundeName) {
+    const fahrzeuge = new Map(); // kennzeichen -> fahrzeugInfo
+    
+    // 1. Aus dem Kunden-Datensatz
+    const kunde = (this.kundenCache || []).find(k => k.id === kundeId);
+    if (kunde && kunde.kennzeichen) {
+      const kzNorm = this.normalizeKennzeichen(kunde.kennzeichen);
+      fahrzeuge.set(kzNorm, {
+        kennzeichen: kunde.kennzeichen,
+        fahrzeugtyp: kunde.fahrzeugtyp || '',
+        vin: kunde.vin || '',
+        quelle: 'kunde',
+        letzterTermin: null,
+        letzterKmStand: null
+      });
+    }
+    
+    // 2. Aus den Terminen des Kunden
+    const kundeTermine = (this.termineCache || []).filter(t => 
+      t.kunde_id === kundeId || 
+      (kundeName && t.kunde_name && t.kunde_name.toLowerCase() === kundeName.toLowerCase())
+    );
+    
+    kundeTermine.forEach(termin => {
+      if (termin.kennzeichen) {
+        const kzNorm = this.normalizeKennzeichen(termin.kennzeichen);
+        
+        if (!fahrzeuge.has(kzNorm)) {
+          // Neues Fahrzeug aus Termin
+          fahrzeuge.set(kzNorm, {
+            kennzeichen: termin.kennzeichen,
+            fahrzeugtyp: termin.fahrzeugtyp || '',
+            vin: termin.vin || '',
+            quelle: 'termin',
+            letzterTermin: termin.datum,
+            letzterKmStand: termin.kilometerstand
+          });
+        } else {
+          // Bestehendes Fahrzeug - ggf. aktualisieren
+          const existing = fahrzeuge.get(kzNorm);
+          if (!existing.letzterTermin || termin.datum > existing.letzterTermin) {
+            existing.letzterTermin = termin.datum;
+            if (termin.kilometerstand) {
+              existing.letzterKmStand = termin.kilometerstand;
+            }
+          }
+          // Fahrzeugtyp ergänzen wenn fehlend
+          if (!existing.fahrzeugtyp && termin.fahrzeugtyp) {
+            existing.fahrzeugtyp = termin.fahrzeugtyp;
+          }
+          if (!existing.vin && termin.vin) {
+            existing.vin = termin.vin;
+          }
+        }
+      }
+    });
+    
+    return Array.from(fahrzeuge.values());
+  }
+
   // Kunde aus Namenssuche auswählen
   selectKundeVorschlag(kundeId) {
     const kunde = (this.kundenCache || []).find(k => k.id === kundeId);
     if (!kunde) return;
     
-    // Felder füllen
+    // Alle Fahrzeuge des Kunden sammeln
+    const fahrzeuge = this.getKundeFahrzeuge(kundeId, kunde.name);
+    
+    // Wenn mehr als ein Fahrzeug vorhanden ist, Auswahl-Popup zeigen
+    if (fahrzeuge.length > 1) {
+      this.showFahrzeugAuswahlModal(kunde, fahrzeuge);
+      this.hideVorschlaege('name');
+      return;
+    }
+    
+    // Nur ein oder kein Fahrzeug - direkt auswählen
+    this.applyKundeAuswahl(kunde, fahrzeuge.length > 0 ? fahrzeuge[0] : null);
+    this.hideVorschlaege('name');
+  }
+
+  // Fahrzeug-Auswahl Modal anzeigen
+  showFahrzeugAuswahlModal(kunde, fahrzeuge) {
+    const modal = document.getElementById('fahrzeugAuswahlModal');
+    const kundeInfo = document.getElementById('fahrzeugAuswahlKunde');
+    const liste = document.getElementById('fahrzeugAuswahlListe');
+    
+    kundeInfo.innerHTML = `<strong>${kunde.name}</strong>${kunde.telefon ? ` · ${kunde.telefon}` : ''}<br>
+      <span style="font-size: 0.9em;">Dieser Kunde hat ${fahrzeuge.length} Fahrzeuge:</span>`;
+    
+    liste.innerHTML = fahrzeuge.map((fz, idx) => `
+      <div class="fahrzeug-auswahl-item" onclick="app.selectFahrzeugFromModal(${kunde.id}, ${idx})" style="
+        padding: 15px;
+        margin-bottom: 10px;
+        background: ${idx === 0 ? '#e8f5e9' : '#f8f9fa'};
+        border-radius: 8px;
+        border: 2px solid ${idx === 0 ? '#4caf50' : '#dee2e6'};
+        cursor: pointer;
+        transition: all 0.2s;
+      " onmouseover="this.style.borderColor='#4a90e2'; this.style.background='#e3f2fd';" 
+         onmouseout="this.style.borderColor='${idx === 0 ? '#4caf50' : '#dee2e6'}'; this.style.background='${idx === 0 ? '#e8f5e9' : '#f8f9fa'}';">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+          <div>
+            <span style="font-size: 1.2em; font-weight: bold;">🚗 ${fz.kennzeichen}</span>
+            ${fz.fahrzeugtyp ? `<span style="color: #666; margin-left: 10px;">${fz.fahrzeugtyp}</span>` : ''}
+          </div>
+          ${idx === 0 ? '<span style="background: #4caf50; color: white; padding: 2px 8px; border-radius: 4px; font-size: 0.8em;">Zuletzt</span>' : ''}
+        </div>
+        ${fz.vin ? `<div style="font-size: 0.85em; color: #888; margin-top: 5px;">VIN: ${fz.vin}</div>` : ''}
+        <div style="font-size: 0.85em; color: #666; margin-top: 5px;">
+          ${fz.letzterTermin ? `Letzter Termin: ${this.formatDatum(fz.letzterTermin)}` : 'Aus Kundenstamm'}
+          ${fz.letzterKmStand ? ` · ${fz.letzterKmStand.toLocaleString('de-DE')} km` : ''}
+        </div>
+      </div>
+    `).join('');
+    
+    // Speichere die Daten für späteren Zugriff
+    this.fahrzeugAuswahlData = { kunde, fahrzeuge };
+    
+    modal.style.display = 'block';
+  }
+
+  // Fahrzeug aus Modal auswählen
+  selectFahrzeugFromModal(kundeId, fahrzeugIndex) {
+    if (!this.fahrzeugAuswahlData) return;
+    
+    const { kunde, fahrzeuge } = this.fahrzeugAuswahlData;
+    const fahrzeug = fahrzeuge[fahrzeugIndex];
+    
+    this.applyKundeAuswahl(kunde, fahrzeug);
+    this.closeFahrzeugAuswahlModal();
+  }
+
+  // Fahrzeug-Auswahl Modal schließen
+  closeFahrzeugAuswahlModal() {
+    const modal = document.getElementById('fahrzeugAuswahlModal');
+    modal.style.display = 'none';
+    this.fahrzeugAuswahlData = null;
+  }
+
+  // Kunde und Fahrzeug auf das Formular anwenden
+  applyKundeAuswahl(kunde, fahrzeug) {
+    // Kunden-Daten füllen
     document.getElementById('kunde_id').value = kunde.id;
     document.getElementById('terminNameSuche').value = kunde.name;
     document.getElementById('neuer_kunde_telefon').value = kunde.telefon || '';
     
-    // Kennzeichen setzen
-    if (kunde.kennzeichen) {
-      document.getElementById('kennzeichen').value = kunde.kennzeichen;
+    // Fahrzeug-Daten füllen
+    if (fahrzeug) {
+      document.getElementById('kennzeichen').value = fahrzeug.kennzeichen || '';
+      
       // Auch die Suchfelder füllen
+      if (fahrzeug.kennzeichen) {
+        const parts = this.parseKennzeichen(fahrzeug.kennzeichen);
+        document.getElementById('kzSucheBezirk').value = parts.bezirk;
+        document.getElementById('kzSucheBuchstaben').value = parts.buchstaben;
+        document.getElementById('kzSucheNummer').value = parts.nummer;
+      }
+      
+      if (fahrzeug.fahrzeugtyp) {
+        document.getElementById('fahrzeugtyp').value = fahrzeug.fahrzeugtyp;
+      }
+      
+      if (fahrzeug.vin) {
+        document.getElementById('vin').value = fahrzeug.vin;
+      }
+      
+      // KM-Stand als Placeholder setzen
+      const kmStandInput = document.getElementById('kilometerstand');
+      if (fahrzeug.letzterKmStand && kmStandInput) {
+        kmStandInput.value = '';
+        kmStandInput.placeholder = `Letzter KM-Stand: ${fahrzeug.letzterKmStand.toLocaleString('de-DE')} km`;
+        kmStandInput.classList.add('has-previous-value');
+      }
+    } else if (kunde.kennzeichen) {
+      // Fallback: Kennzeichen aus Kunden-Datensatz
+      document.getElementById('kennzeichen').value = kunde.kennzeichen;
       const parts = this.parseKennzeichen(kunde.kennzeichen);
       document.getElementById('kzSucheBezirk').value = parts.bezirk;
       document.getElementById('kzSucheBuchstaben').value = parts.buchstaben;
       document.getElementById('kzSucheNummer').value = parts.nummer;
-    }
-    
-    // Fahrzeugtyp setzen
-    if (kunde.fahrzeugtyp) {
-      document.getElementById('fahrzeugtyp').value = kunde.fahrzeugtyp;
+      
+      if (kunde.fahrzeugtyp) {
+        document.getElementById('fahrzeugtyp').value = kunde.fahrzeugtyp;
+      }
+      
+      // Letzten KM-Stand suchen
+      const letzterKmStand = this.findLetztenKmStand(kunde.id, kunde.name, kunde.kennzeichen);
+      const kmStandInput = document.getElementById('kilometerstand');
+      if (letzterKmStand && kmStandInput) {
+        kmStandInput.value = '';
+        kmStandInput.placeholder = `Letzter KM-Stand: ${letzterKmStand.toLocaleString('de-DE')} km`;
+        kmStandInput.classList.add('has-previous-value');
+      }
     }
     
     // Kunde gefunden anzeigen
     this.showGefundenerKunde(kunde.name, kunde.telefon);
-    
-    // Letzten KM-Stand suchen
-    const letzterKmStand = this.findLetztenKmStand(kunde.id, kunde.name, kunde.kennzeichen);
-    const kmStandInput = document.getElementById('kilometerstand');
-    if (letzterKmStand && kmStandInput) {
-      kmStandInput.value = '';
-      kmStandInput.placeholder = `Letzter KM-Stand: ${letzterKmStand.toLocaleString('de-DE')} km`;
-      kmStandInput.classList.add('has-previous-value');
-    }
-    
-    // Vorschläge ausblenden
-    this.hideVorschlaege('name');
   }
 
   // Kennzeichen aus Kennzeichensuche auswählen
@@ -7539,6 +7836,12 @@ class App {
       mussBearbeitetCheckbox.checked = termin.muss_bearbeitet_werden || false;
     }
 
+    // Interne Auftragsnummer setzen
+    const interneAuftragsnummerInput = document.getElementById('modalInterneAuftragsnummer');
+    if (interneAuftragsnummerInput) {
+      interneAuftragsnummerInput.value = termin.interne_auftragsnummer || '';
+    }
+
     // Lade Mitarbeiter, Lehrlinge und Abwesenheiten für das Datum
     let mitarbeiter = [];
     let lehrlinge = [];
@@ -8304,13 +8607,18 @@ class App {
     const mussBearbeitetCheckbox = document.getElementById('modalMussBearbeitetCheckbox');
     const mussBearbeitetWerden = mussBearbeitetCheckbox ? mussBearbeitetCheckbox.checked : false;
 
+    // Interne Auftragsnummer auslesen
+    const interneAuftragsnummerInput = document.getElementById('modalInterneAuftragsnummer');
+    const interneAuftragsnummer = interneAuftragsnummerInput ? interneAuftragsnummerInput.value.trim() : '';
+
     try {
       await TermineService.update(this.currentTerminId, {
         tatsaechliche_zeit: gesamtzeitMinuten,
         arbeitszeiten_details: JSON.stringify(arbeitszeitenDetails),
         status: status,
         mitarbeiter_id: terminMitarbeiterId,
-        muss_bearbeitet_werden: mussBearbeitetWerden
+        muss_bearbeitet_werden: mussBearbeitetWerden,
+        interne_auftragsnummer: interneAuftragsnummer
       });
 
       // Speichere Phasen wenn mehrtägig aktiviert ist

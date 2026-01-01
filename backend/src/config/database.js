@@ -294,6 +294,13 @@ function initializeDatabase() {
       }
     });
 
+    // Interne Auftragsnummer
+    db.run(`ALTER TABLE termine ADD COLUMN interne_auftragsnummer TEXT`, (err) => {
+      if (err && !err.message.includes('duplicate column')) {
+        console.error('Fehler beim Hinzufügen von interne_auftragsnummer:', err);
+      }
+    });
+
     // Mitarbeiter-Tabelle
     db.run(`CREATE TABLE IF NOT EXISTS mitarbeiter (
       id INTEGER PRIMARY KEY AUTOINCREMENT,

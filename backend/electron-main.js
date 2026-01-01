@@ -1,35 +1,105 @@
-const { app, BrowserWindow, ipcMain, shell } = require('electron');
+const { app, BrowserWindow, ipcMain, shell, dialog } = require('electron');
 const path = require('path');
 const os = require('os');
 const fs = require('fs');
 
-// Setze das Datenverzeichnis auf den Ordner der EXE-Datei
-// Dies muss VOR dem Laden des Servers geschehen!
-// Die Datenbank soll IMMER neben der EXE liegen (im Unterordner 'database')
-if (app.isPackaged) {
-  // Bei gepackter App: Verzeichnis der EXE-Datei verwenden
-  const exeDir = path.dirname(process.execPath);
-  process.env.ELECTRON_EXE_DIR = exeDir;
-  process.env.DATA_DIR = exeDir;
-  
-  // Expliziter Datenbank-Pfad neben der EXE
-  const dbDir = path.join(exeDir, 'database');
-  const dbPath = path.join(dbDir, 'werkstatt.db');
-  process.env.DB_PATH = dbPath;
-  
-  // Erstelle database-Ordner falls nicht vorhanden
-  if (!fs.existsSync(dbDir)) {
-    fs.mkdirSync(dbDir, { recursive: true });
-    console.log('Datenbank-Ordner erstellt:', dbDir);
+// Ermittle das tatsächliche Verzeichnis der EXE-Datei
+// Bei portable Apps wird PORTABLE_EXECUTABLE_DIR gesetzt
+// Bei installierten Apps verwenden wir process.execPath
+function getAppDirectory() {
+  // Portable App: PORTABLE_EXECUTABLE_DIR enthält das Verzeichnis der ursprünglichen EXE
+  if (process.env.PORTABLE_EXECUTABLE_DIR) {
+    console.log('Portable App erkannt, Verzeichnis:', process.env.PORTABLE_EXECUTABLE_DIR);
+    return process.env.PORTABLE_EXECUTABLE_DIR;
   }
   
-  console.log('=== Gepackte Electron-App ===');
+  // Installierte oder normale App: Verzeichnis der EXE
+  if (app.isPackaged) {
+    return path.dirname(process.execPath);
+  }
+  
+  // Entwicklungsmodus
+  return process.cwd();
+}
+
+// Konfigurationsdatei für persistente Einstellungen
+function getConfigPath() {
+  const appDir = getAppDirectory();
+  return path.join(appDir, 'werkstatt-config.json');
+}
+
+function loadConfig() {
+  const configPath = getConfigPath();
+  try {
+    if (fs.existsSync(configPath)) {
+      const data = fs.readFileSync(configPath, 'utf8');
+      console.log('Konfiguration geladen von:', configPath);
+      return JSON.parse(data);
+    }
+  } catch (error) {
+    console.error('Fehler beim Laden der Konfiguration:', error);
+  }
+  return {};
+}
+
+function saveConfig(config) {
+  const configPath = getConfigPath();
+  try {
+    fs.writeFileSync(configPath, JSON.stringify(config, null, 2), 'utf8');
+    console.log('Konfiguration gespeichert:', configPath);
+    return true;
+  } catch (error) {
+    console.error('Fehler beim Speichern der Konfiguration:', error);
+    return false;
+  }
+}
+
+// Lade gespeicherte Konfiguration
+const savedConfig = loadConfig();
+
+// Setze das Datenverzeichnis
+// Dies muss VOR dem Laden des Servers geschehen!
+const appDir = getAppDirectory();
+
+if (app.isPackaged || process.env.PORTABLE_EXECUTABLE_DIR) {
+  // Bei gepackter App: Verzeichnis der EXE-Datei verwenden
+  process.env.ELECTRON_EXE_DIR = appDir;
+  process.env.DATA_DIR = appDir;
+  
+  // Prüfe ob ein gespeicherter Datenbank-Pfad existiert
+  if (savedConfig.dbPath && fs.existsSync(savedConfig.dbPath)) {
+    process.env.DB_PATH = savedConfig.dbPath;
+    console.log('=== Gepackte Electron-App (gespeicherte DB) ===');
+    console.log('Gespeicherter Datenbank-Pfad:', savedConfig.dbPath);
+  } else {
+    // Standard: Datenbank-Pfad neben der EXE
+    const dbDir = path.join(appDir, 'database');
+    const dbPath = path.join(dbDir, 'werkstatt.db');
+    process.env.DB_PATH = dbPath;
+    
+    // Erstelle database-Ordner falls nicht vorhanden
+    if (!fs.existsSync(dbDir)) {
+      fs.mkdirSync(dbDir, { recursive: true });
+      console.log('Datenbank-Ordner erstellt:', dbDir);
+    }
+    
+    console.log('=== Gepackte Electron-App ===');
+    console.log('Datenbank-Pfad:', dbPath);
+  }
+  
   console.log('EXE-Pfad:', process.execPath);
-  console.log('Datenverzeichnis:', exeDir);
-  console.log('Datenbank-Pfad:', dbPath);
+  console.log('App-Verzeichnis:', appDir);
+  console.log('PORTABLE_EXECUTABLE_DIR:', process.env.PORTABLE_EXECUTABLE_DIR || 'nicht gesetzt');
   console.log('=============================');
 } else {
-  console.log('=== Entwicklungsmodus ===');
+  // Entwicklungsmodus: auch gespeicherten Pfad beachten
+  if (savedConfig.dbPath && fs.existsSync(savedConfig.dbPath)) {
+    process.env.DB_PATH = savedConfig.dbPath;
+    console.log('=== Entwicklungsmodus (gespeicherte DB) ===');
+    console.log('Gespeicherter Datenbank-Pfad:', savedConfig.dbPath);
+  } else {
+    console.log('=== Entwicklungsmodus ===');
+  }
   console.log('Arbeitsverzeichnis:', process.cwd());
 }
 
@@ -47,8 +117,8 @@ let serverStats = {
 
 function createWindow() {
   mainWindow = new BrowserWindow({
-    width: 350,
-    height: 520,
+    width: 400,
+    height: 580,
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
@@ -282,4 +352,91 @@ ipcMain.handle('backup-open-folder', async () => {
   } catch (error) {
     return { success: false, error: error.message };
   }
+});
+
+// IPC Handler für Datenbank-Pfad Verwaltung
+ipcMain.handle('db-get-path', async () => {
+  try {
+    const config = loadConfig();
+    const currentPath = process.env.DB_PATH || BackupController.getDbPath();
+    return {
+      success: true,
+      dbPath: currentPath,
+      savedPath: config.dbPath || null,
+      isCustom: !!config.dbPath
+    };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('db-select-file', async () => {
+  try {
+    const result = await dialog.showOpenDialog(mainWindow, {
+      title: 'Datenbank auswählen',
+      filters: [
+        { name: 'SQLite Datenbank', extensions: ['db', 'sqlite', 'sqlite3'] },
+        { name: 'Alle Dateien', extensions: ['*'] }
+      ],
+      properties: ['openFile']
+    });
+
+    if (result.canceled || result.filePaths.length === 0) {
+      return { success: false, canceled: true };
+    }
+
+    const selectedPath = result.filePaths[0];
+    
+    // Speichere den Pfad in der Konfiguration
+    const config = loadConfig();
+    config.dbPath = selectedPath;
+    saveConfig(config);
+
+    return {
+      success: true,
+      dbPath: selectedPath,
+      message: 'Datenbank-Pfad gespeichert. Bitte starten Sie die Anwendung neu, um die neue Datenbank zu verwenden.'
+    };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('db-reset-path', async () => {
+  try {
+    const config = loadConfig();
+    delete config.dbPath;
+    saveConfig(config);
+
+    // Ermittle den Standard-Pfad (mit getAppDirectory für portable Apps)
+    const appDir = getAppDirectory();
+    const defaultPath = path.join(appDir, 'database', 'werkstatt.db');
+
+    return {
+      success: true,
+      dbPath: defaultPath,
+      message: 'Datenbank-Pfad auf Standard zurückgesetzt. Bitte starten Sie die Anwendung neu.'
+    };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('db-open-folder', async () => {
+  try {
+    const dbPath = process.env.DB_PATH || BackupController.getDbPath();
+    const dbDir = path.dirname(dbPath);
+    if (!fs.existsSync(dbDir)) {
+      fs.mkdirSync(dbDir, { recursive: true });
+    }
+    shell.openPath(dbDir);
+    return { success: true };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('app-restart', async () => {
+  app.relaunch();
+  app.exit(0);
 });

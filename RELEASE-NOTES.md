@@ -1,17 +1,16 @@
-# Release Notes - Version 1.0.2
+# Release Notes - Version 1.0.3
 
 ## 🐛 Bugfixes & Verbesserungen
 
-### Datenbank-Speicherort verbessert
-- **Änderung**: Die Datenbank wird jetzt IMMER im Ordner neben der EXE-Datei gespeichert
-- **Betrifft**: Werkstatt-Server.exe und Werkstatt-Terminplaner-Complete.exe
-- **Vorteil**: Einfacheres Backup, da alle Daten im gleichen Ordner wie die Anwendung liegen
-- **Struktur**: `[EXE-Ordner]/database/werkstatt.db`
+### Fix: "Interner Termin" Formular-Sichtbarkeit
+- **Problem**: Das "Interner Termin" Formular blieb nach Tab-Wechsel oder Speichern sichtbar
+- **Lösung**: Direkte `style.display` Steuerung anstelle von CSS-Klassen für zuverlässige Sichtbarkeit
+- **Betrifft**: Tab "Termine" → Unter-Tabs
 
-### Robustere Erkennung der Electron-App
-- Verbesserte Erkennung für gepackte Electron-Apps
-- Mehrere Fallback-Methoden für die Pfaderkennung
-- Besseres Logging beim Start
+### Neu: Interne Auftragsnummer bei Zeitverwaltung
+- **Feature**: Neues Eingabefeld "Interne Auftragsnummer" im Modal "Zeiten für einzelne Arbeiten"
+- **Speicherung**: Wird in der Datenbank gespeichert und beim Öffnen geladen
+- **Position**: Unter "Arbeitszeit in Stunden" mit blauem Info-Styling
 
 ## 📦 Release-Dateien
 
@@ -87,9 +86,9 @@ Detaillierte Anleitung: [NETZWERK-INSTALLATION.md](https://github.com/SHP-ART/We
 
 ## 🆕 Seit letztem Release
 
-- Datenbank wird jetzt IMMER neben der EXE gespeichert
-- Robustere Erkennung der Electron-App-Umgebung
-- Verbessertes Logging beim Start
+- Fix für "Interner Termin" Formular-Sichtbarkeit
+- Neues Feld "Interne Auftragsnummer" bei Zeitverwaltung
+- Verbesserte Sub-Tab-Steuerung
 
 ## 💡 Support
 
@@ -97,6 +96,6 @@ Bei Problemen bitte ein Issue auf GitHub erstellen: https://github.com/SHP-ART/W
 
 ---
 
-**Datum**: 30. Dezember 2025
+**Datum**: 1. Januar 2026
 **Version**: 1.0.2
 **Build**: Complete App (All-in-One mit ICU-Fix)

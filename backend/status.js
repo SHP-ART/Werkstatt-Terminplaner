@@ -102,6 +102,11 @@ function showTab(tabName) {
         loadBackupStatus();
         loadBackupList();
     }
+    
+    // Bei Datenbank-Tab: Pfad laden
+    if (tabName === 'database') {
+        loadDbPath();
+    }
 }
 
 // Backup-Status laden
@@ -251,4 +256,116 @@ function formatBackupName(name) {
         return `${match[3]}.${match[2]}.${match[1]} ${match[4]}:${match[5]}`;
     }
     return name;
+}
+
+// ========== Datenbank-Pfad Funktionen ==========
+
+// Datenbank-Pfad laden
+async function loadDbPath() {
+    const pathEl = document.getElementById('currentDbPath');
+    const statusEl = document.getElementById('dbStatus');
+    
+    try {
+        const result = await window.electronAPI.getDbPath();
+        
+        if (result.success) {
+            pathEl.textContent = result.dbPath;
+            
+            if (result.isCustom) {
+                pathEl.classList.add('custom');
+                statusEl.textContent = '✅ Benutzerdefiniert';
+                statusEl.style.color = '#28a745';
+            } else {
+                pathEl.classList.remove('custom');
+                statusEl.textContent = '📍 Standard';
+                statusEl.style.color = '#666';
+            }
+        } else {
+            pathEl.textContent = 'Fehler beim Laden';
+            statusEl.textContent = '❌ Fehler';
+        }
+    } catch (error) {
+        pathEl.textContent = 'Fehler: ' + error.message;
+        statusEl.textContent = '❌ Fehler';
+    }
+}
+
+// Datenbank auswählen
+async function selectDatabase() {
+    const btn = document.getElementById('btnSelectDb');
+    
+    btn.disabled = true;
+    btn.textContent = '⏳ Auswählen...';
+    
+    try {
+        const result = await window.electronAPI.selectDbFile();
+        
+        if (result.canceled) {
+            // Abgebrochen, nichts tun
+        } else if (result.success) {
+            showDbMessage('success', result.message);
+            loadDbPath();
+        } else {
+            showDbMessage('error', `❌ Fehler: ${result.error}`);
+        }
+    } catch (error) {
+        showDbMessage('error', `❌ Fehler: ${error.message}`);
+    } finally {
+        btn.disabled = false;
+        btn.textContent = '📂 Datenbank auswählen';
+    }
+}
+
+// Datenbank-Pfad zurücksetzen
+async function resetDbPath() {
+    if (!confirm('Datenbank-Pfad auf Standard zurücksetzen?')) {
+        return;
+    }
+    
+    try {
+        const result = await window.electronAPI.resetDbPath();
+        
+        if (result.success) {
+            showDbMessage('success', result.message);
+            loadDbPath();
+        } else {
+            showDbMessage('error', `❌ Fehler: ${result.error}`);
+        }
+    } catch (error) {
+        showDbMessage('error', `❌ Fehler: ${error.message}`);
+    }
+}
+
+// Datenbank-Ordner öffnen
+async function openDbFolder() {
+    try {
+        await window.electronAPI.openDbFolder();
+    } catch (error) {
+        showDbMessage('error', `❌ Fehler: ${error.message}`);
+    }
+}
+
+// Anwendung neu starten
+async function restartApp() {
+    if (!confirm('Anwendung jetzt neu starten?')) {
+        return;
+    }
+    
+    try {
+        await window.electronAPI.restartApp();
+    } catch (error) {
+        showDbMessage('error', `❌ Fehler: ${error.message}`);
+    }
+}
+
+// Datenbank-Nachricht anzeigen
+function showDbMessage(type, message) {
+    const msgEl = document.getElementById('dbMessage');
+    msgEl.className = `backup-status ${type}`;
+    msgEl.textContent = message;
+    msgEl.style.display = 'block';
+    
+    setTimeout(() => {
+        msgEl.style.display = 'none';
+    }, 5000);
 }

@@ -138,6 +138,16 @@ class App {
       cancelImportBtn.addEventListener('click', () => this.cancelExcelImport());
     }
     
+    // Fahrzeug-Auswahl Modal Event-Listener
+    const closeFahrzeugAuswahl = document.getElementById('closeFahrzeugAuswahl');
+    if (closeFahrzeugAuswahl) {
+      closeFahrzeugAuswahl.addEventListener('click', () => this.closeFahrzeugAuswahlModal());
+    }
+    const fahrzeugAuswahlZurueck = document.getElementById('fahrzeugAuswahlZurueck');
+    if (fahrzeugAuswahlZurueck) {
+      fahrzeugAuswahlZurueck.addEventListener('click', () => this.closeFahrzeugAuswahlModal());
+    }
+    
     // Kundenliste-Suche Event-Listener
     const kundenListeSuche = document.getElementById('kundenListeSuche');
     if (kundenListeSuche) {
@@ -719,6 +729,12 @@ class App {
     if (ersatzautoStatus) {
       ersatzautoStatus.style.display = 'none';
     }
+    
+    // Teile-Bestellen Checkbox zurücksetzen
+    const teileBestellenCheckbox = document.getElementById('teileBestellenCheckbox');
+    if (teileBestellenCheckbox) {
+      teileBestellenCheckbox.checked = false;
+    }
 
     // Warnung verstecken
     this.hideTerminWarnung();
@@ -728,6 +744,123 @@ class App {
     
     // Phasen zurücksetzen
     this.resetPhasen();
+    
+    // Auslastungsanzeige verstecken
+    const terminAuslastungAnzeige = document.getElementById('terminAuslastungAnzeige');
+    if (terminAuslastungAnzeige) {
+      terminAuslastungAnzeige.style.display = 'none';
+    }
+    
+    // Kalender-Popup verstecken
+    const auslastungKalenderPopup = document.getElementById('auslastungKalenderPopup');
+    if (auslastungKalenderPopup) {
+      auslastungKalenderPopup.style.display = 'none';
+    }
+    
+    // Autocomplete-Dropdown für Arbeiten verstecken
+    const arbeitAutocomplete = document.getElementById('arbeitAutocomplete');
+    if (arbeitAutocomplete) {
+      arbeitAutocomplete.style.display = 'none';
+      arbeitAutocomplete.innerHTML = '';
+    }
+    
+    // Fahrzeug-Auswahl Modal verstecken (falls offen)
+    const fahrzeugAuswahlModal = document.getElementById('fahrzeugAuswahlModal');
+    if (fahrzeugAuswahlModal) {
+      fahrzeugAuswahlModal.style.display = 'none';
+    }
+    this.fahrzeugAuswahlData = null;
+  }
+
+  // Alle schwebenden/floating Elemente verstecken (bei Tab-Wechsel)
+  hideAllFloatingElements() {
+    // Auslastungsanzeige
+    const terminAuslastungAnzeige = document.getElementById('terminAuslastungAnzeige');
+    if (terminAuslastungAnzeige) {
+      terminAuslastungAnzeige.style.display = 'none';
+    }
+    
+    // Kalender-Popup
+    const auslastungKalenderPopup = document.getElementById('auslastungKalenderPopup');
+    if (auslastungKalenderPopup) {
+      auslastungKalenderPopup.style.display = 'none';
+    }
+    
+    // Autocomplete-Dropdowns
+    const arbeitAutocomplete = document.getElementById('arbeitAutocomplete');
+    if (arbeitAutocomplete) {
+      arbeitAutocomplete.style.display = 'none';
+    }
+    
+    // Namenssuche-Vorschläge
+    const nameSucheVorschlaege = document.getElementById('nameSucheVorschlaege');
+    if (nameSucheVorschlaege) {
+      nameSucheVorschlaege.classList.remove('aktiv');
+    }
+    
+    // Kennzeichen-Vorschläge
+    const kennzeichenSucheVorschlaege = document.getElementById('kennzeichenSucheVorschlaege');
+    if (kennzeichenSucheVorschlaege) {
+      kennzeichenSucheVorschlaege.classList.remove('aktiv');
+    }
+    
+    // Fahrzeug-Auswahl Modal
+    const fahrzeugAuswahlModal = document.getElementById('fahrzeugAuswahlModal');
+    if (fahrzeugAuswahlModal) {
+      fahrzeugAuswahlModal.style.display = 'none';
+    }
+    
+    // Gefundener Kunde Anzeige
+    const gefundenerKundeAnzeige = document.getElementById('gefundenerKundeAnzeige');
+    if (gefundenerKundeAnzeige) {
+      gefundenerKundeAnzeige.style.display = 'none';
+    }
+    
+    // Alle Modals verstecken
+    document.querySelectorAll('.modal').forEach(modal => {
+      modal.style.display = 'none';
+    });
+  }
+
+  // Setzt die Sub-Tabs im "termine" Container auf den Standardzustand zurück
+  resetTermineSubTabs() {
+    const termineContainer = document.getElementById('termine');
+    if (!termineContainer) return;
+    
+    // Alle Sub-Tab-Contents deaktivieren und verstecken
+    termineContainer.querySelectorAll('.sub-tab-content').forEach(content => {
+      content.classList.remove('active');
+      content.style.display = 'none';
+    });
+    
+    // Alle Sub-Tab-Buttons deaktivieren
+    termineContainer.querySelectorAll('.sub-tab-button').forEach(btn => {
+      btn.classList.remove('active');
+    });
+    
+    // Ersten Sub-Tab (neuerTermin) aktivieren und anzeigen
+    const neuerTerminContent = document.getElementById('neuerTermin');
+    if (neuerTerminContent) {
+      neuerTerminContent.classList.add('active');
+      neuerTerminContent.style.display = 'block';
+    }
+    
+    const neuerTerminButton = termineContainer.querySelector('.sub-tab-button[data-subtab="neuerTermin"]');
+    if (neuerTerminButton) {
+      neuerTerminButton.classList.add('active');
+    }
+    
+    // Auch das Formular für internen Termin zurücksetzen
+    const internerTerminForm = document.getElementById('internerTerminForm');
+    if (internerTerminForm) {
+      internerTerminForm.reset();
+    }
+    
+    // Extra: Interner Termin explizit verstecken
+    const internerTerminDiv = document.getElementById('internerTermin');
+    if (internerTerminDiv) {
+      internerTerminDiv.style.display = 'none';
+    }
   }
 
   // === TERMIN BEARBEITEN METHODEN ===
@@ -1341,6 +1474,7 @@ class App {
     const tabName = button.dataset.tab;
     if (!tabName) return;
 
+    // Alle Tab-Inhalte verstecken
     document.querySelectorAll('.tab-content').forEach(content => {
       content.classList.remove('active');
     });
@@ -1349,8 +1483,15 @@ class App {
       button.classList.remove('active');
     });
 
+    // Gewählten Tab aktivieren
     document.getElementById(tabName).classList.add('active');
     button.classList.add('active');
+
+    // Bei Tab-Wechsel: Alle schwebenden Elemente verstecken
+    this.hideAllFloatingElements();
+    
+    // Bei JEDEM Tab-Wechsel: Sub-Tabs im "termine" Container zurücksetzen
+    this.resetTermineSubTabs();
 
     if (tabName === 'termine') {
       // Formular komplett zurücksetzen beim Öffnen des Termine-Tabs
@@ -1413,10 +1554,11 @@ class App {
     const subTabsContainer = button.closest('.sub-tabs');
     const parentContainer = subTabsContainer.parentElement;
 
-    // Entferne active nur von Geschwister-Elementen (siblings)
+    // Entferne active und verstecke alle Sub-Tab-Contents
     Array.from(parentContainer.children).forEach(child => {
       if (child.classList.contains('sub-tab-content')) {
         child.classList.remove('active');
+        child.style.display = 'none';
       }
     });
 
@@ -1429,6 +1571,7 @@ class App {
     const targetContent = document.getElementById(subTabName);
     if (targetContent) {
       targetContent.classList.add('active');
+      targetContent.style.display = 'block';
     }
     button.classList.add('active');
 
@@ -1467,6 +1610,10 @@ class App {
 
     if (subTabName === 'settingsKunden') {
       this.loadKunden();
+    }
+
+    if (subTabName === 'teileStatus') {
+      this.loadTeileStatusUebersicht();
     }
   }
 
@@ -2746,6 +2893,20 @@ class App {
       }
 
       await this.ensureArbeitenExistieren(arbeitenListe, termin.geschaetzte_zeit);
+      
+      // Prüfe ob Teile bestellt werden müssen
+      const teileBestellenChecked = document.getElementById('teileBestellenCheckbox')?.checked;
+      if (teileBestellenChecked && arbeitenListe.length > 0) {
+        // Setze teile_status für alle Arbeiten auf "bestellen"
+        const arbeitszeitenDetails = {};
+        for (const arbeit of arbeitenListe) {
+          arbeitszeitenDetails[arbeit] = {
+            teile_status: 'bestellen'
+          };
+        }
+        termin.arbeitszeiten_details = JSON.stringify(arbeitszeitenDetails);
+      }
+      
       const createdTermin = await TermineService.create(termin);
       
       // Wenn Phasen aktiviert sind, speichere diese und erstelle ggf. Folgetermine
@@ -2880,9 +3041,10 @@ class App {
       console.log('Termin erfolgreich erstellt!');
       alert('Interner Termin erfolgreich erstellt!');
 
-      // Formular zurücksetzen
+      // Formular zurücksetzen und zum "Neuer Termin" Sub-Tab wechseln
       document.getElementById('internerTerminForm').reset();
       this.setInternerTerminTodayDate();
+      this.resetTermineSubTabs();
 
       this.loadTermine();
       this.loadDashboard();
@@ -3968,6 +4130,7 @@ class App {
   updateAuslastungWocheInfo() {
     const datumInput = document.getElementById('auslastungDatum');
     const wocheInfoEl = document.getElementById('auslastungWocheInfo');
+    const aktuellerTagEl = document.getElementById('auslastungAktuellerTag');
     if (!datumInput.value || !wocheInfoEl) return;
 
     const date = new Date(datumInput.value);
@@ -3980,7 +4143,9 @@ class App {
     friday.setDate(monday.getDate() + 4);
 
     const formatDate = (d) => {
-      return d.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' });
+      const wochentag = d.toLocaleDateString('de-DE', { weekday: 'short' });
+      const datum = d.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' });
+      return `${wochentag} ${datum}`;
     };
 
     // Kalenderwoche berechnen
@@ -3989,6 +4154,13 @@ class App {
     const weekNumber = Math.ceil((days + startOfYear.getDay() + 1) / 7);
 
     wocheInfoEl.textContent = `KW ${weekNumber}: ${formatDate(monday)} - ${formatDate(friday)}`;
+
+    // Aktueller Tag Badge
+    if (aktuellerTagEl) {
+      const wochentagLang = date.toLocaleDateString('de-DE', { weekday: 'long' });
+      const datumFormatiert = date.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' });
+      aktuellerTagEl.innerHTML = `📅 ${wochentagLang} <span class="tag-datum">${datumFormatiert}</span>`;
+    }
   }
 
   async loadAuslastung() {
@@ -4002,6 +4174,9 @@ class App {
     try {
       const data = await AuslastungService.getByDatum(datum);
       await this.loadAuslastungWoche();
+      
+      // Lade Zeitleiste
+      await this.loadZeitleiste(datum);
 
       // Zeige die Zeiten nach Status
       document.getElementById('geplant').textContent = this.formatMinutesToHours(data.geplant_minuten || 0);
@@ -4929,6 +5104,9 @@ class App {
     // Nächster Kunde berechnen
     this.updateNaechsterKunde(termine);
     
+    // Auslastung für heute berechnen
+    this.updateHeuteAuslastung(termine);
+    
     // Uhrzeit jede Sekunde aktualisieren
     if (this.uhrzeitInterval) {
       clearInterval(this.uhrzeitInterval);
@@ -4937,6 +5115,53 @@ class App {
       this.updateAktuelleUhrzeit();
       this.updateNaechsterKunde(termine);
     }, 1000);
+  }
+
+  async updateHeuteAuslastung(termine) {
+    const wertEl = document.getElementById('heuteAuslastungWert');
+    const detailEl = document.getElementById('heuteAuslastungDetail');
+    
+    if (!wertEl || !detailEl) return;
+    
+    try {
+      // Berechne Gesamtzeit der Termine (ohne schwebende)
+      let gesamtMinuten = 0;
+      termine.forEach(termin => {
+        if (termin.ist_schwebend) return;
+        const zeit = termin.geschaetzte_zeit || 0;
+        gesamtMinuten += zeit;
+      });
+      
+      // Lade Einstellungen für verfügbare Kapazität
+      const einstellungen = await EinstellungenService.getWerkstatt();
+      const mitarbeiterZahl = parseInt(einstellungen.mitarbeiter_anzahl) || 2;
+      const stundenProTag = parseFloat(einstellungen.stunden_pro_tag) || 8;
+      
+      const verfuegbareMinuten = mitarbeiterZahl * stundenProTag * 60;
+      const auslastungProzent = verfuegbareMinuten > 0 
+        ? Math.round((gesamtMinuten / verfuegbareMinuten) * 100) 
+        : 0;
+      
+      // Werte anzeigen
+      wertEl.textContent = `${auslastungProzent}%`;
+      
+      const gesamtStunden = (gesamtMinuten / 60).toFixed(1);
+      const verfuegbareStunden = (verfuegbareMinuten / 60).toFixed(1);
+      detailEl.textContent = `${gesamtStunden} von ${verfuegbareStunden} Stunden`;
+      
+      // Farbe je nach Auslastung
+      if (auslastungProzent >= 100) {
+        wertEl.style.color = '#e53935';
+      } else if (auslastungProzent >= 80) {
+        wertEl.style.color = '#ff9800';
+      } else {
+        wertEl.style.color = '#4caf50';
+      }
+    } catch (error) {
+      console.error('Fehler bei Auslastungsberechnung:', error);
+      wertEl.textContent = '--%';
+      detailEl.textContent = 'Fehler beim Laden';
+    }
   }
 
   updateAktuelleUhrzeit() {
@@ -5521,45 +5746,204 @@ class App {
     return text.replace(regex, '<span class="vorschlag-match">$1</span>');
   }
 
+  // Alle Fahrzeuge eines Kunden sammeln (aus Kunden-Daten und Terminen)
+  getKundeFahrzeuge(kundeId, kundeName) {
+    const fahrzeuge = new Map(); // kennzeichen -> fahrzeugInfo
+    
+    // 1. Aus dem Kunden-Datensatz
+    const kunde = (this.kundenCache || []).find(k => k.id === kundeId);
+    if (kunde && kunde.kennzeichen) {
+      const kzNorm = this.normalizeKennzeichen(kunde.kennzeichen);
+      fahrzeuge.set(kzNorm, {
+        kennzeichen: kunde.kennzeichen,
+        fahrzeugtyp: kunde.fahrzeugtyp || '',
+        vin: kunde.vin || '',
+        quelle: 'kunde',
+        letzterTermin: null,
+        letzterKmStand: null
+      });
+    }
+    
+    // 2. Aus den Terminen des Kunden
+    const kundeTermine = (this.termineCache || []).filter(t => 
+      t.kunde_id === kundeId || 
+      (kundeName && t.kunde_name && t.kunde_name.toLowerCase() === kundeName.toLowerCase())
+    );
+    
+    kundeTermine.forEach(termin => {
+      if (termin.kennzeichen) {
+        const kzNorm = this.normalizeKennzeichen(termin.kennzeichen);
+        
+        if (!fahrzeuge.has(kzNorm)) {
+          // Neues Fahrzeug aus Termin
+          fahrzeuge.set(kzNorm, {
+            kennzeichen: termin.kennzeichen,
+            fahrzeugtyp: termin.fahrzeugtyp || '',
+            vin: termin.vin || '',
+            quelle: 'termin',
+            letzterTermin: termin.datum,
+            letzterKmStand: termin.kilometerstand
+          });
+        } else {
+          // Bestehendes Fahrzeug - ggf. aktualisieren
+          const existing = fahrzeuge.get(kzNorm);
+          if (!existing.letzterTermin || termin.datum > existing.letzterTermin) {
+            existing.letzterTermin = termin.datum;
+            if (termin.kilometerstand) {
+              existing.letzterKmStand = termin.kilometerstand;
+            }
+          }
+          // Fahrzeugtyp ergänzen wenn fehlend
+          if (!existing.fahrzeugtyp && termin.fahrzeugtyp) {
+            existing.fahrzeugtyp = termin.fahrzeugtyp;
+          }
+          if (!existing.vin && termin.vin) {
+            existing.vin = termin.vin;
+          }
+        }
+      }
+    });
+    
+    return Array.from(fahrzeuge.values());
+  }
+
   // Kunde aus Namenssuche auswählen
   selectKundeVorschlag(kundeId) {
     const kunde = (this.kundenCache || []).find(k => k.id === kundeId);
     if (!kunde) return;
     
-    // Felder füllen
+    // Alle Fahrzeuge des Kunden sammeln
+    const fahrzeuge = this.getKundeFahrzeuge(kundeId, kunde.name);
+    
+    // Wenn mehr als ein Fahrzeug vorhanden ist, Auswahl-Popup zeigen
+    if (fahrzeuge.length > 1) {
+      this.showFahrzeugAuswahlModal(kunde, fahrzeuge);
+      this.hideVorschlaege('name');
+      return;
+    }
+    
+    // Nur ein oder kein Fahrzeug - direkt auswählen
+    this.applyKundeAuswahl(kunde, fahrzeuge.length > 0 ? fahrzeuge[0] : null);
+    this.hideVorschlaege('name');
+  }
+
+  // Fahrzeug-Auswahl Modal anzeigen
+  showFahrzeugAuswahlModal(kunde, fahrzeuge) {
+    const modal = document.getElementById('fahrzeugAuswahlModal');
+    const kundeInfo = document.getElementById('fahrzeugAuswahlKunde');
+    const liste = document.getElementById('fahrzeugAuswahlListe');
+    
+    kundeInfo.innerHTML = `<strong>${kunde.name}</strong>${kunde.telefon ? ` · ${kunde.telefon}` : ''}<br>
+      <span style="font-size: 0.9em;">Dieser Kunde hat ${fahrzeuge.length} Fahrzeuge:</span>`;
+    
+    liste.innerHTML = fahrzeuge.map((fz, idx) => `
+      <div class="fahrzeug-auswahl-item" onclick="app.selectFahrzeugFromModal(${kunde.id}, ${idx})" style="
+        padding: 15px;
+        margin-bottom: 10px;
+        background: ${idx === 0 ? '#e8f5e9' : '#f8f9fa'};
+        border-radius: 8px;
+        border: 2px solid ${idx === 0 ? '#4caf50' : '#dee2e6'};
+        cursor: pointer;
+        transition: all 0.2s;
+      " onmouseover="this.style.borderColor='#4a90e2'; this.style.background='#e3f2fd';" 
+         onmouseout="this.style.borderColor='${idx === 0 ? '#4caf50' : '#dee2e6'}'; this.style.background='${idx === 0 ? '#e8f5e9' : '#f8f9fa'}';">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+          <div>
+            <span style="font-size: 1.2em; font-weight: bold;">🚗 ${fz.kennzeichen}</span>
+            ${fz.fahrzeugtyp ? `<span style="color: #666; margin-left: 10px;">${fz.fahrzeugtyp}</span>` : ''}
+          </div>
+          ${idx === 0 ? '<span style="background: #4caf50; color: white; padding: 2px 8px; border-radius: 4px; font-size: 0.8em;">Zuletzt</span>' : ''}
+        </div>
+        ${fz.vin ? `<div style="font-size: 0.85em; color: #888; margin-top: 5px;">VIN: ${fz.vin}</div>` : ''}
+        <div style="font-size: 0.85em; color: #666; margin-top: 5px;">
+          ${fz.letzterTermin ? `Letzter Termin: ${this.formatDatum(fz.letzterTermin)}` : 'Aus Kundenstamm'}
+          ${fz.letzterKmStand ? ` · ${fz.letzterKmStand.toLocaleString('de-DE')} km` : ''}
+        </div>
+      </div>
+    `).join('');
+    
+    // Speichere die Daten für späteren Zugriff
+    this.fahrzeugAuswahlData = { kunde, fahrzeuge };
+    
+    modal.style.display = 'block';
+  }
+
+  // Fahrzeug aus Modal auswählen
+  selectFahrzeugFromModal(kundeId, fahrzeugIndex) {
+    if (!this.fahrzeugAuswahlData) return;
+    
+    const { kunde, fahrzeuge } = this.fahrzeugAuswahlData;
+    const fahrzeug = fahrzeuge[fahrzeugIndex];
+    
+    this.applyKundeAuswahl(kunde, fahrzeug);
+    this.closeFahrzeugAuswahlModal();
+  }
+
+  // Fahrzeug-Auswahl Modal schließen
+  closeFahrzeugAuswahlModal() {
+    const modal = document.getElementById('fahrzeugAuswahlModal');
+    modal.style.display = 'none';
+    this.fahrzeugAuswahlData = null;
+  }
+
+  // Kunde und Fahrzeug auf das Formular anwenden
+  applyKundeAuswahl(kunde, fahrzeug) {
+    // Kunden-Daten füllen
     document.getElementById('kunde_id').value = kunde.id;
     document.getElementById('terminNameSuche').value = kunde.name;
     document.getElementById('neuer_kunde_telefon').value = kunde.telefon || '';
     
-    // Kennzeichen setzen
-    if (kunde.kennzeichen) {
-      document.getElementById('kennzeichen').value = kunde.kennzeichen;
+    // Fahrzeug-Daten füllen
+    if (fahrzeug) {
+      document.getElementById('kennzeichen').value = fahrzeug.kennzeichen || '';
+      
       // Auch die Suchfelder füllen
+      if (fahrzeug.kennzeichen) {
+        const parts = this.parseKennzeichen(fahrzeug.kennzeichen);
+        document.getElementById('kzSucheBezirk').value = parts.bezirk;
+        document.getElementById('kzSucheBuchstaben').value = parts.buchstaben;
+        document.getElementById('kzSucheNummer').value = parts.nummer;
+      }
+      
+      if (fahrzeug.fahrzeugtyp) {
+        document.getElementById('fahrzeugtyp').value = fahrzeug.fahrzeugtyp;
+      }
+      
+      if (fahrzeug.vin) {
+        document.getElementById('vin').value = fahrzeug.vin;
+      }
+      
+      // KM-Stand als Placeholder setzen
+      const kmStandInput = document.getElementById('kilometerstand');
+      if (fahrzeug.letzterKmStand && kmStandInput) {
+        kmStandInput.value = '';
+        kmStandInput.placeholder = `Letzter KM-Stand: ${fahrzeug.letzterKmStand.toLocaleString('de-DE')} km`;
+        kmStandInput.classList.add('has-previous-value');
+      }
+    } else if (kunde.kennzeichen) {
+      // Fallback: Kennzeichen aus Kunden-Datensatz
+      document.getElementById('kennzeichen').value = kunde.kennzeichen;
       const parts = this.parseKennzeichen(kunde.kennzeichen);
       document.getElementById('kzSucheBezirk').value = parts.bezirk;
       document.getElementById('kzSucheBuchstaben').value = parts.buchstaben;
       document.getElementById('kzSucheNummer').value = parts.nummer;
-    }
-    
-    // Fahrzeugtyp setzen
-    if (kunde.fahrzeugtyp) {
-      document.getElementById('fahrzeugtyp').value = kunde.fahrzeugtyp;
+      
+      if (kunde.fahrzeugtyp) {
+        document.getElementById('fahrzeugtyp').value = kunde.fahrzeugtyp;
+      }
+      
+      // Letzten KM-Stand suchen
+      const letzterKmStand = this.findLetztenKmStand(kunde.id, kunde.name, kunde.kennzeichen);
+      const kmStandInput = document.getElementById('kilometerstand');
+      if (letzterKmStand && kmStandInput) {
+        kmStandInput.value = '';
+        kmStandInput.placeholder = `Letzter KM-Stand: ${letzterKmStand.toLocaleString('de-DE')} km`;
+        kmStandInput.classList.add('has-previous-value');
+      }
     }
     
     // Kunde gefunden anzeigen
     this.showGefundenerKunde(kunde.name, kunde.telefon);
-    
-    // Letzten KM-Stand suchen
-    const letzterKmStand = this.findLetztenKmStand(kunde.id, kunde.name, kunde.kennzeichen);
-    const kmStandInput = document.getElementById('kilometerstand');
-    if (letzterKmStand && kmStandInput) {
-      kmStandInput.value = '';
-      kmStandInput.placeholder = `Letzter KM-Stand: ${letzterKmStand.toLocaleString('de-DE')} km`;
-      kmStandInput.classList.add('has-previous-value');
-    }
-    
-    // Vorschläge ausblenden
-    this.hideVorschlaege('name');
   }
 
   // Kennzeichen aus Kennzeichensuche auswählen
@@ -7430,8 +7814,18 @@ class App {
     this.currentTerminId = terminId;
     const arbeitenListe = this.parseArbeiten(termin.arbeit || '');
 
-    document.getElementById('modalTerminInfo').textContent =
-      `${termin.termin_nr || '-'} - ${termin.kunde_name} - ${termin.datum}`;
+    // Reset Teile-Status-Daten für separaten Bereich
+    this.modalTeileStatusData = [];
+
+    // Bringzeit und Datum formatieren
+    const bringzeitText = termin.bring_zeit ? termin.bring_zeit.substring(0, 5) : '—';
+    const datumFormatiert = new Date(termin.datum).toLocaleDateString('de-DE', { weekday: 'short', day: '2-digit', month: '2-digit', year: 'numeric' });
+
+    document.getElementById('modalTerminInfo').innerHTML =
+      `<strong>${termin.termin_nr || '-'}</strong> - ${termin.kunde_name} - ${datumFormatiert}
+       <span style="margin-left: 15px; padding: 4px 10px; background: #e3f2fd; border-radius: 4px; font-size: 0.9em;">
+         🕐 Bringzeit: <strong>${bringzeitText}</strong>
+       </span>`;
 
     // Status vorauswählen
     document.getElementById('modalTerminStatus').value = termin.status || 'geplant';
@@ -7442,15 +7836,41 @@ class App {
       mussBearbeitetCheckbox.checked = termin.muss_bearbeitet_werden || false;
     }
 
-    // Lade Mitarbeiter und Lehrlinge für Dropdowns
+    // Interne Auftragsnummer setzen
+    const interneAuftragsnummerInput = document.getElementById('modalInterneAuftragsnummer');
+    if (interneAuftragsnummerInput) {
+      interneAuftragsnummerInput.value = termin.interne_auftragsnummer || '';
+    }
+
+    // Lade Mitarbeiter, Lehrlinge und Abwesenheiten für das Datum
     let mitarbeiter = [];
     let lehrlinge = [];
+    let abwesenheiten = [];
     try {
-      mitarbeiter = await MitarbeiterService.getAktive();
-      lehrlinge = await LehrlingeService.getAktive();
+      [mitarbeiter, lehrlinge, abwesenheiten] = await Promise.all([
+        MitarbeiterService.getAktive(),
+        LehrlingeService.getAktive(),
+        EinstellungenService.getAbwesenheitenByDateRange(termin.datum, termin.datum)
+      ]);
     } catch (error) {
-      console.error('Fehler beim Laden der Mitarbeiter/Lehrlinge:', error);
+      console.error('Fehler beim Laden der Mitarbeiter/Lehrlinge/Abwesenheiten:', error);
     }
+
+    // Erstelle Set von abwesenden Personen für schnellen Lookup
+    // API-Format: {mitarbeiter_id: 2, lehrling_id: null, ...} oder {mitarbeiter_id: null, lehrling_id: 1, ...}
+    const abwesendeIds = new Set();
+    if (Array.isArray(abwesenheiten)) {
+      abwesenheiten.forEach(a => {
+        if (a.mitarbeiter_id) {
+          abwesendeIds.add(`ma_${a.mitarbeiter_id}`);
+        }
+        if (a.lehrling_id) {
+          abwesendeIds.add(`l_${a.lehrling_id}`);
+        }
+      });
+    }
+    console.log('Abwesenheiten für', termin.datum, ':', abwesenheiten);
+    console.log('Abwesende IDs:', [...abwesendeIds]);
 
     // Befülle Gesamt-Mitarbeiter-Dropdown (mit Mitarbeitern und Lehrlingen)
     const gesamtMitarbeiterSelect = document.getElementById('modalGesamtMitarbeiter');
@@ -7461,7 +7881,12 @@ class App {
       mitarbeiter.forEach(ma => {
         const option = document.createElement('option');
         option.value = `ma_${ma.id}`;
-        option.textContent = `👤 ${ma.name}`;
+        const istAbwesend = abwesendeIds.has(`ma_${ma.id}`);
+        option.textContent = istAbwesend ? `🚫 ${ma.name} (ABWESEND)` : `👤 ${ma.name}`;
+        option.style.color = istAbwesend ? '#c62828' : '';
+        if (istAbwesend) {
+          option.disabled = true;
+        }
         gesamtMitarbeiterSelect.appendChild(option);
       });
     }
@@ -7471,10 +7896,20 @@ class App {
       lehrlinge.forEach(l => {
         const option = document.createElement('option');
         option.value = `l_${l.id}`;
-        option.textContent = `🎓 ${l.name} (Lehrling)`;
+        const istAbwesend = abwesendeIds.has(`l_${l.id}`);
+        option.textContent = istAbwesend ? `🚫 ${l.name} (ABWESEND)` : `🎓 ${l.name} (Lehrling)`;
+        option.style.color = istAbwesend ? '#c62828' : '';
+        if (istAbwesend) {
+          option.disabled = true;
+        }
         gesamtMitarbeiterSelect.appendChild(option);
       });
     }
+
+    // Speichere abwesendeIds für die einzelnen Arbeits-Dropdowns
+    this.modalAbwesendeIds = abwesendeIds;
+    this.modalMitarbeiter = mitarbeiter;
+    this.modalLehrlinge = lehrlinge;
 
     const liste = document.getElementById('modalArbeitszeitenListe');
     liste.innerHTML = '';
@@ -7518,11 +7953,13 @@ class App {
       let teileStatus = ''; // Teile-Status
 
       // Prüfe zuerst ob individuelle Zeit für diese Arbeit gespeichert ist
+      let startzeit = '';
       if (arbeitszeitenDetails[arbeit]) {
-        // Neue Struktur: {zeit: 30, mitarbeiter_id: 1, type: 'mitarbeiter', teile_status: 'vorrätig'} oder alte Struktur: 30
+        // Neue Struktur: {zeit: 30, mitarbeiter_id: 1, type: 'mitarbeiter', teile_status: 'vorrätig', startzeit: '09:00'} oder alte Struktur: 30
         if (typeof arbeitszeitenDetails[arbeit] === 'object') {
           zeitMinuten = arbeitszeitenDetails[arbeit].zeit || arbeitszeitenDetails[arbeit];
           teileStatus = arbeitszeitenDetails[arbeit].teile_status || '';
+          startzeit = arbeitszeitenDetails[arbeit].startzeit || '';
           if (arbeitszeitenDetails[arbeit].type === 'lehrling') {
             mitarbeiterId = `l_${arbeitszeitenDetails[arbeit].mitarbeiter_id || arbeitszeitenDetails[arbeit].lehrling_id}`;
           } else if (arbeitszeitenDetails[arbeit].mitarbeiter_id) {
@@ -7550,6 +7987,8 @@ class App {
       const zeitStunden = (zeitMinuten / 60).toFixed(2);
 
       // Erstelle Dropdown für diese Aufgabe (mit Mitarbeitern und Lehrlingen)
+      // Verwende gespeicherte Abwesenheiten
+      const abwesendeIds = this.modalAbwesendeIds || new Set();
       let mitarbeiterOptions = '<option value="">-- Keine Zuordnung --</option>';
       
       // Mitarbeiter
@@ -7557,7 +7996,11 @@ class App {
         mitarbeiter.forEach(ma => {
           const value = `ma_${ma.id}`;
           const selected = value === mitarbeiterId ? 'selected' : '';
-          mitarbeiterOptions += `<option value="${value}" ${selected}>👤 ${ma.name}</option>`;
+          const istAbwesend = abwesendeIds.has(value);
+          const disabled = istAbwesend ? 'disabled' : '';
+          const label = istAbwesend ? `🚫 ${ma.name} (ABWESEND)` : `👤 ${ma.name}`;
+          const style = istAbwesend ? 'style="color: #c62828;"' : '';
+          mitarbeiterOptions += `<option value="${value}" ${selected} ${disabled} ${style}>${label}</option>`;
         });
       }
       
@@ -7566,11 +8009,15 @@ class App {
         lehrlinge.forEach(l => {
           const value = `l_${l.id}`;
           const selected = value === mitarbeiterId ? 'selected' : '';
-          mitarbeiterOptions += `<option value="${value}" ${selected}>🎓 ${l.name} (Lehrling)</option>`;
+          const istAbwesend = abwesendeIds.has(value);
+          const disabled = istAbwesend ? 'disabled' : '';
+          const label = istAbwesend ? `🚫 ${l.name} (ABWESEND)` : `🎓 ${l.name} (Lehrling)`;
+          const style = istAbwesend ? 'style="color: #c62828;"' : '';
+          mitarbeiterOptions += `<option value="${value}" ${selected} ${disabled} ${style}>${label}</option>`;
         });
       }
 
-      // Teile-Status Optionen
+      // Teile-Status Optionen - werden später separat angezeigt
       const teileStatusOptions = `
         <option value="" ${teileStatus === '' ? 'selected' : ''}>⚪ Keine Teile nötig</option>
         <option value="vorraetig" ${teileStatus === 'vorraetig' ? 'selected' : ''}>✅ Teile vorrätig</option>
@@ -7579,6 +8026,15 @@ class App {
         <option value="eingetroffen" ${teileStatus === 'eingetroffen' ? 'selected' : ''}>🚚 Teile eingetroffen</option>
       `;
 
+      // Speichere Teile-Status für separaten Bereich
+      this.modalTeileStatusData = this.modalTeileStatusData || [];
+      this.modalTeileStatusData.push({
+        index: index,
+        arbeit: arbeit,
+        teileStatus: teileStatus,
+        teileStatusOptions: teileStatusOptions
+      });
+
       const item = document.createElement('div');
       item.className = 'arbeitszeit-item';
       item.style.marginBottom = '15px';
@@ -7586,7 +8042,12 @@ class App {
         <div style="margin-bottom: 5px;">
           <label style="font-weight: 600;">📋 ${arbeit}:</label>
         </div>
-        <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin-bottom: 5px;">
+        <div style="display: grid; grid-template-columns: 80px 1fr 1fr; gap: 10px; margin-bottom: 5px;">
+          <input type="time"
+                 id="modal_startzeit_${index}"
+                 value="${startzeit}"
+                 title="Startzeit (Arbeitsbeginn)"
+                 style="padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
           <input type="number"
                  id="modal_zeit_${index}"
                  value="${zeitStunden}"
@@ -7595,29 +8056,20 @@ class App {
                  placeholder="Std."
                  onchange="app.updateModalGesamtzeit()"
                  onfocus="this.select()"
-                 title="Zeit in Stunden"
+                 title="Dauer in Stunden"
                  style="padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
           <select id="modal_mitarbeiter_${index}"
                   title="Mitarbeiter zuordnen"
                   style="padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
             ${mitarbeiterOptions}
           </select>
-          <select id="modal_teile_${index}"
-                  title="Teile-Status"
-                  onchange="app.updateTeileStatusStyle(this)"
-                  style="padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
-            ${teileStatusOptions}
-          </select>
         </div>
       `;
       liste.appendChild(item);
-      
-      // Style für Teile-Status setzen
-      const teileSelect = document.getElementById(`modal_teile_${index}`);
-      if (teileSelect) {
-        this.updateTeileStatusStyle(teileSelect);
-      }
     });
+
+    // Erstelle separaten Teile-Status Bereich
+    this.renderModalTeileStatusSection();
 
     this.updateModalGesamtzeit();
     
@@ -7929,6 +8381,58 @@ class App {
     document.getElementById('modalGesamtzeit').textContent = gesamtStunden.toFixed(2) + ' h';
   }
 
+  // Rendert den separaten Teile-Status-Bereich im Modal
+  renderModalTeileStatusSection() {
+    // Finde oder erstelle den Container
+    let teileSection = document.getElementById('modalTeileStatusSection');
+    
+    if (!teileSection) {
+      // Erstelle den Bereich nach der Arbeitszeiten-Liste
+      const gesamtzeitDiv = document.getElementById('modalGesamtzeit').closest('div');
+      teileSection = document.createElement('div');
+      teileSection.id = 'modalTeileStatusSection';
+      gesamtzeitDiv.insertAdjacentElement('afterend', teileSection);
+    }
+
+    // Prüfe ob überhaupt Teile-Status-Daten vorhanden sind
+    if (!this.modalTeileStatusData || this.modalTeileStatusData.length === 0) {
+      teileSection.innerHTML = '';
+      return;
+    }
+
+    teileSection.innerHTML = `
+      <div style="margin-top: 20px; padding: 15px; background: linear-gradient(135deg, #fff8e1 0%, #fffde7 100%); border-radius: 8px; border-left: 4px solid #ff9800;">
+        <h4 style="margin: 0 0 15px 0; color: #e65100; display: flex; align-items: center; gap: 8px;">
+          📦 Teile-Status
+        </h4>
+        <div class="teile-status-grid" style="display: grid; gap: 12px;">
+          ${this.modalTeileStatusData.map(item => `
+            <div class="teile-status-row" style="display: grid; grid-template-columns: 1fr 200px; gap: 10px; align-items: center; padding: 8px; background: white; border-radius: 6px; border: 1px solid #e0e0e0;">
+              <span style="font-weight: 500; color: #333;">📋 ${item.arbeit}</span>
+              <select id="modal_teile_${item.index}"
+                      title="Teile-Status für ${item.arbeit}"
+                      onchange="app.updateTeileStatusStyle(this)"
+                      style="padding: 8px; border: 2px solid #ddd; border-radius: 4px; cursor: pointer;">
+                ${item.teileStatusOptions}
+              </select>
+            </div>
+          `).join('')}
+        </div>
+        <small style="display: block; margin-top: 12px; color: #666;">
+          💡 Wählen Sie den Teile-Status für jede Arbeit aus. Bei "Muss bestellt werden" erscheint der Termin in der Teile-Übersicht.
+        </small>
+      </div>
+    `;
+
+    // Styles für alle Teile-Status-Selects anwenden
+    this.modalTeileStatusData.forEach(item => {
+      const select = document.getElementById(`modal_teile_${item.index}`);
+      if (select) {
+        this.updateTeileStatusStyle(select);
+      }
+    });
+  }
+
   // Visuelles Styling für Teile-Status Dropdown
   updateTeileStatusStyle(selectElement) {
     if (!selectElement) return;
@@ -8046,16 +8550,21 @@ class App {
         // NEU: Teile-Status auslesen
         const teileSelect = document.getElementById(`modal_teile_${index}`);
         const teileStatus = teileSelect ? teileSelect.value : '';
+        
+        // NEU: Startzeit auslesen
+        const startzeitInput = document.getElementById(`modal_startzeit_${index}`);
+        const startzeit = startzeitInput ? startzeitInput.value : '';
 
-        // Neue Struktur: {zeit: 30, mitarbeiter_id: 1, type: 'mitarbeiter', teile_status: 'vorraetig'}
-        if (mitarbeiterValue || teileStatus) {
+        // Neue Struktur: {zeit: 30, mitarbeiter_id: 1, type: 'mitarbeiter', teile_status: 'vorraetig', startzeit: '09:00'}
+        if (mitarbeiterValue || teileStatus || startzeit) {
           if (mitarbeiterValue && mitarbeiterValue.startsWith('ma_')) {
             const id = parseInt(mitarbeiterValue.replace('ma_', ''), 10);
             arbeitszeitenDetails[arbeitenListe[index]] = {
               zeit: zeitMinuten,
               mitarbeiter_id: id,
               type: 'mitarbeiter',
-              teile_status: teileStatus
+              teile_status: teileStatus,
+              startzeit: startzeit
             };
           } else if (mitarbeiterValue && mitarbeiterValue.startsWith('l_')) {
             const id = parseInt(mitarbeiterValue.replace('l_', ''), 10);
@@ -8064,13 +8573,15 @@ class App {
               lehrling_id: id,
               mitarbeiter_id: id, // Für Kompatibilität
               type: 'lehrling',
-              teile_status: teileStatus
+              teile_status: teileStatus,
+              startzeit: startzeit
             };
           } else {
-            // Nur Teile-Status ohne Mitarbeiter
+            // Nur Teile-Status/Startzeit ohne Mitarbeiter
             arbeitszeitenDetails[arbeitenListe[index]] = {
               zeit: zeitMinuten,
-              teile_status: teileStatus
+              teile_status: teileStatus,
+              startzeit: startzeit
             };
           }
         } else {
@@ -8096,13 +8607,18 @@ class App {
     const mussBearbeitetCheckbox = document.getElementById('modalMussBearbeitetCheckbox');
     const mussBearbeitetWerden = mussBearbeitetCheckbox ? mussBearbeitetCheckbox.checked : false;
 
+    // Interne Auftragsnummer auslesen
+    const interneAuftragsnummerInput = document.getElementById('modalInterneAuftragsnummer');
+    const interneAuftragsnummer = interneAuftragsnummerInput ? interneAuftragsnummerInput.value.trim() : '';
+
     try {
       await TermineService.update(this.currentTerminId, {
         tatsaechliche_zeit: gesamtzeitMinuten,
         arbeitszeiten_details: JSON.stringify(arbeitszeitenDetails),
         status: status,
         mitarbeiter_id: terminMitarbeiterId,
-        muss_bearbeitet_werden: mussBearbeitetWerden
+        muss_bearbeitet_werden: mussBearbeitetWerden,
+        interne_auftragsnummer: interneAuftragsnummer
       });
 
       // Speichere Phasen wenn mehrtägig aktiviert ist
@@ -8148,6 +8664,12 @@ class App {
       this.loadTermine();
       this.loadDashboard();
       this.loadAuslastung();
+      
+      // Aktualisiere Teile-Status-Übersicht wenn sichtbar
+      const teileStatusTab = document.getElementById('teileStatus');
+      if (teileStatusTab && teileStatusTab.classList.contains('active')) {
+        this.loadTeileStatusUebersicht();
+      }
     } catch (error) {
       console.error('Fehler beim Speichern:', error);
       alert('Fehler beim Speichern der Zeiten & Status');
@@ -8904,6 +9426,641 @@ class App {
     div.textContent = text;
     return div.innerHTML;
   }
+
+  // ==========================================
+  // TEILE-STATUS ÜBERSICHT
+  // ==========================================
+
+  async loadTeileStatusUebersicht() {
+    const tbody = document.getElementById('teileStatusTableBody');
+    if (!tbody) return;
+
+    tbody.innerHTML = `
+      <tr>
+        <td colspan="6" style="text-align: center; padding: 30px; color: #666;">
+          <span style="font-size: 24px;">⏳</span><br>
+          Lade Teile-Status...
+        </td>
+      </tr>
+    `;
+
+    try {
+      const termine = await TermineService.getAll();
+      
+      // Filtere Termine mit Teile-Status
+      const termineWithTeile = [];
+      
+      for (const termin of termine) {
+        if (termin.arbeitszeiten_details) {
+          try {
+            const details = typeof termin.arbeitszeiten_details === 'string' 
+              ? JSON.parse(termin.arbeitszeiten_details) 
+              : termin.arbeitszeiten_details;
+            
+            // Prüfe jeden Arbeitsschritt auf Teile-Status
+            for (const [arbeit, data] of Object.entries(details)) {
+              if (arbeit.startsWith('_')) continue; // Interne Felder überspringen
+              
+              const teileStatus = typeof data === 'object' && data.teile_status 
+                ? data.teile_status 
+                : null;
+              
+              if (teileStatus && teileStatus !== '') {
+                termineWithTeile.push({
+                  ...termin,
+                  arbeit_name: arbeit,
+                  teile_status: teileStatus
+                });
+              }
+            }
+          } catch (e) {
+            console.error('JSON Parse Fehler für Termin', termin.termin_nr, e);
+          }
+        }
+      }
+
+      // Statistiken berechnen
+      const stats = {
+        bestellen: termineWithTeile.filter(t => t.teile_status === 'bestellen').length,
+        bestellt: termineWithTeile.filter(t => t.teile_status === 'bestellt').length,
+        eingetroffen: termineWithTeile.filter(t => t.teile_status === 'eingetroffen').length,
+        vorraetig: termineWithTeile.filter(t => t.teile_status === 'vorraetig').length
+      };
+
+      // Statistik-Karten aktualisieren
+      const bestellenEl = document.getElementById('teileBestellenCount');
+      const bestelltEl = document.getElementById('teileBestelltCount');
+      const eingetroffenEl = document.getElementById('teileEingetroffenCount');
+      const vorraetigEl = document.getElementById('teileVorraetigCount');
+      
+      if (bestellenEl) bestellenEl.textContent = stats.bestellen;
+      if (bestelltEl) bestelltEl.textContent = stats.bestellt;
+      if (eingetroffenEl) eingetroffenEl.textContent = stats.eingetroffen;
+      if (vorraetigEl) vorraetigEl.textContent = stats.vorraetig;
+
+      // Speichern für Filter
+      this.teileStatusData = termineWithTeile;
+
+      // Tabelle rendern
+      this.renderTeileStatusTable(termineWithTeile);
+
+    } catch (error) {
+      console.error('Fehler beim Laden der Teile-Status-Übersicht:', error);
+      tbody.innerHTML = `
+        <tr>
+          <td colspan="6" style="text-align: center; padding: 30px; color: #c62828;">
+            <span style="font-size: 24px;">❌</span><br>
+            Fehler beim Laden
+          </td>
+        </tr>
+      `;
+    }
+  }
+
+  renderTeileStatusTable(termine) {
+    const tbody = document.getElementById('teileStatusTableBody');
+    if (!tbody) return;
+
+    if (termine.length === 0) {
+      tbody.innerHTML = `
+        <tr>
+          <td colspan="6" style="text-align: center; padding: 30px; color: #666;">
+            <span style="font-size: 24px;">✅</span><br>
+            Keine Termine mit Teile-Status gefunden
+          </td>
+        </tr>
+      `;
+      return;
+    }
+
+    // Sortiere nach Datum (neueste zuerst) und dann nach Teile-Status Priorität
+    const statusPriority = { 'bestellen': 1, 'bestellt': 2, 'eingetroffen': 3, 'vorraetig': 4 };
+    termine.sort((a, b) => {
+      const priorityDiff = (statusPriority[a.teile_status] || 99) - (statusPriority[b.teile_status] || 99);
+      if (priorityDiff !== 0) return priorityDiff;
+      return new Date(b.datum) - new Date(a.datum);
+    });
+
+    tbody.innerHTML = termine.map(termin => {
+      const datum = new Date(termin.datum).toLocaleDateString('de-DE', {
+        weekday: 'short',
+        day: '2-digit',
+        month: '2-digit'
+      });
+
+      const statusMap = {
+        'bestellen': { icon: '⚠️', text: 'Muss bestellt werden', class: 'teile-bestellen' },
+        'bestellt': { icon: '📦', text: 'Bestellt', class: 'teile-bestellt' },
+        'eingetroffen': { icon: '🚚', text: 'Eingetroffen', class: 'teile-eingetroffen' },
+        'vorraetig': { icon: '✅', text: 'Vorrätig', class: 'teile-vorraetig' }
+      };
+
+      const status = statusMap[termin.teile_status] || { icon: '❓', text: termin.teile_status, class: '' };
+
+      // Escape den Arbeit-Namen für JavaScript
+      const arbeitNameEscaped = (termin.arbeit_name || '').replace(/'/g, "\\'").replace(/"/g, '\\"');
+
+      return `
+        <tr class="teile-row" data-status="${termin.teile_status}" data-termin-id="${termin.id}">
+          <td>${datum}</td>
+          <td>${this.escapeHtml(termin.kunde_name || 'Unbekannt')}</td>
+          <td><strong>${this.escapeHtml(termin.kennzeichen || '-')}</strong></td>
+          <td>${this.escapeHtml(termin.arbeit_name || termin.arbeiten || '-')}</td>
+          <td>
+            <select class="teile-status-select ${status.class}" 
+                    onchange="app.updateTeileStatusDirekt(${termin.id}, '${arbeitNameEscaped}', this.value)">
+              <option value="bestellen" ${termin.teile_status === 'bestellen' ? 'selected' : ''}>⚠️ Muss bestellt werden</option>
+              <option value="bestellt" ${termin.teile_status === 'bestellt' ? 'selected' : ''}>📦 Bestellt</option>
+              <option value="eingetroffen" ${termin.teile_status === 'eingetroffen' ? 'selected' : ''}>🚚 Eingetroffen</option>
+              <option value="vorraetig" ${termin.teile_status === 'vorraetig' ? 'selected' : ''}>✅ Vorrätig</option>
+              <option value="" ${!termin.teile_status ? 'selected' : ''}>⚪ Keine Teile nötig</option>
+            </select>
+          </td>
+          <td>
+            <button class="btn btn-small" onclick="app.openArbeitszeitenModal(${termin.id})" title="Termin bearbeiten">
+              ✏️ Bearbeiten
+            </button>
+          </td>
+        </tr>
+      `;
+    }).join('');
+  }
+
+  filterTeileStatus(filter) {
+    // Buttons aktiv/inaktiv setzen
+    document.querySelectorAll('.teile-filter-btn').forEach(btn => {
+      btn.classList.toggle('active', btn.dataset.filter === filter);
+    });
+
+    if (!this.teileStatusData) return;
+
+    let filteredData = this.teileStatusData;
+    if (filter !== 'alle') {
+      filteredData = this.teileStatusData.filter(t => t.teile_status === filter);
+    }
+
+    this.renderTeileStatusTable(filteredData);
+  }
+
+  async updateTeileStatusDirekt(terminId, arbeitName, neuerStatus) {
+    try {
+      // Lade aktuelle Termin-Daten
+      const termin = await TermineService.getById(terminId);
+      if (!termin) {
+        alert('Termin nicht gefunden');
+        return;
+      }
+
+      let details = {};
+      if (termin.arbeitszeiten_details) {
+        try {
+          details = typeof termin.arbeitszeiten_details === 'string'
+            ? JSON.parse(termin.arbeitszeiten_details)
+            : termin.arbeitszeiten_details;
+        } catch (e) {
+          details = {};
+        }
+      }
+
+      // Update den Teile-Status für die spezifische Arbeit
+      if (details[arbeitName]) {
+        if (typeof details[arbeitName] === 'object') {
+          details[arbeitName].teile_status = neuerStatus;
+        } else {
+          // Alte Struktur (nur Zahl) - konvertiere zu neuer Struktur
+          details[arbeitName] = {
+            zeit: details[arbeitName],
+            teile_status: neuerStatus
+          };
+        }
+      } else {
+        details[arbeitName] = {
+          zeit: 0,
+          teile_status: neuerStatus
+        };
+      }
+
+      // Speichern
+      await TermineService.update(terminId, {
+        arbeitszeiten_details: JSON.stringify(details)
+      });
+
+      // Style des Selects aktualisieren
+      const select = document.querySelector(`tr[data-termin-id="${terminId}"] .teile-status-select`);
+      if (select) {
+        select.className = 'teile-status-select';
+        if (neuerStatus === 'bestellen') select.classList.add('teile-bestellen');
+        else if (neuerStatus === 'bestellt') select.classList.add('teile-bestellt');
+        else if (neuerStatus === 'eingetroffen') select.classList.add('teile-eingetroffen');
+        else if (neuerStatus === 'vorraetig') select.classList.add('teile-vorraetig');
+      }
+
+      // Daten neu laden für korrekte Statistiken
+      await this.loadTeileStatusUebersicht();
+
+      this.showToast('Teile-Status aktualisiert', 'success');
+
+    } catch (error) {
+      console.error('Fehler beim Aktualisieren des Teile-Status:', error);
+      alert('Fehler beim Aktualisieren: ' + error.message);
+    }
+  }
+
+  // ==========================================
+  // ZEITLEISTEN-ANSICHT (8-18 Uhr)
+  // ==========================================
+
+  async loadZeitleiste(datum) {
+    const body = document.getElementById('zeitleisteBody');
+    if (!body) return;
+
+    body.innerHTML = '<div class="zeitleiste-loading"><span>⏳</span> Lade Zeitleiste...</div>';
+
+    try {
+      // Lade alle Termine für dieses Datum
+      const termine = await TermineService.getAll(datum);
+      
+      // Lade Mitarbeiter und Lehrlinge
+      const [mitarbeiter, lehrlinge] = await Promise.all([
+        MitarbeiterService.getAktive(),
+        LehrlingeService.getAktive()
+      ]);
+
+      // Erstelle Arbeiten-Map nach Mitarbeiter/Lehrling
+      const arbeitenMap = new Map();
+      const ohneZuordnung = [];
+
+      // Verarbeite alle Termine
+      for (const termin of termine) {
+        const arbeitenListe = this.parseArbeiten(termin.arbeit || '');
+        let details = {};
+        
+        if (termin.arbeitszeiten_details) {
+          try {
+            details = typeof termin.arbeitszeiten_details === 'string' 
+              ? JSON.parse(termin.arbeitszeiten_details) 
+              : termin.arbeitszeiten_details;
+          } catch (e) {}
+        }
+
+        // Für jede Arbeit im Termin
+        for (const arbeit of arbeitenListe) {
+          const arbeitDetails = typeof details[arbeit] === 'object' ? details[arbeit] : { zeit: details[arbeit] || 0 };
+          const zeitMinuten = arbeitDetails.zeit || (termin.geschaetzte_zeit / arbeitenListe.length) || 60;
+          const startzeit = arbeitDetails.startzeit || null;
+          const zuordnungsTyp = arbeitDetails.type || null; // 'mitarbeiter' oder 'lehrling'
+          const mitarbeiterId = arbeitDetails.mitarbeiter_id || termin.mitarbeiter_id;
+          const lehrlingId = arbeitDetails.lehrling_id || null;
+
+          const arbeitEntry = {
+            terminId: termin.id,
+            terminNr: termin.termin_nr,
+            kunde: termin.kunde_name,
+            kennzeichen: termin.kennzeichen,
+            arbeit: arbeit,
+            zeitMinuten: zeitMinuten,
+            startzeit: startzeit,
+            status: termin.status || 'geplant',
+            istIntern: !termin.kennzeichen || termin.abholung_details === 'Interner Termin'
+          };
+
+          // Zuordnung zu Mitarbeiter oder Lehrling basierend auf dem expliziten type-Feld
+          if (zuordnungsTyp === 'lehrling' && lehrlingId) {
+            // Explizit als Lehrling markiert
+            const key = `l_${lehrlingId}`;
+            if (!arbeitenMap.has(key)) {
+              arbeitenMap.set(key, { typ: 'lehrling', id: lehrlingId, arbeiten: [] });
+            }
+            arbeitenMap.get(key).arbeiten.push(arbeitEntry);
+          } else if (zuordnungsTyp === 'mitarbeiter' && mitarbeiterId) {
+            // Explizit als Mitarbeiter markiert
+            const key = `m_${mitarbeiterId}`;
+            if (!arbeitenMap.has(key)) {
+              arbeitenMap.set(key, { typ: 'mitarbeiter', id: mitarbeiterId, arbeiten: [] });
+            }
+            arbeitenMap.get(key).arbeiten.push(arbeitEntry);
+          } else if (mitarbeiterId) {
+            // Fallback: Alte Daten ohne type-Feld
+            const key = `m_${mitarbeiterId}`;
+            if (!arbeitenMap.has(key)) {
+              arbeitenMap.set(key, { typ: 'mitarbeiter', id: mitarbeiterId, arbeiten: [] });
+            }
+            arbeitenMap.get(key).arbeiten.push(arbeitEntry);
+          } else if (lehrlingId) {
+            // Fallback: Lehrling ohne type-Feld
+            const key = `l_${lehrlingId}`;
+            if (!arbeitenMap.has(key)) {
+              arbeitenMap.set(key, { typ: 'lehrling', id: lehrlingId, arbeiten: [] });
+            }
+            arbeitenMap.get(key).arbeiten.push(arbeitEntry);
+          } else {
+            ohneZuordnung.push(arbeitEntry);
+          }
+        }
+      }
+
+      // Rendere die Zeitleiste
+      this.renderZeitleiste(body, arbeitenMap, ohneZuordnung, mitarbeiter, lehrlinge);
+
+    } catch (error) {
+      console.error('Fehler beim Laden der Zeitleiste:', error);
+      body.innerHTML = '<div class="zeitleiste-leer"><span class="zeitleiste-leer-icon">❌</span><p>Fehler beim Laden</p></div>';
+    }
+  }
+
+  renderZeitleiste(container, arbeitenMap, ohneZuordnung, mitarbeiter, lehrlinge) {
+    // Keine Arbeiten?
+    if (arbeitenMap.size === 0 && ohneZuordnung.length === 0) {
+      container.innerHTML = `
+        <div class="zeitleiste-leer">
+          <span class="zeitleiste-leer-icon">📅</span>
+          <p>Keine Termine für diesen Tag</p>
+        </div>
+      `;
+      return;
+    }
+
+    const START_HOUR = 8;
+    const END_HOUR = 18;
+    const TOTAL_HOURS = END_HOUR - START_HOUR; // 10 Stunden
+
+    let html = '';
+
+    // Aktuelle Zeit Marker Position berechnen (falls heute)
+    const heute = this.formatDateLocal(new Date());
+    const selectedDatum = document.getElementById('auslastungDatum').value;
+    let jetztMarkerHtml = '';
+    
+    if (selectedDatum === heute) {
+      const now = new Date();
+      const currentHour = now.getHours() + now.getMinutes() / 60;
+      if (currentHour >= START_HOUR && currentHour <= END_HOUR) {
+        const jetztPosition = ((currentHour - START_HOUR) / TOTAL_HOURS) * 100;
+        jetztMarkerHtml = `<div class="zeitleiste-jetzt-marker" style="left: ${jetztPosition}%;"></div>`;
+      }
+    }
+
+    // Mitarbeiter-Zeilen
+    for (const ma of mitarbeiter) {
+      const key = `m_${ma.id}`;
+      const data = arbeitenMap.get(key);
+      const arbeiten = data ? data.arbeiten : [];
+      
+      html += this.renderZeitleisteRow(ma.name, 'Mitarbeiter', arbeiten, START_HOUR, END_HOUR, TOTAL_HOURS, jetztMarkerHtml);
+    }
+
+    // Lehrling-Zeilen
+    for (const lehrling of lehrlinge) {
+      const key = `l_${lehrling.id}`;
+      const data = arbeitenMap.get(key);
+      const arbeiten = data ? data.arbeiten : [];
+      
+      html += this.renderZeitleisteRow(lehrling.name, 'Lehrling', arbeiten, START_HOUR, END_HOUR, TOTAL_HOURS, jetztMarkerHtml);
+    }
+
+    // Nicht zugeordnete Arbeiten
+    if (ohneZuordnung.length > 0) {
+      html += this.renderZeitleisteRow('⚠️ Nicht zugeordnet', '', ohneZuordnung, START_HOUR, END_HOUR, TOTAL_HOURS, jetztMarkerHtml, true);
+    }
+
+    container.innerHTML = html;
+  }
+
+  renderZeitleisteRow(name, typ, arbeiten, startHour, endHour, totalHours, jetztMarkerHtml, isWarning = false) {
+    const rowClass = isWarning ? 'zeitleiste-row nicht-zugeordnet' : 'zeitleiste-row';
+    
+    // Gitter erstellen
+    let gitterHtml = '<div class="zeitleiste-gitter">';
+    for (let h = startHour; h <= endHour; h++) {
+      gitterHtml += '<div class="zeitleiste-gitter-stunde"></div>';
+    }
+    gitterHtml += '</div>';
+
+    // Arbeitsblöcke erstellen
+    let bloeckeHtml = '<div class="zeitleiste-arbeiten">';
+    
+    // Sortiere Arbeiten nach Startzeit
+    const sortedArbeiten = [...arbeiten].sort((a, b) => {
+      if (!a.startzeit && !b.startzeit) return 0;
+      if (!a.startzeit) return 1;
+      if (!b.startzeit) return -1;
+      return a.startzeit.localeCompare(b.startzeit);
+    });
+
+    // Berechne Positionen für überlappende Blöcke
+    let currentEndMinutes = startHour * 60;
+    
+    for (const arbeit of sortedArbeiten) {
+      let leftPercent, widthPercent;
+      let startMinutes, endMinutes;
+      
+      if (arbeit.startzeit) {
+        // Mit Startzeit
+        const [startH, startM] = arbeit.startzeit.split(':').map(Number);
+        startMinutes = startH * 60 + startM;
+        endMinutes = startMinutes + arbeit.zeitMinuten;
+        
+        // Begrenzen auf 8-18 Uhr
+        const displayStart = Math.max(startMinutes, startHour * 60);
+        const displayEnd = Math.min(endMinutes, endHour * 60);
+        
+        leftPercent = ((displayStart - startHour * 60) / (totalHours * 60)) * 100;
+        widthPercent = ((displayEnd - displayStart) / (totalHours * 60)) * 100;
+      } else {
+        // Ohne Startzeit: Platziere nach letzter Arbeit
+        startMinutes = currentEndMinutes;
+        endMinutes = startMinutes + arbeit.zeitMinuten;
+        
+        // Begrenzen auf 8-18 Uhr
+        const displayStart = Math.max(startMinutes, startHour * 60);
+        const displayEnd = Math.min(endMinutes, endHour * 60);
+        
+        leftPercent = ((displayStart - startHour * 60) / (totalHours * 60)) * 100;
+        widthPercent = ((displayEnd - displayStart) / (totalHours * 60)) * 100;
+      }
+
+      currentEndMinutes = endMinutes;
+      
+      // Nur anzeigen wenn im sichtbaren Bereich
+      if (widthPercent <= 0) continue;
+
+      const statusClass = arbeit.startzeit ? `status-${arbeit.status}` : 'status-keine-zeit';
+      const internClass = arbeit.istIntern ? 'intern-termin' : '';
+      const startZeitText = arbeit.startzeit || '—';
+      const endZeitText = this.minutesToTime(endMinutes);
+      const dauerText = this.formatMinutesToHours(arbeit.zeitMinuten);
+      
+      // Hauptanzeige: Kennzeichen bevorzugt, sonst Name (bei internen Terminen)
+      const hauptAnzeige = arbeit.kennzeichen ? arbeit.kennzeichen : (arbeit.istIntern ? '🔧 ' + arbeit.kunde : arbeit.kunde);
+
+      bloeckeHtml += `
+        <div class="zeitleiste-block ${statusClass} ${internClass}" 
+             style="left: ${leftPercent}%; width: ${Math.max(widthPercent, 3)}%;"
+             onclick="app.openZeitleisteKontextmenu(event, ${arbeit.terminId}, '${this.escapeHtml(arbeit.kunde)}', '${this.escapeHtml(arbeit.arbeit)}', '${arbeit.terminNr}')"
+             title="${arbeit.kunde}${arbeit.kennzeichen ? ' - ' + arbeit.kennzeichen : ''}&#10;${arbeit.arbeit}&#10;${startZeitText} - ${endZeitText} (${dauerText})">
+          <span class="zeitleiste-block-haupt">${this.escapeHtml(hauptAnzeige)}</span>
+          <span class="zeitleiste-block-zeit">${startZeitText} - ${endZeitText}</span>
+        </div>
+      `;
+    }
+
+    bloeckeHtml += '</div>';
+
+    return `
+      <div class="${rowClass}">
+        <div class="zeitleiste-mitarbeiter">
+          <span class="zeitleiste-mitarbeiter-name">${this.escapeHtml(name)}</span>
+          ${typ ? `<span class="zeitleiste-mitarbeiter-typ">${typ}</span>` : ''}
+        </div>
+        <div class="zeitleiste-timeline">
+          ${gitterHtml}
+          ${jetztMarkerHtml}
+          ${bloeckeHtml}
+        </div>
+      </div>
+    `;
+  }
+
+  minutesToTime(totalMinutes) {
+    const hours = Math.floor(totalMinutes / 60);
+    const minutes = totalMinutes % 60;
+    return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
+  }
+
+  // ==========================================
+  // ZEITLEISTE KONTEXTMENÜ
+  // ==========================================
+
+  openZeitleisteKontextmenu(event, terminId, kunde, arbeit, terminNr) {
+    event.stopPropagation();
+    
+    const menu = document.getElementById('zeitleisteKontextmenu');
+    const header = document.getElementById('zeitleisteKontextmenuHeader');
+    
+    // Speichere aktuelle Termin-Info
+    this.zeitleisteKontextTerminId = terminId;
+    
+    // Header befüllen
+    header.innerHTML = `
+      <strong>${terminNr}</strong> - ${kunde}
+      <small>${arbeit}</small>
+    `;
+    
+    // Position berechnen
+    let x = event.clientX;
+    let y = event.clientY;
+    
+    // Menü anzeigen (temporär für Größenmessung)
+    menu.style.display = 'block';
+    menu.style.visibility = 'hidden';
+    
+    const menuRect = menu.getBoundingClientRect();
+    const viewportWidth = window.innerWidth;
+    const viewportHeight = window.innerHeight;
+    
+    // Sicherstellen, dass Menü im Viewport bleibt
+    if (x + menuRect.width > viewportWidth) {
+      x = viewportWidth - menuRect.width - 10;
+    }
+    if (y + menuRect.height > viewportHeight) {
+      y = viewportHeight - menuRect.height - 10;
+    }
+    
+    menu.style.left = `${x}px`;
+    menu.style.top = `${y}px`;
+    menu.style.visibility = 'visible';
+    
+    // Click außerhalb schließt Menü
+    setTimeout(() => {
+      document.addEventListener('click', this.closeZeitleisteKontextmenuHandler);
+    }, 10);
+  }
+
+  closeZeitleisteKontextmenuHandler = (event) => {
+    const menu = document.getElementById('zeitleisteKontextmenu');
+    if (menu && !menu.contains(event.target)) {
+      menu.style.display = 'none';
+      document.removeEventListener('click', this.closeZeitleisteKontextmenuHandler);
+    }
+  }
+
+  closeZeitleisteKontextmenu() {
+    const menu = document.getElementById('zeitleisteKontextmenu');
+    if (menu) {
+      menu.style.display = 'none';
+    }
+    document.removeEventListener('click', this.closeZeitleisteKontextmenuHandler);
+  }
+
+  zeitleisteKontextZeiten() {
+    this.closeZeitleisteKontextmenu();
+    if (this.zeitleisteKontextTerminId) {
+      this.openArbeitszeitenModal(this.zeitleisteKontextTerminId);
+    }
+  }
+
+  zeitleisteKontextDetails() {
+    this.closeZeitleisteKontextmenu();
+    if (this.zeitleisteKontextTerminId) {
+      this.showTerminDetails(this.zeitleisteKontextTerminId);
+    }
+  }
+
+  zeitleisteKontextSplit() {
+    this.closeZeitleisteKontextmenu();
+    if (!this.zeitleisteKontextTerminId) return;
+    
+    const termin = this.termineById[this.zeitleisteKontextTerminId];
+    if (!termin) {
+      alert('Termin nicht gefunden');
+      return;
+    }
+
+    // Setze currentDetailTerminId für die Split-Funktion
+    this.currentDetailTerminId = this.zeitleisteKontextTerminId;
+
+    const gesamtzeit = termin.geschaetzte_zeit || 60;
+    
+    // Info-Box befüllen
+    document.getElementById('splitTerminInfo').innerHTML = `
+      <strong>${termin.termin_nr || '-'}</strong> - ${termin.kunde_name || '-'}<br>
+      <span style="color: #666;">${termin.arbeit || '-'}</span>
+    `;
+    document.getElementById('splitGesamtzeit').textContent = `${gesamtzeit} Min. (${this.formatMinutesToHours(gesamtzeit)})`;
+    
+    // Standard-Werte setzen (50/50 Split)
+    const teil1Zeit = Math.round(gesamtzeit / 2);
+    document.getElementById('splitTeil1Zeit').value = teil1Zeit;
+    document.getElementById('splitTeil1Zeit').max = gesamtzeit - 1;
+    document.getElementById('splitTeil1Range').max = gesamtzeit;
+    document.getElementById('splitTeil1Range').value = teil1Zeit;
+    
+    // Teil 2 Zeit berechnen
+    document.getElementById('splitTeil2Zeit').value = gesamtzeit - teil1Zeit;
+    
+    // Morgen als Standard-Datum für Teil 2
+    const morgen = new Date();
+    morgen.setDate(morgen.getDate() + 1);
+    // Sonntag überspringen
+    if (morgen.getDay() === 0) {
+      morgen.setDate(morgen.getDate() + 1);
+    }
+    document.getElementById('splitTeil2Datum').value = this.formatDateLocal(morgen);
+    document.getElementById('splitTeil2Datum').min = this.formatDateLocal(new Date());
+    
+    // Speichere Gesamtzeit für Range-Updates
+    this.splitGesamtzeit = gesamtzeit;
+    
+    // Preview aktualisieren
+    this.updateSplitPreview();
+    
+    // Split-Modal anzeigen
+    document.getElementById('terminSplitModal').style.display = 'block';
+    
+    // Event-Listener für Teil1-Input
+    document.getElementById('splitTeil1Zeit').oninput = () => this.updateSplitFromInput();
+  }
 }
+
 
 const app = new App();

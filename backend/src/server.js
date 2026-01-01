@@ -97,8 +97,16 @@ function startServer(clientCountCallback, requestLogCallback) {
     // Frontend statisch ausliefern (falls vorhanden)
     const frontendPath = findFrontendPath();
     if (frontendPath) {
-        // Statische Dateien aus dem Frontend-Ordner
-        app.use(express.static(frontendPath));
+        // Statische Dateien aus dem Frontend-Ordner (ohne Cache für Entwicklung)
+        app.use(express.static(frontendPath, {
+            etag: false,
+            maxAge: 0,
+            setHeaders: (res) => {
+                res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+                res.set('Pragma', 'no-cache');
+                res.set('Expires', '0');
+            }
+        }));
         
         // Alle anderen Anfragen an index.html weiterleiten (SPA-Support)
         app.get('*', (req, res, next) => {

@@ -11,5 +11,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
   createBackup: () => ipcRenderer.invoke('backup-create'),
   restoreBackup: (filename) => ipcRenderer.invoke('backup-restore', filename),
   deleteBackup: (filename) => ipcRenderer.invoke('backup-delete', filename),
-  openBackupFolder: () => ipcRenderer.invoke('backup-open-folder')
+  openBackupFolder: () => ipcRenderer.invoke('backup-open-folder'),
+  // Datenbank-Pfad Funktionen
+  getDbPath: () => ipcRenderer.invoke('db-get-path'),
+  selectDbFile: () => ipcRenderer.invoke('db-select-file'),
+  resetDbPath: () => ipcRenderer.invoke('db-reset-path'),
+  openDbFolder: () => ipcRenderer.invoke('db-open-folder'),
+  restartApp: () => ipcRenderer.invoke('app-restart')
 });

@@ -1,7 +1,7 @@
 directories:
   output: dist-allinone
   buildResources: build
-appId: com.example.werkstatt-terminplaner-complete
+appId: com.werkstatt.terminplaner
 productName: Werkstatt Terminplaner
 files:
   - filter:
@@ -20,6 +20,22 @@ extraResources:
       - '!node_modules/**'
       - '!*.md'
 win:
-  target: portable
+  target:
+    - target: nsis
+      arch:
+        - x64
+    - target: dir
+      arch:
+        - x64
   icon: null
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: Werkstatt Terminplaner
+  installerIcon: null
+  uninstallerIcon: null
+  installerHeaderIcon: null
+  deleteAppDataOnUninstall: false
 electronVersion: 39.2.7
