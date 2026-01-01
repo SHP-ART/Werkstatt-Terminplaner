@@ -503,8 +503,10 @@ class TermineController {
                       // Berechne Zeit, die "Nur Service" Mitarbeitern zugeordnet ist (wird von Gesamtauslastung abgezogen)
                       let nurServiceZugeordneteZeit = 0;
                       
-                      // Gesamtanzahl aller Termine für Servicezeit-Berechnung (nur_service Mitarbeiter bekommen Servicezeit für ALLE Termine)
-                      const gesamtTerminAnzahlFuerService = (row && row.termin_anzahl) ? row.termin_anzahl : 0;
+                      // Gesamtanzahl der AKTIVEN Termine für Servicezeit-Berechnung 
+                      // (nur_service Mitarbeiter bekommen Servicezeit nur für NICHT-ABGESCHLOSSENE Termine)
+                      // aktive_termine = Termine mit Status 'geplant' oder 'in_arbeit'
+                      const gesamtTerminAnzahlFuerService = (row && row.aktive_termine) ? row.aktive_termine : 0;
                       
                       // Erstelle eine Map für schnellen Zugriff auf Termin-Daten pro Mitarbeiter
                       const terminDatenMap = {};
@@ -569,7 +571,8 @@ class TermineController {
                           // Mitarbeiter macht nur Service - seine Zeit zählt NICHT zur Werkstattkapazität
                           // Servicezeit wird basierend auf ALLEN Terminen des Tages berechnet (NUR für nur_service Mitarbeiter)
                           servicezeitFuerMitarbeiter = gesamtTerminAnzahlFuerService * servicezeitWert;
-                          belegtMitService = servicezeitFuerMitarbeiter;
+                          // Belegte Zeit = zugeordnete Arbeit (mit Nebenzeit) + Servicezeit für alle Termine
+                          belegtMitService = belegt + servicezeitFuerMitarbeiter;
                           // Für nur_service Mitarbeiter: verfuegbar_minuten zeigt seine eigene Kapazität für Auslastungsanzeige
                           verfuegbarNachService = verfuegbar;
                           // NICHT zu gesamtVerfuegbar hinzufügen (für Werkstatt-Gesamtkapazität)!
@@ -861,7 +864,8 @@ class TermineController {
                         // Mitarbeiter macht nur Service - seine Zeit zählt NICHT zur Werkstattkapazität
                         // Servicezeit wird basierend auf ALLEN Terminen des Tages berechnet (NUR für nur_service Mitarbeiter)
                         servicezeitFuerMitarbeiter = gesamtTerminAnzahlFuerService * servicezeitWert;
-                        belegtMitService = servicezeitFuerMitarbeiter;
+                        // NEU: Zugeordnete Arbeitszeit (belegt) + Servicezeit
+                        belegtMitService = belegt + servicezeitFuerMitarbeiter;
                         // Für nur_service Mitarbeiter: verfuegbar_minuten zeigt seine eigene Kapazität für Auslastungsanzeige
                         verfuegbarNachService = verfuegbar;
                         // NICHT zu gesamtVerfuegbar hinzufügen (für Werkstatt-Gesamtkapazität)!

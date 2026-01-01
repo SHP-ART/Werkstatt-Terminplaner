@@ -3196,15 +3196,14 @@ tr.schwebend {
 
 .autocomplete-dropdown {
     display: none;
-    position: absolute;
-    background: white;
-    border: 2px solid var(--accent);
-    border-radius: 5px;
-    max-height: 200px;
+    position: fixed;
+    background: #ffffff;
+    border: 2px solid #4a90e2;
+    border-radius: 8px;
+    max-height: 250px;
     overflow-y: auto;
-    z-index: 1000;
-    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
-    width: 100%;
+    z-index: 999999;
+    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.3);
 }
 
 .autocomplete-dropdown.show {
@@ -5666,4 +5665,93 @@ mark.highlight {
     height: 1px;
     background: #eee;
     margin: 4px 0;
+}
+
+/* ================================================
+   TERMIN VORSCHAU MODAL MIT COUNTDOWN
+   ================================================ */
+
+.termin-vorschau-modal {
+    animation: slideInUp 0.3s ease;
+}
+
+@keyframes slideInUp {
+    from {
+        opacity: 0;
+        transform: translateY(30px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.termin-vorschau-modal .countdown-bar {
+    position: relative;
+}
+
+.termin-vorschau-modal #countdownZahl {
+    font-family: 'Segoe UI', monospace;
+    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.termin-vorschau-modal .vorschau-row {
+    transition: background 0.2s ease;
+}
+
+.termin-vorschau-modal .vorschau-row:hover {
+    background: rgba(74, 144, 226, 0.05);
+}
+
+/* Termin Vorschau Modal Spezifisch */
+#terminVorschauModal {
+    opacity: 0;
+    transition: opacity 0.3s ease;
+}
+
+#terminVorschauModal.active {
+    opacity: 1;
+}
+
+#terminVorschauModal .modal-content {
+    transform: translateY(20px) scale(0.95);
+    transition: transform 0.3s ease;
+}
+
+#terminVorschauModal.active .modal-content {
+    transform: translateY(0) scale(1);
+}
+
+.btn-success {
+    background: linear-gradient(135deg, #28a745 0%, #218838 100%);
+    color: white;
+    border: none;
+    padding: 12px 24px;
+    border-radius: 8px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.btn-success:hover {
+    background: linear-gradient(135deg, #218838 0%, #1e7e34 100%);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(40, 167, 69, 0.3);
+}
+
+.btn-danger {
+    background: linear-gradient(135deg, #dc3545 0%, #c82333 100%);
+    color: white;
+    border: none;
+    padding: 12px 24px;
+    border-radius: 8px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.btn-danger:hover {
+    background: linear-gradient(135deg, #c82333 0%, #bd2130 100%);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(220, 53, 69, 0.3);
 }

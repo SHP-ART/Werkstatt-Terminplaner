@@ -395,8 +395,16 @@ function initializeDatabase() {
     db.run(`CREATE TABLE IF NOT EXISTS arbeitszeiten (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       bezeichnung TEXT NOT NULL,
-      standard_minuten INTEGER NOT NULL
+      standard_minuten INTEGER NOT NULL,
+      aliase TEXT DEFAULT ''
     )`);
+
+    // Füge aliase Spalte hinzu falls sie nicht existiert (für bestehende Datenbanken)
+    db.run(`ALTER TABLE arbeitszeiten ADD COLUMN aliase TEXT DEFAULT ''`, (err) => {
+      if (err && !err.message.includes('duplicate column')) {
+        console.error('Fehler beim Hinzufügen von aliase:', err);
+      }
+    });
 
     db.get("SELECT COUNT(*) as count FROM arbeitszeiten", (err, row) => {
       if (!err && row.count === 0) {

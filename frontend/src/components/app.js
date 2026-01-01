@@ -2364,6 +2364,15 @@ class App {
         const option = document.createElement('option');
         option.value = arbeit.bezeichnung;
         arbeitListe.appendChild(option);
+        
+        // Auch Aliase als Optionen hinzufügen
+        if (arbeit.aliase) {
+          arbeit.aliase.split(',').forEach(alias => {
+            const aliasOption = document.createElement('option');
+            aliasOption.value = alias.trim();
+            arbeitListe.appendChild(aliasOption);
+          });
+        }
       });
 
       const tbody = document.getElementById('arbeitszeitenTable').getElementsByTagName('tbody')[0];
@@ -2378,6 +2387,15 @@ class App {
                    data-id="${arbeit.id}"
                    value="${arbeit.bezeichnung}"
                    style="width: 100%; min-width: 150px; padding: 8px;">
+          </td>
+          <td>
+            <input type="text"
+                   id="aliase_${arbeit.id}"
+                   data-id="${arbeit.id}"
+                   value="${arbeit.aliase || ''}"
+                   placeholder="z.B. Service, DS, Durchsicht"
+                   title="Mehrere Suchbegriffe durch Komma getrennt"
+                   style="width: 100%; min-width: 200px; padding: 8px;">
           </td>
           <td>
             <input type="number"
@@ -2462,9 +2480,22 @@ class App {
     
     arbeiten.forEach(arbeit => {
       // Suche nach der Arbeit in den Standardzeiten (case-insensitive)
-      const gefunden = this.arbeitszeiten.find(
+      // Erst in Bezeichnung suchen, dann in Aliasen
+      let gefunden = this.arbeitszeiten.find(
         az => az.bezeichnung.toLowerCase() === arbeit.toLowerCase()
       );
+      
+      // Falls nicht gefunden, in Aliasen suchen
+      if (!gefunden) {
+        const suchBegriff = arbeit.toLowerCase();
+        gefunden = this.arbeitszeiten.find(az => {
+          if (az.aliase) {
+            const aliasListe = az.aliase.split(',').map(a => a.trim().toLowerCase());
+            return aliasListe.includes(suchBegriff);
+          }
+          return false;
+        });
+      }
       
       if (gefunden) {
         const minuten = gefunden.standard_minuten || 0;
@@ -2481,7 +2512,11 @@ class App {
           zeitStr = `${minutenAnteil} min`;
         }
         
-        details.push(`✓ ${arbeit}: <strong>${zeitStr}</strong>`);
+        // Zeige den erkannten Standardzeit-Namen wenn über Alias gefunden
+        const hinweis = gefunden.bezeichnung.toLowerCase() !== arbeit.toLowerCase() 
+          ? ` → ${gefunden.bezeichnung}` 
+          : '';
+        details.push(`✓ ${arbeit}${hinweis}: <strong>${zeitStr}</strong>`);
       } else {
         nichtGefunden.push(arbeit);
         details.push(`⚠️ ${arbeit}: <em>keine Standardzeit hinterlegt</em>`);
@@ -2559,12 +2594,15 @@ class App {
 
     // Sammle alle Updates
     for (let row of rows) {
-      const bezeichnungInput = row.querySelector('input[type="text"]');
+      const inputs = row.querySelectorAll('input[type="text"]');
+      const bezeichnungInput = inputs[0]; // Erste Texteingabe = Bezeichnung
+      const aliaseInput = inputs[1]; // Zweite Texteingabe = Aliase
       const zeitInput = row.querySelector('input[type="number"]');
 
       if (bezeichnungInput && zeitInput) {
         const id = bezeichnungInput.dataset.id;
         const bezeichnung = bezeichnungInput.value.trim();
+        const aliase = aliaseInput ? aliaseInput.value.trim() : '';
         const stunden = parseFloat(zeitInput.value);
 
         if (!bezeichnung) {
@@ -2585,6 +2623,7 @@ class App {
         updates.push({
           id: id,
           bezeichnung: bezeichnung,
+          aliase: aliase,
           standard_minuten: minuten
         });
       }
@@ -2599,6 +2638,7 @@ class App {
       for (let update of updates) {
         await ArbeitszeitenService.update(update.id, {
           bezeichnung: update.bezeichnung,
+          aliase: update.aliase,
           standard_minuten: update.standard_minuten
         });
       }
@@ -2995,14 +3035,218 @@ class App {
       if (existing) {
         resolvedKundeId = existing.id;
         resolvedKundeName = existing.name;
-      } else {
-        try {
-          const created = await KundenService.create({ name: kundeNameEingabe, telefon: kundeTelefon || null });
-          resolvedKundeId = created.id;
-          this.loadKunden(); // Cache auffrischen
-        } catch (err) {
-          console.error('Fehler beim Anlegen des Kunden:', err);
-        }
+      }
+      // Neuen Kunden NICHT mehr hier anlegen - das passiert später beim eigentlichen Speichern
+    }
+
+    if (!resolvedKundeId && !resolvedKundeName) {
+      alert('Bitte wählen Sie einen Kunden oder geben Sie einen neuen Namen ein.');
+      return;
+    }
+
+    // Speichere alle Daten für die spätere Verarbeitung
+    this.pendingTerminData = {
+      termin,
+      arbeitenListe,
+      resolvedKundeId,
+      resolvedKundeName,
+      kundeTelefon
+    };
+
+    // Zeige Vorschau-Modal mit Countdown
+    this.showTerminVorschau(termin, resolvedKundeName, kundeTelefon, arbeitenListe, abholungTyp, ersatzautoChecked);
+  }
+
+  // ===== TERMIN VORSCHAU MIT COUNTDOWN =====
+  showTerminVorschau(termin, kundeName, telefon, arbeitenListe, abholungTyp, ersatzauto) {
+    const modal = document.getElementById('terminVorschauModal');
+    if (!modal) {
+      console.error('Termin Vorschau Modal nicht gefunden!');
+      // Fallback: Direkt speichern ohne Vorschau
+      this.executeTerminSave();
+      return;
+    }
+
+    // Fülle die Vorschau-Daten
+    document.getElementById('vorschauKunde').textContent = kundeName || 'Unbekannt';
+    document.getElementById('vorschauTelefon').textContent = telefon || '-';
+    
+    // Datum formatieren
+    const datumObj = new Date(termin.datum);
+    const formatiertesDatum = datumObj.toLocaleDateString('de-DE', { 
+      weekday: 'long', 
+      day: '2-digit', 
+      month: '2-digit', 
+      year: 'numeric' 
+    });
+    document.getElementById('vorschauDatum').textContent = formatiertesDatum;
+    
+    document.getElementById('vorschauKennzeichen').textContent = termin.kennzeichen || '-';
+    
+    // Zeit formatieren
+    const stunden = Math.floor(termin.geschaetzte_zeit / 60);
+    const minuten = termin.geschaetzte_zeit % 60;
+    const zeitText = stunden > 0 
+      ? `${stunden} h ${minuten > 0 ? minuten + ' min' : ''}` 
+      : `${minuten} min`;
+    document.getElementById('vorschauZeit').textContent = zeitText;
+    
+    // Arbeiten als Liste darstellen
+    const arbeitenHtml = arbeitenListe.map(a => `• ${a}`).join('<br>');
+    document.getElementById('vorschauArbeiten').innerHTML = arbeitenHtml;
+    
+    // Abholungs-Typ
+    const abholungTexte = {
+      'bringen': 'Kunde bringt/holt selbst',
+      'hol_bring': 'Hol- und Bringservice',
+      'ruecksprache': 'Telefonische Rücksprache',
+      'warten': 'Kunde wartet'
+    };
+    document.getElementById('vorschauAbholung').textContent = abholungTexte[abholungTyp] || abholungTyp;
+    
+    // Ersatzauto
+    const ersatzautoRow = document.getElementById('vorschauErsatzautoRow');
+    if (ersatzauto) {
+      ersatzautoRow.style.display = 'flex';
+      const tage = termin.ersatzauto_tage;
+      document.getElementById('vorschauErsatzauto').textContent = tage ? `Ja (${tage} Tage)` : 'Ja';
+    } else {
+      ersatzautoRow.style.display = 'none';
+    }
+
+    // Modal anzeigen - sowohl display als auch active Klasse setzen
+    modal.style.display = 'flex';
+    // Kurze Verzögerung für Animation
+    setTimeout(() => {
+      modal.classList.add('active');
+    }, 10);
+
+    // Countdown starten
+    this.startTerminCountdown();
+  }
+
+  startTerminCountdown() {
+    // Vorherigen Countdown abbrechen falls vorhanden
+    if (this.terminCountdownInterval) {
+      clearInterval(this.terminCountdownInterval);
+    }
+
+    let sekunden = 5;
+    const countdownZahl = document.getElementById('countdownZahl');
+    const countdownBar = document.getElementById('countdownBar');
+
+    // Initial setzen
+    countdownZahl.textContent = sekunden;
+    countdownBar.style.width = '100%';
+
+    this.terminCountdownInterval = setInterval(() => {
+      sekunden--;
+      countdownZahl.textContent = sekunden;
+      countdownBar.style.width = `${(sekunden / 5) * 100}%`;
+
+      if (sekunden <= 0) {
+        clearInterval(this.terminCountdownInterval);
+        this.terminCountdownInterval = null;
+        // Auto-Speichern
+        this.executeTerminSave();
+      }
+    }, 1000);
+
+    // Event-Listener für Buttons
+    const abbrechenBtn = document.getElementById('vorschauAbbrechenBtn');
+    const sofortBtn = document.getElementById('vorschauSofortSpeichernBtn');
+
+    // Alte Listener entfernen
+    abbrechenBtn.replaceWith(abbrechenBtn.cloneNode(true));
+    sofortBtn.replaceWith(sofortBtn.cloneNode(true));
+
+    // Neue Listener hinzufügen
+    document.getElementById('vorschauAbbrechenBtn').addEventListener('click', () => {
+      this.cancelTerminVorschau();
+    });
+
+    document.getElementById('vorschauSofortSpeichernBtn').addEventListener('click', () => {
+      if (this.terminCountdownInterval) {
+        clearInterval(this.terminCountdownInterval);
+        this.terminCountdownInterval = null;
+      }
+      this.executeTerminSave();
+    });
+
+    // ESC-Taste zum Abbrechen
+    this.terminVorschauEscHandler = (e) => {
+      if (e.key === 'Escape') {
+        this.cancelTerminVorschau();
+      }
+    };
+    document.addEventListener('keydown', this.terminVorschauEscHandler);
+
+    // Klick auf Hintergrund zum Abbrechen
+    const modal = document.getElementById('terminVorschauModal');
+    modal.addEventListener('click', (e) => {
+      if (e.target === modal) {
+        this.cancelTerminVorschau();
+      }
+    });
+  }
+
+  cancelTerminVorschau() {
+    // Countdown stoppen
+    if (this.terminCountdownInterval) {
+      clearInterval(this.terminCountdownInterval);
+      this.terminCountdownInterval = null;
+    }
+
+    // ESC-Handler entfernen
+    if (this.terminVorschauEscHandler) {
+      document.removeEventListener('keydown', this.terminVorschauEscHandler);
+      this.terminVorschauEscHandler = null;
+    }
+
+    // Modal schließen mit Animation
+    const modal = document.getElementById('terminVorschauModal');
+    if (modal) {
+      modal.classList.remove('active');
+      // Warte auf Animation, dann verstecken
+      setTimeout(() => {
+        modal.style.display = 'none';
+      }, 300);
+    }
+
+    // Pending-Daten löschen
+    this.pendingTerminData = null;
+  }
+
+  async executeTerminSave() {
+    // ESC-Handler entfernen falls vorhanden
+    if (this.terminVorschauEscHandler) {
+      document.removeEventListener('keydown', this.terminVorschauEscHandler);
+      this.terminVorschauEscHandler = null;
+    }
+
+    // Modal schließen
+    const modal = document.getElementById('terminVorschauModal');
+    if (modal) {
+      modal.classList.remove('active');
+      modal.style.display = 'none';
+    }
+
+    const data = this.pendingTerminData;
+    if (!data) {
+      console.error('Keine Termin-Daten vorhanden');
+      return;
+    }
+
+    let { termin, arbeitenListe, resolvedKundeId, resolvedKundeName, kundeTelefon } = data;
+
+    // Falls neuer Kunde, jetzt anlegen
+    if (!resolvedKundeId && resolvedKundeName) {
+      try {
+        const created = await KundenService.create({ name: resolvedKundeName, telefon: kundeTelefon || null });
+        resolvedKundeId = created.id;
+        this.loadKunden(); // Cache auffrischen
+      } catch (err) {
+        console.error('Fehler beim Anlegen des Kunden:', err);
       }
     }
 
@@ -3010,9 +3254,6 @@ class App {
       termin.kunde_id = resolvedKundeId;
     } else if (resolvedKundeName) {
       termin.kunde_name = resolvedKundeName;
-    } else {
-      alert('Bitte wählen Sie einen Kunden oder geben Sie einen neuen Namen ein.');
-      return;
     }
     if (kundeTelefon) {
       termin.kunde_telefon = kundeTelefon;
@@ -3032,6 +3273,7 @@ class App {
           `Möchten Sie den Termin trotzdem erstellen?`
         );
         if (!bestaetigung) {
+          this.pendingTerminData = null;
           return;
         }
       } else if (validation.warnung) {
@@ -3041,6 +3283,7 @@ class App {
           `Möchten Sie fortfahren?`
         );
         if (!bestaetigung) {
+          this.pendingTerminData = null;
           return;
         }
       }
@@ -3113,9 +3356,13 @@ class App {
       this.loadDashboard();
       this.loadArbeitszeiten();
       this.loadTermineZeiten();
+      
+      // Pending-Daten löschen
+      this.pendingTerminData = null;
     } catch (error) {
       console.error('Fehler beim Erstellen des Termins:', error);
       alert('Fehler beim Erstellen des Termins: ' + (error.message || 'Unbekannter Fehler'));
+      this.pendingTerminData = null;
     }
   }
 
@@ -9027,15 +9274,38 @@ class App {
     const lines = beforeCursor.split('\n');
     const currentLine = lines[lines.length - 1].trim();
 
+    console.log('Autocomplete: Eingabe erkannt, aktuelle Zeile:', currentLine);
+
     if (currentLine.length < 2) {
       this.closeAutocomplete();
       return;
     }
 
-    // Filtere passende Arbeiten
-    const matches = this.arbeitszeiten.filter(arbeit =>
-      arbeit.bezeichnung.toLowerCase().includes(currentLine.toLowerCase())
-    );
+    // Sicherstellen, dass arbeitszeiten ein Array ist
+    if (!this.arbeitszeiten || !Array.isArray(this.arbeitszeiten)) {
+      console.warn('Arbeitszeiten nicht geladen, lade jetzt...');
+      this.loadArbeitszeiten();
+      return;
+    }
+
+    console.log('Autocomplete: Suche in', this.arbeitszeiten.length, 'Arbeitszeiten');
+
+    // Filtere passende Arbeiten - suche in Bezeichnung UND Aliasen
+    const suchBegriff = currentLine.toLowerCase();
+    const matches = this.arbeitszeiten.filter(arbeit => {
+      // Suche in Bezeichnung
+      if (arbeit.bezeichnung && arbeit.bezeichnung.toLowerCase().includes(suchBegriff)) {
+        return true;
+      }
+      // Suche in Aliasen
+      if (arbeit.aliase) {
+        const aliasListe = arbeit.aliase.split(',').map(a => a.trim().toLowerCase());
+        return aliasListe.some(alias => alias.includes(suchBegriff));
+      }
+      return false;
+    });
+
+    console.log('Autocomplete: Gefundene Matches:', matches.length);
 
     if (matches.length === 0) {
       this.closeAutocomplete();
@@ -9047,14 +9317,63 @@ class App {
 
   showAutocomplete(matches, currentText) {
     const dropdown = document.getElementById('arbeitAutocomplete');
+    const textarea = document.getElementById('arbeitEingabe');
+    
+    if (!dropdown) {
+      console.error('Autocomplete dropdown nicht gefunden!');
+      return;
+    }
+    
+    if (!textarea) {
+      console.error('Textarea nicht gefunden!');
+      return;
+    }
+    
     dropdown.innerHTML = '';
     this.autocompleteSelectedIndex = -1;
+
+    // Positioniere das Dropdown mit fixed positioning für garantierte Sichtbarkeit
+    const textareaRect = textarea.getBoundingClientRect();
+    
+    // Alle Styles inline setzen für garantierte Anzeige
+    dropdown.style.cssText = `
+      display: block !important;
+      position: fixed !important;
+      top: ${textareaRect.bottom + 2}px !important;
+      left: ${textareaRect.left}px !important;
+      width: ${textareaRect.width}px !important;
+      z-index: 999999 !important;
+      background: #ffffff !important;
+      border: 3px solid #4a90e2 !important;
+      border-radius: 8px !important;
+      max-height: 250px !important;
+      overflow-y: auto !important;
+      box-shadow: 0 8px 25px rgba(0, 0, 0, 0.4) !important;
+    `;
 
     matches.forEach((arbeit, index) => {
       const item = document.createElement('div');
       item.className = 'autocomplete-item';
+      item.style.cssText = `
+        padding: 12px 15px !important;
+        cursor: pointer !important;
+        border-bottom: 1px solid #f0f0f0 !important;
+        background: #ffffff !important;
+        color: #333 !important;
+        font-size: 14px !important;
+      `;
       item.textContent = arbeit.bezeichnung;
       item.dataset.index = index;
+
+      item.addEventListener('mouseenter', () => {
+        item.style.background = '#4a90e2';
+        item.style.color = '#ffffff';
+      });
+      
+      item.addEventListener('mouseleave', () => {
+        item.style.background = '#ffffff';
+        item.style.color = '#333';
+      });
 
       item.addEventListener('click', () => {
         this.selectAutocompleteItem(arbeit.bezeichnung);
@@ -9065,6 +9384,8 @@ class App {
 
     dropdown.classList.add('show');
     this.currentAutocompleteMatches = matches;
+    
+    console.log('Autocomplete angezeigt mit', matches.length, 'Vorschlägen, Position:', textareaRect.bottom, textareaRect.left, 'Display:', dropdown.style.display);
   }
 
   handleArbeitKeydown(e) {
@@ -9134,6 +9455,7 @@ class App {
     const dropdown = document.getElementById('arbeitAutocomplete');
     if (dropdown) {
       dropdown.classList.remove('show');
+      dropdown.style.display = 'none';
       dropdown.innerHTML = '';
     }
     this.autocompleteSelectedIndex = -1;

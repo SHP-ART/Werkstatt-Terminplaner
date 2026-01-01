@@ -12,11 +12,12 @@ class ArbeitszeitenController {
   }
 
   static update(req, res) {
-    const { standard_minuten, bezeichnung } = req.body;
+    const { standard_minuten, bezeichnung, aliase } = req.body;
     const minuten = parseInt(standard_minuten, 10);
     const data = {
       standard_minuten: Number.isFinite(minuten) ? minuten : standard_minuten,
-      bezeichnung: bezeichnung
+      bezeichnung: bezeichnung,
+      aliase: aliase
     };
     ArbeitszeitenModel.update(req.params.id, data, (err, result) => {
       if (err) {
@@ -31,7 +32,8 @@ class ArbeitszeitenController {
     const standard_minuten = parseInt(req.body.standard_minuten, 10);
     const payload = {
       bezeichnung: req.body.bezeichnung,
-      standard_minuten: Number.isFinite(standard_minuten) ? standard_minuten : req.body.standard_minuten
+      standard_minuten: Number.isFinite(standard_minuten) ? standard_minuten : req.body.standard_minuten,
+      aliase: req.body.aliase || ''
     };
 
     ArbeitszeitenModel.create(payload, function(err) {

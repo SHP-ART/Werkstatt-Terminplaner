@@ -6,7 +6,7 @@ class ArbeitszeitenModel {
   }
 
   static update(id, data, callback) {
-    const { standard_minuten, bezeichnung } = data;
+    const { standard_minuten, bezeichnung, aliase } = data;
 
     // Baue die SQL-Query dynamisch auf, je nachdem welche Felder vorhanden sind
     const updates = [];
@@ -20,6 +20,11 @@ class ArbeitszeitenModel {
     if (bezeichnung !== undefined) {
       updates.push('bezeichnung = ?');
       values.push(bezeichnung);
+    }
+
+    if (aliase !== undefined) {
+      updates.push('aliase = ?');
+      values.push(aliase);
     }
 
     if (updates.length === 0) {
@@ -41,10 +46,10 @@ class ArbeitszeitenModel {
   }
 
   static create(arbeit, callback) {
-    const { bezeichnung, standard_minuten } = arbeit;
+    const { bezeichnung, standard_minuten, aliase } = arbeit;
     db.run(
-      'INSERT INTO arbeitszeiten (bezeichnung, standard_minuten) VALUES (?, ?)',
-      [bezeichnung, standard_minuten],
+      'INSERT INTO arbeitszeiten (bezeichnung, standard_minuten, aliase) VALUES (?, ?, ?)',
+      [bezeichnung, standard_minuten, aliase || ''],
       callback
     );
   }
@@ -59,10 +64,30 @@ class ArbeitszeitenModel {
   }
 
   static findByBezeichnung(bezeichnung, callback) {
+    // Suche zuerst nach exakter Bezeichnung
     db.get(
       'SELECT * FROM arbeitszeiten WHERE LOWER(bezeichnung) = LOWER(?)',
       [bezeichnung],
-      callback
+      (err, row) => {
+        if (err) return callback(err);
+        if (row) return callback(null, row);
+        
+        // Falls nicht gefunden, suche in Aliasen
+        db.all('SELECT * FROM arbeitszeiten WHERE aliase IS NOT NULL AND aliase != ""', (err, rows) => {
+          if (err) return callback(err);
+          
+          const suchBegriff = bezeichnung.toLowerCase();
+          for (const arbeit of rows) {
+            if (arbeit.aliase) {
+              const aliasListe = arbeit.aliase.split(',').map(a => a.trim().toLowerCase());
+              if (aliasListe.includes(suchBegriff)) {
+                return callback(null, arbeit);
+              }
+            }
+          }
+          callback(null, null);
+        });
+      }
     );
   }
 

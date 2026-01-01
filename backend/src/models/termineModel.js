@@ -404,25 +404,134 @@ class TermineModel {
 
   static getAuslastungProMitarbeiter(datum, callback) {
     // Berechnet Auslastung pro Mitarbeiter (ohne schwebende Termine)
-    const query = `
-      SELECT
-        m.id as mitarbeiter_id,
-        m.name as mitarbeiter_name,
-        m.arbeitsstunden_pro_tag,
-        m.nebenzeit_prozent,
-        m.nur_service,
-        COALESCE(SUM(COALESCE(t.tatsaechliche_zeit, t.geschaetzte_zeit)), 0) as belegt_minuten,
-        COALESCE(SUM(CASE WHEN COALESCE(t.status, 'geplant') = 'geplant' THEN COALESCE(t.tatsaechliche_zeit, t.geschaetzte_zeit) ELSE 0 END), 0) as geplant_minuten,
-        COALESCE(SUM(CASE WHEN t.status = 'in_arbeit' THEN COALESCE(t.tatsaechliche_zeit, t.geschaetzte_zeit) ELSE 0 END), 0) as in_arbeit_minuten,
-        COALESCE(SUM(CASE WHEN t.status = 'abgeschlossen' THEN COALESCE(t.tatsaechliche_zeit, t.geschaetzte_zeit) ELSE 0 END), 0) as abgeschlossen_minuten,
-        COUNT(t.id) as termin_anzahl
-      FROM mitarbeiter m
-      LEFT JOIN termine t ON m.id = t.mitarbeiter_id AND t.datum = ? AND t.geloescht_am IS NULL AND COALESCE(t.ist_schwebend, 0) = 0
-      WHERE m.aktiv = 1
-      GROUP BY m.id, m.name, m.arbeitsstunden_pro_tag, m.nebenzeit_prozent, m.nur_service
-      ORDER BY m.name
+    // Berücksichtigt sowohl mitarbeiter_id als auch arbeitszeiten_details
+    
+    // Erst alle aktiven Mitarbeiter laden
+    const mitarbeiterQuery = `
+      SELECT id, name, arbeitsstunden_pro_tag, nebenzeit_prozent, nur_service
+      FROM mitarbeiter
+      WHERE aktiv = 1
     `;
-    db.all(query, [datum], callback);
+    
+    db.all(mitarbeiterQuery, [], (mitErr, mitarbeiter) => {
+      if (mitErr) {
+        return callback(mitErr);
+      }
+      
+      // Initialisiere Auslastung für alle Mitarbeiter
+      const auslastungMap = {};
+      (mitarbeiter || []).forEach(m => {
+        auslastungMap[m.id] = {
+          mitarbeiter_id: m.id,
+          mitarbeiter_name: m.name,
+          arbeitsstunden_pro_tag: m.arbeitsstunden_pro_tag || 8,
+          nebenzeit_prozent: m.nebenzeit_prozent || 0,
+          nur_service: m.nur_service,
+          belegt_minuten: 0,
+          geplant_minuten: 0,
+          in_arbeit_minuten: 0,
+          abgeschlossen_minuten: 0,
+          termin_anzahl: 0
+        };
+      });
+      
+      // Lade alle Termine für dieses Datum
+      const termineQuery = `
+        SELECT id, mitarbeiter_id, geschaetzte_zeit, tatsaechliche_zeit, status, arbeitszeiten_details
+        FROM termine
+        WHERE datum = ? AND geloescht_am IS NULL AND COALESCE(ist_schwebend, 0) = 0
+      `;
+      
+      db.all(termineQuery, [datum], (termErr, termine) => {
+        if (termErr) {
+          return callback(termErr);
+        }
+        
+        // Analysiere Termine und sammle Auslastung pro Mitarbeiter
+        (termine || []).forEach(termin => {
+          const status = termin.status || 'geplant';
+          const gesamtZeit = termin.tatsaechliche_zeit || termin.geschaetzte_zeit || 0;
+          
+          // Set um zu tracken, welchen Mitarbeitern dieser Termin bereits zugeordnet wurde
+          const zugeordneteMitarbeiter = new Set();
+          
+          // Prüfe arbeitszeiten_details für Detail-Zuordnungen
+          if (termin.arbeitszeiten_details) {
+            try {
+              const details = JSON.parse(termin.arbeitszeiten_details);
+              
+              // Prüfe Gesamt-Zuordnung (_gesamt_mitarbeiter_id)
+              if (details._gesamt_mitarbeiter_id) {
+                const gesamt = details._gesamt_mitarbeiter_id;
+                if (typeof gesamt === 'object' && gesamt.type === 'mitarbeiter' && gesamt.id) {
+                  const mitarbeiterId = gesamt.id;
+                  if (auslastungMap[mitarbeiterId]) {
+                    auslastungMap[mitarbeiterId].belegt_minuten += gesamtZeit;
+                    auslastungMap[mitarbeiterId].termin_anzahl += 1;
+                    zugeordneteMitarbeiter.add(mitarbeiterId);
+                    if (status === 'geplant') {
+                      auslastungMap[mitarbeiterId].geplant_minuten += gesamtZeit;
+                    } else if (status === 'in_arbeit') {
+                      auslastungMap[mitarbeiterId].in_arbeit_minuten += gesamtZeit;
+                    } else if (status === 'abgeschlossen') {
+                      auslastungMap[mitarbeiterId].abgeschlossen_minuten += gesamtZeit;
+                    }
+                  }
+                }
+              }
+              
+              // Prüfe einzelne Arbeitszuordnungen
+              for (const [arbeitName, arbeitDetails] of Object.entries(details)) {
+                if (arbeitName.startsWith('_')) continue; // Überspringe Meta-Felder
+                
+                if (typeof arbeitDetails === 'object' && arbeitDetails.type === 'mitarbeiter' && arbeitDetails.mitarbeiter_id) {
+                  const mitarbeiterId = arbeitDetails.mitarbeiter_id;
+                  const arbeitZeit = arbeitDetails.zeit || 0;
+                  
+                  if (auslastungMap[mitarbeiterId] && !zugeordneteMitarbeiter.has(mitarbeiterId)) {
+                    auslastungMap[mitarbeiterId].belegt_minuten += arbeitZeit;
+                    auslastungMap[mitarbeiterId].termin_anzahl += 1;
+                    zugeordneteMitarbeiter.add(mitarbeiterId);
+                    if (status === 'geplant') {
+                      auslastungMap[mitarbeiterId].geplant_minuten += arbeitZeit;
+                    } else if (status === 'in_arbeit') {
+                      auslastungMap[mitarbeiterId].in_arbeit_minuten += arbeitZeit;
+                    } else if (status === 'abgeschlossen') {
+                      auslastungMap[mitarbeiterId].abgeschlossen_minuten += arbeitZeit;
+                    }
+                  } else if (auslastungMap[mitarbeiterId] && zugeordneteMitarbeiter.has(mitarbeiterId)) {
+                    // Mitarbeiter war schon zugeordnet durch Gesamt - nur Zeit addieren, nicht Termin-Anzahl
+                    // NICHT hinzufügen, da Gesamt-Zeit schon die volle Zeit enthält
+                  }
+                }
+              }
+            } catch (e) {
+              console.error('Fehler beim Parsen von arbeitszeiten_details:', e);
+            }
+          }
+          
+          // Falls kein Detail-Zuordnung, nutze mitarbeiter_id aus Termin-Hauptfeld
+          if (zugeordneteMitarbeiter.size === 0 && termin.mitarbeiter_id) {
+            const mitarbeiterId = termin.mitarbeiter_id;
+            if (auslastungMap[mitarbeiterId]) {
+              auslastungMap[mitarbeiterId].belegt_minuten += gesamtZeit;
+              auslastungMap[mitarbeiterId].termin_anzahl += 1;
+              if (status === 'geplant') {
+                auslastungMap[mitarbeiterId].geplant_minuten += gesamtZeit;
+              } else if (status === 'in_arbeit') {
+                auslastungMap[mitarbeiterId].in_arbeit_minuten += gesamtZeit;
+              } else if (status === 'abgeschlossen') {
+                auslastungMap[mitarbeiterId].abgeschlossen_minuten += gesamtZeit;
+              }
+            }
+          }
+        });
+        
+        // Konvertiere Map zu Array
+        const result = Object.values(auslastungMap);
+        callback(null, result);
+      });
+    });
   }
 
   static getAuslastungMitPuffer(datum, pufferzeitMinuten, callback) {

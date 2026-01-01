@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Werkstatt Terminplaner</title>
-    <link rel="stylesheet" href="src/styles/style.css?v=111">
+    <link rel="stylesheet" href="src/styles/style.css?v=117">
     <!-- SheetJS für Excel-Import -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 </head>
@@ -1194,6 +1194,7 @@
                         <thead>
                             <tr>
                                 <th>Arbeit</th>
+                                <th>Suchbegriffe / Aliase</th>
                                 <th>Standardzeit (Stunden)</th>
                                 <th>Aktionen</th>
                             </tr>
@@ -1201,7 +1202,8 @@
                         <tbody></tbody>
                     </table>
                     <div style="margin-top: 10px; padding: 10px; background: #f0f7ff; border-left: 4px solid #4a90e2; border-radius: 4px;">
-                        <strong>Hinweis:</strong> Eingabe in Stunden (z.B. 0.25 = 15 Min, 0.5 = 30 Min, 1 = 60 Min, 2 = 120 Min)
+                        <strong>Hinweis:</strong> Eingabe in Stunden (z.B. 0.25 = 15 Min, 0.5 = 30 Min, 1 = 60 Min, 2 = 120 Min)<br>
+                        <strong>Suchbegriffe:</strong> Mehrere durch Komma getrennt (z.B. "Wartung, Service, DS, Durchsicht") - alle finden dieselbe Standardzeit
                     </div>
                 </div>
             </div>
@@ -2074,8 +2076,74 @@
         </div>
     </div>
 
+    <!-- Termin Vorschau Modal mit Countdown -->
+    <div id="terminVorschauModal" class="modal-overlay" style="display: none;">
+        <div class="modal-content termin-vorschau-modal" style="max-width: 600px;">
+            <div class="modal-header" style="background: linear-gradient(135deg, #4a90e2 0%, #357abd 100%); color: white; padding: 20px; border-radius: 8px 8px 0 0;">
+                <h3 style="margin: 0; display: flex; align-items: center; gap: 10px;">
+                    <span>📋</span> Termin-Zusammenfassung
+                </h3>
+            </div>
+            <div class="modal-body" style="padding: 20px;">
+                <!-- Countdown-Anzeige -->
+                <div id="vorschauCountdown" style="text-align: center; margin-bottom: 20px; padding: 15px; background: linear-gradient(135deg, #e8f5e9 0%, #c8e6c9 100%); border-radius: 8px;">
+                    <div style="font-size: 0.9em; color: #2e7d32; margin-bottom: 5px;">Wird automatisch gespeichert in</div>
+                    <div id="countdownZahl" style="font-size: 3em; font-weight: bold; color: #1b5e20; line-height: 1;">5</div>
+                    <div style="font-size: 0.85em; color: #388e3c; margin-top: 5px;">Sekunden</div>
+                    <div class="countdown-bar" style="margin-top: 10px; background: #a5d6a7; border-radius: 5px; height: 8px; overflow: hidden;">
+                        <div id="countdownBar" style="height: 100%; background: #2e7d32; width: 100%; transition: width 1s linear;"></div>
+                    </div>
+                </div>
+
+                <!-- Zusammenfassung -->
+                <div id="vorschauInhalt" style="background: #f8f9fa; border-radius: 8px; padding: 15px;">
+                    <div class="vorschau-row" style="display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #e9ecef;">
+                        <span style="color: #666;">👤 Kunde:</span>
+                        <strong id="vorschauKunde">-</strong>
+                    </div>
+                    <div class="vorschau-row" style="display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #e9ecef;">
+                        <span style="color: #666;">📞 Telefon:</span>
+                        <span id="vorschauTelefon">-</span>
+                    </div>
+                    <div class="vorschau-row" style="display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #e9ecef;">
+                        <span style="color: #666;">📅 Datum:</span>
+                        <strong id="vorschauDatum">-</strong>
+                    </div>
+                    <div class="vorschau-row" style="display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #e9ecef;">
+                        <span style="color: #666;">🚗 Kennzeichen:</span>
+                        <strong id="vorschauKennzeichen">-</strong>
+                    </div>
+                    <div class="vorschau-row" style="display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #e9ecef;">
+                        <span style="color: #666;">⏱️ Geschätzte Zeit:</span>
+                        <span id="vorschauZeit">-</span>
+                    </div>
+                    <div class="vorschau-row" style="padding: 8px 0; border-bottom: 1px solid #e9ecef;">
+                        <span style="color: #666; display: block; margin-bottom: 5px;">🔧 Arbeiten:</span>
+                        <div id="vorschauArbeiten" style="background: white; padding: 10px; border-radius: 6px; font-size: 0.95em;"></div>
+                    </div>
+                    <div class="vorschau-row" style="display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #e9ecef;">
+                        <span style="color: #666;">🚙 Abholung:</span>
+                        <span id="vorschauAbholung">-</span>
+                    </div>
+                    <div id="vorschauErsatzautoRow" class="vorschau-row" style="display: none; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #e9ecef;">
+                        <span style="color: #666;">🚗 Ersatzauto:</span>
+                        <span id="vorschauErsatzauto" style="color: #e65100; font-weight: 600;">Ja</span>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer" style="padding: 15px 20px; background: #f8f9fa; border-radius: 0 0 8px 8px; display: flex; justify-content: space-between; gap: 10px;">
+                <button id="vorschauAbbrechenBtn" class="btn btn-danger" style="flex: 1;">
+                    ❌ Abbrechen
+                </button>
+                <button id="vorschauSofortSpeichernBtn" class="btn btn-success" style="flex: 2;">
+                    ✅ Jetzt speichern
+                </button>
+            </div>
+        </div>
+    </div>
+
     <script src="config.js"></script>
     <script src="src/services/api.js?v=38"></script>
-    <script src="src/components/app.js?v=125"></script>
+    <script src="src/components/app.js?v=133"></script>
 </body>
 </html>
