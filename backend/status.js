@@ -107,6 +107,11 @@ function showTab(tabName) {
     if (tabName === 'database') {
         loadDbPath();
     }
+    
+    // Bei Update-Tab: Status laden
+    if (tabName === 'update') {
+        loadUpdateStatus();
+    }
 }
 
 // Backup-Status laden
@@ -368,4 +373,169 @@ function showDbMessage(type, message) {
     setTimeout(() => {
         msgEl.style.display = 'none';
     }, 5000);
+}
+
+// ========== Auto-Update Funktionen ==========
+
+// Update-Status beim Start laden
+document.addEventListener('DOMContentLoaded', () => {
+    loadUpdateStatus();
+    
+    // Auf Update-Status-Events hören
+    if (window.electronAPI.onUpdateStatus) {
+        window.electronAPI.onUpdateStatus((status) => {
+            updateUpdateUI(status);
+        });
+    }
+});
+
+// Update-Status laden
+async function loadUpdateStatus() {
+    try {
+        const result = await window.electronAPI.getUpdateStatus();
+        
+        if (result.success) {
+            document.getElementById('currentVersion').textContent = 'v' + result.currentVersion;
+            updateUpdateUI(result.status);
+            
+            // Wenn nicht gepackt, Update-Button ausblenden
+            if (!result.isPackaged) {
+                document.getElementById('btnCheckUpdate').style.display = 'none';
+                document.getElementById('updateStatusText').textContent = 'Nur in installierter Version';
+            }
+        }
+    } catch (error) {
+        console.error('Fehler beim Laden des Update-Status:', error);
+    }
+}
+
+// Update-UI aktualisieren
+function updateUpdateUI(status) {
+    const statusTextEl = document.getElementById('updateStatusText');
+    const availableEl = document.getElementById('updateAvailable');
+    const progressEl = document.getElementById('updateProgress');
+    const btnCheck = document.getElementById('btnCheckUpdate');
+    const btnDownload = document.getElementById('btnDownloadUpdate');
+    const btnInstall = document.getElementById('btnInstallUpdate');
+    const tabBtn = document.getElementById('tabUpdate');
+    
+    // Status-Text
+    if (status.checking) {
+        statusTextEl.textContent = '🔍 Prüfe...';
+    } else if (status.downloading) {
+        statusTextEl.textContent = '⬇️ Lade herunter...';
+    } else if (status.downloaded) {
+        statusTextEl.textContent = '✅ Bereit zur Installation';
+        statusTextEl.style.color = '#28a745';
+    } else if (status.available) {
+        statusTextEl.textContent = '🎉 Update verfügbar!';
+        statusTextEl.style.color = '#007bff';
+    } else if (status.error) {
+        statusTextEl.textContent = '❌ ' + status.error;
+        statusTextEl.style.color = '#dc3545';
+    } else {
+        statusTextEl.textContent = 'Aktuell';
+        statusTextEl.style.color = '#28a745';
+    }
+    
+    // Update-Verfügbar-Box
+    if (status.available && status.version) {
+        availableEl.style.display = 'block';
+        document.getElementById('newVersion').textContent = 'v' + status.version;
+        tabBtn.textContent = '🔄 Update ⬆️';
+        tabBtn.style.background = '#28a745';
+        tabBtn.style.color = 'white';
+    } else {
+        availableEl.style.display = 'none';
+        tabBtn.textContent = '🔄 Update';
+        tabBtn.style.background = '';
+        tabBtn.style.color = '';
+    }
+    
+    // Download-Progress
+    if (status.downloading) {
+        progressEl.style.display = 'block';
+        document.getElementById('downloadPercent').textContent = Math.round(status.progress) + '%';
+        document.getElementById('downloadBar').style.width = status.progress + '%';
+    } else {
+        progressEl.style.display = 'none';
+    }
+    
+    // Buttons
+    btnCheck.style.display = status.downloading || status.downloaded ? 'none' : 'block';
+    btnCheck.disabled = status.checking;
+    btnCheck.textContent = status.checking ? '⏳ Prüfe...' : '🔍 Auf Updates prüfen';
+    
+    btnDownload.style.display = status.available && !status.downloading && !status.downloaded ? 'block' : 'none';
+    
+    btnInstall.style.display = status.downloaded ? 'block' : 'none';
+}
+
+// Auf Updates prüfen
+async function checkForUpdates() {
+    const btn = document.getElementById('btnCheckUpdate');
+    
+    btn.disabled = true;
+    btn.textContent = '⏳ Prüfe...';
+    
+    try {
+        const result = await window.electronAPI.checkForUpdates();
+        
+        if (!result.success) {
+            showUpdateMessage('error', `❌ ${result.error}`);
+        }
+    } catch (error) {
+        showUpdateMessage('error', `❌ Fehler: ${error.message}`);
+    } finally {
+        btn.disabled = false;
+        btn.textContent = '🔍 Auf Updates prüfen';
+    }
+}
+
+// Update herunterladen
+async function downloadUpdate() {
+    const btn = document.getElementById('btnDownloadUpdate');
+    
+    btn.disabled = true;
+    btn.textContent = '⏳ Starte Download...';
+    
+    try {
+        const result = await window.electronAPI.downloadUpdate();
+        
+        if (!result.success) {
+            showUpdateMessage('error', `❌ ${result.error}`);
+        }
+    } catch (error) {
+        showUpdateMessage('error', `❌ Fehler: ${error.message}`);
+    } finally {
+        btn.disabled = false;
+        btn.textContent = '⬇️ Update herunterladen';
+    }
+}
+
+// Update installieren
+async function installUpdate() {
+    if (!confirm('Update jetzt installieren?\n\nDie Anwendung wird neu gestartet.')) {
+        return;
+    }
+    
+    try {
+        await window.electronAPI.installUpdate();
+    } catch (error) {
+        showUpdateMessage('error', `❌ Fehler: ${error.message}`);
+    }
+}
+
+// Update-Nachricht anzeigen
+function showUpdateMessage(type, message) {
+    const msgEl = document.getElementById('updateMessage');
+    if (msgEl) {
+        msgEl.className = `backup-status ${type}`;
+        msgEl.textContent = message;
+        msgEl.style.display = 'block';
+        
+        setTimeout(() => {
+            msgEl.style.display = 'none';
+        }, 5000);
+    }
 }

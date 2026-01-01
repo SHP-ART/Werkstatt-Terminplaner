@@ -24,6 +24,12 @@
       ]
     }
   ],
+  "publish": {
+    "provider": "github",
+    "owner": "shp-art",
+    "repo": "Werkstatt-Terminplaner",
+    "releaseType": "release"
+  },
   "win": {
     "target": [
       {

@@ -229,6 +229,32 @@
             background: #d4edda;
             border-color: #28a745;
         }
+        
+        /* Update Styles */
+        .update-available {
+            background: linear-gradient(135deg, #28a745 0%, #218838 100%);
+            color: white;
+            padding: 12px;
+            border-radius: 6px;
+            text-align: center;
+            margin-bottom: 8px;
+        }
+        .update-version {
+            font-size: 1.4em;
+            font-weight: bold;
+        }
+        .update-progress {
+            background: #e9ecef;
+            border-radius: 4px;
+            height: 8px;
+            margin: 10px 0;
+            overflow: hidden;
+        }
+        .update-progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #007bff, #28a745);
+            transition: width 0.3s;
+        }
     </style>
 </head>
 <body>
@@ -236,6 +262,7 @@
         <button class="tab-btn active" onclick="showTab('status')">📊 Status</button>
         <button class="tab-btn" onclick="showTab('database')">🗄️ Datenbank</button>
         <button class="tab-btn" onclick="showTab('backup')">💾 Backup</button>
+        <button class="tab-btn" onclick="showTab('update')" id="tabUpdate">🔄 Update</button>
     </div>
 
     <!-- Status Tab -->
@@ -366,6 +393,58 @@
             <button class="backup-btn primary" onclick="restartApp()" style="margin-top: 10px;">
                 🔁 Anwendung neu starten
             </button>
+        </div>
+    </div>
+
+    <!-- Update Tab -->
+    <div id="tab-update" class="tab-content">
+        <div class="status-box">
+            <h2>🔄 Auto-Update</h2>
+            <div id="updateMessage" class="backup-status info" style="display: none;"></div>
+            
+            <div class="info-row">
+                <span class="info-label">Aktuelle Version</span>
+                <span class="info-value" id="currentVersion">-</span>
+            </div>
+            <div class="info-row">
+                <span class="info-label">Status</span>
+                <span class="info-value" id="updateStatusText">Bereit</span>
+            </div>
+            
+            <div id="updateAvailable" style="display: none;">
+                <div class="update-available">
+                    <div>🎉 Neue Version verfügbar!</div>
+                    <div class="update-version" id="newVersion">-</div>
+                </div>
+            </div>
+            
+            <div id="updateProgress" style="display: none;">
+                <div class="info-row">
+                    <span class="info-label">Download</span>
+                    <span class="info-value" id="downloadPercent">0%</span>
+                </div>
+                <div class="update-progress">
+                    <div class="update-progress-fill" id="downloadBar" style="width: 0%"></div>
+                </div>
+            </div>
+            
+            <button class="backup-btn primary" onclick="checkForUpdates()" id="btnCheckUpdate">
+                🔍 Auf Updates prüfen
+            </button>
+            <button class="backup-btn primary" onclick="downloadUpdate()" id="btnDownloadUpdate" style="display: none;">
+                ⬇️ Update herunterladen
+            </button>
+            <button class="backup-btn primary" onclick="installUpdate()" id="btnInstallUpdate" style="display: none; background: #28a745;">
+                ✨ Update installieren & neu starten
+            </button>
+        </div>
+        
+        <div class="status-box">
+            <h2>ℹ️ Hinweis</h2>
+            <p style="font-size: 0.85em; color: #666; margin: 0;">
+                Updates werden automatisch beim Start geprüft. Heruntergeladene Updates werden 
+                beim nächsten Neustart automatisch installiert.
+            </p>
         </div>
     </div>
 

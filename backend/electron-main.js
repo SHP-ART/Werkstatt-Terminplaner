@@ -1,7 +1,87 @@
 const { app, BrowserWindow, ipcMain, shell, dialog } = require('electron');
+const { autoUpdater } = require('electron-updater');
 const path = require('path');
 const os = require('os');
 const fs = require('fs');
+
+// ===== AUTO-UPDATER KONFIGURATION =====
+autoUpdater.autoDownload = false; // Manuell steuern
+autoUpdater.autoInstallOnAppQuit = true;
+
+// Update-Status für die UI
+let updateStatus = {
+  checking: false,
+  available: false,
+  downloaded: false,
+  downloading: false,
+  progress: 0,
+  version: null,
+  error: null
+};
+
+function sendUpdateStatus() {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send('update-status', updateStatus);
+  }
+}
+
+// Auto-Updater Events
+autoUpdater.on('checking-for-update', () => {
+  console.log('Prüfe auf Updates...');
+  updateStatus = { ...updateStatus, checking: true, error: null };
+  sendUpdateStatus();
+});
+
+autoUpdater.on('update-available', (info) => {
+  console.log('Update verfügbar:', info.version);
+  updateStatus = {
+    ...updateStatus,
+    checking: false,
+    available: true,
+    version: info.version,
+    releaseNotes: info.releaseNotes
+  };
+  sendUpdateStatus();
+});
+
+autoUpdater.on('update-not-available', (info) => {
+  console.log('Kein Update verfügbar');
+  updateStatus = { ...updateStatus, checking: false, available: false };
+  sendUpdateStatus();
+});
+
+autoUpdater.on('error', (err) => {
+  console.error('Auto-Updater Fehler:', err);
+  updateStatus = {
+    ...updateStatus,
+    checking: false,
+    downloading: false,
+    error: err.message
+  };
+  sendUpdateStatus();
+});
+
+autoUpdater.on('download-progress', (progressObj) => {
+  console.log(`Download: ${progressObj.percent.toFixed(1)}%`);
+  updateStatus = {
+    ...updateStatus,
+    downloading: true,
+    progress: progressObj.percent
+  };
+  sendUpdateStatus();
+});
+
+autoUpdater.on('update-downloaded', (info) => {
+  console.log('Update heruntergeladen:', info.version);
+  updateStatus = {
+    ...updateStatus,
+    downloading: false,
+    downloaded: true,
+    version: info.version
+  };
+  sendUpdateStatus();
+});
+// ===== ENDE AUTO-UPDATER KONFIGURATION =====
 
 // Ermittle das tatsächliche Verzeichnis der EXE-Datei
 // Bei portable Apps wird PORTABLE_EXECUTABLE_DIR gesetzt
@@ -204,6 +284,15 @@ app.whenReady().then(() => {
 
   // System-Stats alle 2 Sekunden senden
   statsInterval = setInterval(sendSystemStats, 2000);
+
+  // Auto-Update: Prüfe auf Updates nach App-Start (nur bei gepackter App)
+  if (app.isPackaged) {
+    setTimeout(() => {
+      autoUpdater.checkForUpdates().catch(err => {
+        console.log('Update-Check fehlgeschlagen:', err.message);
+      });
+    }, 3000); // 3 Sekunden nach Start
+  }
 
   app.on('activate', function () {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
@@ -440,3 +529,40 @@ ipcMain.handle('app-restart', async () => {
   app.relaunch();
   app.exit(0);
 });
+
+// ===== AUTO-UPDATE IPC HANDLER =====
+ipcMain.handle('update-check', async () => {
+  try {
+    if (!app.isPackaged) {
+      return { success: false, error: 'Updates nur in der installierten Version verfügbar' };
+    }
+    await autoUpdater.checkForUpdates();
+    return { success: true };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('update-download', async () => {
+  try {
+    await autoUpdater.downloadUpdate();
+    return { success: true };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('update-install', async () => {
+  // Installiert das Update und startet die App neu
+  autoUpdater.quitAndInstall(false, true);
+});
+
+ipcMain.handle('update-get-status', async () => {
+  return {
+    success: true,
+    status: updateStatus,
+    currentVersion: app.getVersion(),
+    isPackaged: app.isPackaged
+  };
+});
+// ===== ENDE AUTO-UPDATE IPC HANDLER =====

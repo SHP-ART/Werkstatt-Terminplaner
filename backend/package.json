@@ -7,12 +7,15 @@
     "start": "electron .",
     "dev": "nodemon src/server.js",
     "build:exe": "electron-builder",
-    "build:allinone": "electron-builder --config electron-builder-allinone.json"
+    "build:allinone": "electron-builder --config electron-builder-allinone.json",
+    "release": "electron-builder --config electron-builder-allinone.json --publish always",
+    "release:draft": "electron-builder --config electron-builder-allinone.json --publish onTagOrDraft"
   },
   "dependencies": {
     "body-parser": "^1.20.2",
     "cors": "^2.8.5",
     "dotenv": "^16.3.1",
+    "electron-updater": "^6.6.2",
     "express": "^4.18.2",
     "sqlite3": "^5.1.6",
     "ws": "^8.18.3"

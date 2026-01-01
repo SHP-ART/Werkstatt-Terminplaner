@@ -17,5 +17,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
   selectDbFile: () => ipcRenderer.invoke('db-select-file'),
   resetDbPath: () => ipcRenderer.invoke('db-reset-path'),
   openDbFolder: () => ipcRenderer.invoke('db-open-folder'),
-  restartApp: () => ipcRenderer.invoke('app-restart')
+  restartApp: () => ipcRenderer.invoke('app-restart'),
+  // Auto-Update Funktionen
+  checkForUpdates: () => ipcRenderer.invoke('update-check'),
+  downloadUpdate: () => ipcRenderer.invoke('update-download'),
+  installUpdate: () => ipcRenderer.invoke('update-install'),
+  getUpdateStatus: () => ipcRenderer.invoke('update-get-status'),
+  onUpdateStatus: (callback) => ipcRenderer.on('update-status', (event, ...args) => callback(...args))
 });
