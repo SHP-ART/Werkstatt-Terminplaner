@@ -104,6 +104,11 @@ class KundenService {
   static async updateFahrzeug(kundeId, altesKennzeichen, neuesDaten) {
     return ApiService.put(`/kunden/${kundeId}/fahrzeuge/${encodeURIComponent(altesKennzeichen)}`, neuesDaten);
   }
+
+  // Gesamtanzahl aller Fahrzeuge
+  static async countFahrzeuge() {
+    return ApiService.get('/kunden/stats/fahrzeuge');
+  }
 }
 
 class TermineService {

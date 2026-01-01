@@ -490,6 +490,24 @@ class KundenModel {
       }
     );
   }
+
+  // Zähle alle eindeutigen Fahrzeuge (Kennzeichen) in der Datenbank
+  static countAlleFahrzeuge(callback) {
+    const query = `
+      SELECT COUNT(DISTINCT UPPER(REPLACE(REPLACE(kennzeichen, ' ', ''), '-', ''))) as anzahl
+      FROM (
+        SELECT kennzeichen FROM termine 
+        WHERE kennzeichen IS NOT NULL AND kennzeichen != '' AND geloescht_am IS NULL
+        UNION
+        SELECT kennzeichen FROM kunden 
+        WHERE kennzeichen IS NOT NULL AND kennzeichen != ''
+      )
+    `;
+    db.get(query, [], (err, row) => {
+      if (err) return callback(err);
+      callback(null, row ? row.anzahl : 0);
+    });
+  }
 }
 
 module.exports = KundenModel;

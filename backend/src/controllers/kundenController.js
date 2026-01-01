@@ -107,6 +107,18 @@ class KundenController {
     });
   }
 
+  // Anzahl aller Fahrzeuge in der Datenbank
+  static countFahrzeuge(req, res) {
+    KundenModel.countAlleFahrzeuge((err, anzahl) => {
+      if (err) {
+        console.error('Fehler beim Zählen der Fahrzeuge:', err);
+        res.status(500).json({ error: err.message });
+      } else {
+        res.json({ anzahl });
+      }
+    });
+  }
+
   // Alle Fahrzeuge (Kennzeichen) eines Kunden abrufen
   static getFahrzeuge(req, res) {
     const kundeId = req.params.id;

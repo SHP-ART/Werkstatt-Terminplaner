@@ -66,9 +66,9 @@
                 <div class="dashboard-card">
                     <div class="card-icon">📈</div>
                     <div class="card-content">
-                        <h3>Kunden Gesamt</h3>
+                        <h3>Kunden & Fahrzeuge</h3>
                         <div class="card-value" id="kundenGesamt">0</div>
-                        <div class="card-detail">In der Datenbank</div>
+                        <div class="card-detail"><span id="fahrzeugeGesamt">0</span> Fahrzeuge</div>
                     </div>
                 </div>
 
@@ -444,7 +444,7 @@
                     <div class="form-row">
                         <div class="form-group" style="position: relative;">
                             <label>Arbeiten (jede Zeile eine Arbeit):</label>
-                            <textarea id="arbeitEingabe" rows="3" placeholder="z.B.&#10;Ölwechsel&#10;Bremsen vorne" required autocomplete="off"></textarea>
+                            <textarea id="arbeitEingabe" class="arbeiten-textarea" rows="5" placeholder="z.B.&#10;Ölwechsel&#10;Bremsen vorne&#10;Inspektion" required autocomplete="off"></textarea>
                             <div id="arbeitAutocomplete" class="autocomplete-dropdown"></div>
                             <datalist id="arbeitListe"></datalist>
                             
@@ -574,12 +574,11 @@
                         <div class="dots-border"></div>
                     </button>
                 </form>
-            </div>
 
-            <div class="info-box" style="margin-top: 20px; padding: 15px; background: #e3f2fd; border-radius: 8px;">
-                <p>✅ <strong>Termin erstellt!</strong></p>
-                <p>Gehen Sie zu <strong>"Zeitverwaltung"</strong>, um die Zeiten für einzelne Arbeiten zu bearbeiten.</p>
-            </div>
+                <div class="info-box" style="margin-top: 20px; padding: 15px; background: #e3f2fd; border-radius: 8px;">
+                    <p>✅ <strong>Termin erstellt!</strong></p>
+                    <p>Gehen Sie zu <strong>"Zeitverwaltung"</strong>, um die Zeiten für einzelne Arbeiten zu bearbeiten.</p>
+                </div>
             </div>
 
             <div id="terminBearbeiten" class="sub-tab-content">
@@ -666,7 +665,7 @@
                             <div class="form-row">
                                 <div class="form-group" style="position: relative;">
                                     <label>Arbeiten (jede Zeile eine Arbeit):</label>
-                                    <textarea id="edit_arbeitEingabe" rows="3" placeholder="z.B.&#10;Ölwechsel&#10;Bremsen vorne" required autocomplete="off"></textarea>
+                                    <textarea id="edit_arbeitEingabe" class="arbeiten-textarea" rows="5" placeholder="z.B.&#10;Ölwechsel&#10;Bremsen vorne&#10;Inspektion" required autocomplete="off"></textarea>
                                     
                                     <!-- Geschätzte Zeit Anzeige -->
                                     <div id="editZeitschaetzungAnzeige" style="margin-top: 10px; padding: 12px; background: linear-gradient(135deg, #e8f4fd 0%, #f0f7ff 100%); border-radius: 8px; border-left: 4px solid #4a90e2; display: none;">
@@ -976,7 +975,7 @@
                     </div>
                 </div>
                 
-                <div id="ersatzautoUebersicht" class="ersatzauto-grid">
+                <div id="ersatzautoUebersicht">
                     <div class="loading">Lade Übersicht...</div>
                 </div>
             </div>
@@ -1437,7 +1436,7 @@
                         <span>Ohne Startzeit</span>
                     </div>
                     <div class="legende-item">
-                        <span class="color-box" style="background: linear-gradient(135deg, rgba(198, 40, 40, 0.25) 0%, rgba(198, 40, 40, 0.35) 100%); border-left: 2px solid #c62828; border-right: 2px solid #c62828;"></span>
+                        <span class="color-box" style="background: repeating-linear-gradient(-45deg, rgba(239, 83, 80, 0.15), rgba(239, 83, 80, 0.15) 4px, rgba(239, 83, 80, 0.25) 4px, rgba(239, 83, 80, 0.25) 8px); border: 2px dashed #ef5350; border-radius: 4px;"></span>
                         <span>🍽️ Mittagspause</span>
                     </div>
                 </div>

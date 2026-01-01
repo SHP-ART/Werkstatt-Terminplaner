@@ -20,12 +20,24 @@ class App {
 
   init() {
     this.setupEventListeners();
+    this.initSubTabs(); // Sub-Tabs initialisieren
     this.loadInitialData();
     this.setTodayDate();
     this.setInternerTerminTodayDate();
     this.loadInternerTerminMitarbeiter();
     this.setupWebSocket();
     this.setupErsatzautoOptionHandlers();
+  }
+
+  // Initialisiert alle Sub-Tabs und setzt display:none für nicht-aktive
+  initSubTabs() {
+    document.querySelectorAll('.sub-tab-content').forEach(content => {
+      if (!content.classList.contains('active')) {
+        content.style.display = 'none';
+      } else {
+        content.style.display = 'block';
+      }
+    });
   }
 
   setupWebSocket() {
@@ -1568,18 +1580,15 @@ class App {
     const subTabsContainer = button.closest('.sub-tabs');
     const parentContainer = subTabsContainer.parentElement;
 
-    // Entferne active und verstecke alle Sub-Tab-Contents
-    Array.from(parentContainer.children).forEach(child => {
-      if (child.classList.contains('sub-tab-content')) {
-        child.classList.remove('active');
-        child.style.display = 'none';
-      }
+    // Entferne active und verstecke alle Sub-Tab-Contents im Parent-Container
+    parentContainer.querySelectorAll('.sub-tab-content').forEach(content => {
+      content.classList.remove('active');
+      content.style.display = 'none';
     });
 
-    Array.from(subTabsContainer.children).forEach(btn => {
-      if (btn.classList.contains('sub-tab-button')) {
-        btn.classList.remove('active');
-      }
+    // Deaktiviere alle Sub-Tab-Buttons
+    subTabsContainer.querySelectorAll('.sub-tab-button').forEach(btn => {
+      btn.classList.remove('active');
     });
 
     const targetContent = document.getElementById(subTabName);
@@ -4836,6 +4845,14 @@ class App {
 
       document.getElementById('kundenGesamt').textContent = allKunden.length;
 
+      // Lade Fahrzeuganzahl
+      try {
+        const fahrzeugeStats = await KundenService.countFahrzeuge();
+        document.getElementById('fahrzeugeGesamt').textContent = fahrzeugeStats.anzahl || 0;
+      } catch (e) {
+        document.getElementById('fahrzeugeGesamt').textContent = '-';
+      }
+
       document.getElementById('termineWoche').textContent = termineWoche.length;
 
       // Dashboard Auslastungsbalken aktualisieren
@@ -7146,7 +7163,7 @@ class App {
     }
   }
 
-  // Ersatzauto-Übersicht laden
+  // Ersatzauto-Übersicht laden (Wochen-Ansicht Mo-So)
   async loadErsatzautoUebersicht() {
     const container = document.getElementById('ersatzautoUebersicht');
     if (!container) return;
@@ -7154,76 +7171,151 @@ class App {
     container.innerHTML = '<div class="loading">Lade Übersicht...</div>';
     
     try {
-      // Generiere die nächsten 30 Tage (Mo-Sa)
-      const days = this.getWeeksForMonthView().flat();
+      // Generiere 5 Wochen (Mo-So) ab dem aktuellen Montag
+      const weeks = this.getWeeksForErsatzautoView();
       const today = this.formatDateLocal(new Date());
       
       // Lade Verfügbarkeit für alle Tage parallel
-      const verfuegbarkeitPromises = days.map(day => 
+      const allDays = weeks.flat();
+      const verfuegbarkeitPromises = allDays.map(day => 
         ErsatzautosService.getVerfuegbarkeit(day.datum)
           .catch(() => ({ gesamt: 0, vergeben: 0, verfuegbar: 0 }))
       );
       const verfuegbarkeiten = await Promise.all(verfuegbarkeitPromises);
       
-      container.innerHTML = '';
+      // Erstelle Map für schnellen Zugriff
+      const verfMap = new Map();
+      allDays.forEach((day, idx) => verfMap.set(day.datum, verfuegbarkeiten[idx]));
       
-      days.forEach((day, index) => {
-        const verf = verfuegbarkeiten[index];
-        const isPast = day.datum < today;
-        const isToday = day.datum === today;
-        const gesperrt = verf.gesperrt || 0;
-        
-        let statusClass = 'frei';
-        let statusText = `${verf.verfuegbar}/${verf.gesamt}`;
-        let detailText = '';
-        
-        if (verf.gesamt === 0) {
-          statusClass = 'frei';
-          statusText = '-';
-        } else if (verf.verfuegbar === 0) {
-          statusClass = 'voll';
-          // Unterscheide ob gesperrt oder vergeben
-          if (gesperrt > 0 && verf.vergeben === 0) {
-            statusText = `0/${verf.gesamt}`;
-            detailText = `${gesperrt} gesperrt`;
-          } else if (gesperrt > 0) {
-            statusText = `0/${verf.gesamt}`;
-            detailText = `${verf.vergeben} vergeben, ${gesperrt} gesperrt`;
-          } else {
-            detailText = `${verf.vergeben} vergeben`;
-          }
-        } else if (verf.vergeben > 0 || gesperrt > 0) {
-          statusClass = 'teilweise';
-          let details = [];
-          if (verf.vergeben > 0) details.push(`${verf.vergeben} vergeben`);
-          if (gesperrt > 0) details.push(`${gesperrt} gesperrt`);
-          detailText = details.join(', ');
-        }
-        
-        const wochentage = ['So', 'Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa'];
-        const dateObj = new Date(day.datum);
-        const wochentag = wochentage[dateObj.getDay()];
-        
-        const card = document.createElement('div');
-        // Status-Klasse zur Karte hinzufügen für bessere Sichtbarkeit
-        card.className = `ersatzauto-tag${isToday ? ' heute' : ''}${isPast ? ' vergangen' : ''} status-${statusClass}`;
-        
-        card.innerHTML = `
-          <div class="ea-datum">${day.dayNum}. ${day.monthShort}</div>
-          <div class="ea-wochentag">${wochentag}</div>
-          <div class="ea-status ${statusClass}">
-            <span class="ea-status-dot ea-${statusClass}"></span>
-            ${statusText}
+      // Header mit Wochentagen
+      let html = `
+        <div class="ea-wochen-container">
+          <div class="ea-wochen-header">
+            <div class="ea-kw-header">KW</div>
+            <div class="ea-tag-header">Mo</div>
+            <div class="ea-tag-header">Di</div>
+            <div class="ea-tag-header">Mi</div>
+            <div class="ea-tag-header">Do</div>
+            <div class="ea-tag-header">Fr</div>
+            <div class="ea-tag-header">Sa</div>
+            <div class="ea-tag-header">So</div>
           </div>
-          ${detailText ? `<div class="ea-details">${detailText}</div>` : ''}
-        `;
+      `;
+      
+      // Jede Woche als Zeile
+      weeks.forEach(week => {
+        const firstDay = new Date(week[0].datum);
+        const kw = this.getWeekNumber(firstDay);
         
-        container.appendChild(card);
+        html += `<div class="ea-wochen-zeile">`;
+        html += `<div class="ea-kw">KW ${kw}</div>`;
+        
+        week.forEach(day => {
+          const verf = verfMap.get(day.datum) || { gesamt: 0, vergeben: 0, verfuegbar: 0 };
+          const isPast = day.datum < today;
+          const isToday = day.datum === today;
+          const isSunday = day.dayOfWeek === 0;
+          const gesperrt = verf.gesperrt || 0;
+          
+          let statusClass = 'frei';
+          let statusText = `${verf.verfuegbar}/${verf.gesamt}`;
+          let tooltipText = '';
+          
+          if (verf.gesamt === 0) {
+            statusClass = 'keine';
+            statusText = '-';
+            tooltipText = 'Keine Ersatzautos';
+          } else if (verf.verfuegbar === 0) {
+            statusClass = 'voll';
+            let details = [];
+            if (verf.vergeben > 0) details.push(`${verf.vergeben} vergeben`);
+            if (gesperrt > 0) details.push(`${gesperrt} gesperrt`);
+            tooltipText = details.join(', ');
+          } else if (verf.vergeben > 0 || gesperrt > 0) {
+            statusClass = 'teilweise';
+            let details = [];
+            if (verf.vergeben > 0) details.push(`${verf.vergeben} vergeben`);
+            if (gesperrt > 0) details.push(`${gesperrt} gesperrt`);
+            tooltipText = details.join(', ');
+          } else {
+            tooltipText = 'Alle verfügbar';
+          }
+          
+          const todayClass = isToday ? ' ea-heute' : '';
+          const pastClass = isPast ? ' ea-vergangen' : '';
+          const sundayClass = isSunday ? ' ea-sonntag' : '';
+          
+          html += `
+            <div class="ea-tag-zelle${todayClass}${pastClass}${sundayClass} ea-status-${statusClass}" 
+                 title="${day.dayNum}. ${day.monthShort}&#10;${tooltipText}">
+              <div class="ea-tag-datum">${day.dayNum}</div>
+              <div class="ea-tag-verfuegbar">${statusText}</div>
+            </div>
+          `;
+        });
+        
+        html += `</div>`;
       });
+      
+      html += `</div>`;
+      
+      // Legende hinzufügen
+      html += `
+        <div class="ea-legende">
+          <div class="ea-legende-item"><span class="ea-legende-dot ea-frei"></span> Frei</div>
+          <div class="ea-legende-item"><span class="ea-legende-dot ea-teilweise"></span> Teilweise belegt</div>
+          <div class="ea-legende-item"><span class="ea-legende-dot ea-voll"></span> Ausgebucht</div>
+        </div>
+      `;
+      
+      container.innerHTML = html;
+      
     } catch (error) {
       console.error('Fehler beim Laden der Ersatzauto-Übersicht:', error);
       container.innerHTML = '<div class="loading" style="color: #ef4444;">Fehler beim Laden</div>';
     }
+  }
+
+  // Gibt Wochen für Ersatzauto-Ansicht zurück (5 Wochen, Mo-So)
+  getWeeksForErsatzautoView() {
+    const weeks = [];
+    const today = new Date();
+    today.setHours(12, 0, 0, 0);
+    
+    // Finde den Montag der aktuellen Woche
+    const currentDay = today.getDay();
+    const mondayOffset = currentDay === 0 ? -6 : 1 - currentDay;
+    const startMonday = new Date(today);
+    startMonday.setDate(today.getDate() + mondayOffset);
+    
+    // 5 Wochen generieren (Mo-So = 7 Tage pro Woche)
+    for (let weekNum = 0; weekNum < 5; weekNum++) {
+      const week = [];
+      for (let dayNum = 0; dayNum < 7; dayNum++) { // Mo=0 bis So=6
+        const day = new Date(startMonday);
+        day.setDate(startMonday.getDate() + (weekNum * 7) + dayNum);
+        
+        const monthNames = ['Jan', 'Feb', 'Mär', 'Apr', 'Mai', 'Jun', 'Jul', 'Aug', 'Sep', 'Okt', 'Nov', 'Dez'];
+        
+        week.push({
+          datum: this.formatDateLocal(day),
+          dayNum: day.getDate(),
+          monthShort: monthNames[day.getMonth()],
+          dayOfWeek: day.getDay() // 0=So, 1=Mo, ..., 6=Sa
+        });
+      }
+      weeks.push(week);
+    }
+    return weeks;
+  }
+
+  // Kalenderwoche berechnen
+  getWeekNumber(date) {
+    const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+    const dayNum = d.getUTCDay() || 7;
+    d.setUTCDate(d.getUTCDate() + 4 - dayNum);
+    const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+    return Math.ceil((((d - yearStart) / 86400000) + 1) / 7);
   }
 
   async loadAbwesenheit() {
@@ -10060,11 +10152,17 @@ class App {
         const widthPercent = ((displayEnd - displayStart) / (totalHours * 60)) * 100;
         const pauseEndZeit = this.minutesToTime(pauseEndMinuten);
         
+        // Bei breiteren Blöcken mehr Info anzeigen
+        const showLabel = widthPercent > 6;
+        const pauseContent = showLabel 
+          ? `<span class="zeitleiste-mittagspause-text">Pause</span><span class="zeitleiste-mittagspause-label">${mittagspauseStart} - ${pauseEndZeit}</span>`
+          : `<span class="zeitleiste-mittagspause-text"></span>`;
+        
         mittagspauseHtml = `
           <div class="zeitleiste-mittagspause" 
                style="left: ${leftPercent}%; width: ${widthPercent}%;"
-               title="Mittagspause: ${mittagspauseStart} - ${pauseEndZeit} (${mittagspauseDauer} Min.)">
-            <span class="zeitleiste-mittagspause-text">🍽️</span>
+               title="🍽️ Mittagspause&#10;${mittagspauseStart} - ${pauseEndZeit}&#10;Dauer: ${mittagspauseDauer} Min.">
+            ${pauseContent}
           </div>
         `;
       }
@@ -10072,6 +10170,15 @@ class App {
 
     // Arbeitsblöcke erstellen
     let bloeckeHtml = '<div class="zeitleiste-arbeiten">';
+    
+    // Berechne Mittagspause-Zeiten (in Minuten)
+    let pauseStartMinuten = null;
+    let pauseEndMinuten = null;
+    if (mittagspauseStart && mittagspauseDauer > 0) {
+      const [pauseH, pauseM] = mittagspauseStart.split(':').map(Number);
+      pauseStartMinuten = pauseH * 60 + pauseM;
+      pauseEndMinuten = pauseStartMinuten + mittagspauseDauer;
+    }
     
     // Sortiere Arbeiten nach Startzeit
     const sortedArbeiten = [...arbeiten].sort((a, b) => {
@@ -10084,8 +10191,42 @@ class App {
     // Berechne Positionen für überlappende Blöcke
     let currentEndMinutes = startHour * 60;
     
+    // Hilfsfunktion zum Rendern eines einzelnen Blocks
+    const renderBlock = (arbeit, blockStartMinutes, blockEndMinutes, istFortsetzung = false) => {
+      // Begrenzen auf 8-18 Uhr
+      const displayStart = Math.max(blockStartMinutes, startHour * 60);
+      const displayEnd = Math.min(blockEndMinutes, endHour * 60);
+      
+      const leftPercent = ((displayStart - startHour * 60) / (totalHours * 60)) * 100;
+      const widthPercent = ((displayEnd - displayStart) / (totalHours * 60)) * 100;
+      
+      if (widthPercent <= 0) return '';
+      
+      const statusClass = arbeit.startzeit ? `status-${arbeit.status}` : 'status-keine-zeit';
+      const internClass = arbeit.istIntern ? 'intern-termin' : '';
+      const startZeitText = this.minutesToTime(blockStartMinutes);
+      const endZeitText = this.minutesToTime(blockEndMinutes);
+      const dauerMinuten = blockEndMinutes - blockStartMinutes;
+      const dauerText = this.formatMinutesToHours(dauerMinuten);
+      const auftragsnrText = arbeit.interneAuftragsnummer ? `&#10;Auftrag: ${arbeit.interneAuftragsnummer}` : '';
+      const fortsetzungText = istFortsetzung ? ' (Forts.)' : '';
+      
+      // Hauptanzeige: Kennzeichen bevorzugt, sonst Name (bei internen Terminen)
+      const hauptAnzeige = arbeit.kennzeichen ? arbeit.kennzeichen : (arbeit.istIntern ? '🔧 ' + arbeit.kunde : arbeit.kunde);
+      const auftragsnrEscaped = arbeit.interneAuftragsnummer ? this.escapeHtml(arbeit.interneAuftragsnummer) : '';
+
+      return `
+        <div class="zeitleiste-block ${statusClass} ${internClass}" 
+             style="left: ${leftPercent}%; width: ${Math.max(widthPercent, 3)}%;"
+             onclick="app.openZeitleisteKontextmenu(event, ${arbeit.terminId}, '${this.escapeHtml(arbeit.kunde)}', '${this.escapeHtml(arbeit.arbeit)}', '${arbeit.terminNr}', '${auftragsnrEscaped}')"
+             title="${arbeit.kunde}${arbeit.kennzeichen ? ' - ' + arbeit.kennzeichen : ''}&#10;${arbeit.arbeit}${fortsetzungText}&#10;${startZeitText} - ${endZeitText} (${dauerText})${auftragsnrText}">
+          <span class="zeitleiste-block-haupt">${this.escapeHtml(hauptAnzeige)}</span>
+          <span class="zeitleiste-block-zeit">${startZeitText} - ${endZeitText}</span>
+        </div>
+      `;
+    };
+    
     for (const arbeit of sortedArbeiten) {
-      let leftPercent, widthPercent;
       let startMinutes, endMinutes;
       
       if (arbeit.startzeit) {
@@ -10093,51 +10234,46 @@ class App {
         const [startH, startM] = arbeit.startzeit.split(':').map(Number);
         startMinutes = startH * 60 + startM;
         endMinutes = startMinutes + arbeit.zeitMinuten;
-        
-        // Begrenzen auf 8-18 Uhr
-        const displayStart = Math.max(startMinutes, startHour * 60);
-        const displayEnd = Math.min(endMinutes, endHour * 60);
-        
-        leftPercent = ((displayStart - startHour * 60) / (totalHours * 60)) * 100;
-        widthPercent = ((displayEnd - displayStart) / (totalHours * 60)) * 100;
       } else {
-        // Ohne Startzeit: Platziere nach letzter Arbeit
+        // Ohne Startzeit: Platziere nach letzter Arbeit (und nach Pause falls nötig)
         startMinutes = currentEndMinutes;
+        // Wenn Start in der Pause liegt, nach der Pause beginnen
+        if (pauseStartMinuten !== null && startMinutes >= pauseStartMinuten && startMinutes < pauseEndMinuten) {
+          startMinutes = pauseEndMinuten;
+        }
         endMinutes = startMinutes + arbeit.zeitMinuten;
-        
-        // Begrenzen auf 8-18 Uhr
-        const displayStart = Math.max(startMinutes, startHour * 60);
-        const displayEnd = Math.min(endMinutes, endHour * 60);
-        
-        leftPercent = ((displayStart - startHour * 60) / (totalHours * 60)) * 100;
-        widthPercent = ((displayEnd - displayStart) / (totalHours * 60)) * 100;
       }
-
-      currentEndMinutes = endMinutes;
       
-      // Nur anzeigen wenn im sichtbaren Bereich
-      if (widthPercent <= 0) continue;
-
-      const statusClass = arbeit.startzeit ? `status-${arbeit.status}` : 'status-keine-zeit';
-      const internClass = arbeit.istIntern ? 'intern-termin' : '';
-      const startZeitText = arbeit.startzeit || '—';
-      const endZeitText = this.minutesToTime(endMinutes);
-      const dauerText = this.formatMinutesToHours(arbeit.zeitMinuten);
-      const auftragsnrText = arbeit.interneAuftragsnummer ? `&#10;Auftrag: ${arbeit.interneAuftragsnummer}` : '';
-      
-      // Hauptanzeige: Kennzeichen bevorzugt, sonst Name (bei internen Terminen)
-      const hauptAnzeige = arbeit.kennzeichen ? arbeit.kennzeichen : (arbeit.istIntern ? '🔧 ' + arbeit.kunde : arbeit.kunde);
-      const auftragsnrEscaped = arbeit.interneAuftragsnummer ? this.escapeHtml(arbeit.interneAuftragsnummer) : '';
-
-      bloeckeHtml += `
-        <div class="zeitleiste-block ${statusClass} ${internClass}" 
-             style="left: ${leftPercent}%; width: ${Math.max(widthPercent, 3)}%;"
-             onclick="app.openZeitleisteKontextmenu(event, ${arbeit.terminId}, '${this.escapeHtml(arbeit.kunde)}', '${this.escapeHtml(arbeit.arbeit)}', '${arbeit.terminNr}', '${auftragsnrEscaped}')"
-             title="${arbeit.kunde}${arbeit.kennzeichen ? ' - ' + arbeit.kennzeichen : ''}&#10;${arbeit.arbeit}&#10;${startZeitText} - ${endZeitText} (${dauerText})${auftragsnrText}">
-          <span class="zeitleiste-block-haupt">${this.escapeHtml(hauptAnzeige)}</span>
-          <span class="zeitleiste-block-zeit">${startZeitText} - ${endZeitText}</span>
-        </div>
-      `;
+      // Prüfe ob der Termin über die Mittagspause geht
+      if (pauseStartMinuten !== null && startMinutes < pauseStartMinuten && endMinutes > pauseStartMinuten) {
+        // Termin überlappt mit der Pause - aufteilen
+        
+        // Teil 1: Vor der Pause
+        const teil1End = pauseStartMinuten;
+        bloeckeHtml += renderBlock(arbeit, startMinutes, teil1End, false);
+        
+        // Teil 2: Nach der Pause (mit der verbleibenden Zeit)
+        const verbrauchteZeit = teil1End - startMinutes;
+        const verbleibendeZeit = arbeit.zeitMinuten - verbrauchteZeit;
+        if (verbleibendeZeit > 0) {
+          const teil2Start = pauseEndMinuten;
+          const teil2End = teil2Start + verbleibendeZeit;
+          bloeckeHtml += renderBlock(arbeit, teil2Start, teil2End, true);
+          currentEndMinutes = teil2End;
+        } else {
+          currentEndMinutes = teil1End;
+        }
+      } else {
+        // Termin überlappt nicht mit der Pause - normal rendern
+        bloeckeHtml += renderBlock(arbeit, startMinutes, endMinutes, false);
+        
+        // Wenn das Ende in der Pause liegt, nach der Pause fortsetzen
+        if (pauseStartMinuten !== null && endMinutes > pauseStartMinuten && endMinutes <= pauseEndMinuten) {
+          currentEndMinutes = pauseEndMinuten;
+        } else {
+          currentEndMinutes = endMinutes;
+        }
+      }
     }
 
     bloeckeHtml += '</div>';
