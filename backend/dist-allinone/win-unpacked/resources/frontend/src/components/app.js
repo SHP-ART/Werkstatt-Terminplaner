@@ -20,12 +20,24 @@ class App {
 
   init() {
     this.setupEventListeners();
+    this.initSubTabs(); // Sub-Tabs initialisieren
     this.loadInitialData();
     this.setTodayDate();
     this.setInternerTerminTodayDate();
     this.loadInternerTerminMitarbeiter();
     this.setupWebSocket();
     this.setupErsatzautoOptionHandlers();
+  }
+
+  // Initialisiert alle Sub-Tabs und setzt display:none für nicht-aktive
+  initSubTabs() {
+    document.querySelectorAll('.sub-tab-content').forEach(content => {
+      if (!content.classList.contains('active')) {
+        content.style.display = 'none';
+      } else {
+        content.style.display = 'block';
+      }
+    });
   }
 
   setupWebSocket() {
@@ -74,6 +86,15 @@ class App {
     document.getElementById('serverConfigForm').addEventListener('submit', (e) => this.handleServerConfigSubmit(e));
     document.getElementById('werkstattSettingsForm').addEventListener('submit', (e) => this.handleWerkstattSettingsSubmit(e));
     
+    // Wartende Aktionen Formular
+    const wartendeAktionForm = document.getElementById('wartendeAktionForm');
+    if (wartendeAktionForm) {
+      wartendeAktionForm.addEventListener('submit', (e) => this.handleWartendeAktionSubmit(e));
+    }
+    
+    // Wartende Aktionen Kundensuche
+    this.setupWartendeAktionenKundensuche();
+    
     // Ersatzauto-Formular
     const ersatzautoForm = document.getElementById('ersatzautoForm');
     if (ersatzautoForm) {
@@ -117,6 +138,12 @@ class App {
     document.getElementById('wocheBtn').addEventListener('click', () => this.showWocheTermine());
     document.getElementById('offeneTermineBtn').addEventListener('click', () => this.showOffeneTermine());
     document.getElementById('schwebendeTermineBtn').addEventListener('click', () => this.showSchwebendeTermine());
+    
+    // Schwebende Termine Anzeige klickbar machen
+    const schwebendDisplay = document.getElementById('schwebendDisplay');
+    if (schwebendDisplay) {
+      schwebendDisplay.addEventListener('click', () => this.showSchwebendeTermine());
+    }
 
     // Event-Listener für 7-Tage-Limit bei Krankmeldungen
     document.getElementById('krankVonDatum').addEventListener('change', () => this.validateKrankDatum());
@@ -146,6 +173,20 @@ class App {
     const fahrzeugAuswahlZurueck = document.getElementById('fahrzeugAuswahlZurueck');
     if (fahrzeugAuswahlZurueck) {
       fahrzeugAuswahlZurueck.addEventListener('click', () => this.closeFahrzeugAuswahlModal());
+    }
+    
+    // Fahrzeugverwaltung Modal Event-Listener
+    const closeFahrzeugVerwaltung = document.getElementById('closeFahrzeugVerwaltung');
+    if (closeFahrzeugVerwaltung) {
+      closeFahrzeugVerwaltung.addEventListener('click', () => this.closeFahrzeugVerwaltungModal());
+    }
+    const fahrzeugVerwaltungSchliessen = document.getElementById('fahrzeugVerwaltungSchliessen');
+    if (fahrzeugVerwaltungSchliessen) {
+      fahrzeugVerwaltungSchliessen.addEventListener('click', () => this.closeFahrzeugVerwaltungModal());
+    }
+    const fahrzeugHinzufuegenBtn = document.getElementById('fahrzeugHinzufuegenBtn');
+    if (fahrzeugHinzufuegenBtn) {
+      fahrzeugHinzufuegenBtn.addEventListener('click', () => this.addFahrzeugFromModal());
     }
     
     // Kundenliste-Suche Event-Listener
@@ -1554,18 +1595,15 @@ class App {
     const subTabsContainer = button.closest('.sub-tabs');
     const parentContainer = subTabsContainer.parentElement;
 
-    // Entferne active und verstecke alle Sub-Tab-Contents
-    Array.from(parentContainer.children).forEach(child => {
-      if (child.classList.contains('sub-tab-content')) {
-        child.classList.remove('active');
-        child.style.display = 'none';
-      }
+    // Entferne active und verstecke alle Sub-Tab-Contents im Parent-Container
+    parentContainer.querySelectorAll('.sub-tab-content').forEach(content => {
+      content.classList.remove('active');
+      content.style.display = 'none';
     });
 
-    Array.from(subTabsContainer.children).forEach(btn => {
-      if (btn.classList.contains('sub-tab-button')) {
-        btn.classList.remove('active');
-      }
+    // Deaktiviere alle Sub-Tab-Buttons
+    subTabsContainer.querySelectorAll('.sub-tab-button').forEach(btn => {
+      btn.classList.remove('active');
     });
 
     const targetContent = document.getElementById(subTabName);
@@ -1615,6 +1653,10 @@ class App {
     if (subTabName === 'teileStatus') {
       this.loadTeileStatusUebersicht();
     }
+
+    if (subTabName === 'wartendeAktionen') {
+      this.loadWartendeAktionen();
+    }
   }
 
   switchToTab(tabName) {
@@ -1625,13 +1667,28 @@ class App {
   }
 
   loadInitialData() {
-    this.loadKunden();
-    this.loadTermineCache(); // Lade alle Termine für Cache
-    this.loadTermine();
-    this.loadArbeitszeiten();
-    this.loadDashboard();
-    this.loadWerkstattSettings();
-    this.loadTermineZeiten();
+    // Lade Daten - Fehler werden in den einzelnen Funktionen behandelt
+    this.loadKunden().catch(err => {
+      console.error('loadKunden failed:', err);
+    });
+    this.loadTermineCache().catch(err => {
+      console.error('loadTermineCache failed:', err);
+    });
+    this.loadTermine().catch(err => {
+      console.error('loadTermine failed:', err);
+    });
+    this.loadArbeitszeiten().catch(err => {
+      console.error('loadArbeitszeiten failed:', err);
+    });
+    this.loadDashboard().catch(err => {
+      console.error('loadDashboard failed:', err);
+    });
+    this.loadWerkstattSettings().catch(err => {
+      console.error('loadWerkstattSettings failed:', err);
+    });
+    this.loadTermineZeiten().catch(err => {
+      console.error('loadTermineZeiten failed:', err);
+    });
     this.heuteTermine = [];
   }
 
@@ -1671,7 +1728,13 @@ class App {
       this.updateTerminSuchliste();
     } catch (error) {
       console.error('Fehler beim Laden der Kunden:', error);
-      alert('Fehler beim Laden der Kunden. Ist das Backend gestartet?');
+      let errorMessage = 'Fehler beim Laden der Kunden.';
+      if (error.isNetworkError) {
+        errorMessage = `Verbindung zum Server fehlgeschlagen. Bitte prüfen Sie, ob das Backend läuft und erreichbar ist.\n\nFehler: ${error.message}`;
+      } else if (error.message) {
+        errorMessage = `Fehler beim Laden der Kunden: ${error.message}`;
+      }
+      alert(errorMessage);
     }
   }
 
@@ -1737,6 +1800,7 @@ class App {
         <td>${this.highlightMatch(kunde.fahrzeugtyp || '-', suchBegriff)}</td>
         <td>${this.highlightMatch(kunde.locosoft_id || '-', suchBegriff)}</td>
         <td>
+          <button class="btn btn-small btn-primary" onclick="app.openFahrzeugVerwaltung(${kunde.id}, '${(kunde.name || '').replace(/'/g, "\\'")}')" title="Fahrzeuge verwalten">🚗</button>
           <button class="btn btn-small btn-secondary" onclick="app.editKunde(${kunde.id})" title="Bearbeiten">✏️</button>
           <button class="btn btn-small btn-danger" onclick="app.deleteKunde(${kunde.id}, '${(kunde.name || '').replace(/'/g, "\\'")}')">🗑️</button>
         </td>
@@ -2069,68 +2133,49 @@ class App {
       return;
     }
 
-    // Gruppiere nach Kundenname für intelligenten Import
-    const kundenMap = new Map();
+    // Zähle eindeutige Kunden und Fahrzeuge für die Vorschau
+    const kundenNamen = new Set();
+    const fahrzeugeSet = new Set();
     
     this.pendingImportData.forEach(row => {
-      const nameLower = row.name.toLowerCase();
-      if (!kundenMap.has(nameLower)) {
-        kundenMap.set(nameLower, {
-          name: row.name,
-          telefon: row.telefon,
-          email: row.email,
-          adresse: row.adresse,
-          fahrzeuge: []
-        });
-      }
-      
-      const kunde = kundenMap.get(nameLower);
-      // Ergänze fehlende Kontaktdaten
-      if (!kunde.telefon && row.telefon) kunde.telefon = row.telefon;
-      if (!kunde.email && row.email) kunde.email = row.email;
-      if (!kunde.adresse && row.adresse) kunde.adresse = row.adresse;
-      
-      // Füge Fahrzeug hinzu wenn vorhanden
-      if (row.kennzeichen) {
-        kunde.fahrzeuge.push({
-          kennzeichen: row.kennzeichen,
-          fahrzeugtyp: row.fahrzeugtyp || '',
-          vin: row.vin || ''
-        });
-      }
+      if (row.name) kundenNamen.add(row.name.toLowerCase());
+      if (row.kennzeichen) fahrzeugeSet.add(row.kennzeichen.toUpperCase().replace(/[\s\-]/g, ''));
     });
 
     // Bestätigungsdialog
-    const kundenCount = kundenMap.size;
-    const fahrzeugCount = Array.from(kundenMap.values()).reduce((sum, k) => sum + k.fahrzeuge.length, 0);
+    const kundenCount = kundenNamen.size;
+    const fahrzeugCount = fahrzeugeSet.size;
     
-    if (!confirm(`Import starten?\n\n${kundenCount} Kunden mit ${fahrzeugCount} Fahrzeugen werden importiert.\n\nHinweis: Bei Kunden mit mehreren Fahrzeugen wird das erste Fahrzeug als Hauptkennzeichen gespeichert.`)) {
+    if (!confirm(`Import starten?\n\n${kundenCount} eindeutige Kunden mit ${fahrzeugCount} Fahrzeugen.\n\nHinweis: Kunden mit mehreren Fahrzeugen werden automatisch erkannt und alle Kennzeichen zugeordnet.`)) {
       return;
     }
 
     try {
-      // Bereite Kunden für API-Import vor
-      const kundenZuImportieren = [];
-      
-      kundenMap.forEach((kundeData) => {
-        const ersteFahrzeug = kundeData.fahrzeuge[0] || {};
-        kundenZuImportieren.push({
-          name: kundeData.name,
-          telefon: kundeData.telefon || '',
-          email: kundeData.email || '',
-          adresse: kundeData.adresse || '',
-          kennzeichen: ersteFahrzeug.kennzeichen || '',
-          fahrzeugtyp: ersteFahrzeug.fahrzeugtyp || '',
-          vin: ersteFahrzeug.vin || '',
-          // Speichere alle Fahrzeuge als Info in Notizen falls mehrere
-          notizen: kundeData.fahrzeuge.length > 1 
-            ? 'Weitere Fahrzeuge: ' + kundeData.fahrzeuge.slice(1).map(f => f.kennzeichen).join(', ')
-            : ''
-        });
-      });
+      // Sende alle Zeilen - das Backend gruppiert Kunden mit gleichem Namen
+      // und erstellt automatisch Fahrzeug-Einträge für zusätzliche Kennzeichen
+      const kundenZuImportieren = this.pendingImportData.map(row => ({
+        name: row.name,
+        telefon: row.telefon || '',
+        email: row.email || '',
+        adresse: row.adresse || '',
+        kennzeichen: row.kennzeichen || '',
+        fahrzeugtyp: row.fahrzeugtyp || '',
+        vin: row.vin || ''
+      }));
 
       const result = await KundenService.import(kundenZuImportieren);
-      alert(`✅ Import erfolgreich!\n\n${result.message}`);
+      
+      // Detaillierte Erfolgsmeldung
+      let message = `✅ Import erfolgreich!\n\n`;
+      message += `📋 ${result.imported} Kunden importiert\n`;
+      if (result.fahrzeugeHinzugefuegt > 0) {
+        message += `🚗 ${result.fahrzeugeHinzugefuegt} zusätzliche Fahrzeuge hinzugefügt\n`;
+      }
+      if (result.skipped > 0) {
+        message += `⏭️ ${result.skipped} übersprungen\n`;
+      }
+      
+      alert(message);
       
       // Aufräumen
       this.cancelExcelImport();
@@ -2200,6 +2245,154 @@ class App {
     }
   }
 
+  // ================================================
+  // FAHRZEUGVERWALTUNG
+  // ================================================
+
+  // Fahrzeugverwaltung Modal öffnen
+  async openFahrzeugVerwaltung(kundeId, kundeName) {
+    this.fahrzeugVerwaltungKundeId = kundeId;
+    this.fahrzeugVerwaltungKundeName = kundeName;
+    
+    const modal = document.getElementById('fahrzeugVerwaltungModal');
+    const kundeInfo = document.getElementById('fahrzeugVerwaltungKunde');
+    
+    kundeInfo.innerHTML = `<strong>${kundeName}</strong> (ID: ${kundeId})`;
+    
+    // Lade Fahrzeuge
+    await this.loadFahrzeugVerwaltungListe();
+    
+    // Formular zurücksetzen
+    document.getElementById('neuesFahrzeugKennzeichen').value = '';
+    document.getElementById('neuesFahrzeugTyp').value = '';
+    document.getElementById('neuesFahrzeugVin').value = '';
+    
+    modal.style.display = 'block';
+  }
+
+  // Fahrzeugliste im Modal laden
+  async loadFahrzeugVerwaltungListe() {
+    const liste = document.getElementById('fahrzeugVerwaltungListe');
+    
+    try {
+      const fahrzeuge = await KundenService.getFahrzeuge(this.fahrzeugVerwaltungKundeId);
+      
+      if (fahrzeuge.length === 0) {
+        liste.innerHTML = `
+          <div style="text-align: center; padding: 30px; color: #666; background: #f8f9fa; border-radius: 8px;">
+            <p style="font-size: 1.2em;">🚗 Keine Fahrzeuge vorhanden</p>
+            <p style="font-size: 0.9em;">Fügen Sie unten ein neues Fahrzeug hinzu.</p>
+          </div>
+        `;
+        return;
+      }
+      
+      liste.innerHTML = fahrzeuge.map((fz, idx) => {
+        const letzterTermin = fz.letzter_termin || fz.letzterTermin;
+        const letzterKmStand = fz.letzter_km_stand || fz.letzterKmStand;
+        
+        return `
+          <div class="fahrzeug-verwaltung-item" style="
+            padding: 15px;
+            margin-bottom: 10px;
+            background: ${idx === 0 ? '#e8f5e9' : '#f8f9fa'};
+            border-radius: 8px;
+            border: 2px solid ${idx === 0 ? '#4caf50' : '#dee2e6'};
+          ">
+            <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+              <div style="flex: 1;">
+                <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 5px;">
+                  <span style="font-size: 1.1em; font-weight: bold;">🚗 ${fz.kennzeichen}</span>
+                  ${idx === 0 ? '<span style="background: #4caf50; color: white; padding: 2px 8px; border-radius: 4px; font-size: 0.75em;">Zuletzt</span>' : ''}
+                  <span style="background: ${fz.quelle === 'kundenstamm' ? '#2196f3' : '#ff9800'}; color: white; padding: 2px 6px; border-radius: 4px; font-size: 0.7em;">${fz.quelle === 'kundenstamm' ? 'Hauptfahrzeug' : 'Aus Terminen'}</span>
+                </div>
+                ${fz.fahrzeugtyp ? `<div style="color: #666; font-size: 0.9em;">Typ: ${fz.fahrzeugtyp}</div>` : ''}
+                ${fz.vin ? `<div style="color: #888; font-size: 0.85em;">VIN: ${fz.vin}</div>` : ''}
+                <div style="color: #888; font-size: 0.85em; margin-top: 5px;">
+                  ${letzterTermin ? `Letzter Termin: ${this.formatDatum(letzterTermin)}` : 'Keine Termine'}
+                  ${letzterKmStand ? ` · ${Number(letzterKmStand).toLocaleString('de-DE')} km` : ''}
+                </div>
+              </div>
+              <div style="display: flex; gap: 5px;">
+                <button class="btn btn-small btn-danger" onclick="app.deleteFahrzeugFromModal('${fz.kennzeichen.replace(/'/g, "\\'")}')" title="Fahrzeug löschen">🗑️</button>
+              </div>
+            </div>
+          </div>
+        `;
+      }).join('');
+      
+    } catch (error) {
+      console.error('Fehler beim Laden der Fahrzeuge:', error);
+      liste.innerHTML = `<div style="color: red; padding: 15px;">Fehler beim Laden der Fahrzeuge</div>`;
+    }
+  }
+
+  // Fahrzeug aus Modal hinzufügen
+  async addFahrzeugFromModal() {
+    const kennzeichen = document.getElementById('neuesFahrzeugKennzeichen').value.trim().toUpperCase();
+    const fahrzeugtyp = document.getElementById('neuesFahrzeugTyp').value.trim();
+    const vin = document.getElementById('neuesFahrzeugVin').value.trim().toUpperCase();
+    
+    if (!kennzeichen) {
+      alert('Bitte geben Sie ein Kennzeichen ein.');
+      document.getElementById('neuesFahrzeugKennzeichen').focus();
+      return;
+    }
+    
+    try {
+      await KundenService.addFahrzeug(this.fahrzeugVerwaltungKundeId, {
+        kennzeichen,
+        fahrzeugtyp,
+        vin
+      });
+      
+      // Formular zurücksetzen
+      document.getElementById('neuesFahrzeugKennzeichen').value = '';
+      document.getElementById('neuesFahrzeugTyp').value = '';
+      document.getElementById('neuesFahrzeugVin').value = '';
+      
+      // Liste neu laden
+      await this.loadFahrzeugVerwaltungListe();
+      
+      // Auch Termin-Cache aktualisieren
+      this.loadTermineCache();
+      
+    } catch (error) {
+      console.error('Fehler beim Hinzufügen des Fahrzeugs:', error);
+      alert('Fehler: ' + (error.message || 'Fahrzeug konnte nicht hinzugefügt werden'));
+    }
+  }
+
+  // Fahrzeug aus Modal löschen
+  async deleteFahrzeugFromModal(kennzeichen) {
+    if (!confirm(`Möchten Sie das Fahrzeug "${kennzeichen}" wirklich löschen?\n\nAchtung: Alle Termine mit diesem Kennzeichen werden ebenfalls gelöscht!`)) {
+      return;
+    }
+    
+    try {
+      await KundenService.deleteFahrzeug(this.fahrzeugVerwaltungKundeId, kennzeichen);
+      
+      // Liste neu laden
+      await this.loadFahrzeugVerwaltungListe();
+      
+      // Auch Termin-Cache und Kundenliste aktualisieren
+      this.loadTermineCache();
+      this.loadKunden();
+      
+    } catch (error) {
+      console.error('Fehler beim Löschen des Fahrzeugs:', error);
+      alert('Fehler: ' + (error.message || 'Fahrzeug konnte nicht gelöscht werden'));
+    }
+  }
+
+  // Fahrzeugverwaltung Modal schließen
+  closeFahrzeugVerwaltungModal() {
+    const modal = document.getElementById('fahrzeugVerwaltungModal');
+    modal.style.display = 'none';
+    this.fahrzeugVerwaltungKundeId = null;
+    this.fahrzeugVerwaltungKundeName = null;
+  }
+
   async loadArbeitszeiten() {
     try {
       const arbeitszeiten = await ArbeitszeitenService.getAll();
@@ -2211,6 +2404,15 @@ class App {
         const option = document.createElement('option');
         option.value = arbeit.bezeichnung;
         arbeitListe.appendChild(option);
+        
+        // Auch Aliase als Optionen hinzufügen
+        if (arbeit.aliase) {
+          arbeit.aliase.split(',').forEach(alias => {
+            const aliasOption = document.createElement('option');
+            aliasOption.value = alias.trim();
+            arbeitListe.appendChild(aliasOption);
+          });
+        }
       });
 
       const tbody = document.getElementById('arbeitszeitenTable').getElementsByTagName('tbody')[0];
@@ -2225,6 +2427,15 @@ class App {
                    data-id="${arbeit.id}"
                    value="${arbeit.bezeichnung}"
                    style="width: 100%; min-width: 150px; padding: 8px;">
+          </td>
+          <td>
+            <input type="text"
+                   id="aliase_${arbeit.id}"
+                   data-id="${arbeit.id}"
+                   value="${arbeit.aliase || ''}"
+                   placeholder="z.B. Service, DS, Durchsicht"
+                   title="Mehrere Suchbegriffe durch Komma getrennt"
+                   style="width: 100%; min-width: 200px; padding: 8px;">
           </td>
           <td>
             <input type="number"
@@ -2309,9 +2520,22 @@ class App {
     
     arbeiten.forEach(arbeit => {
       // Suche nach der Arbeit in den Standardzeiten (case-insensitive)
-      const gefunden = this.arbeitszeiten.find(
+      // Erst in Bezeichnung suchen, dann in Aliasen
+      let gefunden = this.arbeitszeiten.find(
         az => az.bezeichnung.toLowerCase() === arbeit.toLowerCase()
       );
+      
+      // Falls nicht gefunden, in Aliasen suchen
+      if (!gefunden) {
+        const suchBegriff = arbeit.toLowerCase();
+        gefunden = this.arbeitszeiten.find(az => {
+          if (az.aliase) {
+            const aliasListe = az.aliase.split(',').map(a => a.trim().toLowerCase());
+            return aliasListe.includes(suchBegriff);
+          }
+          return false;
+        });
+      }
       
       if (gefunden) {
         const minuten = gefunden.standard_minuten || 0;
@@ -2328,7 +2552,11 @@ class App {
           zeitStr = `${minutenAnteil} min`;
         }
         
-        details.push(`✓ ${arbeit}: <strong>${zeitStr}</strong>`);
+        // Zeige den erkannten Standardzeit-Namen wenn über Alias gefunden
+        const hinweis = gefunden.bezeichnung.toLowerCase() !== arbeit.toLowerCase() 
+          ? ` → ${gefunden.bezeichnung}` 
+          : '';
+        details.push(`✓ ${arbeit}${hinweis}: <strong>${zeitStr}</strong>`);
       } else {
         nichtGefunden.push(arbeit);
         details.push(`⚠️ ${arbeit}: <em>keine Standardzeit hinterlegt</em>`);
@@ -2406,12 +2634,15 @@ class App {
 
     // Sammle alle Updates
     for (let row of rows) {
-      const bezeichnungInput = row.querySelector('input[type="text"]');
+      const inputs = row.querySelectorAll('input[type="text"]');
+      const bezeichnungInput = inputs[0]; // Erste Texteingabe = Bezeichnung
+      const aliaseInput = inputs[1]; // Zweite Texteingabe = Aliase
       const zeitInput = row.querySelector('input[type="number"]');
 
       if (bezeichnungInput && zeitInput) {
         const id = bezeichnungInput.dataset.id;
         const bezeichnung = bezeichnungInput.value.trim();
+        const aliase = aliaseInput ? aliaseInput.value.trim() : '';
         const stunden = parseFloat(zeitInput.value);
 
         if (!bezeichnung) {
@@ -2432,6 +2663,7 @@ class App {
         updates.push({
           id: id,
           bezeichnung: bezeichnung,
+          aliase: aliase,
           standard_minuten: minuten
         });
       }
@@ -2446,6 +2678,7 @@ class App {
       for (let update of updates) {
         await ArbeitszeitenService.update(update.id, {
           bezeichnung: update.bezeichnung,
+          aliase: update.aliase,
           standard_minuten: update.standard_minuten
         });
       }
@@ -2842,14 +3075,218 @@ class App {
       if (existing) {
         resolvedKundeId = existing.id;
         resolvedKundeName = existing.name;
-      } else {
-        try {
-          const created = await KundenService.create({ name: kundeNameEingabe, telefon: kundeTelefon || null });
-          resolvedKundeId = created.id;
-          this.loadKunden(); // Cache auffrischen
-        } catch (err) {
-          console.error('Fehler beim Anlegen des Kunden:', err);
-        }
+      }
+      // Neuen Kunden NICHT mehr hier anlegen - das passiert später beim eigentlichen Speichern
+    }
+
+    if (!resolvedKundeId && !resolvedKundeName) {
+      alert('Bitte wählen Sie einen Kunden oder geben Sie einen neuen Namen ein.');
+      return;
+    }
+
+    // Speichere alle Daten für die spätere Verarbeitung
+    this.pendingTerminData = {
+      termin,
+      arbeitenListe,
+      resolvedKundeId,
+      resolvedKundeName,
+      kundeTelefon
+    };
+
+    // Zeige Vorschau-Modal mit Countdown
+    this.showTerminVorschau(termin, resolvedKundeName, kundeTelefon, arbeitenListe, abholungTyp, ersatzautoChecked);
+  }
+
+  // ===== TERMIN VORSCHAU MIT COUNTDOWN =====
+  showTerminVorschau(termin, kundeName, telefon, arbeitenListe, abholungTyp, ersatzauto) {
+    const modal = document.getElementById('terminVorschauModal');
+    if (!modal) {
+      console.error('Termin Vorschau Modal nicht gefunden!');
+      // Fallback: Direkt speichern ohne Vorschau
+      this.executeTerminSave();
+      return;
+    }
+
+    // Fülle die Vorschau-Daten
+    document.getElementById('vorschauKunde').textContent = kundeName || 'Unbekannt';
+    document.getElementById('vorschauTelefon').textContent = telefon || '-';
+    
+    // Datum formatieren
+    const datumObj = new Date(termin.datum);
+    const formatiertesDatum = datumObj.toLocaleDateString('de-DE', { 
+      weekday: 'long', 
+      day: '2-digit', 
+      month: '2-digit', 
+      year: 'numeric' 
+    });
+    document.getElementById('vorschauDatum').textContent = formatiertesDatum;
+    
+    document.getElementById('vorschauKennzeichen').textContent = termin.kennzeichen || '-';
+    
+    // Zeit formatieren
+    const stunden = Math.floor(termin.geschaetzte_zeit / 60);
+    const minuten = termin.geschaetzte_zeit % 60;
+    const zeitText = stunden > 0 
+      ? `${stunden} h ${minuten > 0 ? minuten + ' min' : ''}` 
+      : `${minuten} min`;
+    document.getElementById('vorschauZeit').textContent = zeitText;
+    
+    // Arbeiten als Liste darstellen
+    const arbeitenHtml = arbeitenListe.map(a => `• ${a}`).join('<br>');
+    document.getElementById('vorschauArbeiten').innerHTML = arbeitenHtml;
+    
+    // Abholungs-Typ
+    const abholungTexte = {
+      'bringen': 'Kunde bringt/holt selbst',
+      'hol_bring': 'Hol- und Bringservice',
+      'ruecksprache': 'Telefonische Rücksprache',
+      'warten': 'Kunde wartet'
+    };
+    document.getElementById('vorschauAbholung').textContent = abholungTexte[abholungTyp] || abholungTyp;
+    
+    // Ersatzauto
+    const ersatzautoRow = document.getElementById('vorschauErsatzautoRow');
+    if (ersatzauto) {
+      ersatzautoRow.style.display = 'flex';
+      const tage = termin.ersatzauto_tage;
+      document.getElementById('vorschauErsatzauto').textContent = tage ? `Ja (${tage} Tage)` : 'Ja';
+    } else {
+      ersatzautoRow.style.display = 'none';
+    }
+
+    // Modal anzeigen - sowohl display als auch active Klasse setzen
+    modal.style.display = 'flex';
+    // Kurze Verzögerung für Animation
+    setTimeout(() => {
+      modal.classList.add('active');
+    }, 10);
+
+    // Countdown starten
+    this.startTerminCountdown();
+  }
+
+  startTerminCountdown() {
+    // Vorherigen Countdown abbrechen falls vorhanden
+    if (this.terminCountdownInterval) {
+      clearInterval(this.terminCountdownInterval);
+    }
+
+    let sekunden = 5;
+    const countdownZahl = document.getElementById('countdownZahl');
+    const countdownBar = document.getElementById('countdownBar');
+
+    // Initial setzen
+    countdownZahl.textContent = sekunden;
+    countdownBar.style.width = '100%';
+
+    this.terminCountdownInterval = setInterval(() => {
+      sekunden--;
+      countdownZahl.textContent = sekunden;
+      countdownBar.style.width = `${(sekunden / 5) * 100}%`;
+
+      if (sekunden <= 0) {
+        clearInterval(this.terminCountdownInterval);
+        this.terminCountdownInterval = null;
+        // Auto-Speichern
+        this.executeTerminSave();
+      }
+    }, 1000);
+
+    // Event-Listener für Buttons
+    const abbrechenBtn = document.getElementById('vorschauAbbrechenBtn');
+    const sofortBtn = document.getElementById('vorschauSofortSpeichernBtn');
+
+    // Alte Listener entfernen
+    abbrechenBtn.replaceWith(abbrechenBtn.cloneNode(true));
+    sofortBtn.replaceWith(sofortBtn.cloneNode(true));
+
+    // Neue Listener hinzufügen
+    document.getElementById('vorschauAbbrechenBtn').addEventListener('click', () => {
+      this.cancelTerminVorschau();
+    });
+
+    document.getElementById('vorschauSofortSpeichernBtn').addEventListener('click', () => {
+      if (this.terminCountdownInterval) {
+        clearInterval(this.terminCountdownInterval);
+        this.terminCountdownInterval = null;
+      }
+      this.executeTerminSave();
+    });
+
+    // ESC-Taste zum Abbrechen
+    this.terminVorschauEscHandler = (e) => {
+      if (e.key === 'Escape') {
+        this.cancelTerminVorschau();
+      }
+    };
+    document.addEventListener('keydown', this.terminVorschauEscHandler);
+
+    // Klick auf Hintergrund zum Abbrechen
+    const modal = document.getElementById('terminVorschauModal');
+    modal.addEventListener('click', (e) => {
+      if (e.target === modal) {
+        this.cancelTerminVorschau();
+      }
+    });
+  }
+
+  cancelTerminVorschau() {
+    // Countdown stoppen
+    if (this.terminCountdownInterval) {
+      clearInterval(this.terminCountdownInterval);
+      this.terminCountdownInterval = null;
+    }
+
+    // ESC-Handler entfernen
+    if (this.terminVorschauEscHandler) {
+      document.removeEventListener('keydown', this.terminVorschauEscHandler);
+      this.terminVorschauEscHandler = null;
+    }
+
+    // Modal schließen mit Animation
+    const modal = document.getElementById('terminVorschauModal');
+    if (modal) {
+      modal.classList.remove('active');
+      // Warte auf Animation, dann verstecken
+      setTimeout(() => {
+        modal.style.display = 'none';
+      }, 300);
+    }
+
+    // Pending-Daten löschen
+    this.pendingTerminData = null;
+  }
+
+  async executeTerminSave() {
+    // ESC-Handler entfernen falls vorhanden
+    if (this.terminVorschauEscHandler) {
+      document.removeEventListener('keydown', this.terminVorschauEscHandler);
+      this.terminVorschauEscHandler = null;
+    }
+
+    // Modal schließen
+    const modal = document.getElementById('terminVorschauModal');
+    if (modal) {
+      modal.classList.remove('active');
+      modal.style.display = 'none';
+    }
+
+    const data = this.pendingTerminData;
+    if (!data) {
+      console.error('Keine Termin-Daten vorhanden');
+      return;
+    }
+
+    let { termin, arbeitenListe, resolvedKundeId, resolvedKundeName, kundeTelefon } = data;
+
+    // Falls neuer Kunde, jetzt anlegen
+    if (!resolvedKundeId && resolvedKundeName) {
+      try {
+        const created = await KundenService.create({ name: resolvedKundeName, telefon: kundeTelefon || null });
+        resolvedKundeId = created.id;
+        this.loadKunden(); // Cache auffrischen
+      } catch (err) {
+        console.error('Fehler beim Anlegen des Kunden:', err);
       }
     }
 
@@ -2857,9 +3294,6 @@ class App {
       termin.kunde_id = resolvedKundeId;
     } else if (resolvedKundeName) {
       termin.kunde_name = resolvedKundeName;
-    } else {
-      alert('Bitte wählen Sie einen Kunden oder geben Sie einen neuen Namen ein.');
-      return;
     }
     if (kundeTelefon) {
       termin.kunde_telefon = kundeTelefon;
@@ -2879,6 +3313,7 @@ class App {
           `Möchten Sie den Termin trotzdem erstellen?`
         );
         if (!bestaetigung) {
+          this.pendingTerminData = null;
           return;
         }
       } else if (validation.warnung) {
@@ -2888,6 +3323,7 @@ class App {
           `Möchten Sie fortfahren?`
         );
         if (!bestaetigung) {
+          this.pendingTerminData = null;
           return;
         }
       }
@@ -2960,9 +3396,13 @@ class App {
       this.loadDashboard();
       this.loadArbeitszeiten();
       this.loadTermineZeiten();
+      
+      // Pending-Daten löschen
+      this.pendingTerminData = null;
     } catch (error) {
       console.error('Fehler beim Erstellen des Termins:', error);
       alert('Fehler beim Erstellen des Termins: ' + (error.message || 'Unbekannter Fehler'));
+      this.pendingTerminData = null;
     }
   }
 
@@ -3052,6 +3492,536 @@ class App {
     } catch (error) {
       console.error('Fehler beim Erstellen des internen Termins:', error);
       alert('Fehler beim Erstellen des internen Termins: ' + (error.message || 'Unbekannter Fehler'));
+    }
+  }
+
+  // ========================================
+  // WARTENDE AKTIONEN FUNKTIONEN
+  // ========================================
+
+  setupWartendeAktionenKundensuche() {
+    const nameSuche = document.getElementById('wartendNameSuche');
+    const kzBezirk = document.getElementById('wartendKzBezirk');
+    const kzBuchstaben = document.getElementById('wartendKzBuchstaben');
+    const kzNummer = document.getElementById('wartendKzNummer');
+
+    if (nameSuche) {
+      nameSuche.addEventListener('input', () => this.handleWartendNameSuche());
+      nameSuche.addEventListener('keydown', (e) => this.handleWartendSucheKeydown(e, 'name'));
+      nameSuche.addEventListener('blur', () => setTimeout(() => this.hideWartendVorschlaege('name'), 350));
+    }
+
+    // Kennzeichen-Suche mit 3 Feldern
+    const kzFelder = [kzBezirk, kzBuchstaben, kzNummer];
+    const kzFeldIds = ['wartendKzBezirk', 'wartendKzBuchstaben', 'wartendKzNummer'];
+    
+    kzFelder.forEach((feld, index) => {
+      if (feld) {
+        feld.addEventListener('input', (e) => {
+          e.target.value = e.target.value.toUpperCase();
+          this.handleWartendKennzeichenSuche();
+          // Auto-Tab zum nächsten Feld
+          if (kzFeldIds[index] === 'wartendKzBezirk' && e.target.value.length >= 3) {
+            document.getElementById('wartendKzBuchstaben')?.focus();
+          } else if (kzFeldIds[index] === 'wartendKzBuchstaben' && e.target.value.length >= 2) {
+            document.getElementById('wartendKzNummer')?.focus();
+          }
+        });
+        feld.addEventListener('keydown', (e) => this.handleWartendSucheKeydown(e, 'kennzeichen'));
+        feld.addEventListener('blur', () => {
+          setTimeout(() => {
+            const aktivesElement = document.activeElement;
+            const aktivesId = aktivesElement ? aktivesElement.id : '';
+            if (!kzFeldIds.includes(aktivesId)) {
+              this.hideWartendVorschlaege('kennzeichen');
+            }
+          }, 100);
+        });
+      }
+    });
+  }
+
+  // Namenssuche für Wartende Aktionen (nutzt Cache wie Hauptformular)
+  handleWartendNameSuche() {
+    const eingabe = document.getElementById('wartendNameSuche')?.value.trim() || '';
+    const vorschlaegeDiv = document.getElementById('wartendNameVorschlaege');
+    
+    if (!vorschlaegeDiv) return;
+    
+    if (eingabe.length < 2) {
+      vorschlaegeDiv.classList.remove('aktiv');
+      vorschlaegeDiv.innerHTML = '';
+      return;
+    }
+    
+    const lower = eingabe.toLowerCase();
+    
+    // Suche in Kunden nach Name (nutzt Cache)
+    const treffer = (this.kundenCache || []).filter(kunde => 
+      kunde.name && kunde.name.toLowerCase().includes(lower)
+    ).slice(0, 10);
+    
+    if (treffer.length === 0) {
+      vorschlaegeDiv.innerHTML = '<div class="keine-vorschlaege">Kein Kunde gefunden</div>';
+      vorschlaegeDiv.classList.add('aktiv');
+      return;
+    }
+    
+    vorschlaegeDiv.innerHTML = treffer.map((kunde, idx) => `
+      <div class="vorschlag-item" data-index="${idx}" onmousedown="event.preventDefault(); app.selectWartendeKundeVorschlag(${kunde.id})">
+        <div>
+          <span class="vorschlag-name">${this.highlightMatch(kunde.name, eingabe)}</span>
+          ${kunde.telefon ? `<span class="vorschlag-telefon"> · ${kunde.telefon}</span>` : ''}
+        </div>
+        ${kunde.kennzeichen ? `<span class="vorschlag-kennzeichen">${kunde.kennzeichen}</span>` : ''}
+      </div>
+    `).join('');
+    
+    vorschlaegeDiv.classList.add('aktiv');
+    this.wartendVorschlaegeIndex = -1;
+    this.wartendVorschlaege = treffer;
+  }
+
+  // Kennzeichen-Suche für Wartende Aktionen (nutzt Cache wie Hauptformular)
+  handleWartendKennzeichenSuche() {
+    const bezirk = document.getElementById('wartendKzBezirk')?.value.trim().toUpperCase() || '';
+    const buchstaben = document.getElementById('wartendKzBuchstaben')?.value.trim().toUpperCase() || '';
+    const nummer = document.getElementById('wartendKzNummer')?.value.trim().toUpperCase() || '';
+    const vorschlaegeDiv = document.getElementById('wartendKzVorschlaege');
+    
+    if (!vorschlaegeDiv) return;
+    
+    // Mindestens ein Feld muss ausgefüllt sein
+    if (!bezirk && !buchstaben && !nummer) {
+      vorschlaegeDiv.classList.remove('aktiv');
+      vorschlaegeDiv.innerHTML = '';
+      return;
+    }
+    
+    // Sammle alle Kennzeichen aus Kunden und Terminen (gleiche Logik wie Hauptformular)
+    const alleKennzeichen = new Map();
+    
+    // Aus Kundentabelle
+    (this.kundenCache || []).forEach(kunde => {
+      if (kunde.kennzeichen) {
+        const kzNormalized = this.normalizeKennzeichen(kunde.kennzeichen);
+        if (!alleKennzeichen.has(kzNormalized)) {
+          alleKennzeichen.set(kzNormalized, {
+            kennzeichen: kunde.kennzeichen,
+            kundeId: kunde.id,
+            kundeName: kunde.name,
+            kundeTelefon: kunde.telefon,
+            fahrzeugtyp: kunde.fahrzeugtyp
+          });
+        }
+      }
+    });
+    
+    // Aus Terminen (falls Kennzeichen nicht in Kunden)
+    (this.termineCache || []).forEach(termin => {
+      if (termin.kennzeichen) {
+        const kzNormalized = this.normalizeKennzeichen(termin.kennzeichen);
+        if (!alleKennzeichen.has(kzNormalized)) {
+          alleKennzeichen.set(kzNormalized, {
+            kennzeichen: termin.kennzeichen,
+            kundeId: termin.kunde_id,
+            kundeName: termin.kunde_name,
+            kundeTelefon: null,
+            fahrzeugtyp: null
+          });
+        }
+      }
+    });
+    
+    // Filtern nach den eingegebenen Teilen
+    const treffer = [];
+    alleKennzeichen.forEach((data) => {
+      const kzParts = this.parseKennzeichen(data.kennzeichen);
+      
+      let match = true;
+      if (bezirk && !kzParts.bezirk.includes(bezirk)) match = false;
+      if (buchstaben && !kzParts.buchstaben.includes(buchstaben)) match = false;
+      if (nummer && !kzParts.nummer.includes(nummer)) match = false;
+      
+      if (match) {
+        treffer.push(data);
+      }
+    });
+    
+    if (treffer.length === 0) {
+      vorschlaegeDiv.innerHTML = '<div class="keine-vorschlaege">Kein Kennzeichen gefunden</div>';
+      vorschlaegeDiv.classList.add('aktiv');
+      return;
+    }
+    
+    // Sortieren: Exakte Treffer zuerst
+    treffer.sort((a, b) => {
+      const aExakt = this.parseKennzeichen(a.kennzeichen);
+      const bExakt = this.parseKennzeichen(b.kennzeichen);
+      const aScore = (aExakt.bezirk === bezirk ? 3 : 0) + (aExakt.buchstaben === buchstaben ? 2 : 0) + (aExakt.nummer === nummer ? 1 : 0);
+      const bScore = (bExakt.bezirk === bezirk ? 3 : 0) + (bExakt.buchstaben === buchstaben ? 2 : 0) + (bExakt.nummer === nummer ? 1 : 0);
+      return bScore - aScore;
+    });
+    
+    vorschlaegeDiv.innerHTML = treffer.slice(0, 10).map((data, idx) => {
+      return `
+        <div class="vorschlag-item" data-index="${idx}" onmousedown="event.preventDefault(); app.selectWartendeKennzeichenVorschlag(${data.kundeId || 'null'}, '${this.escapeHtml(data.kennzeichen)}', '${this.escapeHtml(data.kundeName || '')}', '${this.escapeHtml(data.kundeTelefon || '')}', '${this.escapeHtml(data.fahrzeugtyp || '')}')">
+          <div>
+            <span class="vorschlag-kennzeichen" style="margin-right: 10px;">${this.formatKennzeichenHighlight(data.kennzeichen, bezirk, buchstaben, nummer)}</span>
+            <span class="vorschlag-name">${data.kundeName || 'Unbekannter Kunde'}</span>
+          </div>
+          ${data.fahrzeugtyp ? `<span class="vorschlag-telefon">${data.fahrzeugtyp}</span>` : ''}
+        </div>
+      `;
+    }).join('');
+    
+    vorschlaegeDiv.classList.add('aktiv');
+    this.wartendKzVorschlaegeIndex = -1;
+    this.wartendKzVorschlaege = treffer.slice(0, 10);
+  }
+
+  // Vorschlag auswählen (Name)
+  async selectWartendeKundeVorschlag(kundeId) {
+    const kunde = (this.kundenCache || []).find(k => k.id === kundeId);
+    if (!kunde) return;
+    
+    // Fahrzeuge direkt vom Backend laden (inkl. aller Termine-Kennzeichen)
+    try {
+      const fahrzeuge = await KundenService.getFahrzeuge(kundeId);
+      
+      // Wenn mehr als ein Fahrzeug vorhanden ist, Auswahl-Popup zeigen
+      if (fahrzeuge.length > 1) {
+        this.showWartendeFahrzeugAuswahlModal(kunde, fahrzeuge);
+        this.hideWartendVorschlaege('name');
+        return;
+      }
+      
+      // Nur ein oder kein Fahrzeug - direkt auswählen
+      const fahrzeug = fahrzeuge.length > 0 ? fahrzeuge[0] : null;
+      this.selectWartendeKunde(kundeId, kunde.name, kunde.telefon, 
+        fahrzeug ? fahrzeug.kennzeichen : kunde.kennzeichen, 
+        fahrzeug ? fahrzeug.fahrzeugtyp : kunde.fahrzeugtyp);
+      this.hideWartendVorschlaege('name');
+    } catch (error) {
+      console.error('Fehler beim Laden der Fahrzeuge:', error);
+      // Fallback: Nur den Kunden ohne Fahrzeugauswahl übernehmen
+      this.selectWartendeKunde(kundeId, kunde.name, kunde.telefon, kunde.kennzeichen, kunde.fahrzeugtyp);
+      this.hideWartendVorschlaege('name');
+    }
+  }
+
+  // Fahrzeug-Auswahl Modal für Wartende Aktionen
+  showWartendeFahrzeugAuswahlModal(kunde, fahrzeuge) {
+    const modal = document.getElementById('fahrzeugAuswahlModal');
+    const kundeInfo = document.getElementById('fahrzeugAuswahlKunde');
+    const liste = document.getElementById('fahrzeugAuswahlListe');
+    
+    kundeInfo.innerHTML = `<strong>${kunde.name}</strong>${kunde.telefon ? ` · ${kunde.telefon}` : ''}<br>
+      <span style="font-size: 0.9em;">Dieser Kunde hat ${fahrzeuge.length} Fahrzeuge:</span>`;
+    
+    liste.innerHTML = fahrzeuge.map((fz, idx) => {
+      const letzterTermin = fz.letzter_termin || fz.letzterTermin;
+      const letzterKmStand = fz.letzter_km_stand || fz.letzterKmStand;
+      
+      return `
+      <div class="fahrzeug-auswahl-item" onclick="app.selectWartendeFahrzeugFromModal(${kunde.id}, ${idx})" style="
+        padding: 15px;
+        margin-bottom: 10px;
+        background: ${idx === 0 ? '#e8f5e9' : '#f8f9fa'};
+        border-radius: 8px;
+        border: 2px solid ${idx === 0 ? '#4caf50' : '#dee2e6'};
+        cursor: pointer;
+        transition: all 0.2s;
+      " onmouseover="this.style.borderColor='#4a90e2'; this.style.background='#e3f2fd';" 
+         onmouseout="this.style.borderColor='${idx === 0 ? '#4caf50' : '#dee2e6'}'; this.style.background='${idx === 0 ? '#e8f5e9' : '#f8f9fa'}';">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+          <div>
+            <span style="font-size: 1.2em; font-weight: bold;">🚗 ${fz.kennzeichen}</span>
+            ${fz.fahrzeugtyp ? `<span style="color: #666; margin-left: 10px;">${fz.fahrzeugtyp}</span>` : ''}
+          </div>
+          ${idx === 0 ? '<span style="background: #4caf50; color: white; padding: 2px 8px; border-radius: 4px; font-size: 0.8em;">Zuletzt</span>' : ''}
+        </div>
+        ${fz.vin ? `<div style="font-size: 0.85em; color: #888; margin-top: 5px;">VIN: ${fz.vin}</div>` : ''}
+        <div style="font-size: 0.85em; color: #666; margin-top: 5px;">
+          ${letzterTermin ? `Letzter Termin: ${this.formatDatum(letzterTermin)}` : 'Aus Kundenstamm'}
+          ${letzterKmStand ? ` · ${Number(letzterKmStand).toLocaleString('de-DE')} km` : ''}
+        </div>
+      </div>
+    `}).join('');
+    
+    // Speichere die Daten für späteren Zugriff (für Wartende Aktionen)
+    this.wartendeFahrzeugAuswahlData = { kunde, fahrzeuge };
+    
+    modal.style.display = 'block';
+  }
+
+  // Fahrzeug aus Modal für Wartende Aktionen auswählen
+  selectWartendeFahrzeugFromModal(kundeId, fahrzeugIndex) {
+    if (!this.wartendeFahrzeugAuswahlData) return;
+    
+    const { kunde, fahrzeuge } = this.wartendeFahrzeugAuswahlData;
+    const fahrzeug = fahrzeuge[fahrzeugIndex];
+    
+    this.selectWartendeKunde(kundeId, kunde.name, kunde.telefon, fahrzeug.kennzeichen, fahrzeug.fahrzeugtyp);
+    
+    // Modal schließen
+    document.getElementById('fahrzeugAuswahlModal').style.display = 'none';
+    this.wartendeFahrzeugAuswahlData = null;
+  }
+
+  // Vorschlag auswählen (Kennzeichen)
+  selectWartendeKennzeichenVorschlag(kundeId, kennzeichen, kundeName, kundeTelefon, fahrzeugtyp) {
+    this.selectWartendeKunde(kundeId, kundeName, kundeTelefon, kennzeichen, fahrzeugtyp);
+    this.hideWartendVorschlaege('kennzeichen');
+  }
+
+  selectWartendeKunde(kundeId, name, telefon, kennzeichen, fahrzeugtyp) {
+    document.getElementById('wartend_kunde_id').value = kundeId || '';
+    document.getElementById('wartendKundeName').textContent = name || 'Unbekannt';
+    document.getElementById('wartendKundeTelefon').textContent = telefon ? `📞 ${telefon}` : '';
+    document.getElementById('wartendGefundenerKunde').style.display = 'block';
+    
+    if (kennzeichen) {
+      document.getElementById('wartend_kennzeichen').value = kennzeichen;
+    }
+    if (fahrzeugtyp) {
+      document.getElementById('wartend_fahrzeugtyp').value = fahrzeugtyp;
+    }
+
+    // Suchfelder zurücksetzen
+    document.getElementById('wartendNameSuche').value = '';
+    document.getElementById('wartendKzBezirk').value = '';
+    document.getElementById('wartendKzBuchstaben').value = '';
+    document.getElementById('wartendKzNummer').value = '';
+  }
+
+  hideWartendVorschlaege(typ) {
+    if (typ === 'name') {
+      const div = document.getElementById('wartendNameVorschlaege');
+      if (div) {
+        div.classList.remove('aktiv');
+        div.innerHTML = '';
+      }
+    } else if (typ === 'kennzeichen') {
+      const div = document.getElementById('wartendKzVorschlaege');
+      if (div) {
+        div.classList.remove('aktiv');
+        div.innerHTML = '';
+      }
+    }
+  }
+
+  handleWartendSucheKeydown(e, typ) {
+    const vorschlaegeDiv = typ === 'name' 
+      ? document.getElementById('wartendNameVorschlaege')
+      : document.getElementById('wartendKzVorschlaege');
+    
+    if (!vorschlaegeDiv || !vorschlaegeDiv.classList.contains('aktiv')) return;
+    
+    const items = vorschlaegeDiv.querySelectorAll('.vorschlag-item');
+    const currentIndex = typ === 'name' ? this.wartendVorschlaegeIndex : this.wartendKzVorschlaegeIndex;
+    
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      const newIndex = Math.min(currentIndex + 1, items.length - 1);
+      this.updateWartendVorschlagHighlight(items, newIndex, typ);
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      const newIndex = Math.max(currentIndex - 1, 0);
+      this.updateWartendVorschlagHighlight(items, newIndex, typ);
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      if (currentIndex >= 0 && items[currentIndex]) {
+        items[currentIndex].click();
+      }
+    } else if (e.key === 'Escape') {
+      this.hideWartendVorschlaege(typ);
+    }
+  }
+
+  updateWartendVorschlagHighlight(items, newIndex, typ) {
+    items.forEach((item, i) => {
+      item.classList.toggle('highlighted', i === newIndex);
+    });
+    if (typ === 'name') {
+      this.wartendVorschlaegeIndex = newIndex;
+    } else {
+      this.wartendKzVorschlaegeIndex = newIndex;
+    }
+  }
+
+  // Schnellauswahl für Wartende Aktionen Grund
+  setWartendGrund(grund) {
+    const textarea = document.getElementById('wartend_beschreibung');
+    if (textarea) {
+      // Wenn schon Text vorhanden, auf neue Zeile anhängen
+      if (textarea.value.trim()) {
+        textarea.value = textarea.value.trim() + '\n' + grund;
+      } else {
+        textarea.value = grund;
+      }
+      textarea.focus();
+    }
+  }
+
+  async handleWartendeAktionSubmit(e) {
+    e.preventDefault();
+
+    const kundeId = document.getElementById('wartend_kunde_id').value;
+    const kennzeichen = document.getElementById('wartend_kennzeichen').value.trim();
+    const fahrzeugtyp = document.getElementById('wartend_fahrzeugtyp').value.trim();
+    const beschreibung = document.getElementById('wartend_beschreibung').value.trim();
+    const zeitStunden = parseFloat(document.getElementById('wartend_zeit').value) || 1;
+    const notizen = document.getElementById('wartend_notizen').value.trim();
+
+    if (!kennzeichen || !beschreibung) {
+      alert('Bitte Kennzeichen und Beschreibung ausfüllen.');
+      return;
+    }
+
+    // Kundenname ermitteln
+    let kundeName = 'Unbekannt';
+    if (kundeId) {
+      kundeName = document.getElementById('wartendKundeName').textContent || 'Unbekannt';
+    }
+
+    const termin = {
+      kunde_id: kundeId || null,
+      kunde_name: kundeName,
+      kunde_telefon: null,
+      kennzeichen: kennzeichen,
+      fahrzeugtyp: fahrzeugtyp || null,
+      arbeit: beschreibung,
+      umfang: notizen,
+      geschaetzte_zeit: Math.round(zeitStunden * 60),
+      datum: '9999-12-31', // Platzhalter-Datum für schwebende Termine (DB erfordert NOT NULL)
+      ist_schwebend: 1,
+      abholung_typ: 'warten',
+      abholung_details: 'Wartende Aktion',
+      status: 'wartend'
+    };
+
+    try {
+      await TermineService.create(termin);
+      alert('Wartende Aktion erfolgreich erstellt!');
+
+      // Formular zurücksetzen
+      document.getElementById('wartendeAktionForm').reset();
+      document.getElementById('wartendGefundenerKunde').style.display = 'none';
+      document.getElementById('wartend_kunde_id').value = '';
+
+      // Liste aktualisieren
+      this.loadWartendeAktionen();
+      this.loadDashboard();
+    } catch (error) {
+      console.error('Fehler beim Erstellen der wartenden Aktion:', error);
+      alert('Fehler: ' + (error.message || 'Unbekannter Fehler'));
+    }
+  }
+
+  async loadWartendeAktionen() {
+    const listeDiv = document.getElementById('wartendeAktionenListe');
+    const anzahlSpan = document.getElementById('wartendeAnzahl');
+    
+    if (!listeDiv) return;
+
+    try {
+      const termine = await TermineService.getAll(null);
+      const wartendeAktionen = termine.filter(t => t.ist_schwebend === 1 || t.ist_schwebend === true);
+
+      anzahlSpan.textContent = wartendeAktionen.length;
+
+      if (wartendeAktionen.length === 0) {
+        listeDiv.innerHTML = `
+          <div class="wartende-leer">
+            <div class="wartende-leer-icon">✅</div>
+            <p>Keine wartenden Aktionen vorhanden</p>
+            <p style="font-size: 0.9em;">Erstellen Sie oben eine neue wartende Aktion</p>
+          </div>
+        `;
+        return;
+      }
+
+      listeDiv.innerHTML = wartendeAktionen.map(termin => {
+        const erstelltAm = termin.erstellt_am ? new Date(termin.erstellt_am).toLocaleDateString('de-DE') : 'Unbekannt';
+        const zeitAnzeige = termin.geschaetzte_zeit ? `${(termin.geschaetzte_zeit / 60).toFixed(1)} h` : '-';
+        
+        return `
+          <div class="wartende-karte" data-termin-id="${termin.id}">
+            <div class="wartende-karte-erstellt">Erstellt: ${erstelltAm}</div>
+            <div class="wartende-karte-header">
+              <span class="wartende-karte-kunde">${termin.kunde_name || 'Unbekannt'}</span>
+              <span class="wartende-karte-kennzeichen">${termin.kennzeichen || '-'}</span>
+            </div>
+            <div class="wartende-karte-body">
+              <div class="wartende-karte-beschreibung">${this.escapeHtml(termin.arbeit || '')}</div>
+              <div class="wartende-karte-meta">
+                ${termin.fahrzeugtyp ? `<span>🚗 ${termin.fahrzeugtyp}</span>` : ''}
+                <span>⏱️ ${zeitAnzeige}</span>
+                ${termin.umfang ? `<span>📝 ${termin.umfang}</span>` : ''}
+              </div>
+            </div>
+            <div class="wartende-karte-footer">
+              <button class="btn btn-einplanen" onclick="app.wartendeAktionEinplanen(${termin.id})">
+                📅 Einplanen
+              </button>
+              <button class="btn btn-bearbeiten-wartend" onclick="app.showTerminDetails(${termin.id})">
+                ✏️ Bearbeiten
+              </button>
+              <button class="btn btn-erledigt" onclick="app.wartendeAktionErledigt(${termin.id})">
+                ✓ Erledigt
+              </button>
+              <button class="btn btn-loeschen-wartend" onclick="app.wartendeAktionLoeschen(${termin.id})" title="Löschen">
+                🗑️
+              </button>
+            </div>
+          </div>
+        `;
+      }).join('');
+    } catch (error) {
+      console.error('Fehler beim Laden der wartenden Aktionen:', error);
+      listeDiv.innerHTML = '<div class="error">Fehler beim Laden</div>';
+    }
+  }
+
+  async wartendeAktionEinplanen(terminId) {
+    // Lade Termin und öffne das Einplanen-Modal
+    try {
+      const termin = await TermineService.getById(terminId);
+      this.termineById[terminId] = termin; // Speichere für das Modal
+      this.einplanenFromWartendeAktionen = true; // Merker für spezielle Behandlung
+      this.openEinplanenDatumModal(terminId, termin);
+    } catch (error) {
+      console.error('Fehler beim Laden des Termins:', error);
+      alert('Fehler: ' + (error.message || 'Unbekannter Fehler'));
+    }
+  }
+
+  async wartendeAktionErledigt(terminId) {
+    if (!confirm('Diese wartende Aktion als erledigt markieren?\n(Der Termin wird gelöscht)')) return;
+
+    try {
+      await TermineService.delete(terminId);
+      alert('Wartende Aktion wurde erledigt und entfernt.');
+      this.loadWartendeAktionen();
+      this.loadDashboard();
+    } catch (error) {
+      console.error('Fehler beim Erledigen:', error);
+      alert('Fehler: ' + (error.message || 'Unbekannter Fehler'));
+    }
+  }
+
+  async wartendeAktionLoeschen(terminId) {
+    if (!confirm('Diese wartende Aktion wirklich löschen?')) return;
+
+    try {
+      await TermineService.delete(terminId);
+      alert('Wartende Aktion wurde gelöscht.');
+      this.loadWartendeAktionen();
+      this.loadDashboard();
+    } catch (error) {
+      console.error('Fehler beim Löschen:', error);
+      alert('Fehler: ' + (error.message || 'Unbekannter Fehler'));
     }
   }
 
@@ -3409,6 +4379,10 @@ class App {
 
   async showSchwebendeTermine() {
     // Zeige alle schwebenden Termine (ist_schwebend = 1)
+    
+    // Wechsle zum Zeitverwaltung-Tab
+    this.switchToTab('zeitverwaltung');
+    
     document.getElementById('filterDatum').value = '';
     
     try {
@@ -3543,8 +4517,23 @@ class App {
   }
 
   async showTerminDetails(terminId) {
-    const termin = this.termineById[terminId];
-    if (!termin) return;
+    let termin = this.termineById[terminId];
+    
+    // Falls Termin nicht im Cache ist, lade ihn vom Server
+    if (!termin) {
+      try {
+        termin = await TermineService.getById(terminId);
+        if (!termin) {
+          alert('Termin nicht gefunden');
+          return;
+        }
+        this.termineById[terminId] = termin;
+      } catch (error) {
+        console.error('Fehler beim Laden des Termins:', error);
+        alert('Fehler beim Laden des Termins');
+        return;
+      }
+    }
 
     // Speichere aktuelle Termin-ID für Split/Schwebend-Funktionen
     this.currentDetailTerminId = terminId;
@@ -3569,20 +4558,67 @@ class App {
     try {
       const mitarbeiter = await MitarbeiterService.getAktive();
       const lehrlinge = await LehrlingeService.getAktive();
+      
+      // Lade Abwesenheiten für das Datum des Termins
+      let abwesendeMitarbeiterIds = new Set();
+      let abwesendeLehrlingeIds = new Set();
+      
+      if (termin.datum && termin.datum !== '9999-12-31') {
+        try {
+          const abwesenheiten = await EinstellungenService.getAbwesenheitenByDateRange(termin.datum, termin.datum);
+          if (abwesenheiten && Array.isArray(abwesenheiten)) {
+            abwesenheiten.forEach(a => {
+              // API gibt mitarbeiter_id oder lehrling_id zurück
+              if (a.mitarbeiter_id) {
+                abwesendeMitarbeiterIds.add(a.mitarbeiter_id);
+              }
+              if (a.lehrling_id) {
+                abwesendeLehrlingeIds.add(a.lehrling_id);
+              }
+            });
+          }
+        } catch (e) {
+          console.warn('Konnte Abwesenheiten nicht laden:', e);
+        }
+      }
 
-      // Erstelle Optgroups für bessere Übersicht
-      if (mitarbeiter.length > 0) {
+      // Erstelle Optgroups für bessere Übersicht - nur verfügbare Personen
+      const verfuegbareMitarbeiter = mitarbeiter.filter(m => !abwesendeMitarbeiterIds.has(m.id));
+      const abwesendeMitarbeiter = mitarbeiter.filter(m => abwesendeMitarbeiterIds.has(m.id));
+      
+      if (verfuegbareMitarbeiter.length > 0) {
         mitarbeiterOptions += '<optgroup label="Mitarbeiter">';
-        mitarbeiterOptions += mitarbeiter.map(m =>
+        mitarbeiterOptions += verfuegbareMitarbeiter.map(m =>
           `<option value="ma_${m.id}" ${termin.mitarbeiter_id === m.id ? 'selected' : ''}>${m.name}</option>`
         ).join('');
         mitarbeiterOptions += '</optgroup>';
       }
+      
+      // Abwesende Mitarbeiter separat anzeigen (ausgegraut)
+      if (abwesendeMitarbeiter.length > 0) {
+        mitarbeiterOptions += '<optgroup label="⛔ Abwesend">';
+        mitarbeiterOptions += abwesendeMitarbeiter.map(m =>
+          `<option value="ma_${m.id}" disabled style="color: #999;">${m.name} (abwesend)</option>`
+        ).join('');
+        mitarbeiterOptions += '</optgroup>';
+      }
 
-      if (lehrlinge.length > 0) {
+      const verfuegbareLehrlinge = lehrlinge.filter(l => !abwesendeLehrlingeIds.has(l.id));
+      const abwesendeLehrlinge = lehrlinge.filter(l => abwesendeLehrlingeIds.has(l.id));
+      
+      if (verfuegbareLehrlinge.length > 0) {
         mitarbeiterOptions += '<optgroup label="Lehrlinge">';
-        mitarbeiterOptions += lehrlinge.map(l =>
+        mitarbeiterOptions += verfuegbareLehrlinge.map(l =>
           `<option value="l_${l.id}" ${zugeordneteLehrlingId === l.id ? 'selected' : ''}>${l.name}</option>`
+        ).join('');
+        mitarbeiterOptions += '</optgroup>';
+      }
+      
+      // Abwesende Lehrlinge separat anzeigen (ausgegraut)
+      if (abwesendeLehrlinge.length > 0) {
+        mitarbeiterOptions += '<optgroup label="⛔ Lehrlinge abwesend">';
+        mitarbeiterOptions += abwesendeLehrlinge.map(l =>
+          `<option value="l_${l.id}" disabled style="color: #999;">${l.name} (abwesend)</option>`
         ).join('');
         mitarbeiterOptions += '</optgroup>';
       }
@@ -3677,6 +4713,10 @@ class App {
             <span class="detail-label">Geschätzte Zeit</span>
             <span class="detail-value detail-value-highlight">${this.formatMinutesToHours(termin.geschaetzte_zeit || 0)}</span>
           </div>
+          <div class="detail-item">
+            <span class="detail-label">Interne Auftragsnr.</span>
+            <span class="detail-value detail-value-highlight">${termin.interne_auftragsnummer || '-'}</span>
+          </div>
           ${termin.dringlichkeit ? `
           <div class="detail-item">
             <span class="detail-label">Dringlichkeit</span>
@@ -3734,6 +4774,13 @@ class App {
           💾 Zuordnung speichern
         </button>
       </div>
+
+      <!-- Zeiten für einzelne Arbeiten -->
+      <div class="detail-section detail-section-action">
+        <button class="btn btn-secondary detail-action-btn" style="width: 100%;" onclick="app.closeTerminDetails(); app.openArbeitszeitenModal(${termin.id});">
+          ⏱️ Zeiten für einzelne Arbeiten festlegen
+        </button>
+      </div>
     `;
 
     // Schwebend-Button aktualisieren
@@ -3744,10 +4791,22 @@ class App {
 
   async updateTerminMitarbeiter(terminId) {
     const selectedValue = document.getElementById('terminMitarbeiterSelect').value;
+    
+    // Hole den aktuellen Termin für vorhandene arbeitszeiten_details
+    const termin = this.termineById[terminId];
+    let existingDetails = {};
+    
+    if (termin && termin.arbeitszeiten_details) {
+      try {
+        existingDetails = JSON.parse(termin.arbeitszeiten_details);
+      } catch (e) {
+        // Ignoriere Parse-Fehler
+      }
+    }
 
     // Parse den Wert: "ma_1" oder "l_1" oder ""
     let mitarbeiterIdValue = null;
-    let arbeitszeitenDetails = null;
+    let istSchwebend = termin ? termin.ist_schwebend : 0;
 
     if (selectedValue && selectedValue !== '') {
       const [type, id] = selectedValue.split('_');
@@ -3756,25 +4815,80 @@ class App {
       if (type === 'ma') {
         // Mitarbeiter: Speichere in mitarbeiter_id
         mitarbeiterIdValue = numId;
-        // Speichere auch in arbeitszeiten_details für konsistente Zuordnung
-        arbeitszeitenDetails = {
-          _gesamt_mitarbeiter_id: { type: 'mitarbeiter', id: numId }
-        };
+        // Aktualisiere _gesamt_mitarbeiter_id in bestehenden Details
+        existingDetails._gesamt_mitarbeiter_id = { type: 'mitarbeiter', id: numId };
+        // Wenn ein Mitarbeiter zugeordnet wird, ist der Termin nicht mehr schwebend
+        istSchwebend = 0;
       } else if (type === 'l') {
         // Lehrling: Speichere nur in arbeitszeiten_details
         mitarbeiterIdValue = null; // Lehrlinge haben kein mitarbeiter_id
-        arbeitszeitenDetails = {
-          _gesamt_mitarbeiter_id: { type: 'lehrling', id: numId }
-        };
+        existingDetails._gesamt_mitarbeiter_id = { type: 'lehrling', id: numId };
+        // Wenn ein Lehrling zugeordnet wird, ist der Termin nicht mehr schwebend
+        istSchwebend = 0;
       }
+    } else {
+      // Keine Zuordnung - entferne _gesamt_mitarbeiter_id
+      delete existingDetails._gesamt_mitarbeiter_id;
     }
 
+    // Überschneidungsprüfung wenn Mitarbeiter/Lehrling zugeordnet wird und Termin eine Startzeit hat
+    if (selectedValue && termin) {
+      let terminStartzeit = null;
+      if (existingDetails._startzeit) {
+        terminStartzeit = existingDetails._startzeit;
+      }
+      
+      // Nur prüfen wenn Startzeit vorhanden und kein schwebender/wartender Termin
+      if (terminStartzeit && termin.datum && termin.datum !== '9999-12-31') {
+        const [type, id] = selectedValue.split('_');
+        const numId = parseInt(id, 10);
+        const mitarbeiterId = type === 'ma' ? numId : null;
+        const lehrlingId = type === 'l' ? numId : null;
+        
+        const ueberschneidungen = await this.checkTerminUeberschneidungen(
+          termin.datum,
+          terminStartzeit,
+          termin.geschaetzte_zeit || 60,
+          mitarbeiterId,
+          lehrlingId,
+          terminId
+        );
+        
+        if (ueberschneidungen.length > 0) {
+          const konfliktListe = ueberschneidungen.map(u => 
+            `• ${u.termin.termin_nr}: ${u.startzeit} - ${u.endzeit} (${u.termin.kunde_name || 'Unbekannt'})`
+          ).join('\n');
+          
+          const fortfahren = confirm(
+            `⚠️ TERMINÜBERSCHNEIDUNG!\n\n` +
+            `Der Termin überschneidet sich mit:\n${konfliktListe}\n\n` +
+            `Trotzdem fortfahren?`
+          );
+          
+          if (!fortfahren) return;
+        }
+      }
+    }
+    
+    // Automatisch auf "geplant" setzen wenn Mitarbeiter zugeordnet wird und Startzeit vorhanden
+    let neuerStatus = null;
+    if (selectedValue && existingDetails._startzeit && termin.status === 'wartend') {
+      neuerStatus = 'geplant';
+    }
+    
     try {
-      await TermineService.update(terminId, {
+      const updateData = {
         mitarbeiter_id: mitarbeiterIdValue,
-        arbeitszeiten_details: arbeitszeitenDetails ? JSON.stringify(arbeitszeitenDetails) : null
-      });
-      alert('Zuordnung gespeichert!');
+        arbeitszeiten_details: Object.keys(existingDetails).length > 0 ? JSON.stringify(existingDetails) : null,
+        ist_schwebend: istSchwebend
+      };
+      
+      if (neuerStatus) {
+        updateData.status = neuerStatus;
+      }
+      
+      await TermineService.update(terminId, updateData);
+      alert('Zuordnung gespeichert!' + (neuerStatus ? ' Status auf "Geplant" gesetzt.' : ''));
       this.closeTerminDetails();
       this.loadTermine();
       this.loadAuslastung();
@@ -3852,48 +4966,184 @@ class App {
       modal = document.createElement('div');
       modal.id = 'einplanenDatumModal';
       modal.className = 'modal';
-      modal.innerHTML = `
-        <div class="modal-content" style="max-width: 400px;">
-          <span class="close-btn" onclick="app.closeEinplanenDatumModal()">&times;</span>
-          <h3 style="margin-bottom: 20px;">📅 Termin einplanen</h3>
-          <div id="einplanenTerminInfo" style="background: #f5f5f5; padding: 10px; border-radius: 8px; margin-bottom: 20px;"></div>
-          <div class="form-group">
-            <label for="einplanenDatum"><strong>Datum für den Termin wählen:</strong></label>
-            <input type="date" id="einplanenDatum" class="form-control" style="font-size: 16px; padding: 10px;">
-          </div>
-          <div style="display: flex; gap: 10px; margin-top: 20px;">
-            <button type="button" class="btn btn-primary" onclick="app.confirmEinplanenDatum()" style="flex: 1;">
-              ✅ Einplanen
-            </button>
-            <button type="button" class="btn btn-secondary" onclick="app.closeEinplanenDatumModal()" style="flex: 1;">
-              ❌ Abbrechen
-            </button>
-          </div>
-        </div>
-      `;
       document.body.appendChild(modal);
     }
     
-    // Termin-Info anzeigen
+    modal.innerHTML = `
+      <div class="modal-content" style="max-width: 500px;">
+        <span class="close-btn" onclick="app.closeEinplanenDatumModal()">&times;</span>
+        <h3 style="margin-bottom: 20px;">📅 Termin einplanen</h3>
+        <div id="einplanenTerminInfo" style="background: #f5f5f5; padding: 10px; border-radius: 8px; margin-bottom: 20px;"></div>
+        
+        <div class="form-group">
+          <label for="einplanenDatum"><strong>Datum für den Termin wählen:</strong></label>
+          <input type="date" id="einplanenDatum" class="form-control" style="font-size: 16px; padding: 10px;">
+        </div>
+        
+        <div class="form-group" style="margin-top: 15px;">
+          <label for="einplanenUhrzeit"><strong>Startzeit (optional):</strong></label>
+          <input type="time" id="einplanenUhrzeit" class="form-control" style="font-size: 16px; padding: 10px;" placeholder="z.B. 08:00">
+          <small style="color: #666; display: block; margin-top: 5px;">Wenn leer, wird der Termin automatisch eingeplant.</small>
+        </div>
+        
+        <div class="form-group" style="margin-top: 15px;">
+          <label for="einplanenBringzeit"><strong>Bringzeit (optional):</strong></label>
+          <input type="time" id="einplanenBringzeit" class="form-control" style="font-size: 16px; padding: 10px;" placeholder="z.B. 08:00">
+          <small style="color: #666; display: block; margin-top: 5px;">Zeit, zu der das Fahrzeug gebracht werden soll</small>
+        </div>
+        
+        <div class="form-group" style="margin-top: 15px;">
+          <label><strong>Arbeiten hinzufügen (optional):</strong></label>
+          <div style="display: flex; gap: 10px; margin-top: 5px;">
+            <input type="text" id="einplanenArbeitText" class="form-control" style="flex: 1;" placeholder="Arbeit eingeben...">
+            <input type="number" id="einplanenArbeitZeit" class="form-control" style="width: 70px;" placeholder="h" min="0.1" step="0.1">
+            <button type="button" class="btn btn-secondary" onclick="app.addArbeitToEinplanen()" style="white-space: nowrap;">
+              ➕
+            </button>
+          </div>
+          <div id="einplanenArbeitenListe" style="margin-top: 10px; max-height: 150px; overflow-y: auto;"></div>
+          <div style="margin-top: 10px; display: flex; justify-content: space-between; align-items: center;">
+            <span style="color: #666; font-size: 0.9em;">Geschätzte Zeit:</span>
+            <strong id="einplanenGesamtzeit">0 h</strong>
+          </div>
+        </div>
+        
+        <div style="display: flex; gap: 10px; margin-top: 20px;">
+          <button type="button" class="btn btn-primary" onclick="app.confirmEinplanenDatum()" style="flex: 1;">
+            ✅ Einplanen
+          </button>
+          <button type="button" class="btn btn-secondary" onclick="app.closeEinplanenDatumModal()" style="flex: 1;">
+            ❌ Abbrechen
+          </button>
+        </div>
+      </div>
+    `;
+    
+    // Termin-Info anzeigen (nur Kunde und Kennzeichen, nicht die Arbeiten)
     document.getElementById('einplanenTerminInfo').innerHTML = `
       <strong>${termin.termin_nr || '-'}</strong> - ${termin.kunde_name || '-'}<br>
-      <span style="color: #666;">${termin.arbeit || '-'}</span><br>
-      <span style="color: #999; font-size: 0.9em;">Aktuelles Datum: ${termin.datum || 'Nicht gesetzt'}</span>
+      <span style="color: #666;">${termin.kennzeichen || '-'}</span><br>
+      <span style="color: #999; font-size: 0.9em;">Aktuelles Datum: ${termin.datum === '9999-12-31' ? 'Nicht gesetzt' : (termin.datum || 'Nicht gesetzt')}</span>
     `;
     
     // Datum vorbelegen (heute oder bestehendes Datum)
     const datumInput = document.getElementById('einplanenDatum');
-    if (termin.datum) {
+    if (termin.datum && termin.datum !== '9999-12-31') {
       datumInput.value = termin.datum;
     } else {
       datumInput.value = new Date().toISOString().split('T')[0];
     }
     
+    // Bringzeit vorbelegen (falls vorhanden)
+    const bringzeitInput = document.getElementById('einplanenBringzeit');
+    if (bringzeitInput && termin.bring_zeit) {
+      bringzeitInput.value = termin.bring_zeit;
+    }
+    
     // Speichere aktuelle Termin-ID
     this.einplanenTerminId = terminId;
     
+    // Speichere die ursprüngliche geschätzte Zeit des Termins
+    this.einplanenUrspruenglicheZeit = termin.geschaetzte_zeit || 60;
+    
+    // Lade bestehende Arbeiten aus dem Termin
+    this.einplanenArbeiten = [];
+    if (termin.arbeit) {
+      // Parse arbeitszeiten_details für die Zeiten
+      let details = {};
+      if (termin.arbeitszeiten_details) {
+        try {
+          details = typeof termin.arbeitszeiten_details === 'string' 
+            ? JSON.parse(termin.arbeitszeiten_details) 
+            : termin.arbeitszeiten_details;
+        } catch (e) {}
+      }
+      
+      // Arbeiten aus dem Termin laden
+      const arbeitenListe = termin.arbeit.split('\n').map(a => a.trim()).filter(a => a);
+      
+      // Berechne Standard-Zeit pro Arbeit aus geschätzter Gesamtzeit des Termins
+      const gesamtZeitMinuten = termin.geschaetzte_zeit || 60;
+      const standardZeitProArbeit = arbeitenListe.length > 0 ? Math.round(gesamtZeitMinuten / arbeitenListe.length) : 60;
+      
+      arbeitenListe.forEach(bezeichnung => {
+        let zeitMinuten = standardZeitProArbeit; // Aus Termin-Gesamtzeit berechnet
+        if (details[bezeichnung]) {
+          if (typeof details[bezeichnung] === 'object' && details[bezeichnung].zeit) {
+            zeitMinuten = details[bezeichnung].zeit;
+          } else if (typeof details[bezeichnung] === 'number') {
+            zeitMinuten = details[bezeichnung];
+          }
+        }
+        this.einplanenArbeiten.push({ bezeichnung, zeit: zeitMinuten });
+      });
+    }
+    
+    // Arbeiten-Liste anzeigen
+    this.renderEinplanenArbeiten();
+    
     // Modal anzeigen
     modal.style.display = 'flex';
+  }
+
+  addArbeitToEinplanen() {
+    const textInput = document.getElementById('einplanenArbeitText');
+    const zeitInput = document.getElementById('einplanenArbeitZeit');
+    
+    const bezeichnung = textInput.value.trim();
+    const zeitStunden = parseFloat(zeitInput.value) || 0.5;
+    const zeitMinuten = Math.round(zeitStunden * 60);
+    
+    if (!bezeichnung) {
+      alert('Bitte eine Arbeitsbeschreibung eingeben');
+      return;
+    }
+    
+    // Prüfe ob schon vorhanden
+    if (this.einplanenArbeiten.find(a => a.bezeichnung === bezeichnung)) {
+      alert('Diese Arbeit ist bereits hinzugefügt');
+      return;
+    }
+    
+    this.einplanenArbeiten.push({ bezeichnung, zeit: zeitMinuten, zeitStunden });
+    this.renderEinplanenArbeiten();
+    textInput.value = '';
+    zeitInput.value = '';
+  }
+
+  removeArbeitFromEinplanen(index) {
+    this.einplanenArbeiten.splice(index, 1);
+    this.renderEinplanenArbeiten();
+  }
+
+  renderEinplanenArbeiten() {
+    const liste = document.getElementById('einplanenArbeitenListe');
+    if (!liste) return;
+    
+    if (this.einplanenArbeiten.length === 0) {
+      liste.innerHTML = '<div style="color: #999; font-style: italic; padding: 5px;">Keine Arbeiten eingetragen</div>';
+    } else {
+      liste.innerHTML = this.einplanenArbeiten.map((a, i) => `
+        <div style="display: flex; justify-content: space-between; align-items: center; padding: 5px 10px; background: #e8f5e9; border-radius: 4px; margin-bottom: 5px;">
+          <span>${a.bezeichnung} <small style="color: #666;">(${(a.zeit / 60).toFixed(1)} h)</small></span>
+          <button type="button" onclick="app.removeArbeitFromEinplanen(${i})" style="background: none; border: none; color: #f44336; cursor: pointer; font-size: 16px;">✕</button>
+        </div>
+      `).join('');
+    }
+    
+    this.updateEinplanenGesamtzeit();
+  }
+
+  updateEinplanenGesamtzeit() {
+    // Verwende die ursprüngliche geschätzte Zeit des Termins
+    // Wenn Arbeiten hinzugefügt wurden, deren Gesamtzeit größer ist, verwende diese
+    const arbeitenZeit = this.einplanenArbeiten.reduce((sum, a) => sum + a.zeit, 0);
+    this.einplanenGesamtzeit = Math.max(this.einplanenUrspruenglicheZeit || 0, arbeitenZeit);
+    
+    const gesamtzeitEl = document.getElementById('einplanenGesamtzeit');
+    if (gesamtzeitEl) {
+      gesamtzeitEl.textContent = `${(this.einplanenGesamtzeit / 60).toFixed(1)} h`;
+    }
   }
 
   closeEinplanenDatumModal() {
@@ -3903,9 +5153,458 @@ class App {
     }
   }
 
+  // Prüft auf Terminüberschneidungen bei einem Mitarbeiter/Lehrling
+  async checkTerminUeberschneidungen(datum, startzeit, dauerMinuten, mitarbeiterId, lehrlingId, ausschlussTerminId = null) {
+    const ueberschneidungen = [];
+    
+    if (!datum || !startzeit || (!mitarbeiterId && !lehrlingId)) {
+      return ueberschneidungen;
+    }
+    
+    // Lade Einstellungen für Nebenzeit
+    let nebenzeitProzent = 0;
+    try {
+      const einstellungen = await EinstellungenService.getWerkstatt();
+      nebenzeitProzent = einstellungen?.nebenzeit_prozent || 0;
+    } catch (e) {}
+    
+    // Berechne Start- und Endzeit des neuen Termins (inkl. Nebenzeit)
+    const [startH, startM] = startzeit.split(':').map(Number);
+    const neuerStartMin = startH * 60 + startM;
+    const dauerMitNebenzeit = nebenzeitProzent > 0 
+      ? Math.round((dauerMinuten || 60) * (1 + nebenzeitProzent / 100))
+      : (dauerMinuten || 60);
+    const neuerEndeMin = neuerStartMin + dauerMitNebenzeit;
+    
+    // Lade alle Termine für dieses Datum
+    const termine = await TermineService.getAll();
+    const tagesTermine = termine.filter(t => 
+      t.datum === datum && 
+      t.id !== ausschlussTerminId &&
+      !t.ist_schwebend
+    );
+    
+    for (const t of tagesTermine) {
+      // Prüfe ob dieser Termin dem gleichen Mitarbeiter/Lehrling zugeordnet ist
+      let istGleicherMitarbeiter = false;
+      
+      if (mitarbeiterId && t.mitarbeiter_id === mitarbeiterId) {
+        istGleicherMitarbeiter = true;
+      }
+      
+      // Prüfe auch arbeitszeiten_details für Lehrlinge
+      if (t.arbeitszeiten_details) {
+        try {
+          const details = JSON.parse(t.arbeitszeiten_details);
+          if (details._gesamt_mitarbeiter_id) {
+            if (mitarbeiterId && details._gesamt_mitarbeiter_id.type === 'mitarbeiter' && details._gesamt_mitarbeiter_id.id === mitarbeiterId) {
+              istGleicherMitarbeiter = true;
+            }
+            if (lehrlingId && details._gesamt_mitarbeiter_id.type === 'lehrling' && details._gesamt_mitarbeiter_id.id === lehrlingId) {
+              istGleicherMitarbeiter = true;
+            }
+          }
+        } catch (e) {}
+      }
+      
+      if (!istGleicherMitarbeiter) continue;
+      
+      // Hole Startzeit des bestehenden Termins
+      let terminStartzeit = null;
+      if (t.arbeitszeiten_details) {
+        try {
+          const details = JSON.parse(t.arbeitszeiten_details);
+          terminStartzeit = details._startzeit;
+          
+          // Falls keine _startzeit, suche in den einzelnen Arbeiten nach startzeit
+          if (!terminStartzeit) {
+            for (const [key, val] of Object.entries(details)) {
+              if (key.startsWith('_')) continue;
+              if (typeof val === 'object' && val.startzeit) {
+                terminStartzeit = val.startzeit;
+                break;
+              }
+            }
+          }
+        } catch (e) {}
+      }
+      
+      if (!terminStartzeit) continue;
+      
+      const [tStartH, tStartM] = terminStartzeit.split(':').map(Number);
+      const tStartMin = tStartH * 60 + tStartM;
+      const tDauer = t.geschaetzte_zeit || 60;
+      // Nebenzeit auch auf bestehende Termine anwenden
+      const tDauerMitNebenzeit = nebenzeitProzent > 0 
+        ? Math.round(tDauer * (1 + nebenzeitProzent / 100))
+        : tDauer;
+      const tEndeMin = tStartMin + tDauerMitNebenzeit;
+      
+      // Prüfe Überschneidung: Neuer Termin startet vor Ende des bestehenden UND endet nach Start des bestehenden
+      if (neuerStartMin < tEndeMin && neuerEndeMin > tStartMin) {
+        ueberschneidungen.push({
+          termin: t,
+          startzeit: terminStartzeit,
+          endzeit: `${Math.floor(tEndeMin/60).toString().padStart(2,'0')}:${(tEndeMin%60).toString().padStart(2,'0')}`
+        });
+      }
+    }
+    
+    return ueberschneidungen;
+  }
+
+  // Prüft alle Termine eines Tages auf Überschneidungen und zeigt Vorschläge
+  async pruefeUeberschneidungen() {
+    const datum = document.getElementById('auslastungDatum').value;
+    if (!datum) {
+      alert('Bitte zuerst ein Datum auswählen!');
+      return;
+    }
+
+    const modal = document.getElementById('ueberschneidungenModal');
+    const body = document.getElementById('ueberschneidungenBody');
+    const alleAnwendenBtn = document.getElementById('ueberschneidungenAlleAnwenden');
+    
+    modal.style.display = 'block';
+    body.innerHTML = '<div class="loading">⏳ Prüfe Termine auf Überschneidungen...</div>';
+    alleAnwendenBtn.style.display = 'none';
+
+    try {
+      // Lade Einstellungen für Nebenzeit
+      const einstellungen = await EinstellungenService.getWerkstatt();
+      const nebenzeitProzent = einstellungen?.nebenzeit_prozent || 0;
+
+      // Lade alle Termine und Mitarbeiter
+      const [termine, mitarbeiter, lehrlinge] = await Promise.all([
+        TermineService.getAll(),
+        MitarbeiterService.getAktive(),
+        LehrlingeService.getAktive()
+      ]);
+
+      const tagesTermine = termine.filter(t => 
+        t.datum === datum && 
+        !t.ist_schwebend
+      );
+
+      // Gruppiere Termine nach Mitarbeiter/Lehrling
+      const termineMitZeit = [];
+      
+      for (const t of tagesTermine) {
+        let startzeit = null;
+        let mitarbeiterId = t.mitarbeiter_id;
+        let lehrlingId = null;
+        let personTyp = 'mitarbeiter';
+        let personId = mitarbeiterId;
+        
+        if (t.arbeitszeiten_details) {
+          try {
+            const details = JSON.parse(t.arbeitszeiten_details);
+            
+            // Versuche _startzeit zu finden
+            startzeit = details._startzeit;
+            
+            // Falls keine _startzeit, suche in den einzelnen Arbeiten nach startzeit
+            if (!startzeit) {
+              for (const [key, val] of Object.entries(details)) {
+                if (key.startsWith('_')) continue; // Überspringe Meta-Felder
+                if (typeof val === 'object' && val.startzeit) {
+                  startzeit = val.startzeit;
+                  break; // Nimm die erste gefundene Startzeit
+                }
+              }
+            }
+            
+            if (details._gesamt_mitarbeiter_id) {
+              personTyp = details._gesamt_mitarbeiter_id.type;
+              personId = details._gesamt_mitarbeiter_id.id;
+              if (personTyp === 'lehrling') {
+                lehrlingId = personId;
+                mitarbeiterId = null;
+              }
+            }
+          } catch (e) {}
+        }
+        
+        if (!startzeit || !personId) continue;
+        
+        const [startH, startM] = startzeit.split(':').map(Number);
+        const startMin = startH * 60 + startM;
+        const dauer = t.geschaetzte_zeit || 60;
+        const dauerMitNebenzeit = nebenzeitProzent > 0 
+          ? Math.round(dauer * (1 + nebenzeitProzent / 100))
+          : dauer;
+        const endeMin = startMin + dauerMitNebenzeit;
+        
+        termineMitZeit.push({
+          termin: t,
+          startzeit,
+          startMin,
+          endeMin,
+          dauer: dauerMitNebenzeit,
+          personTyp,
+          personId,
+          personKey: `${personTyp}_${personId}`
+        });
+      }
+
+      // Finde Überschneidungen pro Person
+      const konflikte = [];
+      const personenMap = new Map();
+      
+      for (const t of termineMitZeit) {
+        if (!personenMap.has(t.personKey)) {
+          personenMap.set(t.personKey, []);
+        }
+        personenMap.get(t.personKey).push(t);
+      }
+
+      // Für jede Person: Sortiere nach Startzeit und finde Konflikte
+      for (const [personKey, personTermine] of personenMap) {
+        // Sortiere nach Startzeit
+        personTermine.sort((a, b) => a.startMin - b.startMin);
+        
+        for (let i = 0; i < personTermine.length; i++) {
+          const current = personTermine[i];
+          
+          for (let j = i + 1; j < personTermine.length; j++) {
+            const next = personTermine[j];
+            
+            // Überschneidung wenn current endet nach next startet
+            if (current.endeMin > next.startMin) {
+              // Berechne Vorschlag: Verschiebe next nach Ende von current
+              const vorschlagStartMin = current.endeMin;
+              const vorschlagStart = `${Math.floor(vorschlagStartMin/60).toString().padStart(2,'0')}:${(vorschlagStartMin%60).toString().padStart(2,'0')}`;
+              
+              // Prüfe ob Vorschlag im Rahmen (vor 18 Uhr) ist
+              const vorschlagEndeMin = vorschlagStartMin + next.dauer;
+              const istMachbar = vorschlagEndeMin <= 18 * 60;
+              
+              konflikte.push({
+                termin1: current,
+                termin2: next,
+                vorschlagStart,
+                vorschlagEndeMin,
+                istMachbar,
+                personKey
+              });
+            }
+          }
+        }
+      }
+
+      // Speichere Konflikte für "Alle anwenden"
+      this.aktuelleKonflikte = konflikte;
+
+      // Formatiere Datum für Anzeige
+      const datumFormatiert = new Date(datum + 'T00:00:00').toLocaleDateString('de-DE', { 
+        weekday: 'long', day: '2-digit', month: '2-digit', year: 'numeric' 
+      });
+
+      // Render Ergebnis
+      if (konflikte.length === 0) {
+        body.innerHTML = `
+          <div style="text-align: center; padding: 30px;">
+            <span style="font-size: 48px;">✅</span>
+            <h4 style="color: #2e7d32; margin-top: 15px;">Keine Überschneidungen gefunden!</h4>
+            <p style="color: #666;">Alle Termine am ${datumFormatiert} sind zeitlich korrekt geplant.</p>
+          </div>
+        `;
+      } else {
+        // Hole Namen für Anzeige
+        const mitarbeiterMap = new Map(mitarbeiter.map(m => [`mitarbeiter_${m.id}`, m.name]));
+        const lehrlingeMap = new Map(lehrlinge.map(l => [`lehrling_${l.id}`, l.name]));
+        const personenNamen = new Map([...mitarbeiterMap, ...lehrlingeMap]);
+
+        let html = `
+          <div style="background: #fff3e0; padding: 15px; border-radius: 8px; margin-bottom: 20px; border-left: 4px solid #ff9800;">
+            <strong>⚠️ ${konflikte.length} Überschneidung(en) gefunden!</strong>
+            <p style="margin: 5px 0 0 0; color: #666;">Klicken Sie auf "Anwenden" um den Vorschlag zu übernehmen.</p>
+          </div>
+        `;
+
+        konflikte.forEach((konflikt, index) => {
+          const personName = personenNamen.get(konflikt.personKey) || 'Unbekannt';
+          const t1 = konflikt.termin1.termin;
+          const t2 = konflikt.termin2.termin;
+          
+          const konfliktEnde1 = `${Math.floor(konflikt.termin1.endeMin/60).toString().padStart(2,'0')}:${(konflikt.termin1.endeMin%60).toString().padStart(2,'0')}`;
+          const konfliktEnde2 = `${Math.floor(konflikt.termin2.endeMin/60).toString().padStart(2,'0')}:${(konflikt.termin2.endeMin%60).toString().padStart(2,'0')}`;
+          
+          html += `
+            <div class="konflikt-item" style="background: #f8f9fa; padding: 15px; border-radius: 8px; margin-bottom: 15px; border: 1px solid #ddd;">
+              <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 10px;">
+                <div>
+                  <strong style="color: #1976d2;">👷 ${personName}</strong>
+                </div>
+                <span style="background: #ff5722; color: white; padding: 2px 8px; border-radius: 12px; font-size: 0.8em;">
+                  Konflikt ${index + 1}
+                </span>
+              </div>
+              
+              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 15px;">
+                <div style="background: white; padding: 10px; border-radius: 5px; border-left: 3px solid #2196f3;">
+                  <div style="font-weight: 600;">${t1.termin_nr}</div>
+                  <div style="font-size: 0.9em; color: #666;">${t1.kunde_name || 'Unbekannt'}</div>
+                  <div style="margin-top: 5px;">
+                    <span style="background: #e3f2fd; padding: 2px 6px; border-radius: 4px; font-size: 0.85em;">
+                      ${konflikt.termin1.startzeit} - ${konfliktEnde1}
+                    </span>
+                  </div>
+                </div>
+                <div style="background: white; padding: 10px; border-radius: 5px; border-left: 3px solid #ff9800;">
+                  <div style="font-weight: 600;">${t2.termin_nr}</div>
+                  <div style="font-size: 0.9em; color: #666;">${t2.kunde_name || 'Unbekannt'}</div>
+                  <div style="margin-top: 5px;">
+                    <span style="background: #fff3e0; padding: 2px 6px; border-radius: 4px; font-size: 0.85em;">
+                      ${konflikt.termin2.startzeit} - ${konfliktEnde2}
+                    </span>
+                    <span style="color: #d32f2f; font-size: 0.85em; margin-left: 5px;">⚠️ Überschneidung</span>
+                  </div>
+                </div>
+              </div>
+              
+              <div style="background: ${konflikt.istMachbar ? '#e8f5e9' : '#ffebee'}; padding: 10px; border-radius: 5px; display: flex; justify-content: space-between; align-items: center;">
+                <div>
+                  <strong>💡 Vorschlag:</strong> ${t2.termin_nr} verschieben auf 
+                  <span style="font-weight: 600; color: ${konflikt.istMachbar ? '#2e7d32' : '#d32f2f'};">
+                    ${konflikt.vorschlagStart}
+                  </span>
+                  ${!konflikt.istMachbar ? '<span style="color: #d32f2f; font-size: 0.85em;"> (endet nach 18:00!)</span>' : ''}
+                </div>
+                <button class="btn ${konflikt.istMachbar ? 'btn-primary' : 'btn-secondary'}" 
+                        onclick="app.wendeVorschlagAn(${index})"
+                        ${!konflikt.istMachbar ? 'title="Endet nach 18 Uhr - trotzdem anwendbar"' : ''}>
+                  ${konflikt.istMachbar ? '✅ Anwenden' : '⚠️ Anwenden'}
+                </button>
+              </div>
+            </div>
+          `;
+        });
+
+        body.innerHTML = html;
+        alleAnwendenBtn.style.display = konflikte.some(k => k.istMachbar) ? 'block' : 'none';
+      }
+
+    } catch (error) {
+      console.error('Fehler bei Überschneidungsprüfung:', error);
+      body.innerHTML = `
+        <div style="text-align: center; padding: 30px; color: #d32f2f;">
+          <span style="font-size: 48px;">❌</span>
+          <h4>Fehler bei der Prüfung</h4>
+          <p>${error.message || 'Unbekannter Fehler'}</p>
+        </div>
+      `;
+    }
+  }
+
+  // Wendet einen einzelnen Verschiebungsvorschlag an
+  async wendeVorschlagAn(index) {
+    const konflikt = this.aktuelleKonflikte[index];
+    if (!konflikt) return;
+
+    const termin = konflikt.termin2.termin;
+    
+    try {
+      // Lade aktuelle Details
+      let details = {};
+      if (termin.arbeitszeiten_details) {
+        try {
+          details = JSON.parse(termin.arbeitszeiten_details);
+        } catch (e) {}
+      }
+      
+      // Setze neue Startzeit (sowohl _startzeit als auch in allen Arbeiten)
+      details._startzeit = konflikt.vorschlagStart;
+      
+      // Aktualisiere auch die Startzeit in den einzelnen Arbeiten
+      for (const [key, val] of Object.entries(details)) {
+        if (key.startsWith('_')) continue; // Überspringe Meta-Felder
+        if (typeof val === 'object' && val.startzeit !== undefined) {
+          val.startzeit = konflikt.vorschlagStart;
+        }
+      }
+      
+      // Speichern
+      await TermineService.update(termin.id, {
+        arbeitszeiten_details: JSON.stringify(details)
+      });
+      
+      alert(`✅ ${termin.termin_nr} wurde auf ${konflikt.vorschlagStart} verschoben!`);
+      
+      // Modal schließen und neu laden
+      document.getElementById('ueberschneidungenModal').style.display = 'none';
+      this.loadAuslastung();
+      this.loadZeitleiste(document.getElementById('auslastungDatum').value);
+      
+    } catch (error) {
+      console.error('Fehler beim Anwenden des Vorschlags:', error);
+      alert('Fehler: ' + (error.message || 'Unbekannter Fehler'));
+    }
+  }
+
+  // Wendet alle machbaren Vorschläge an
+  async wendeAlleVorschlaegeAn() {
+    if (!this.aktuelleKonflikte || this.aktuelleKonflikte.length === 0) return;
+    
+    const machbareKonflikte = this.aktuelleKonflikte.filter(k => k.istMachbar);
+    if (machbareKonflikte.length === 0) {
+      alert('Keine anwendbaren Vorschläge vorhanden.');
+      return;
+    }
+
+    if (!confirm(`${machbareKonflikte.length} Verschiebung(en) anwenden?`)) return;
+
+    try {
+      let erfolge = 0;
+      
+      for (const konflikt of machbareKonflikte) {
+        const termin = konflikt.termin2.termin;
+        
+        let details = {};
+        if (termin.arbeitszeiten_details) {
+          try {
+            details = JSON.parse(termin.arbeitszeiten_details);
+          } catch (e) {}
+        }
+        
+        // Setze neue Startzeit (sowohl _startzeit als auch in allen Arbeiten)
+        details._startzeit = konflikt.vorschlagStart;
+        
+        // Aktualisiere auch die Startzeit in den einzelnen Arbeiten
+        for (const [key, val] of Object.entries(details)) {
+          if (key.startsWith('_')) continue;
+          if (typeof val === 'object' && val.startzeit !== undefined) {
+            val.startzeit = konflikt.vorschlagStart;
+          }
+        }
+        
+        await TermineService.update(termin.id, {
+          arbeitszeiten_details: JSON.stringify(details)
+        });
+        
+        erfolge++;
+      }
+      
+      alert(`✅ ${erfolge} Termin(e) erfolgreich verschoben!`);
+      
+      // Modal schließen und neu laden
+      document.getElementById('ueberschneidungenModal').style.display = 'none';
+      this.loadAuslastung();
+      this.loadZeitleiste(document.getElementById('auslastungDatum').value);
+      
+    } catch (error) {
+      console.error('Fehler beim Anwenden aller Vorschläge:', error);
+      alert('Fehler: ' + (error.message || 'Unbekannter Fehler'));
+    }
+  }
+
   async confirmEinplanenDatum() {
     const datumInput = document.getElementById('einplanenDatum');
+    const uhrzeitInput = document.getElementById('einplanenUhrzeit');
+    const bringzeitInput = document.getElementById('einplanenBringzeit');
     const neuesDatum = datumInput.value;
+    const neueUhrzeit = uhrzeitInput ? uhrzeitInput.value : null;
+    const neueBringzeit = bringzeitInput ? (bringzeitInput.value || null) : null;
     
     if (!neuesDatum) {
       alert('Bitte ein Datum wählen!');
@@ -3923,9 +5622,97 @@ class App {
       return;
     }
     
+    // Überschneidungsprüfung wenn Mitarbeiter zugeordnet und Uhrzeit angegeben
+    if (neueUhrzeit && termin.mitarbeiter_id) {
+      let mitarbeiterId = termin.mitarbeiter_id;
+      let lehrlingId = null;
+      
+      // Prüfe auch ob Lehrling zugeordnet ist
+      if (termin.arbeitszeiten_details) {
+        try {
+          const details = JSON.parse(termin.arbeitszeiten_details);
+          if (details._gesamt_mitarbeiter_id?.type === 'lehrling') {
+            lehrlingId = details._gesamt_mitarbeiter_id.id;
+            mitarbeiterId = null;
+          }
+        } catch (e) {}
+      }
+      
+      const ueberschneidungen = await this.checkTerminUeberschneidungen(
+        neuesDatum, 
+        neueUhrzeit, 
+        this.einplanenGesamtzeit || termin.geschaetzte_zeit || 60,
+        mitarbeiterId,
+        lehrlingId,
+        this.einplanenTerminId
+      );
+      
+      if (ueberschneidungen.length > 0) {
+        const konfliktListe = ueberschneidungen.map(u => 
+          `• ${u.termin.termin_nr}: ${u.startzeit} - ${u.endzeit} (${u.termin.kunde_name || 'Unbekannt'})`
+        ).join('\n');
+        
+        const fortfahren = confirm(
+          `⚠️ TERMINÜBERSCHNEIDUNG!\n\n` +
+          `Der Termin überschneidet sich mit:\n${konfliktListe}\n\n` +
+          `Trotzdem fortfahren?`
+        );
+        
+        if (!fortfahren) return;
+      }
+    }
+    
     try {
-      // Erst Datum aktualisieren
-      await TermineService.update(this.einplanenTerminId, { datum: neuesDatum });
+      // Update-Daten vorbereiten
+      const updateData = { datum: neuesDatum };
+      
+      // Bringzeit übernehmen (falls angegeben)
+      if (neueBringzeit !== null) {
+        updateData.bring_zeit = neueBringzeit;
+      }
+      
+      // Arbeiten aus der Liste übernehmen (komplett ersetzen)
+      let details = {};
+      
+      // Arbeiten-Text und Details aus der Liste erstellen
+      if (this.einplanenArbeiten && this.einplanenArbeiten.length > 0) {
+        const arbeitenBezeichnungen = this.einplanenArbeiten.map(a => a.bezeichnung);
+        updateData.arbeit = arbeitenBezeichnungen.join('\n');
+        
+        // Arbeitszeit-Details für jede Arbeit speichern
+        this.einplanenArbeiten.forEach(arbeit => {
+          details[arbeit.bezeichnung] = { zeit: arbeit.zeit };
+        });
+        
+        // Gesamtzeit aktualisieren
+        updateData.geschaetzte_zeit = this.einplanenGesamtzeit;
+      }
+      // Wenn keine Arbeiten in der Liste, aber welche existierten, die bestehenden behalten
+      // (Nur das Datum wird aktualisiert)
+      
+      // Wenn Uhrzeit angegeben, in arbeitszeiten_details speichern
+      if (neueUhrzeit) {
+        // Setze Startzeit für die erste Arbeit oder als Gesamt-Startzeit
+        if (this.einplanenArbeiten && this.einplanenArbeiten.length > 0) {
+          const ersteArbeit = this.einplanenArbeiten[0].bezeichnung;
+          if (!details[ersteArbeit]) {
+            details[ersteArbeit] = {};
+          }
+          details[ersteArbeit].startzeit = neueUhrzeit;
+        }
+        details._startzeit = neueUhrzeit;
+      }
+      
+      // Automatisch Status auf "geplant" setzen wenn Datum und Zeit vergeben
+      if (neueUhrzeit && termin.mitarbeiter_id) {
+        updateData.status = 'geplant';
+      }
+      
+      // Details speichern
+      updateData.arbeitszeiten_details = JSON.stringify(details);
+      
+      // Datum und Arbeiten aktualisieren
+      await TermineService.update(this.einplanenTerminId, updateData);
       
       // Dann Schwebend-Status aufheben
       await TermineService.setSchwebend(this.einplanenTerminId, false);
@@ -3933,6 +5720,12 @@ class App {
       // Lokalen Cache aktualisieren
       termin.datum = neuesDatum;
       termin.ist_schwebend = 0;
+      termin.arbeit = updateData.arbeit;
+      termin.geschaetzte_zeit = updateData.geschaetzte_zeit;
+      termin.arbeitszeiten_details = updateData.arbeitszeiten_details;
+      if (updateData.bring_zeit !== undefined) {
+        termin.bring_zeit = updateData.bring_zeit;
+      }
       
       // Button-Text aktualisieren
       this.updateSchwebendButton(false);
@@ -3940,11 +5733,21 @@ class App {
       // Modal schließen
       this.closeEinplanenDatumModal();
       
-      alert(`Termin wurde für ${neuesDatum} eingeplant!`);
+      const uhrzeitText = neueUhrzeit ? ` um ${neueUhrzeit} Uhr` : '';
+      const arbeitenText = (this.einplanenArbeiten && this.einplanenArbeiten.length > 0) 
+        ? `\n${this.einplanenArbeiten.length} Arbeit(en) hinzugefügt.` 
+        : '';
+      alert(`Termin wurde für ${neuesDatum}${uhrzeitText} eingeplant!${arbeitenText}`);
       
       // Daten neu laden
       this.loadTermine();
       this.loadAuslastung();
+      
+      // Wenn von Wartende Aktionen aufgerufen, auch diese Liste aktualisieren
+      if (this.einplanenFromWartendeAktionen) {
+        this.loadWartendeAktionen();
+        this.einplanenFromWartendeAktionen = false;
+      }
       
       // Details-Modal aktualisieren
       if (this.currentDetailTerminId === this.einplanenTerminId) {
@@ -4215,10 +6018,12 @@ class App {
       }
 
       // Berechne Prozentanteile für die Segmente
-      const gesamtMinuten = data.gesamt_minuten || 1;
-      const geplantProzent = ((data.geplant_minuten || 0) / gesamtMinuten) * 100;
-      const inArbeitProzent = ((data.in_arbeit_minuten || 0) / gesamtMinuten) * 100;
-      const abgeschlossenProzent = ((data.abgeschlossen_minuten || 0) / gesamtMinuten) * 100;
+      // Wenn keine Kapazität, nutze belegte Zeit als Referenz für den Balken
+      const belegteZeit = (data.geplant_minuten || 0) + (data.in_arbeit_minuten || 0) + (data.abgeschlossen_minuten || 0);
+      const referenzMinuten = data.gesamt_minuten > 0 ? data.gesamt_minuten : (belegteZeit > 0 ? belegteZeit : 1);
+      const geplantProzent = ((data.geplant_minuten || 0) / referenzMinuten) * 100;
+      const inArbeitProzent = ((data.in_arbeit_minuten || 0) / referenzMinuten) * 100;
+      const abgeschlossenProzent = ((data.abgeschlossen_minuten || 0) / referenzMinuten) * 100;
 
       // Setze die Breite der Segmente
       const geplantSegment = document.getElementById('progressGeplant');
@@ -4480,7 +6285,7 @@ class App {
           const uhrzeitAnzeige = termin.bring_zeit || termin.abholung_zeit || '';
           
           html += `
-            <div class="nicht-zugeordnet-item">
+            <div class="nicht-zugeordnet-item" data-termin-id="${termin.id}" style="cursor: pointer;" title="Klicken zum Bearbeiten">
               <div class="nz-info">
                 <span class="nz-zeit">${uhrzeitAnzeige || '--:--'}</span>
                 <span class="nz-kunde">${this.escapeHtml(kundenName)}</span>
@@ -4499,6 +6304,19 @@ class App {
         </div>`;
         
         container.innerHTML = html;
+        
+        // Click-Handler für nicht zugeordnete Termine hinzufügen
+        container.querySelectorAll('.nicht-zugeordnet-item[data-termin-id]').forEach(item => {
+          item.addEventListener('click', async () => {
+            const terminId = parseInt(item.dataset.terminId, 10);
+            // Speichere Termin im Cache, damit showTerminDetails ihn findet
+            const termin = nichtZugeordnet.find(t => t.id === terminId);
+            if (termin) {
+              this.termineById[terminId] = termin;
+              await this.showTerminDetails(terminId);
+            }
+          });
+        });
       } else {
         // Keine nicht zugeordneten Termine
         section.style.display = 'block';
@@ -4687,6 +6505,14 @@ class App {
       document.getElementById('auslastungHeuteStatus').textContent = auslastungText;
 
       document.getElementById('kundenGesamt').textContent = allKunden.length;
+
+      // Lade Fahrzeuganzahl
+      try {
+        const fahrzeugeStats = await KundenService.countFahrzeuge();
+        document.getElementById('fahrzeugeGesamt').textContent = fahrzeugeStats.anzahl || 0;
+      } catch (e) {
+        document.getElementById('fahrzeugeGesamt').textContent = '-';
+      }
 
       document.getElementById('termineWoche').textContent = termineWoche.length;
 
@@ -5124,30 +6950,20 @@ class App {
     if (!wertEl || !detailEl) return;
     
     try {
-      // Berechne Gesamtzeit der Termine (ohne schwebende)
-      let gesamtMinuten = 0;
-      termine.forEach(termin => {
-        if (termin.ist_schwebend) return;
-        const zeit = termin.geschaetzte_zeit || 0;
-        gesamtMinuten += zeit;
-      });
+      // Lade Auslastungsdaten von der API (gleiche Berechnung wie im Dashboard)
+      const today = this.formatDateLocal(new Date());
+      const auslastungData = await AuslastungService.getByDatum(today);
       
-      // Lade Einstellungen für verfügbare Kapazität
-      const einstellungen = await EinstellungenService.getWerkstatt();
-      const mitarbeiterZahl = parseInt(einstellungen.mitarbeiter_anzahl) || 2;
-      const stundenProTag = parseFloat(einstellungen.stunden_pro_tag) || 8;
-      
-      const verfuegbareMinuten = mitarbeiterZahl * stundenProTag * 60;
-      const auslastungProzent = verfuegbareMinuten > 0 
-        ? Math.round((gesamtMinuten / verfuegbareMinuten) * 100) 
-        : 0;
+      const auslastungProzent = auslastungData.auslastung_prozent || 0;
+      const belegteMinuten = auslastungData.belegt_minuten || 0;
+      const gesamtMinuten = auslastungData.gesamt_minuten || 0;
       
       // Werte anzeigen
       wertEl.textContent = `${auslastungProzent}%`;
       
+      const belegteStunden = (belegteMinuten / 60).toFixed(1);
       const gesamtStunden = (gesamtMinuten / 60).toFixed(1);
-      const verfuegbareStunden = (verfuegbareMinuten / 60).toFixed(1);
-      detailEl.textContent = `${gesamtStunden} von ${verfuegbareStunden} Stunden`;
+      detailEl.textContent = `${belegteStunden} von ${gesamtStunden} Stunden`;
       
       // Farbe je nach Auslastung
       if (auslastungProzent >= 100) {
@@ -5228,16 +7044,16 @@ class App {
         const diffStunden = Math.floor(diffMinuten / 60);
         const diffMin = diffMinuten % 60;
         
-        if (diffStunden > 0) {
-          zeitEl.textContent = `${String(diffStunden).padStart(2, '0')}:${String(diffMin).padStart(2, '0')}`;
-        } else {
-          zeitEl.textContent = `00:${String(diffMin).padStart(2, '0')}`;
-        }
+        const countdown = diffStunden > 0 
+          ? `${String(diffStunden).padStart(2, '0')}:${String(diffMin).padStart(2, '0')}`
+          : `00:${String(diffMin).padStart(2, '0')}`;
+        
+        zeitEl.textContent = `in: ${countdown} um: ${naechsterTermin.bring_zeit}`;
         zeitEl.style.color = diffMinuten <= 15 ? 'var(--accent)' : 'inherit';
-        infoEl.textContent = `${naechsterTermin.kunde_name || 'Kunde'} - ${naechsterTermin.kennzeichen || ''} (${naechsterTermin.bring_zeit})`;
+        infoEl.textContent = `${naechsterTermin.kunde_name || 'Kunde'} - ${naechsterTermin.kennzeichen || ''}`;
       }
     } else {
-      zeitEl.textContent = '--:--';
+      zeitEl.textContent = 'in: --:-- um: --:--';
       zeitEl.style.color = 'inherit';
       infoEl.textContent = 'Keine weiteren Termine heute';
     }
@@ -5808,23 +7624,38 @@ class App {
   }
 
   // Kunde aus Namenssuche auswählen
-  selectKundeVorschlag(kundeId) {
+  async selectKundeVorschlag(kundeId) {
     const kunde = (this.kundenCache || []).find(k => k.id === kundeId);
     if (!kunde) return;
     
-    // Alle Fahrzeuge des Kunden sammeln
-    const fahrzeuge = this.getKundeFahrzeuge(kundeId, kunde.name);
-    
-    // Wenn mehr als ein Fahrzeug vorhanden ist, Auswahl-Popup zeigen
-    if (fahrzeuge.length > 1) {
-      this.showFahrzeugAuswahlModal(kunde, fahrzeuge);
+    // Fahrzeuge direkt vom Backend laden (inkl. aller Termine-Kennzeichen)
+    try {
+      const fahrzeuge = await KundenService.getFahrzeuge(kundeId);
+      
+      console.log(`Kunde ${kunde.name} ausgewählt:`, {
+        kundeId,
+        kundeKennzeichen: kunde.kennzeichen,
+        gefundeneFahrzeuge: fahrzeuge.length,
+        fahrzeuge: fahrzeuge.map(f => f.kennzeichen)
+      });
+      
+      // Wenn mehr als ein Fahrzeug vorhanden ist, Auswahl-Popup zeigen
+      if (fahrzeuge.length > 1) {
+        console.log('Zeige Fahrzeugauswahl-Modal...');
+        this.showFahrzeugAuswahlModal(kunde, fahrzeuge);
+        this.hideVorschlaege('name');
+        return;
+      }
+      
+      // Nur ein oder kein Fahrzeug - direkt auswählen
+      this.applyKundeAuswahl(kunde, fahrzeuge.length > 0 ? fahrzeuge[0] : null);
       this.hideVorschlaege('name');
-      return;
+    } catch (error) {
+      console.error('Fehler beim Laden der Fahrzeuge:', error);
+      // Fallback: Nur den Kunden ohne Fahrzeugauswahl übernehmen
+      this.applyKundeAuswahl(kunde, null);
+      this.hideVorschlaege('name');
     }
-    
-    // Nur ein oder kein Fahrzeug - direkt auswählen
-    this.applyKundeAuswahl(kunde, fahrzeuge.length > 0 ? fahrzeuge[0] : null);
-    this.hideVorschlaege('name');
   }
 
   // Fahrzeug-Auswahl Modal anzeigen
@@ -5836,7 +7667,12 @@ class App {
     kundeInfo.innerHTML = `<strong>${kunde.name}</strong>${kunde.telefon ? ` · ${kunde.telefon}` : ''}<br>
       <span style="font-size: 0.9em;">Dieser Kunde hat ${fahrzeuge.length} Fahrzeuge:</span>`;
     
-    liste.innerHTML = fahrzeuge.map((fz, idx) => `
+    liste.innerHTML = fahrzeuge.map((fz, idx) => {
+      // Unterstütze beide Feldnamen (API: letzter_termin, Cache: letzterTermin)
+      const letzterTermin = fz.letzter_termin || fz.letzterTermin;
+      const letzterKmStand = fz.letzter_km_stand || fz.letzterKmStand;
+      
+      return `
       <div class="fahrzeug-auswahl-item" onclick="app.selectFahrzeugFromModal(${kunde.id}, ${idx})" style="
         padding: 15px;
         margin-bottom: 10px;
@@ -5856,11 +7692,11 @@ class App {
         </div>
         ${fz.vin ? `<div style="font-size: 0.85em; color: #888; margin-top: 5px;">VIN: ${fz.vin}</div>` : ''}
         <div style="font-size: 0.85em; color: #666; margin-top: 5px;">
-          ${fz.letzterTermin ? `Letzter Termin: ${this.formatDatum(fz.letzterTermin)}` : 'Aus Kundenstamm'}
-          ${fz.letzterKmStand ? ` · ${fz.letzterKmStand.toLocaleString('de-DE')} km` : ''}
+          ${letzterTermin ? `Letzter Termin: ${this.formatDatum(letzterTermin)}` : 'Aus Kundenstamm'}
+          ${letzterKmStand ? ` · ${Number(letzterKmStand).toLocaleString('de-DE')} km` : ''}
         </div>
       </div>
-    `).join('');
+    `}).join('');
     
     // Speichere die Daten für späteren Zugriff
     this.fahrzeugAuswahlData = { kunde, fahrzeuge };
@@ -5913,11 +7749,12 @@ class App {
         document.getElementById('vin').value = fahrzeug.vin;
       }
       
-      // KM-Stand als Placeholder setzen
+      // KM-Stand als Placeholder setzen (unterstütze beide Feldnamen)
       const kmStandInput = document.getElementById('kilometerstand');
-      if (fahrzeug.letzterKmStand && kmStandInput) {
+      const letzterKmStand = fahrzeug.letzter_km_stand || fahrzeug.letzterKmStand;
+      if (letzterKmStand && kmStandInput) {
         kmStandInput.value = '';
-        kmStandInput.placeholder = `Letzter KM-Stand: ${fahrzeug.letzterKmStand.toLocaleString('de-DE')} km`;
+        kmStandInput.placeholder = `Letzter KM-Stand: ${Number(letzterKmStand).toLocaleString('de-DE')} km`;
         kmStandInput.classList.add('has-previous-value');
       }
     } else if (kunde.kennzeichen) {
@@ -6523,6 +8360,10 @@ class App {
     if (nebenzeitField) {
       nebenzeitField.value = einstellungen.nebenzeit_prozent || 0;
     }
+    const mittagspauseField = document.getElementById('mittagspause_minuten');
+    if (mittagspauseField) {
+      mittagspauseField.value = einstellungen.mittagspause_minuten || 30;
+    }
   }
 
   // Ersatzautos laden und anzeigen
@@ -6973,7 +8814,7 @@ class App {
     }
   }
 
-  // Ersatzauto-Übersicht laden
+  // Ersatzauto-Übersicht laden (Wochen-Ansicht Mo-So)
   async loadErsatzautoUebersicht() {
     const container = document.getElementById('ersatzautoUebersicht');
     if (!container) return;
@@ -6981,76 +8822,151 @@ class App {
     container.innerHTML = '<div class="loading">Lade Übersicht...</div>';
     
     try {
-      // Generiere die nächsten 30 Tage (Mo-Sa)
-      const days = this.getWeeksForMonthView().flat();
+      // Generiere 5 Wochen (Mo-So) ab dem aktuellen Montag
+      const weeks = this.getWeeksForErsatzautoView();
       const today = this.formatDateLocal(new Date());
       
       // Lade Verfügbarkeit für alle Tage parallel
-      const verfuegbarkeitPromises = days.map(day => 
+      const allDays = weeks.flat();
+      const verfuegbarkeitPromises = allDays.map(day => 
         ErsatzautosService.getVerfuegbarkeit(day.datum)
           .catch(() => ({ gesamt: 0, vergeben: 0, verfuegbar: 0 }))
       );
       const verfuegbarkeiten = await Promise.all(verfuegbarkeitPromises);
       
-      container.innerHTML = '';
+      // Erstelle Map für schnellen Zugriff
+      const verfMap = new Map();
+      allDays.forEach((day, idx) => verfMap.set(day.datum, verfuegbarkeiten[idx]));
       
-      days.forEach((day, index) => {
-        const verf = verfuegbarkeiten[index];
-        const isPast = day.datum < today;
-        const isToday = day.datum === today;
-        const gesperrt = verf.gesperrt || 0;
-        
-        let statusClass = 'frei';
-        let statusText = `${verf.verfuegbar}/${verf.gesamt}`;
-        let detailText = '';
-        
-        if (verf.gesamt === 0) {
-          statusClass = 'frei';
-          statusText = '-';
-        } else if (verf.verfuegbar === 0) {
-          statusClass = 'voll';
-          // Unterscheide ob gesperrt oder vergeben
-          if (gesperrt > 0 && verf.vergeben === 0) {
-            statusText = `0/${verf.gesamt}`;
-            detailText = `${gesperrt} gesperrt`;
-          } else if (gesperrt > 0) {
-            statusText = `0/${verf.gesamt}`;
-            detailText = `${verf.vergeben} vergeben, ${gesperrt} gesperrt`;
-          } else {
-            detailText = `${verf.vergeben} vergeben`;
-          }
-        } else if (verf.vergeben > 0 || gesperrt > 0) {
-          statusClass = 'teilweise';
-          let details = [];
-          if (verf.vergeben > 0) details.push(`${verf.vergeben} vergeben`);
-          if (gesperrt > 0) details.push(`${gesperrt} gesperrt`);
-          detailText = details.join(', ');
-        }
-        
-        const wochentage = ['So', 'Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa'];
-        const dateObj = new Date(day.datum);
-        const wochentag = wochentage[dateObj.getDay()];
-        
-        const card = document.createElement('div');
-        // Status-Klasse zur Karte hinzufügen für bessere Sichtbarkeit
-        card.className = `ersatzauto-tag${isToday ? ' heute' : ''}${isPast ? ' vergangen' : ''} status-${statusClass}`;
-        
-        card.innerHTML = `
-          <div class="ea-datum">${day.dayNum}. ${day.monthShort}</div>
-          <div class="ea-wochentag">${wochentag}</div>
-          <div class="ea-status ${statusClass}">
-            <span class="ea-status-dot ea-${statusClass}"></span>
-            ${statusText}
+      // Header mit Wochentagen
+      let html = `
+        <div class="ea-wochen-container">
+          <div class="ea-wochen-header">
+            <div class="ea-kw-header">KW</div>
+            <div class="ea-tag-header">Mo</div>
+            <div class="ea-tag-header">Di</div>
+            <div class="ea-tag-header">Mi</div>
+            <div class="ea-tag-header">Do</div>
+            <div class="ea-tag-header">Fr</div>
+            <div class="ea-tag-header">Sa</div>
+            <div class="ea-tag-header">So</div>
           </div>
-          ${detailText ? `<div class="ea-details">${detailText}</div>` : ''}
-        `;
+      `;
+      
+      // Jede Woche als Zeile
+      weeks.forEach(week => {
+        const firstDay = new Date(week[0].datum);
+        const kw = this.getWeekNumber(firstDay);
         
-        container.appendChild(card);
+        html += `<div class="ea-wochen-zeile">`;
+        html += `<div class="ea-kw">KW ${kw}</div>`;
+        
+        week.forEach(day => {
+          const verf = verfMap.get(day.datum) || { gesamt: 0, vergeben: 0, verfuegbar: 0 };
+          const isPast = day.datum < today;
+          const isToday = day.datum === today;
+          const isSunday = day.dayOfWeek === 0;
+          const gesperrt = verf.gesperrt || 0;
+          
+          let statusClass = 'frei';
+          let statusText = `${verf.verfuegbar}/${verf.gesamt}`;
+          let tooltipText = '';
+          
+          if (verf.gesamt === 0) {
+            statusClass = 'keine';
+            statusText = '-';
+            tooltipText = 'Keine Ersatzautos';
+          } else if (verf.verfuegbar === 0) {
+            statusClass = 'voll';
+            let details = [];
+            if (verf.vergeben > 0) details.push(`${verf.vergeben} vergeben`);
+            if (gesperrt > 0) details.push(`${gesperrt} gesperrt`);
+            tooltipText = details.join(', ');
+          } else if (verf.vergeben > 0 || gesperrt > 0) {
+            statusClass = 'teilweise';
+            let details = [];
+            if (verf.vergeben > 0) details.push(`${verf.vergeben} vergeben`);
+            if (gesperrt > 0) details.push(`${gesperrt} gesperrt`);
+            tooltipText = details.join(', ');
+          } else {
+            tooltipText = 'Alle verfügbar';
+          }
+          
+          const todayClass = isToday ? ' ea-heute' : '';
+          const pastClass = isPast ? ' ea-vergangen' : '';
+          const sundayClass = isSunday ? ' ea-sonntag' : '';
+          
+          html += `
+            <div class="ea-tag-zelle${todayClass}${pastClass}${sundayClass} ea-status-${statusClass}" 
+                 title="${day.dayNum}. ${day.monthShort}&#10;${tooltipText}">
+              <div class="ea-tag-datum">${day.dayNum}</div>
+              <div class="ea-tag-verfuegbar">${statusText}</div>
+            </div>
+          `;
+        });
+        
+        html += `</div>`;
       });
+      
+      html += `</div>`;
+      
+      // Legende hinzufügen
+      html += `
+        <div class="ea-legende">
+          <div class="ea-legende-item"><span class="ea-legende-dot ea-frei"></span> Frei</div>
+          <div class="ea-legende-item"><span class="ea-legende-dot ea-teilweise"></span> Teilweise belegt</div>
+          <div class="ea-legende-item"><span class="ea-legende-dot ea-voll"></span> Ausgebucht</div>
+        </div>
+      `;
+      
+      container.innerHTML = html;
+      
     } catch (error) {
       console.error('Fehler beim Laden der Ersatzauto-Übersicht:', error);
       container.innerHTML = '<div class="loading" style="color: #ef4444;">Fehler beim Laden</div>';
     }
+  }
+
+  // Gibt Wochen für Ersatzauto-Ansicht zurück (5 Wochen, Mo-So)
+  getWeeksForErsatzautoView() {
+    const weeks = [];
+    const today = new Date();
+    today.setHours(12, 0, 0, 0);
+    
+    // Finde den Montag der aktuellen Woche
+    const currentDay = today.getDay();
+    const mondayOffset = currentDay === 0 ? -6 : 1 - currentDay;
+    const startMonday = new Date(today);
+    startMonday.setDate(today.getDate() + mondayOffset);
+    
+    // 5 Wochen generieren (Mo-So = 7 Tage pro Woche)
+    for (let weekNum = 0; weekNum < 5; weekNum++) {
+      const week = [];
+      for (let dayNum = 0; dayNum < 7; dayNum++) { // Mo=0 bis So=6
+        const day = new Date(startMonday);
+        day.setDate(startMonday.getDate() + (weekNum * 7) + dayNum);
+        
+        const monthNames = ['Jan', 'Feb', 'Mär', 'Apr', 'Mai', 'Jun', 'Jul', 'Aug', 'Sep', 'Okt', 'Nov', 'Dez'];
+        
+        week.push({
+          datum: this.formatDateLocal(day),
+          dayNum: day.getDate(),
+          monthShort: monthNames[day.getMonth()],
+          dayOfWeek: day.getDay() // 0=So, 1=Mo, ..., 6=Sa
+        });
+      }
+      weeks.push(week);
+    }
+    return weeks;
+  }
+
+  // Kalenderwoche berechnen
+  getWeekNumber(date) {
+    const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+    const dayNum = d.getUTCDay() || 7;
+    d.setUTCDate(d.getUTCDate() + 4 - dayNum);
+    const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+    return Math.ceil((((d - yearStart) / 86400000) + 1) / 7);
   }
 
   async loadAbwesenheit() {
@@ -7430,6 +9346,7 @@ class App {
     const servicezeitField = document.getElementById('servicezeit_minuten');
     const ersatzautoField = document.getElementById('ersatzauto_anzahl');
     const nebenzeitField = document.getElementById('nebenzeit_prozent');
+    const mittagspauseField = document.getElementById('mittagspause_minuten');
     
     if (!servicezeitField) {
       alert('Servicezeit-Feld nicht gefunden.');
@@ -7439,6 +9356,7 @@ class App {
     const servicezeit = parseInt(servicezeitField.value, 10);
     const ersatzautoAnzahl = ersatzautoField ? parseInt(ersatzautoField.value, 10) : 2;
     const nebenzeit = nebenzeitField ? parseFloat(nebenzeitField.value) : 0;
+    const mittagspause = mittagspauseField ? parseInt(mittagspauseField.value, 10) : 30;
 
     if (!Number.isFinite(servicezeit) || servicezeit < 0) {
       alert('Bitte eine gültige Servicezeit eingeben.');
@@ -7455,6 +9373,11 @@ class App {
       return;
     }
 
+    if (!Number.isFinite(mittagspause) || mittagspause < 0 || mittagspause > 120) {
+      alert('Bitte eine gültige Mittagspause eingeben (0-120 Minuten).');
+      return;
+    }
+
     try {
       // Lade aktuelle Einstellungen, um Pufferzeit beizubehalten
       const aktuelleEinstellungen = await EinstellungenService.getWerkstatt();
@@ -7463,7 +9386,8 @@ class App {
         pufferzeit_minuten: aktuelleEinstellungen?.pufferzeit_minuten || 15,
         servicezeit_minuten: servicezeit,
         ersatzauto_anzahl: ersatzautoAnzahl,
-        nebenzeit_prozent: nebenzeit
+        nebenzeit_prozent: nebenzeit,
+        mittagspause_minuten: mittagspause
       });
       alert('Einstellungen gespeichert.');
       this.loadAuslastung();
@@ -7483,7 +9407,7 @@ class App {
       tbody.innerHTML = '';
 
       if (mitarbeiter.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="5" class="loading">Keine Mitarbeiter vorhanden</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="6" class="loading">Keine Mitarbeiter vorhanden</td></tr>';
         return;
       }
 
@@ -7492,6 +9416,7 @@ class App {
         row.innerHTML = `
           <td><input type="text" id="mitarbeiter_name_${ma.id}" value="${ma.name || ''}" style="width: 100%; padding: 5px;"></td>
           <td><input type="number" id="mitarbeiter_stunden_${ma.id}" value="${ma.arbeitsstunden_pro_tag || 8}" min="1" max="24" style="width: 100%; padding: 5px;"></td>
+          <td><input type="time" id="mitarbeiter_mittagspause_${ma.id}" value="${ma.mittagspause_start || '12:00'}" style="width: 100%; padding: 5px;" title="Startzeit der Mittagspause"></td>
           <td><input type="checkbox" id="mitarbeiter_nur_service_${ma.id}" ${ma.nur_service === 1 || ma.nur_service === true ? 'checked' : ''} title="Nur Service (Annahme/Rechnung)"></td>
           <td><input type="checkbox" id="mitarbeiter_aktiv_${ma.id}" ${ma.aktiv !== 0 ? 'checked' : ''}></td>
           <td>
@@ -7512,7 +9437,7 @@ class App {
       tbody.innerHTML = '';
 
       if (lehrlinge.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="4" class="loading">Keine Lehrlinge vorhanden</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="5" class="loading">Keine Lehrlinge vorhanden</td></tr>';
         return;
       }
 
@@ -7521,6 +9446,7 @@ class App {
         row.innerHTML = `
           <td><input type="text" id="lehrling_name_${l.id}" value="${l.name || ''}" style="width: 100%; padding: 5px;"></td>
           <td><input type="number" id="lehrling_aufgabe_${l.id}" value="${l.aufgabenbewaeltigung_prozent || 100}" min="0" max="500" step="1" style="width: 100%; padding: 5px;"></td>
+          <td><input type="time" id="lehrling_mittagspause_${l.id}" value="${l.mittagspause_start || '12:00'}" style="width: 100%; padding: 5px;" title="Startzeit der Mittagspause"></td>
           <td><input type="checkbox" id="lehrling_aktiv_${l.id}" ${l.aktiv !== 0 ? 'checked' : ''}></td>
           <td>
             <button class="btn btn-primary" onclick="app.saveLehrling(${l.id})">💾</button>
@@ -7540,6 +9466,7 @@ class App {
     row.innerHTML = `
       <td><input type="text" id="new_mitarbeiter_name" placeholder="Name" style="width: 100%; padding: 5px;"></td>
       <td><input type="number" id="new_mitarbeiter_stunden" value="8" min="1" max="24" style="width: 100%; padding: 5px;"></td>
+      <td><input type="time" id="new_mitarbeiter_mittagspause" value="12:00" style="width: 100%; padding: 5px;" title="Startzeit der Mittagspause"></td>
       <td><input type="checkbox" id="new_mitarbeiter_nur_service" title="Nur Service (Annahme/Rechnung)"></td>
       <td><input type="checkbox" id="new_mitarbeiter_aktiv" checked></td>
       <td>
@@ -7560,6 +9487,7 @@ class App {
   async saveNewMitarbeiter() {
     const name = document.getElementById('new_mitarbeiter_name').value.trim();
     const stunden = parseInt(document.getElementById('new_mitarbeiter_stunden').value, 10);
+    const mittagspause = document.getElementById('new_mitarbeiter_mittagspause').value || '12:00';
     const nurService = document.getElementById('new_mitarbeiter_nur_service').checked;
     const aktiv = document.getElementById('new_mitarbeiter_aktiv').checked;
 
@@ -7572,6 +9500,7 @@ class App {
       await MitarbeiterService.create({
         name,
         arbeitsstunden_pro_tag: stunden || 8,
+        mittagspause_start: mittagspause,
         nur_service: nurService,
         aktiv: aktiv ? 1 : 0
       });
@@ -7586,6 +9515,7 @@ class App {
   async saveMitarbeiter(id) {
     const name = document.getElementById(`mitarbeiter_name_${id}`).value.trim();
     const stunden = parseInt(document.getElementById(`mitarbeiter_stunden_${id}`).value, 10);
+    const mittagspause = document.getElementById(`mitarbeiter_mittagspause_${id}`).value || '12:00';
     const nurService = document.getElementById(`mitarbeiter_nur_service_${id}`).checked;
     const aktiv = document.getElementById(`mitarbeiter_aktiv_${id}`).checked;
 
@@ -7598,6 +9528,7 @@ class App {
       await MitarbeiterService.update(id, {
         name,
         arbeitsstunden_pro_tag: stunden || 8,
+        mittagspause_start: mittagspause,
         nur_service: nurService,
         aktiv: aktiv ? 1 : 0
       });
@@ -7633,6 +9564,7 @@ class App {
     row.innerHTML = `
       <td><input type="text" id="new_lehrling_name" placeholder="Name" style="width: 100%; padding: 5px;"></td>
       <td><input type="number" id="new_lehrling_aufgabe" value="100" min="0" max="500" step="1" style="width: 100%; padding: 5px;"></td>
+      <td><input type="time" id="new_lehrling_mittagspause" value="12:00" style="width: 100%; padding: 5px;" title="Startzeit der Mittagspause"></td>
       <td><input type="checkbox" id="new_lehrling_aktiv" checked></td>
       <td>
         <button class="btn btn-primary" onclick="app.saveNewLehrling()">💾</button>
@@ -7652,6 +9584,7 @@ class App {
   async saveNewLehrling() {
     const name = document.getElementById('new_lehrling_name').value.trim();
     const aufgabe = parseFloat(document.getElementById('new_lehrling_aufgabe').value);
+    const mittagspause = document.getElementById('new_lehrling_mittagspause').value || '12:00';
     const aktiv = document.getElementById('new_lehrling_aktiv').checked;
 
     if (!name) {
@@ -7663,6 +9596,7 @@ class App {
       await LehrlingeService.create({
         name,
         aufgabenbewaeltigung_prozent: aufgabe || 100,
+        mittagspause_start: mittagspause,
         aktiv: aktiv ? 1 : 0
       });
       await this.loadLehrlinge();
@@ -7676,6 +9610,7 @@ class App {
   async saveLehrling(id) {
     const name = document.getElementById(`lehrling_name_${id}`).value.trim();
     const aufgabe = parseFloat(document.getElementById(`lehrling_aufgabe_${id}`).value);
+    const mittagspause = document.getElementById(`lehrling_mittagspause_${id}`).value || '12:00';
     const aktiv = document.getElementById(`lehrling_aktiv_${id}`).checked;
 
     if (!name) {
@@ -7687,6 +9622,7 @@ class App {
       await LehrlingeService.update(id, {
         name,
         aufgabenbewaeltigung_prozent: aufgabe || 100,
+        mittagspause_start: mittagspause,
         aktiv: aktiv ? 1 : 0
       });
       await this.loadLehrlinge();
@@ -8591,16 +10527,37 @@ class App {
       }
     });
 
+    // Setze _startzeit automatisch auf die früheste Startzeit aller Arbeiten
+    let fruehesteStartzeit = null;
+    for (const [key, val] of Object.entries(arbeitszeitenDetails)) {
+      if (key.startsWith('_')) continue;
+      if (typeof val === 'object' && val.startzeit) {
+        if (!fruehesteStartzeit || val.startzeit < fruehesteStartzeit) {
+          fruehesteStartzeit = val.startzeit;
+        }
+      }
+    }
+    if (fruehesteStartzeit) {
+      arbeitszeitenDetails._startzeit = fruehesteStartzeit;
+    }
+
     // Umrechnung von Stunden in Minuten für die Datenbank
     const gesamtzeitMinuten = Math.round(gesamtStunden * 60);
 
-    const status = document.getElementById('modalTerminStatus').value;
+    let status = document.getElementById('modalTerminStatus').value;
 
     // Bestimme Mitarbeiter für Termin (Gesamt-Zuordnung hat Vorrang, sonst Termin-Mitarbeiter)
     // Nur Mitarbeiter können dem Termin direkt zugeordnet werden, nicht Lehrlinge
     let terminMitarbeiterId = termin.mitarbeiter_id || null;
     if (gesamtMitarbeiterValue && gesamtMitarbeiterValue.startsWith('ma_')) {
       terminMitarbeiterId = parseInt(gesamtMitarbeiterValue.replace('ma_', ''), 10);
+    }
+    
+    // Automatisch auf "geplant" setzen wenn Startzeit und Mitarbeiter vorhanden und Status "wartend"
+    if (fruehesteStartzeit && (terminMitarbeiterId || gesamtMitarbeiterValue) && status === 'wartend') {
+      status = 'geplant';
+      // Aktualisiere auch das Dropdown zur Anzeige
+      document.getElementById('modalTerminStatus').value = 'geplant';
     }
 
     // "Muss bearbeitet werden" Checkbox auslesen
@@ -8689,10 +10646,12 @@ class App {
     }
 
     // Berechne Prozentanteile für die Segmente
-    const gesamtMinuten = data.gesamt_minuten || 1;
-    const geplantProzent = ((data.geplant_minuten || 0) / gesamtMinuten) * 100;
-    const inArbeitProzent = ((data.in_arbeit_minuten || 0) / gesamtMinuten) * 100;
-    const abgeschlossenProzent = ((data.abgeschlossen_minuten || 0) / gesamtMinuten) * 100;
+    // Wenn keine Kapazität, nutze belegte Zeit als Referenz für den Balken
+    const belegteZeit = (data.geplant_minuten || 0) + (data.in_arbeit_minuten || 0) + (data.abgeschlossen_minuten || 0);
+    const referenzMinuten = data.gesamt_minuten > 0 ? data.gesamt_minuten : (belegteZeit > 0 ? belegteZeit : 1);
+    const geplantProzent = ((data.geplant_minuten || 0) / referenzMinuten) * 100;
+    const inArbeitProzent = ((data.in_arbeit_minuten || 0) / referenzMinuten) * 100;
+    const abgeschlossenProzent = ((data.abgeschlossen_minuten || 0) / referenzMinuten) * 100;
 
     // Setze die Breite der Segmente
     const geplantSegment = document.getElementById('dashboardProgressGeplant');
@@ -8742,15 +10701,38 @@ class App {
     const lines = beforeCursor.split('\n');
     const currentLine = lines[lines.length - 1].trim();
 
+    console.log('Autocomplete: Eingabe erkannt, aktuelle Zeile:', currentLine);
+
     if (currentLine.length < 2) {
       this.closeAutocomplete();
       return;
     }
 
-    // Filtere passende Arbeiten
-    const matches = this.arbeitszeiten.filter(arbeit =>
-      arbeit.bezeichnung.toLowerCase().includes(currentLine.toLowerCase())
-    );
+    // Sicherstellen, dass arbeitszeiten ein Array ist
+    if (!this.arbeitszeiten || !Array.isArray(this.arbeitszeiten)) {
+      console.warn('Arbeitszeiten nicht geladen, lade jetzt...');
+      this.loadArbeitszeiten();
+      return;
+    }
+
+    console.log('Autocomplete: Suche in', this.arbeitszeiten.length, 'Arbeitszeiten');
+
+    // Filtere passende Arbeiten - suche in Bezeichnung UND Aliasen
+    const suchBegriff = currentLine.toLowerCase();
+    const matches = this.arbeitszeiten.filter(arbeit => {
+      // Suche in Bezeichnung
+      if (arbeit.bezeichnung && arbeit.bezeichnung.toLowerCase().includes(suchBegriff)) {
+        return true;
+      }
+      // Suche in Aliasen
+      if (arbeit.aliase) {
+        const aliasListe = arbeit.aliase.split(',').map(a => a.trim().toLowerCase());
+        return aliasListe.some(alias => alias.includes(suchBegriff));
+      }
+      return false;
+    });
+
+    console.log('Autocomplete: Gefundene Matches:', matches.length);
 
     if (matches.length === 0) {
       this.closeAutocomplete();
@@ -8762,14 +10744,63 @@ class App {
 
   showAutocomplete(matches, currentText) {
     const dropdown = document.getElementById('arbeitAutocomplete');
+    const textarea = document.getElementById('arbeitEingabe');
+    
+    if (!dropdown) {
+      console.error('Autocomplete dropdown nicht gefunden!');
+      return;
+    }
+    
+    if (!textarea) {
+      console.error('Textarea nicht gefunden!');
+      return;
+    }
+    
     dropdown.innerHTML = '';
     this.autocompleteSelectedIndex = -1;
+
+    // Positioniere das Dropdown mit fixed positioning für garantierte Sichtbarkeit
+    const textareaRect = textarea.getBoundingClientRect();
+    
+    // Alle Styles inline setzen für garantierte Anzeige
+    dropdown.style.cssText = `
+      display: block !important;
+      position: fixed !important;
+      top: ${textareaRect.bottom + 2}px !important;
+      left: ${textareaRect.left}px !important;
+      width: ${textareaRect.width}px !important;
+      z-index: 999999 !important;
+      background: #ffffff !important;
+      border: 3px solid #4a90e2 !important;
+      border-radius: 8px !important;
+      max-height: 250px !important;
+      overflow-y: auto !important;
+      box-shadow: 0 8px 25px rgba(0, 0, 0, 0.4) !important;
+    `;
 
     matches.forEach((arbeit, index) => {
       const item = document.createElement('div');
       item.className = 'autocomplete-item';
+      item.style.cssText = `
+        padding: 12px 15px !important;
+        cursor: pointer !important;
+        border-bottom: 1px solid #f0f0f0 !important;
+        background: #ffffff !important;
+        color: #333 !important;
+        font-size: 14px !important;
+      `;
       item.textContent = arbeit.bezeichnung;
       item.dataset.index = index;
+
+      item.addEventListener('mouseenter', () => {
+        item.style.background = '#4a90e2';
+        item.style.color = '#ffffff';
+      });
+      
+      item.addEventListener('mouseleave', () => {
+        item.style.background = '#ffffff';
+        item.style.color = '#333';
+      });
 
       item.addEventListener('click', () => {
         this.selectAutocompleteItem(arbeit.bezeichnung);
@@ -8780,6 +10811,8 @@ class App {
 
     dropdown.classList.add('show');
     this.currentAutocompleteMatches = matches;
+    
+    console.log('Autocomplete angezeigt mit', matches.length, 'Vorschlägen, Position:', textareaRect.bottom, textareaRect.left, 'Display:', dropdown.style.display);
   }
 
   handleArbeitKeydown(e) {
@@ -8849,6 +10882,7 @@ class App {
     const dropdown = document.getElementById('arbeitAutocomplete');
     if (dropdown) {
       dropdown.classList.remove('show');
+      dropdown.style.display = 'none';
       dropdown.innerHTML = '';
     }
     this.autocompleteSelectedIndex = -1;
@@ -9243,6 +11277,9 @@ class App {
   async openAuslastungKalender() {
     const popup = document.getElementById('auslastungKalenderPopup');
     if (!popup) return;
+
+    // Cache leeren, damit immer aktuelle Daten geladen werden
+    this.kalenderAuslastungCache = {};
 
     // Setze den aktuellen Monat basierend auf ausgewähltem Datum oder heute
     const datumInput = document.getElementById('datum');
@@ -9680,19 +11717,31 @@ class App {
       // Lade alle Termine für dieses Datum
       const termine = await TermineService.getAll(datum);
       
-      // Lade Mitarbeiter und Lehrlinge
-      const [mitarbeiter, lehrlinge] = await Promise.all([
+      // Befülle termineById-Cache für Details-Popup
+      for (const termin of termine) {
+        this.termineById[termin.id] = termin;
+      }
+      
+      // Lade Mitarbeiter, Lehrlinge und Einstellungen
+      const [mitarbeiter, lehrlinge, einstellungen] = await Promise.all([
         MitarbeiterService.getAktive(),
-        LehrlingeService.getAktive()
+        LehrlingeService.getAktive(),
+        EinstellungenService.getWerkstatt()
       ]);
 
+      // Mittagspause-Dauer aus Einstellungen (Standard 30 Min)
+      const mittagspauseDauer = einstellungen?.mittagspause_minuten || 30;
+      // Nebenzeit-Prozent aus Einstellungen (Standard 0%)
+      const nebenzeitProzent = einstellungen?.nebenzeit_prozent || 0;
+
       // Erstelle Arbeiten-Map nach Mitarbeiter/Lehrling
+      // Gruppiere nach Termin, nicht nach einzelner Arbeit
       const arbeitenMap = new Map();
       const ohneZuordnung = [];
 
       // Verarbeite alle Termine
       for (const termin of termine) {
-        const arbeitenListe = this.parseArbeiten(termin.arbeit || '');
+        let arbeitenListe = this.parseArbeiten(termin.arbeit || '');
         let details = {};
         
         if (termin.arbeitszeiten_details) {
@@ -9703,64 +11752,128 @@ class App {
           } catch (e) {}
         }
 
-        // Für jede Arbeit im Termin
-        for (const arbeit of arbeitenListe) {
-          const arbeitDetails = typeof details[arbeit] === 'object' ? details[arbeit] : { zeit: details[arbeit] || 0 };
-          const zeitMinuten = arbeitDetails.zeit || (termin.geschaetzte_zeit / arbeitenListe.length) || 60;
-          const startzeit = arbeitDetails.startzeit || null;
-          const zuordnungsTyp = arbeitDetails.type || null; // 'mitarbeiter' oder 'lehrling'
-          const mitarbeiterId = arbeitDetails.mitarbeiter_id || termin.mitarbeiter_id;
-          const lehrlingId = arbeitDetails.lehrling_id || null;
+        // Schwebende Termine immer in "Nicht zugeordnet" anzeigen
+        const istSchwebend = termin.ist_schwebend === 1 || termin.ist_schwebend === true;
 
-          const arbeitEntry = {
+        // Wenn keine Arbeiten, aber Termin existiert, als Platzhalter hinzufügen
+        if (arbeitenListe.length === 0) {
+          arbeitenListe = [termin.kennzeichen || 'Ohne Beschreibung'];
+        }
+
+        // Bestimme Mitarbeiter/Lehrling Zuordnung (aus _gesamt_mitarbeiter_id)
+        let zuordnungsTyp = null;
+        let mitarbeiterId = termin.mitarbeiter_id;
+        let lehrlingId = null;
+        
+        if (details._gesamt_mitarbeiter_id) {
+          zuordnungsTyp = details._gesamt_mitarbeiter_id.type;
+          if (zuordnungsTyp === 'lehrling') {
+            lehrlingId = details._gesamt_mitarbeiter_id.id;
+            mitarbeiterId = null;
+          } else {
+            mitarbeiterId = details._gesamt_mitarbeiter_id.id;
+          }
+        }
+        
+        // Bei schwebenden Terminen keine Zuordnung
+        if (istSchwebend) {
+          zuordnungsTyp = null;
+          mitarbeiterId = null;
+          lehrlingId = null;
+        }
+
+        // Startzeit des Termins (aus _startzeit oder erster Arbeit mit Startzeit)
+        let terminStartzeit = details._startzeit || null;
+        if (!terminStartzeit) {
+          for (const arbeit of arbeitenListe) {
+            const arbeitDetails = typeof details[arbeit] === 'object' ? details[arbeit] : {};
+            if (arbeitDetails.startzeit && arbeitDetails.startzeit.trim() !== '') {
+              terminStartzeit = arbeitDetails.startzeit;
+              break;
+            }
+          }
+        }
+
+        // Erstelle separate Einträge für jede Arbeit (bei mehreren Arbeiten)
+        let laufendeStartzeit = terminStartzeit;
+        const arbeitEntries = [];
+        
+        for (let i = 0; i < arbeitenListe.length; i++) {
+          const arbeit = arbeitenListe[i];
+          const arbeitDetails = typeof details[arbeit] === 'object' ? details[arbeit] : { zeit: details[arbeit] || 0 };
+          let zeitMinuten = arbeitDetails.zeit || (termin.geschaetzte_zeit / arbeitenListe.length) || 60;
+          
+          // Nebenzeit-Aufschlag hinzufügen (z.B. 20% = zeitMinuten * 1.2)
+          if (nebenzeitProzent > 0) {
+            zeitMinuten = Math.round(zeitMinuten * (1 + nebenzeitProzent / 100));
+          }
+          
+          // Startzeit für diese Arbeit bestimmen
+          let arbeitStartzeit = arbeitDetails.startzeit || laufendeStartzeit;
+          
+          // Falls keine Startzeit und vorherige Arbeit existiert, nach vorheriger Arbeit starten
+          if (!arbeitStartzeit && i > 0 && arbeitEntries[i-1]) {
+            const prev = arbeitEntries[i-1];
+            if (prev.startzeit) {
+              const [h, m] = prev.startzeit.split(':').map(Number);
+              const prevEndMinuten = h * 60 + m + prev.zeitMinuten;
+              const newH = Math.floor(prevEndMinuten / 60);
+              const newM = prevEndMinuten % 60;
+              arbeitStartzeit = `${newH.toString().padStart(2, '0')}:${newM.toString().padStart(2, '0')}`;
+            }
+          }
+
+          const terminEntry = {
             terminId: termin.id,
             terminNr: termin.termin_nr,
             kunde: termin.kunde_name,
             kennzeichen: termin.kennzeichen,
             arbeit: arbeit,
+            arbeitenListe: arbeitenListe,
+            arbeitIndex: i,
+            arbeitenAnzahl: arbeitenListe.length,
             zeitMinuten: zeitMinuten,
-            startzeit: startzeit,
+            startzeit: arbeitStartzeit,
             status: termin.status || 'geplant',
-            istIntern: !termin.kennzeichen || termin.abholung_details === 'Interner Termin'
+            istIntern: !termin.kennzeichen || termin.abholung_details === 'Interner Termin',
+            interneAuftragsnummer: termin.interne_auftragsnummer || '',
+            istSchwebend: istSchwebend
           };
+          
+          arbeitEntries.push(terminEntry);
+          
+          // Update laufende Startzeit für nächste Arbeit
+          if (arbeitStartzeit) {
+            const [h, m] = arbeitStartzeit.split(':').map(Number);
+            const endMinuten = h * 60 + m + zeitMinuten;
+            const newH = Math.floor(endMinuten / 60);
+            const newM = endMinuten % 60;
+            laufendeStartzeit = `${newH.toString().padStart(2, '0')}:${newM.toString().padStart(2, '0')}`;
+          }
+        }
 
-          // Zuordnung zu Mitarbeiter oder Lehrling basierend auf dem expliziten type-Feld
+        // Zuordnung zu Mitarbeiter oder Lehrling
+        for (const entry of arbeitEntries) {
           if (zuordnungsTyp === 'lehrling' && lehrlingId) {
-            // Explizit als Lehrling markiert
             const key = `l_${lehrlingId}`;
             if (!arbeitenMap.has(key)) {
               arbeitenMap.set(key, { typ: 'lehrling', id: lehrlingId, arbeiten: [] });
             }
-            arbeitenMap.get(key).arbeiten.push(arbeitEntry);
-          } else if (zuordnungsTyp === 'mitarbeiter' && mitarbeiterId) {
-            // Explizit als Mitarbeiter markiert
-            const key = `m_${mitarbeiterId}`;
-            if (!arbeitenMap.has(key)) {
-              arbeitenMap.set(key, { typ: 'mitarbeiter', id: mitarbeiterId, arbeiten: [] });
-            }
-            arbeitenMap.get(key).arbeiten.push(arbeitEntry);
+            arbeitenMap.get(key).arbeiten.push(entry);
           } else if (mitarbeiterId) {
-            // Fallback: Alte Daten ohne type-Feld
             const key = `m_${mitarbeiterId}`;
             if (!arbeitenMap.has(key)) {
               arbeitenMap.set(key, { typ: 'mitarbeiter', id: mitarbeiterId, arbeiten: [] });
             }
-            arbeitenMap.get(key).arbeiten.push(arbeitEntry);
-          } else if (lehrlingId) {
-            // Fallback: Lehrling ohne type-Feld
-            const key = `l_${lehrlingId}`;
-            if (!arbeitenMap.has(key)) {
-              arbeitenMap.set(key, { typ: 'lehrling', id: lehrlingId, arbeiten: [] });
-            }
-            arbeitenMap.get(key).arbeiten.push(arbeitEntry);
+            arbeitenMap.get(key).arbeiten.push(entry);
           } else {
-            ohneZuordnung.push(arbeitEntry);
+            ohneZuordnung.push(entry);
           }
         }
       }
 
       // Rendere die Zeitleiste
-      this.renderZeitleiste(body, arbeitenMap, ohneZuordnung, mitarbeiter, lehrlinge);
+      this.renderZeitleiste(body, arbeitenMap, ohneZuordnung, mitarbeiter, lehrlinge, mittagspauseDauer);
 
     } catch (error) {
       console.error('Fehler beim Laden der Zeitleiste:', error);
@@ -9768,13 +11881,16 @@ class App {
     }
   }
 
-  renderZeitleiste(container, arbeitenMap, ohneZuordnung, mitarbeiter, lehrlinge) {
-    // Keine Arbeiten?
-    if (arbeitenMap.size === 0 && ohneZuordnung.length === 0) {
+  renderZeitleiste(container, arbeitenMap, ohneZuordnung, mitarbeiter, lehrlinge, mittagspauseDauer = 30) {
+    // Prüfe ob es überhaupt Mitarbeiter oder Lehrlinge gibt
+    const hatPersonal = mitarbeiter.length > 0 || lehrlinge.length > 0;
+    
+    // Keine Arbeiten und kein Personal?
+    if (!hatPersonal) {
       container.innerHTML = `
         <div class="zeitleiste-leer">
           <span class="zeitleiste-leer-icon">📅</span>
-          <p>Keine Termine für diesen Tag</p>
+          <p>Keine Mitarbeiter oder Lehrlinge vorhanden</p>
         </div>
       `;
       return;
@@ -9805,8 +11921,9 @@ class App {
       const key = `m_${ma.id}`;
       const data = arbeitenMap.get(key);
       const arbeiten = data ? data.arbeiten : [];
+      const mittagspauseStart = ma.mittagspause_start || '12:00';
       
-      html += this.renderZeitleisteRow(ma.name, 'Mitarbeiter', arbeiten, START_HOUR, END_HOUR, TOTAL_HOURS, jetztMarkerHtml);
+      html += this.renderZeitleisteRow(ma.name, 'Mitarbeiter', arbeiten, START_HOUR, END_HOUR, TOTAL_HOURS, jetztMarkerHtml, false, mittagspauseStart, mittagspauseDauer);
     }
 
     // Lehrling-Zeilen
@@ -9814,19 +11931,78 @@ class App {
       const key = `l_${lehrling.id}`;
       const data = arbeitenMap.get(key);
       const arbeiten = data ? data.arbeiten : [];
+      const mittagspauseStart = lehrling.mittagspause_start || '12:00';
       
-      html += this.renderZeitleisteRow(lehrling.name, 'Lehrling', arbeiten, START_HOUR, END_HOUR, TOTAL_HOURS, jetztMarkerHtml);
+      html += this.renderZeitleisteRow(lehrling.name, 'Lehrling', arbeiten, START_HOUR, END_HOUR, TOTAL_HOURS, jetztMarkerHtml, false, mittagspauseStart, mittagspauseDauer);
     }
 
-    // Nicht zugeordnete Arbeiten
+    // Nicht zugeordnete Arbeiten - ohne Zeiteinordnung, hintereinander
     if (ohneZuordnung.length > 0) {
-      html += this.renderZeitleisteRow('⚠️ Nicht zugeordnet', '', ohneZuordnung, START_HOUR, END_HOUR, TOTAL_HOURS, jetztMarkerHtml, true);
+      html += this.renderNichtZugeordnetRow(ohneZuordnung, TOTAL_HOURS);
     }
 
     container.innerHTML = html;
   }
 
-  renderZeitleisteRow(name, typ, arbeiten, startHour, endHour, totalHours, jetztMarkerHtml, isWarning = false) {
+  // Spezielle Render-Funktion für "Nicht zugeordnet" - Blöcke hintereinander ohne Zeiteinordnung
+  renderNichtZugeordnetRow(arbeiten, totalHours) {
+    // Berechne Gesamtzeit für proportionale Balken
+    const gesamtMinuten = arbeiten.reduce((sum, a) => sum + (a.zeitMinuten || 60), 0);
+    
+    let bloeckeHtml = '';
+    for (const arbeit of arbeiten) {
+      const zeitMinuten = arbeit.zeitMinuten || 60;
+      // Breite proportional zur Zeit (relativ zur Gesamtzeit, max 100%)
+      const widthPercent = Math.max(5, (zeitMinuten / gesamtMinuten) * 100);
+      
+      // Status-Klasse
+      let statusClass = 'status-geplant';
+      if (arbeit.status === 'in_arbeit') statusClass = 'status-in-arbeit';
+      else if (arbeit.status === 'abgeschlossen') statusClass = 'status-abgeschlossen';
+      else if (arbeit.status === 'wartend') statusClass = 'status-wartend';
+      
+      // Schwebend-Badge
+      const schwebendBadge = arbeit.istSchwebend ? ' ⏸️' : '';
+      
+      // Tooltip
+      const tooltip = `${arbeit.terminNr || ''}${schwebendBadge}&#10;${arbeit.kunde || '-'}&#10;${arbeit.kennzeichen || '-'}&#10;${arbeit.arbeit}&#10;Dauer: ${zeitMinuten} Min. (${(zeitMinuten/60).toFixed(1)} h)`;
+      
+      // Inhalt je nach Breite
+      const content = `
+        <div class="zeitleiste-block-nummer">${arbeit.terminNr || '-'}${schwebendBadge}</div>
+        <div class="zeitleiste-block-text">${arbeit.arbeit}</div>
+        <div class="zeitleiste-block-zeit">${(zeitMinuten/60).toFixed(1)}h</div>
+      `;
+      
+      bloeckeHtml += `
+        <div class="zeitleiste-block-inline ${statusClass}" 
+             style="flex: 0 0 ${widthPercent}%; min-width: 80px;"
+             title="${tooltip}"
+             onclick="app.showTerminDetails(${arbeit.terminId})">
+          ${content}
+        </div>
+      `;
+    }
+    
+    // Gesamtzeit anzeigen
+    const gesamtStunden = (gesamtMinuten / 60).toFixed(1);
+    
+    return `
+      <div class="zeitleiste-row nicht-zugeordnet">
+        <div class="zeitleiste-person">
+          <span class="zeitleiste-person-name">⚠️ Nicht zugeordnet</span>
+          <span class="zeitleiste-person-typ">${arbeiten.length} Termin(e) • ${gesamtStunden} h</span>
+        </div>
+        <div class="zeitleiste-timeline nicht-zugeordnet-timeline">
+          <div class="zeitleiste-inline-container">
+            ${bloeckeHtml}
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  renderZeitleisteRow(name, typ, arbeiten, startHour, endHour, totalHours, jetztMarkerHtml, isWarning = false, mittagspauseStart = null, mittagspauseDauer = 30) {
     const rowClass = isWarning ? 'zeitleiste-row nicht-zugeordnet' : 'zeitleiste-row';
     
     // Gitter erstellen
@@ -9836,8 +12012,49 @@ class App {
     }
     gitterHtml += '</div>';
 
+    // Mittagspause-Block erstellen (falls vorhanden und Dauer > 0)
+    let mittagspauseHtml = '';
+    if (mittagspauseStart && mittagspauseDauer > 0) {
+      const [pauseH, pauseM] = mittagspauseStart.split(':').map(Number);
+      const pauseStartMinuten = pauseH * 60 + pauseM;
+      const pauseEndMinuten = pauseStartMinuten + mittagspauseDauer;
+      
+      // Nur anzeigen wenn im sichtbaren Bereich (8-18 Uhr)
+      const displayStart = Math.max(pauseStartMinuten, startHour * 60);
+      const displayEnd = Math.min(pauseEndMinuten, endHour * 60);
+      
+      if (displayEnd > displayStart) {
+        const leftPercent = ((displayStart - startHour * 60) / (totalHours * 60)) * 100;
+        const widthPercent = ((displayEnd - displayStart) / (totalHours * 60)) * 100;
+        const pauseEndZeit = this.minutesToTime(pauseEndMinuten);
+        
+        // Bei breiteren Blöcken mehr Info anzeigen
+        const showLabel = widthPercent > 6;
+        const pauseContent = showLabel 
+          ? `<span class="zeitleiste-mittagspause-text">Pause</span><span class="zeitleiste-mittagspause-label">${mittagspauseStart} - ${pauseEndZeit}</span>`
+          : `<span class="zeitleiste-mittagspause-text"></span>`;
+        
+        mittagspauseHtml = `
+          <div class="zeitleiste-mittagspause" 
+               style="left: ${leftPercent}%; width: ${widthPercent}%;"
+               title="🍽️ Mittagspause&#10;${mittagspauseStart} - ${pauseEndZeit}&#10;Dauer: ${mittagspauseDauer} Min.">
+            ${pauseContent}
+          </div>
+        `;
+      }
+    }
+
     // Arbeitsblöcke erstellen
     let bloeckeHtml = '<div class="zeitleiste-arbeiten">';
+    
+    // Berechne Mittagspause-Zeiten (in Minuten)
+    let pauseStartMinuten = null;
+    let pauseEndMinuten = null;
+    if (mittagspauseStart && mittagspauseDauer > 0) {
+      const [pauseH, pauseM] = mittagspauseStart.split(':').map(Number);
+      pauseStartMinuten = pauseH * 60 + pauseM;
+      pauseEndMinuten = pauseStartMinuten + mittagspauseDauer;
+    }
     
     // Sortiere Arbeiten nach Startzeit
     const sortedArbeiten = [...arbeiten].sort((a, b) => {
@@ -9850,8 +12067,55 @@ class App {
     // Berechne Positionen für überlappende Blöcke
     let currentEndMinutes = startHour * 60;
     
+    // Hilfsfunktion zum Rendern eines einzelnen Blocks
+    const renderBlock = (arbeit, blockStartMinutes, blockEndMinutes, istFortsetzung = false) => {
+      // Begrenzen auf 8-18 Uhr
+      const displayStart = Math.max(blockStartMinutes, startHour * 60);
+      const displayEnd = Math.min(blockEndMinutes, endHour * 60);
+      
+      const leftPercent = ((displayStart - startHour * 60) / (totalHours * 60)) * 100;
+      const widthPercent = ((displayEnd - displayStart) / (totalHours * 60)) * 100;
+      
+      if (widthPercent <= 0) return '';
+      
+      const statusClass = arbeit.startzeit ? `status-${arbeit.status}` : 'status-keine-zeit';
+      const internClass = arbeit.istIntern ? 'intern-termin' : '';
+      const startZeitText = this.minutesToTime(blockStartMinutes);
+      const endZeitText = this.minutesToTime(blockEndMinutes);
+      const dauerMinuten = blockEndMinutes - blockStartMinutes;
+      const dauerText = this.formatMinutesToHours(dauerMinuten);
+      const auftragsnrText = arbeit.interneAuftragsnummer ? `&#10;Auftrag: ${arbeit.interneAuftragsnummer}` : '';
+      const fortsetzungText = istFortsetzung ? ' (Forts.)' : '';
+      
+      // Hauptanzeige: Kennzeichen bevorzugt, sonst Name (bei internen Terminen)
+      const hauptAnzeige = arbeit.kennzeichen ? arbeit.kennzeichen : (arbeit.istIntern ? '🔧 ' + arbeit.kunde : arbeit.kunde);
+      const auftragsnrEscaped = arbeit.interneAuftragsnummer ? this.escapeHtml(arbeit.interneAuftragsnummer) : '';
+      const schwebendClass = arbeit.istSchwebend ? 'schwebend-block' : '';
+      const schwebendBadge = arbeit.istSchwebend ? '<span class="zeitleiste-schwebend-badge">⏸️</span>' : '';
+      const schwebendTitleText = arbeit.istSchwebend ? '&#10;⏸️ SCHWEBEND' : '';
+      
+      // Mehrteiliger Termin
+      const arbeitenAnzahl = arbeit.arbeitenAnzahl || 1;
+      
+      // Arbeiten-Liste für Tooltip
+      const arbeitenTooltip = arbeit.arbeit;
+      
+      // Kennzeichen oben, Arbeit darunter
+      const blockHaupt = arbeit.kennzeichen || (arbeit.istIntern ? '🔧 ' + arbeit.kunde : arbeit.kunde);
+      const blockArbeit = `<span class="zeitleiste-block-arbeit">${this.escapeHtml(arbeit.arbeit)}</span>`;
+
+      return `
+        <div class="zeitleiste-block ${statusClass} ${internClass} ${schwebendClass}" 
+             style="left: ${leftPercent}%; width: ${Math.max(widthPercent, 3)}%;"
+             onclick="app.openZeitleisteKontextmenu(event, ${arbeit.terminId}, '${this.escapeHtml(arbeit.kunde)}', '${this.escapeHtml(arbeit.arbeit)}', '${arbeit.terminNr}', '${auftragsnrEscaped}')"
+             title="${arbeit.kunde}${arbeit.kennzeichen ? ' - ' + arbeit.kennzeichen : ''}&#10;🔧 ${arbeitenTooltip}${fortsetzungText}&#10;${startZeitText} - ${endZeitText} (${dauerText})${auftragsnrText}${schwebendTitleText}">
+          ${schwebendBadge}<span class="zeitleiste-block-haupt">${this.escapeHtml(blockHaupt)}</span>${blockArbeit}
+          <span class="zeitleiste-block-zeit">${startZeitText} - ${endZeitText}</span>
+        </div>
+      `;
+    };
+    
     for (const arbeit of sortedArbeiten) {
-      let leftPercent, widthPercent;
       let startMinutes, endMinutes;
       
       if (arbeit.startzeit) {
@@ -9860,48 +12124,51 @@ class App {
         startMinutes = startH * 60 + startM;
         endMinutes = startMinutes + arbeit.zeitMinuten;
         
-        // Begrenzen auf 8-18 Uhr
-        const displayStart = Math.max(startMinutes, startHour * 60);
-        const displayEnd = Math.min(endMinutes, endHour * 60);
-        
-        leftPercent = ((displayStart - startHour * 60) / (totalHours * 60)) * 100;
-        widthPercent = ((displayEnd - displayStart) / (totalHours * 60)) * 100;
+        // Wenn die Startzeit in der Pause liegt, nach der Pause verschieben
+        if (pauseStartMinuten !== null && startMinutes >= pauseStartMinuten && startMinutes < pauseEndMinuten) {
+          startMinutes = pauseEndMinuten;
+          endMinutes = startMinutes + arbeit.zeitMinuten;
+        }
       } else {
-        // Ohne Startzeit: Platziere nach letzter Arbeit
+        // Ohne Startzeit: Platziere nach letzter Arbeit (und nach Pause falls nötig)
         startMinutes = currentEndMinutes;
+        // Wenn Start in der Pause liegt, nach der Pause beginnen
+        if (pauseStartMinuten !== null && startMinutes >= pauseStartMinuten && startMinutes < pauseEndMinuten) {
+          startMinutes = pauseEndMinuten;
+        }
         endMinutes = startMinutes + arbeit.zeitMinuten;
-        
-        // Begrenzen auf 8-18 Uhr
-        const displayStart = Math.max(startMinutes, startHour * 60);
-        const displayEnd = Math.min(endMinutes, endHour * 60);
-        
-        leftPercent = ((displayStart - startHour * 60) / (totalHours * 60)) * 100;
-        widthPercent = ((displayEnd - displayStart) / (totalHours * 60)) * 100;
       }
-
-      currentEndMinutes = endMinutes;
       
-      // Nur anzeigen wenn im sichtbaren Bereich
-      if (widthPercent <= 0) continue;
-
-      const statusClass = arbeit.startzeit ? `status-${arbeit.status}` : 'status-keine-zeit';
-      const internClass = arbeit.istIntern ? 'intern-termin' : '';
-      const startZeitText = arbeit.startzeit || '—';
-      const endZeitText = this.minutesToTime(endMinutes);
-      const dauerText = this.formatMinutesToHours(arbeit.zeitMinuten);
-      
-      // Hauptanzeige: Kennzeichen bevorzugt, sonst Name (bei internen Terminen)
-      const hauptAnzeige = arbeit.kennzeichen ? arbeit.kennzeichen : (arbeit.istIntern ? '🔧 ' + arbeit.kunde : arbeit.kunde);
-
-      bloeckeHtml += `
-        <div class="zeitleiste-block ${statusClass} ${internClass}" 
-             style="left: ${leftPercent}%; width: ${Math.max(widthPercent, 3)}%;"
-             onclick="app.openZeitleisteKontextmenu(event, ${arbeit.terminId}, '${this.escapeHtml(arbeit.kunde)}', '${this.escapeHtml(arbeit.arbeit)}', '${arbeit.terminNr}')"
-             title="${arbeit.kunde}${arbeit.kennzeichen ? ' - ' + arbeit.kennzeichen : ''}&#10;${arbeit.arbeit}&#10;${startZeitText} - ${endZeitText} (${dauerText})">
-          <span class="zeitleiste-block-haupt">${this.escapeHtml(hauptAnzeige)}</span>
-          <span class="zeitleiste-block-zeit">${startZeitText} - ${endZeitText}</span>
-        </div>
-      `;
+      // Prüfe ob der Termin über die Mittagspause geht
+      if (pauseStartMinuten !== null && startMinutes < pauseStartMinuten && endMinutes > pauseStartMinuten) {
+        // Termin überlappt mit der Pause - aufteilen
+        
+        // Teil 1: Vor der Pause
+        const teil1End = pauseStartMinuten;
+        bloeckeHtml += renderBlock(arbeit, startMinutes, teil1End, false);
+        
+        // Teil 2: Nach der Pause (mit der verbleibenden Zeit)
+        const verbrauchteZeit = teil1End - startMinutes;
+        const verbleibendeZeit = arbeit.zeitMinuten - verbrauchteZeit;
+        if (verbleibendeZeit > 0) {
+          const teil2Start = pauseEndMinuten;
+          const teil2End = teil2Start + verbleibendeZeit;
+          bloeckeHtml += renderBlock(arbeit, teil2Start, teil2End, true);
+          currentEndMinutes = teil2End;
+        } else {
+          currentEndMinutes = teil1End;
+        }
+      } else {
+        // Termin überlappt nicht mit der Pause - normal rendern
+        bloeckeHtml += renderBlock(arbeit, startMinutes, endMinutes, false);
+        
+        // Wenn das Ende in der Pause liegt, nach der Pause fortsetzen
+        if (pauseStartMinuten !== null && endMinutes > pauseStartMinuten && endMinutes <= pauseEndMinuten) {
+          currentEndMinutes = pauseEndMinuten;
+        } else {
+          currentEndMinutes = endMinutes;
+        }
+      }
     }
 
     bloeckeHtml += '</div>';
@@ -9914,6 +12181,7 @@ class App {
         </div>
         <div class="zeitleiste-timeline">
           ${gitterHtml}
+          ${mittagspauseHtml}
           ${jetztMarkerHtml}
           ${bloeckeHtml}
         </div>
@@ -9931,7 +12199,7 @@ class App {
   // ZEITLEISTE KONTEXTMENÜ
   // ==========================================
 
-  openZeitleisteKontextmenu(event, terminId, kunde, arbeit, terminNr) {
+  openZeitleisteKontextmenu(event, terminId, kunde, arbeit, terminNr, interneAuftragsnummer = '') {
     event.stopPropagation();
     
     const menu = document.getElementById('zeitleisteKontextmenu');
@@ -9940,10 +12208,12 @@ class App {
     // Speichere aktuelle Termin-Info
     this.zeitleisteKontextTerminId = terminId;
     
-    // Header befüllen
+    // Header befüllen mit Auftragsnummer
+    const auftragsnrHtml = interneAuftragsnummer ? `<small class="kontextmenu-auftragsnr">Interne Auftragsnr.: ${interneAuftragsnummer}</small>` : '';
     header.innerHTML = `
       <strong>${terminNr}</strong> - ${kunde}
       <small>${arbeit}</small>
+      ${auftragsnrHtml}
     `;
     
     // Position berechnen

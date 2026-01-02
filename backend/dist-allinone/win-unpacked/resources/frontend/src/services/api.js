@@ -1,7 +1,16 @@
 class ApiService {
   static async request(endpoint, options = {}) {
-    // Verwende die dynamische Konfiguration aus config.js
-    const url = `${CONFIG.API_URL}${endpoint}`;
+    // Prüfe ob CONFIG verfügbar ist
+    if (typeof CONFIG === 'undefined' || typeof CONFIG.API_URL === 'undefined') {
+      const error = new Error('API-Konfiguration nicht verfügbar. Bitte Seite neu laden.');
+      console.error('API Service Error: CONFIG ist nicht verfügbar', error);
+      throw error;
+    }
+    // URL korrekt konstruieren (doppelte Slashes vermeiden)
+    const baseUrl = CONFIG.API_URL.endsWith('/') ? CONFIG.API_URL.slice(0, -1) : CONFIG.API_URL;
+    const endpointPath = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
+    const url = `${baseUrl}${endpointPath}`;
+    
     const config = {
       headers: {
         'Content-Type': 'application/json',
@@ -29,6 +38,23 @@ class ApiService {
       return await response.json();
     } catch (error) {
       console.error('API Request Error:', error);
+      
+      // Verbesserte Fehlerbehandlung für Netzwerkfehler
+      if (error.name === 'TypeError' && (error.message.includes('fetch') || error.message.includes('Failed to fetch') || error.message.includes('NetworkError'))) {
+        // Netzwerkfehler (Backend nicht erreichbar, CORS, etc.)
+        const networkError = new Error(`Verbindung zum Server fehlgeschlagen. Bitte prüfen Sie, ob das Backend läuft und erreichbar ist. (${url})`);
+        networkError.isNetworkError = true;
+        networkError.originalError = error;
+        networkError.url = url;
+        throw networkError;
+      }
+      
+      // Wenn der Fehler bereits eine Status-Eigenschaft hat, ist es ein HTTP-Fehler
+      if (error.status) {
+        throw error;
+      }
+      
+      // Unbekannter Fehler
       throw error;
     }
   }
@@ -84,12 +110,41 @@ class KundenService {
   static async search(searchTerm) {
     return ApiService.get(`/kunden/search?search=${encodeURIComponent(searchTerm)}`);
   }
+
+  // Alle Fahrzeuge (Kennzeichen) eines Kunden abrufen
+  static async getFahrzeuge(kundeId) {
+    return ApiService.get(`/kunden/${kundeId}/fahrzeuge`);
+  }
+
+  // Fahrzeug zu einem Kunden hinzufügen
+  static async addFahrzeug(kundeId, fahrzeug) {
+    return ApiService.post(`/kunden/${kundeId}/fahrzeuge`, fahrzeug);
+  }
+
+  // Fahrzeug eines Kunden löschen
+  static async deleteFahrzeug(kundeId, kennzeichen) {
+    return ApiService.delete(`/kunden/${kundeId}/fahrzeuge/${encodeURIComponent(kennzeichen)}`);
+  }
+
+  // Fahrzeugdaten aktualisieren
+  static async updateFahrzeug(kundeId, altesKennzeichen, neuesDaten) {
+    return ApiService.put(`/kunden/${kundeId}/fahrzeuge/${encodeURIComponent(altesKennzeichen)}`, neuesDaten);
+  }
+
+  // Gesamtanzahl aller Fahrzeuge
+  static async countFahrzeuge() {
+    return ApiService.get('/kunden/stats/fahrzeuge');
+  }
 }
 
 class TermineService {
   static async getAll(datum = null) {
     const query = datum ? `?datum=${datum}` : '';
     return ApiService.get(`/termine${query}`);
+  }
+
+  static async getById(id) {
+    return ApiService.get(`/termine/${id}`);
   }
 
   static async create(termin) {

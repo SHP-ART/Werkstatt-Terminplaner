@@ -70,7 +70,8 @@ function setServerConfig(ip, port) {
 // Konfigurationsobjekt
 const CONFIG = {
   get API_URL() {
-    return getServerConfig().url;
+    const serverConfig = getServerConfig();
+    return serverConfig.url;
   },
   getServerConfig,
   setServerConfig

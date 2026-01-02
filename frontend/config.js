@@ -70,13 +70,7 @@ function setServerConfig(ip, port) {
 // Konfigurationsobjekt
 const CONFIG = {
   get API_URL() {
-    // #region agent log
-    fetch('http://127.0.0.1:7245/ingest/66565fa5-16de-456a-af21-71213d9bb5d2',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'config.js:72',message:'CONFIG.API_URL getter called',data:{timestamp:Date.now()},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
-    // #endregion
     const serverConfig = getServerConfig();
-    // #region agent log
-    fetch('http://127.0.0.1:7245/ingest/66565fa5-16de-456a-af21-71213d9bb5d2',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'config.js:73',message:'getServerConfig result',data:{url:serverConfig.url,ip:serverConfig.ip,port:serverConfig.port},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
-    // #endregion
     return serverConfig.url;
   },
   getServerConfig,
@@ -84,7 +78,4 @@ const CONFIG = {
 };
 
 // Debug-Ausgabe beim Laden
-// #region agent log
-fetch('http://127.0.0.1:7245/ingest/66565fa5-16de-456a-af21-71213d9bb5d2',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'config.js:80',message:'config.js loaded',data:{serverConfig:getServerConfig()},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
-// #endregion
 console.log('Server-Konfiguration:', getServerConfig());

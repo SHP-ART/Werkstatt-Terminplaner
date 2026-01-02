@@ -19,6 +19,11 @@ extraResources:
       - '**/*'
       - '!node_modules/**'
       - '!*.md'
+publish:
+  provider: github
+  owner: shp-art
+  repo: Werkstatt-Terminplaner
+  releaseType: release
 win:
   target:
     - target: nsis

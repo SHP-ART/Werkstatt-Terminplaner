@@ -842,6 +842,53 @@ textarea {
     transition: border-color 0.3s ease;
 }
 
+/* ===== Spezial-Styling für Arbeiten-Textarea ===== */
+.arbeiten-textarea {
+    padding: 0 !important;
+    border: 2px solid #e2e8f0 !important;
+    border-radius: 12px !important;
+    background: #f8fafc !important;
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    font-size: 15px !important;
+    line-height: 2.2 !important;
+    min-height: 160px;
+    resize: vertical;
+    /* Zeilen-Hintergrund simulieren */
+    background-image: repeating-linear-gradient(
+        to bottom,
+        transparent 0px,
+        transparent 32px,
+        #e2e8f0 32px,
+        #e2e8f0 33px
+    ) !important;
+    background-size: 100% 33px !important;
+    background-position: 0 12px !important;
+    padding: 12px 14px !important;
+}
+
+.arbeiten-textarea:focus {
+    border-color: #667eea !important;
+    background-color: #fff !important;
+    box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.15), 0 4px 12px rgba(0, 0, 0, 0.08) !important;
+    background-image: repeating-linear-gradient(
+        to bottom,
+        transparent 0px,
+        transparent 32px,
+        #e8ecf4 32px,
+        #e8ecf4 33px
+    ) !important;
+}
+
+.arbeiten-textarea:hover:not(:focus) {
+    border-color: #cbd5e1 !important;
+    background-color: #f1f5f9 !important;
+}
+
+.arbeiten-textarea::placeholder {
+    color: #94a3b8;
+    font-style: italic;
+}
+
 /* Animierter Highlight-Balken */
 .form-group::after {
     content: '';
@@ -1221,6 +1268,209 @@ select option {
 .ersatzauto-tag.status-teilweise {
     background: linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%);
     border-color: #fde68a;
+}
+
+/* ===== Ersatzauto Wochen-Übersicht (Mo-So) ===== */
+.ea-wochen-container {
+    background: white;
+    border-radius: 12px;
+    border: 1px solid #e2e8f0;
+    overflow: hidden;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+}
+
+.ea-wochen-header {
+    display: grid;
+    grid-template-columns: 60px repeat(7, 1fr);
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    font-weight: 600;
+    font-size: 0.85rem;
+}
+
+.ea-kw-header,
+.ea-tag-header {
+    padding: 12px 8px;
+    text-align: center;
+    border-right: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.ea-tag-header:last-child {
+    border-right: none;
+}
+
+.ea-wochen-zeile {
+    display: grid;
+    grid-template-columns: 60px repeat(7, 1fr);
+    border-bottom: 1px solid #e2e8f0;
+}
+
+.ea-wochen-zeile:last-child {
+    border-bottom: none;
+}
+
+.ea-kw {
+    padding: 10px 8px;
+    text-align: center;
+    font-weight: 600;
+    font-size: 0.75rem;
+    color: #64748b;
+    background: #f8fafc;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-right: 1px solid #e2e8f0;
+}
+
+.ea-tag-zelle {
+    padding: 8px 4px;
+    text-align: center;
+    border-right: 1px solid #f1f5f9;
+    transition: all 0.2s ease;
+    cursor: default;
+    min-height: 50px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+}
+
+.ea-tag-zelle:last-child {
+    border-right: none;
+}
+
+.ea-tag-zelle:hover {
+    background: #f8fafc;
+}
+
+.ea-tag-zelle.ea-heute {
+    background: linear-gradient(135deg, rgba(210, 20, 44, 0.08) 0%, rgba(210, 20, 44, 0.15) 100%);
+    border: 2px solid var(--accent);
+    border-radius: 0;
+}
+
+.ea-tag-zelle.ea-vergangen {
+    opacity: 0.4;
+    background: #fafafa;
+}
+
+.ea-tag-zelle.ea-sonntag {
+    background: #fef2f2;
+}
+
+.ea-tag-zelle.ea-sonntag.ea-vergangen {
+    background: #fafafa;
+}
+
+/* Status-Farben für Zellen */
+.ea-tag-zelle.ea-status-frei {
+    background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%);
+}
+
+.ea-tag-zelle.ea-status-teilweise {
+    background: linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%);
+}
+
+.ea-tag-zelle.ea-status-voll {
+    background: linear-gradient(135deg, #fef2f2 0%, #fee2e2 100%);
+}
+
+.ea-tag-zelle.ea-status-keine {
+    background: #f9fafb;
+}
+
+.ea-tag-datum {
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: #334155;
+}
+
+.ea-tag-verfuegbar {
+    font-size: 0.75rem;
+    font-weight: 500;
+    margin-top: 2px;
+    padding: 2px 6px;
+    border-radius: 10px;
+}
+
+.ea-status-frei .ea-tag-verfuegbar {
+    color: #166534;
+    background: rgba(22, 101, 52, 0.1);
+}
+
+.ea-status-teilweise .ea-tag-verfuegbar {
+    color: #92400e;
+    background: rgba(146, 64, 14, 0.1);
+}
+
+.ea-status-voll .ea-tag-verfuegbar {
+    color: #991b1b;
+    background: rgba(153, 27, 27, 0.1);
+}
+
+.ea-status-keine .ea-tag-verfuegbar {
+    color: #6b7280;
+}
+
+/* Legende */
+.ea-legende {
+    display: flex;
+    gap: 20px;
+    margin-top: 15px;
+    padding: 12px 16px;
+    background: #f8fafc;
+    border-radius: 8px;
+    justify-content: center;
+    flex-wrap: wrap;
+}
+
+.ea-legende-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.85rem;
+    color: #475569;
+}
+
+.ea-legende-dot {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+}
+
+.ea-legende-dot.ea-frei {
+    background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);
+}
+
+.ea-legende-dot.ea-teilweise {
+    background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+}
+
+.ea-legende-dot.ea-voll {
+    background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+}
+
+/* Responsive Anpassungen */
+@media (max-width: 768px) {
+    .ea-wochen-header,
+    .ea-wochen-zeile {
+        grid-template-columns: 45px repeat(7, 1fr);
+    }
+    
+    .ea-tag-datum {
+        font-size: 0.8rem;
+    }
+    
+    .ea-tag-verfuegbar {
+        font-size: 0.65rem;
+        padding: 1px 4px;
+    }
+    
+    .ea-kw-header,
+    .ea-tag-header {
+        padding: 8px 4px;
+        font-size: 0.75rem;
+    }
 }
 
 /* Ersatzauto Schnellzugriff Kacheln */
@@ -2946,15 +3196,14 @@ tr.schwebend {
 
 .autocomplete-dropdown {
     display: none;
-    position: absolute;
-    background: white;
-    border: 2px solid var(--accent);
-    border-radius: 5px;
-    max-height: 200px;
+    position: fixed;
+    background: #ffffff;
+    border: 2px solid #4a90e2;
+    border-radius: 8px;
+    max-height: 250px;
     overflow-y: auto;
-    z-index: 1000;
-    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
-    width: 100%;
+    z-index: 999999;
+    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.3);
 }
 
 .autocomplete-dropdown.show {
@@ -4518,6 +4767,14 @@ mark.highlight {
     gap: 10px;
     align-items: center;
     border-left: 4px solid #ff9800;
+    cursor: pointer;
+    transition: background-color 0.2s, transform 0.2s, box-shadow 0.2s;
+}
+
+.nicht-zugeordnet-item:hover {
+    background-color: #fff3e0;
+    transform: translateX(5px);
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
 }
 
 .nz-info {
@@ -4863,11 +5120,34 @@ mark.highlight {
   border-radius: 8px;
 }
 
+.schwebend-display.schwebend-clickable {
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.schwebend-display.schwebend-clickable:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(255, 152, 0, 0.3);
+  border-color: #e65100;
+}
+
 .schwebend-header {
   display: flex;
   align-items: center;
   gap: 10px;
   margin-bottom: 12px;
+}
+
+.schwebend-click-hint {
+  margin-left: auto;
+  font-size: 0.85rem;
+  color: #e65100;
+  opacity: 0.7;
+  transition: opacity 0.2s;
+}
+
+.schwebend-display.schwebend-clickable:hover .schwebend-click-hint {
+  opacity: 1;
 }
 
 .schwebend-icon {
@@ -5118,7 +5398,7 @@ mark.highlight {
     bottom: 5px;
     min-height: 40px;
     border-radius: 6px;
-    padding: 4px 8px;
+    padding: 3px 6px;
     font-size: 11px;
     color: white;
     overflow: hidden;
@@ -5127,7 +5407,7 @@ mark.highlight {
     box-shadow: 0 1px 3px rgba(0,0,0,0.2);
     display: flex;
     flex-direction: column;
-    justify-content: center;
+    justify-content: flex-start;
     z-index: 1;
 }
 
@@ -5139,6 +5419,10 @@ mark.highlight {
 
 .zeitleiste-block.status-geplant {
     background: linear-gradient(135deg, #2196f3 0%, #1976d2 100%);
+}
+
+.zeitleiste-block.status-wartend {
+    background: linear-gradient(135deg, #9c27b0 0%, #7b1fa2 100%);
 }
 
 .zeitleiste-block.status-in_arbeit {
@@ -5159,22 +5443,67 @@ mark.highlight {
     border: 2px dashed rgba(255,255,255,0.5);
 }
 
+/* Schwebende Termine */
+.zeitleiste-block.schwebend-block {
+    background: linear-gradient(135deg, #9c27b0 0%, #7b1fa2 100%) !important;
+    border: 2px dashed rgba(255,255,255,0.7);
+    opacity: 0.85;
+}
+
+.zeitleiste-schwebend-badge {
+    font-size: 10px;
+    margin-right: 3px;
+}
+
+.zeitleiste-mehrteilig-punkt {
+    display: none;
+}
+
+.zeitleiste-block-arbeit {
+    display: block;
+    font-size: 9px;
+    font-weight: 500;
+    opacity: 0.85;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    margin-top: 0;
+    line-height: 1.1;
+}
+
+.zeitleiste-arbeiten-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(255,255,255,0.3);
+    color: white;
+    font-size: 9px;
+    font-weight: 700;
+    min-width: 16px;
+    height: 16px;
+    border-radius: 8px;
+    margin-right: 4px;
+    padding: 0 4px;
+}
+
 .zeitleiste-block-haupt {
     font-weight: 700;
-    font-size: 12px;
+    font-size: 11px;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
     text-shadow: 0 1px 2px rgba(0,0,0,0.5);
-    letter-spacing: 0.3px;
+    letter-spacing: 0.2px;
+    line-height: 1.2;
 }
 
 .zeitleiste-block-zeit {
-    font-size: 10px;
-    opacity: 0.95;
-    margin-top: 2px;
+    font-size: 9px;
+    opacity: 0.9;
+    margin-top: auto;
     text-shadow: 0 1px 1px rgba(0,0,0,0.4);
-    font-weight: 600;
+    font-weight: 500;
+    line-height: 1.1;
 }
 
 /* Nicht zugeordnete Arbeiten */
@@ -5185,6 +5514,139 @@ mark.highlight {
 .zeitleiste-row.nicht-zugeordnet .zeitleiste-mitarbeiter {
     background: #ffecb3;
     color: #f57c00;
+}
+
+/* Nicht zugeordnet - Inline Container (hintereinander ohne Zeiteinordnung) */
+.nicht-zugeordnet-timeline {
+    background: #fff8e1 !important;
+}
+
+.zeitleiste-inline-container {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    padding: 8px;
+    align-items: stretch;
+}
+
+.zeitleiste-block-inline {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    padding: 6px 10px;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    overflow: hidden;
+}
+
+.zeitleiste-block-inline:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+}
+
+.zeitleiste-block-inline.status-geplant {
+    background: linear-gradient(135deg, #42a5f5, #1e88e5);
+    color: white;
+}
+
+.zeitleiste-block-inline.status-wartend {
+    background: linear-gradient(135deg, #ab47bc, #8e24aa);
+    color: white;
+}
+
+.zeitleiste-block-inline.status-in-arbeit {
+    background: linear-gradient(135deg, #ff9800, #f57c00);
+    color: white;
+}
+
+.zeitleiste-block-inline.status-abgeschlossen {
+    background: linear-gradient(135deg, #66bb6a, #43a047);
+    color: white;
+}
+
+.zeitleiste-block-inline .zeitleiste-block-nummer {
+    font-size: 0.75em;
+    font-weight: 700;
+    opacity: 0.9;
+    white-space: nowrap;
+}
+
+.zeitleiste-block-inline .zeitleiste-block-text {
+    font-size: 0.85em;
+    font-weight: 500;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 150px;
+}
+
+.zeitleiste-block-inline .zeitleiste-block-zeit {
+    font-size: 0.7em;
+    opacity: 0.8;
+    margin-top: 2px;
+}
+
+/* Mittagspause Block - Modern & Übersichtlich */
+.zeitleiste-mittagspause {
+    position: absolute;
+    top: 2px;
+    bottom: 2px;
+    background: repeating-linear-gradient(
+        -45deg,
+        rgba(239, 83, 80, 0.15),
+        rgba(239, 83, 80, 0.15) 8px,
+        rgba(239, 83, 80, 0.25) 8px,
+        rgba(239, 83, 80, 0.25) 16px
+    );
+    border-radius: 6px;
+    border: 2px dashed #ef5350;
+    z-index: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    pointer-events: auto;
+    cursor: default;
+    box-shadow: inset 0 0 10px rgba(239, 83, 80, 0.1);
+    transition: all 0.2s ease;
+}
+
+.zeitleiste-mittagspause:hover {
+    background: repeating-linear-gradient(
+        -45deg,
+        rgba(239, 83, 80, 0.2),
+        rgba(239, 83, 80, 0.2) 8px,
+        rgba(239, 83, 80, 0.3) 8px,
+        rgba(239, 83, 80, 0.3) 16px
+    );
+    border-color: #e53935;
+    box-shadow: inset 0 0 15px rgba(239, 83, 80, 0.15), 0 2px 8px rgba(239, 83, 80, 0.2);
+}
+
+.zeitleiste-mittagspause-text {
+    font-size: 14px;
+    color: #c62828;
+    font-weight: 600;
+    text-shadow: 0 1px 2px rgba(255,255,255,0.8);
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.zeitleiste-mittagspause-text::before {
+    content: '🍽️';
+    font-size: 16px;
+}
+
+.zeitleiste-mittagspause-label {
+    font-size: 11px;
+    color: #c62828;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    opacity: 0.9;
 }
 
 /* Keine Termine Nachricht */
@@ -5306,6 +5768,17 @@ mark.highlight {
     margin-top: 3px;
 }
 
+.zeitleiste-kontextmenu-header .kontextmenu-auftragsnr {
+    display: block;
+    font-weight: 600;
+    opacity: 1;
+    font-size: 12px;
+    margin-top: 6px;
+    background: rgba(255,255,255,0.2);
+    padding: 4px 8px;
+    border-radius: 4px;
+}
+
 .zeitleiste-kontextmenu-items {
     padding: 8px 0;
 }
@@ -5344,4 +5817,422 @@ mark.highlight {
     height: 1px;
     background: #eee;
     margin: 4px 0;
+}
+
+/* ================================================
+   TERMIN VORSCHAU MODAL MIT COUNTDOWN
+   ================================================ */
+
+.termin-vorschau-modal {
+    animation: slideInUp 0.3s ease;
+}
+
+@keyframes slideInUp {
+    from {
+        opacity: 0;
+        transform: translateY(30px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.termin-vorschau-modal .countdown-bar {
+    position: relative;
+}
+
+.termin-vorschau-modal #countdownZahl {
+    font-family: 'Segoe UI', monospace;
+    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.termin-vorschau-modal .vorschau-row {
+    transition: background 0.2s ease;
+}
+
+.termin-vorschau-modal .vorschau-row:hover {
+    background: rgba(74, 144, 226, 0.05);
+}
+
+/* Termin Vorschau Modal Spezifisch */
+#terminVorschauModal {
+    opacity: 0;
+    transition: opacity 0.3s ease;
+}
+
+#terminVorschauModal.active {
+    opacity: 1;
+}
+
+#terminVorschauModal .modal-content {
+    transform: translateY(20px) scale(0.95);
+    transition: transform 0.3s ease;
+}
+
+#terminVorschauModal.active .modal-content {
+    transform: translateY(0) scale(1);
+}
+
+.btn-success {
+    background: linear-gradient(135deg, #28a745 0%, #218838 100%);
+    color: white;
+    border: none;
+    padding: 12px 24px;
+    border-radius: 8px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.btn-success:hover {
+    background: linear-gradient(135deg, #218838 0%, #1e7e34 100%);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(40, 167, 69, 0.3);
+}
+
+.btn-danger {
+    background: linear-gradient(135deg, #dc3545 0%, #c82333 100%);
+    color: white;
+    border: none;
+    padding: 12px 24px;
+    border-radius: 8px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.btn-danger:hover {
+    background: linear-gradient(135deg, #c82333 0%, #bd2130 100%);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(220, 53, 69, 0.3);
+}
+
+/* ========================================
+   WARTENDE AKTIONEN TAB
+   ======================================== */
+
+.wartende-aktionen-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 25px;
+    padding: 20px;
+    background: linear-gradient(135deg, #fff8e1 0%, #ffecb3 100%);
+    border-radius: 12px;
+    border-left: 5px solid #ff9800;
+}
+
+.wartende-aktionen-header h3 {
+    margin: 0 0 8px 0;
+    color: #e65100;
+    font-size: 1.4em;
+}
+
+.wartende-stats {
+    display: flex;
+    gap: 15px;
+}
+
+.wartende-stats .stat-box {
+    background: white;
+    padding: 12px 20px;
+    border-radius: 10px;
+    text-align: center;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    min-width: 80px;
+}
+
+.wartende-stats .stat-value {
+    display: block;
+    font-size: 2em;
+    font-weight: bold;
+    color: #ff9800;
+}
+
+.wartende-stats .stat-label {
+    font-size: 0.85em;
+    color: #666;
+}
+
+.wartende-neu-section {
+    background: linear-gradient(135deg, #fffde7 0%, #fff9c4 100%);
+    border: 2px dashed #ffc107;
+    margin-bottom: 20px;
+}
+
+.wartende-neu-section h4 {
+    color: #f57f17;
+    margin-bottom: 20px;
+}
+
+.wartende-liste-section h4 {
+    color: #333;
+    margin-bottom: 15px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.wartende-liste {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
+
+.wartende-karte {
+    background: white;
+    border-radius: 12px;
+    padding: 20px;
+    border-left: 5px solid #ff9800;
+    box-shadow: 0 3px 10px rgba(0,0,0,0.1);
+    transition: all 0.3s ease;
+    position: relative;
+}
+
+.wartende-karte:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 6px 20px rgba(0,0,0,0.15);
+}
+
+.wartende-karte-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 12px;
+}
+
+.wartende-karte-kunde {
+    font-size: 1.2em;
+    font-weight: bold;
+    color: #333;
+}
+
+.wartende-karte-kennzeichen {
+    background: #f0f0f0;
+    padding: 4px 10px;
+    border-radius: 6px;
+    font-family: monospace;
+    font-weight: bold;
+    color: #555;
+}
+
+.wartende-karte-body {
+    margin-bottom: 15px;
+}
+
+.wartende-karte-beschreibung {
+    background: #f8f9fa;
+    padding: 12px;
+    border-radius: 8px;
+    margin-bottom: 10px;
+    white-space: pre-line;
+    color: #444;
+    line-height: 1.5;
+}
+
+.wartende-karte-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 15px;
+    font-size: 0.9em;
+    color: #666;
+}
+
+.wartende-karte-meta span {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.wartende-karte-footer {
+    display: flex;
+    gap: 10px;
+    padding-top: 15px;
+    border-top: 1px solid #eee;
+    flex-wrap: wrap;
+}
+
+.wartende-karte-footer .btn {
+    flex: 1;
+    min-width: 120px;
+    padding: 10px 15px;
+    font-size: 0.9em;
+}
+
+.btn-einplanen {
+    background: linear-gradient(135deg, #4caf50 0%, #388e3c 100%);
+    color: white;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.btn-einplanen:hover {
+    background: linear-gradient(135deg, #388e3c 0%, #2e7d32 100%);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(76, 175, 80, 0.3);
+}
+
+.btn-bearbeiten-wartend {
+    background: linear-gradient(135deg, #2196f3 0%, #1976d2 100%);
+    color: white;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.btn-bearbeiten-wartend:hover {
+    background: linear-gradient(135deg, #1976d2 0%, #1565c0 100%);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(33, 150, 243, 0.3);
+}
+
+.btn-erledigt {
+    background: linear-gradient(135deg, #9e9e9e 0%, #757575 100%);
+    color: white;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.btn-erledigt:hover {
+    background: linear-gradient(135deg, #757575 0%, #616161 100%);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(158, 158, 158, 0.3);
+}
+
+.btn-loeschen-wartend {
+    background: linear-gradient(135deg, #f44336 0%, #d32f2f 100%);
+    color: white;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    min-width: auto !important;
+    flex: 0 !important;
+    padding: 10px 12px !important;
+}
+
+.btn-loeschen-wartend:hover {
+    background: linear-gradient(135deg, #d32f2f 0%, #c62828 100%);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(244, 67, 54, 0.3);
+}
+
+.wartende-leer {
+    text-align: center;
+    padding: 50px 20px;
+    color: #888;
+}
+
+.wartende-leer-icon {
+    font-size: 4em;
+    margin-bottom: 15px;
+    opacity: 0.5;
+}
+
+.wartende-karte-erstellt {
+    position: absolute;
+    top: 10px;
+    right: 15px;
+    font-size: 0.8em;
+    color: #999;
+}
+
+.btn-sparkle-warning {
+    --sparkle-color: #ff9800;
+    background: linear-gradient(135deg, #ff9800 0%, #f57c00 100%);
+}
+
+.btn-sparkle-warning:hover {
+    background: linear-gradient(135deg, #f57c00 0%, #ef6c00 100%);
+}
+
+/* Wartende Aktionen - Grund/Beschreibung Sektion */
+.wartend-grund-section {
+    background: linear-gradient(135deg, #f5f5f5 0%, #fafafa 100%);
+    padding: 20px;
+    border-radius: 12px;
+    border: 1px solid #e0e0e0;
+    margin-bottom: 20px;
+}
+
+.wartend-grund-section label {
+    font-size: 1.1em;
+    font-weight: 600;
+    color: #333;
+    margin-bottom: 12px;
+    display: block;
+}
+
+.wartend-schnellauswahl {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 15px;
+    align-items: center;
+}
+
+.schnellauswahl-label {
+    font-size: 0.85em;
+    color: #666;
+    margin-right: 5px;
+}
+
+.schnellauswahl-btn {
+    background: white;
+    border: 2px solid #e0e0e0;
+    padding: 6px 12px;
+    border-radius: 20px;
+    font-size: 0.85em;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    color: #555;
+}
+
+.schnellauswahl-btn:hover {
+    border-color: #ff9800;
+    background: #fff8e1;
+    color: #e65100;
+    transform: translateY(-1px);
+}
+
+.schnellauswahl-btn:active {
+    transform: translateY(0);
+    background: #ffecb3;
+}
+
+.wartend-grund-section textarea {
+    width: 100%;
+    padding: 15px;
+    border: 2px solid #e0e0e0;
+    border-radius: 10px;
+    font-size: 1em;
+    line-height: 1.5;
+    resize: vertical;
+    min-height: 100px;
+    transition: border-color 0.2s, box-shadow 0.2s;
+    background: white;
+}
+
+.wartend-grund-section textarea:focus {
+    border-color: #ff9800;
+    box-shadow: 0 0 0 3px rgba(255, 152, 0, 0.15);
+    outline: none;
+}
+
+.wartend-grund-section textarea::placeholder {
+    color: #aaa;
+    font-size: 0.9em;
+}
+
+.wartend-grund-section .form-hint {
+    display: block;
+    margin-top: 10px;
+    font-size: 0.85em;
+    color: #888;
 }
