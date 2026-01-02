@@ -12,8 +12,11 @@ testdaten/
 
 # Build artifacts (will be distributed via GitHub Releases)
 /backend/dist/
+/backend/dist-*/
 /frontend/dist/
+/frontend/dist-*/
 *.exe
+*.blockmap
 
 # Ignore exe files in node_modules
 node_modules/**/*.exe
