@@ -341,6 +341,48 @@ app.on('before-quit', () => {
   stopServer();
 });
 
+// Windows-spezifische Shutdown-Events
+// Diese werden ausgelöst wenn Windows herunterfährt oder der Benutzer sich abmeldet
+if (process.platform === 'win32') {
+  // SIGTERM wird von Windows beim Herunterfahren gesendet
+  process.on('SIGTERM', () => {
+    console.log('SIGTERM empfangen - Anwendung wird beendet...');
+    stopStatsInterval();
+    stopServer();
+    app.quit();
+  });
+
+  // SIGINT wird bei Strg+C gesendet
+  process.on('SIGINT', () => {
+    console.log('SIGINT empfangen - Anwendung wird beendet...');
+    stopStatsInterval();
+    stopServer();
+    app.quit();
+  });
+
+  // Windows Session-Ende (Abmeldung, Herunterfahren)
+  const { powerMonitor } = require('electron');
+  app.whenReady().then(() => {
+    powerMonitor.on('shutdown', () => {
+      console.log('System wird heruntergefahren - Anwendung wird beendet...');
+      stopStatsInterval();
+      stopServer();
+    });
+
+    powerMonitor.on('lock-screen', () => {
+      console.log('Bildschirm gesperrt');
+    });
+
+    powerMonitor.on('suspend', () => {
+      console.log('System geht in Standby');
+    });
+
+    powerMonitor.on('resume', () => {
+      console.log('System aus Standby aufgewacht');
+    });
+  });
+}
+
 // Function to get the actual IP address of the machine
 function getLocalIPAddress() {
   const interfaces = os.networkInterfaces();
