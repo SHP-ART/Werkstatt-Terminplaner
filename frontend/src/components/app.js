@@ -27,6 +27,22 @@ class App {
     this.loadInternerTerminMitarbeiter();
     this.setupWebSocket();
     this.setupErsatzautoOptionHandlers();
+    this.loadServerVersion();
+  }
+
+  // Lädt und zeigt die Server-Version im Header an
+  async loadServerVersion() {
+    try {
+      const response = await api.get('/server-info');
+      if (response && response.version) {
+        const versionEl = document.getElementById('appVersion');
+        if (versionEl) {
+          versionEl.textContent = `v${response.version}`;
+        }
+      }
+    } catch (error) {
+      console.warn('Server-Version konnte nicht geladen werden:', error);
+    }
   }
 
   // Initialisiert alle Sub-Tabs und setzt display:none für nicht-aktive

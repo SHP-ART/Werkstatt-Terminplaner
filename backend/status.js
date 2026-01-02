@@ -12,10 +12,20 @@ document.addEventListener('DOMContentLoaded', () => {
     const lastActivityEl = document.getElementById('lastActivity');
     const requestsListEl = document.getElementById('requestsList');
     const statusIndicatorEl = document.getElementById('statusIndicator');
+    const serverVersionEl = document.getElementById('serverVersion');
 
     // Server URL laden
     window.electronAPI.getServerUrl().then(url => {
         urlEl.textContent = url;
+    });
+    
+    // Server-Version laden
+    window.electronAPI.getUpdateStatus().then(result => {
+        if (result && result.currentVersion) {
+            serverVersionEl.textContent = 'v' + result.currentVersion;
+        }
+    }).catch(() => {
+        serverVersionEl.textContent = '-';
     });
 
     // Client-Count Updates

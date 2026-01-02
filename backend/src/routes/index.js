@@ -32,6 +32,20 @@ router.get('/health', (req, res) => {
 // Server-Info Endpoint für automatische API-Erkennung
 router.get('/server-info', (req, res) => {
   const os = require('os');
+  const path = require('path');
+  const fs = require('fs');
+  
+  // Version aus package.json lesen
+  let version = 'unbekannt';
+  try {
+    const packagePath = path.join(__dirname, '..', '..', 'package.json');
+    if (fs.existsSync(packagePath)) {
+      const pkg = JSON.parse(fs.readFileSync(packagePath, 'utf8'));
+      version = pkg.version;
+    }
+  } catch (e) {
+    console.error('Fehler beim Lesen der Version:', e);
+  }
   
   // Ermittle die IP-Adresse des Servers
   function getLocalIPAddress() {
@@ -51,6 +65,7 @@ router.get('/server-info', (req, res) => {
   
   res.json({
     status: 'OK',
+    version: version,
     ip: ip,
     port: port,
     apiUrl: `http://${ip}:${port}/api`,
