@@ -18,6 +18,55 @@ class App {
     return `${year}-${month}-${day}`;
   }
 
+  // Toast-Benachrichtigung anzeigen
+  showToast(message, type = 'info') {
+    // Prüfen ob bereits ein Toast-Container existiert
+    let toastContainer = document.getElementById('toastContainer');
+    if (!toastContainer) {
+      toastContainer = document.createElement('div');
+      toastContainer.id = 'toastContainer';
+      toastContainer.style.cssText = 'position: fixed; top: 20px; right: 20px; z-index: 10000; display: flex; flex-direction: column; gap: 10px;';
+      document.body.appendChild(toastContainer);
+    }
+
+    // Toast erstellen
+    const toast = document.createElement('div');
+    const colors = {
+      success: { bg: '#4caf50', icon: '✅' },
+      error: { bg: '#f44336', icon: '❌' },
+      warning: { bg: '#ff9800', icon: '⚠️' },
+      info: { bg: '#2196f3', icon: 'ℹ️' }
+    };
+    const color = colors[type] || colors.info;
+
+    toast.style.cssText = `
+      background: ${color.bg}; color: white; padding: 15px 20px; border-radius: 8px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.2); display: flex; align-items: center; gap: 10px;
+      font-size: 14px; font-weight: 500; animation: slideIn 0.3s ease-out;
+      max-width: 350px; word-wrap: break-word;
+    `;
+    toast.innerHTML = `<span>${color.icon}</span><span>${message}</span>`;
+
+    // CSS Animation hinzufügen falls noch nicht vorhanden
+    if (!document.getElementById('toastAnimationStyle')) {
+      const style = document.createElement('style');
+      style.id = 'toastAnimationStyle';
+      style.textContent = `
+        @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+        @keyframes slideOut { from { transform: translateX(0); opacity: 1; } to { transform: translateX(100%); opacity: 0; } }
+      `;
+      document.head.appendChild(style);
+    }
+
+    toastContainer.appendChild(toast);
+
+    // Nach 3 Sekunden ausblenden
+    setTimeout(() => {
+      toast.style.animation = 'slideOut 0.3s ease-out forwards';
+      setTimeout(() => toast.remove(), 300);
+    }, 3000);
+  }
+
   init() {
     this.setupEventListeners();
     this.initSubTabs(); // Sub-Tabs initialisieren
@@ -33,7 +82,7 @@ class App {
   // Lädt und zeigt die Server-Version im Header an
   async loadServerVersion() {
     try {
-      const response = await api.get('/server-info');
+      const response = await ApiService.get('/server-info');
       if (response && response.version) {
         const versionEl = document.getElementById('appVersion');
         if (versionEl) {
@@ -755,6 +804,17 @@ class App {
     if (schnellsucheStatus) {
       schnellsucheStatus.style.display = 'none';
     }
+    
+    // Kunde-Status-Badge ausblenden
+    const kundeStatusAnzeige = document.getElementById('kundeStatusAnzeige');
+    if (kundeStatusAnzeige) {
+      kundeStatusAnzeige.style.display = 'none';
+    }
+    
+    // Kennzeichen-Pflichtmarkierung zurücksetzen
+    const kennzeichenField = document.getElementById('kennzeichen');
+    const kennzeichenLabel = kennzeichenField?.parentElement?.querySelector('label');
+    this.setKennzeichenPflicht(false, kennzeichenField, kennzeichenLabel);
 
     // Versteckte Felder zurücksetzen
     const kundeId = document.getElementById('kunde_id');
@@ -3100,6 +3160,13 @@ class App {
       return;
     }
 
+    // Bei Neukunden muss ein Kennzeichen angegeben werden
+    if (!resolvedKundeId && resolvedKundeName && !termin.kennzeichen) {
+      alert('Bei einem neuen Kunden ist das Kennzeichen ein Pflichtfeld.\nBitte geben Sie ein Kennzeichen ein.');
+      document.getElementById('kennzeichen')?.focus();
+      return;
+    }
+
     // Speichere alle Daten für die spätere Verarbeitung
     this.pendingTerminData = {
       termin,
@@ -3561,8 +3628,12 @@ class App {
   handleWartendNameSuche() {
     const eingabe = document.getElementById('wartendNameSuche')?.value.trim() || '';
     const vorschlaegeDiv = document.getElementById('wartendNameVorschlaege');
+    const statusBadge = document.getElementById('wartendKundeStatusAnzeige');
     
     if (!vorschlaegeDiv) return;
+    
+    // Status-Badge aktualisieren (für wartende Aktionen)
+    this.updateWartendKundeStatusBadge(eingabe, statusBadge);
     
     if (eingabe.length < 2) {
       vorschlaegeDiv.classList.remove('aktiv');
@@ -3578,7 +3649,7 @@ class App {
     ).slice(0, 10);
     
     if (treffer.length === 0) {
-      vorschlaegeDiv.innerHTML = '<div class="keine-vorschlaege">Kein Kunde gefunden</div>';
+      vorschlaegeDiv.innerHTML = '<div class="keine-vorschlaege">Kein Kunde gefunden - wird als neuer Kunde angelegt</div>';
       vorschlaegeDiv.classList.add('aktiv');
       return;
     }
@@ -3596,6 +3667,79 @@ class App {
     vorschlaegeDiv.classList.add('aktiv');
     this.wartendVorschlaegeIndex = -1;
     this.wartendVorschlaege = treffer;
+  }
+
+  // Status-Badge für Neuer Kunde bei Wartende Aktionen
+  updateWartendKundeStatusBadge(eingabe, statusBadge) {
+    if (!statusBadge) return;
+    
+    if (!eingabe || eingabe.length < 2) {
+      statusBadge.style.display = 'none';
+      // Kennzeichen-Pflicht zurücksetzen
+      this.setWartendKennzeichenPflicht(false);
+      return;
+    }
+    
+    const lower = eingabe.toLowerCase();
+    const kundeId = document.getElementById('wartend_kunde_id')?.value;
+    
+    // Prüfe ob exakter Kunde ausgewählt wurde
+    if (kundeId) {
+      statusBadge.textContent = '✓ Kunde ausgewählt';
+      statusBadge.className = 'kunde-status-badge gefunden';
+      statusBadge.style.display = 'inline-block';
+      // Bekannter Kunde - Kennzeichen nicht Pflicht
+      this.setWartendKennzeichenPflicht(false);
+      return;
+    }
+    
+    // Prüfe ob Kunde mit genau diesem Namen existiert
+    const exakterTreffer = (this.kundenCache || []).find(kunde => 
+      kunde.name && kunde.name.toLowerCase() === lower
+    );
+    
+    if (exakterTreffer) {
+      statusBadge.textContent = '✓ Bekannter Kunde';
+      statusBadge.className = 'kunde-status-badge gefunden';
+      statusBadge.style.display = 'inline-block';
+      // Bekannter Kunde - Kennzeichen nicht Pflicht
+      this.setWartendKennzeichenPflicht(false);
+    } else {
+      statusBadge.textContent = '+ Neuer Kunde';
+      statusBadge.className = 'kunde-status-badge neuer-kunde';
+      statusBadge.style.display = 'inline-block';
+      // Neuer Kunde - Kennzeichen ist Pflichtfeld
+      this.setWartendKennzeichenPflicht(true);
+    }
+  }
+
+  // Markiert Kennzeichen-Feld bei Wartende Aktionen als Pflichtfeld
+  setWartendKennzeichenPflicht(isPflicht) {
+    const kennzeichenFeld = document.getElementById('wartend_kennzeichen');
+    // Label ist im Parent-div .form-group
+    const label = kennzeichenFeld?.parentElement?.querySelector('label');
+    
+    if (isPflicht) {
+      // Feld rot markieren
+      if (kennzeichenFeld) {
+        kennzeichenFeld.style.borderColor = '#e53935';
+        kennzeichenFeld.style.backgroundColor = '#ffebee';
+      }
+      // Label mit Pflichtfeld-Marker versehen (falls noch nicht vorhanden)
+      if (label && !label.innerHTML.includes('style="color:#e53935"')) {
+        label.innerHTML = '🚗 Kennzeichen: <span style="color:#e53935;font-weight:bold">*</span>';
+      }
+    } else {
+      // Feld zurücksetzen
+      if (kennzeichenFeld) {
+        kennzeichenFeld.style.borderColor = '';
+        kennzeichenFeld.style.backgroundColor = '';
+      }
+      // Label zurücksetzen
+      if (label) {
+        label.innerHTML = '🚗 Kennzeichen: *';
+      }
+    }
   }
 
   // Kennzeichen-Suche für Wartende Aktionen (nutzt Cache wie Hauptformular)
@@ -3809,6 +3953,15 @@ class App {
     document.getElementById('wartendKzBezirk').value = '';
     document.getElementById('wartendKzBuchstaben').value = '';
     document.getElementById('wartendKzNummer').value = '';
+    
+    // Status-Badge zurücksetzen/verstecken da jetzt ein Kunde ausgewählt ist
+    const statusBadge = document.getElementById('wartendKundeStatusAnzeige');
+    if (statusBadge) {
+      statusBadge.style.display = 'none';
+    }
+    
+    // Kennzeichen-Pflicht zurücksetzen (bekannter Kunde ausgewählt)
+    this.setWartendKennzeichenPflicht(false);
   }
 
   hideWartendVorschlaege(typ) {
@@ -3883,12 +4036,14 @@ class App {
   async handleWartendeAktionSubmit(e) {
     e.preventDefault();
 
-    const kundeId = document.getElementById('wartend_kunde_id').value;
+    let kundeId = document.getElementById('wartend_kunde_id').value;
     const kennzeichen = document.getElementById('wartend_kennzeichen').value.trim();
     const fahrzeugtyp = document.getElementById('wartend_fahrzeugtyp').value.trim();
     const beschreibung = document.getElementById('wartend_beschreibung').value.trim();
     const zeitStunden = parseFloat(document.getElementById('wartend_zeit').value) || 1;
     const notizen = document.getElementById('wartend_notizen').value.trim();
+    const teileStatus = document.getElementById('wartend_teile_status')?.value || '';
+    const kundeNameEingabe = document.getElementById('wartendNameSuche')?.value.trim() || '';
 
     if (!kennzeichen || !beschreibung) {
       alert('Bitte Kennzeichen und Beschreibung ausfüllen.');
@@ -3899,6 +4054,38 @@ class App {
     let kundeName = 'Unbekannt';
     if (kundeId) {
       kundeName = document.getElementById('wartendKundeName').textContent || 'Unbekannt';
+    } else if (kundeNameEingabe) {
+      // Prüfe ob Kunde existiert oder neu angelegt werden soll
+      const existierenderKunde = (this.kundenCache || []).find(k => 
+        k.name && k.name.toLowerCase() === kundeNameEingabe.toLowerCase()
+      );
+      
+      if (existierenderKunde) {
+        kundeId = existierenderKunde.id;
+        kundeName = existierenderKunde.name;
+      } else {
+        // Neuen Kunden anlegen
+        try {
+          const created = await KundenService.create({ name: kundeNameEingabe, telefon: null });
+          kundeId = created.id;
+          kundeName = kundeNameEingabe;
+          this.loadKunden(); // Cache auffrischen
+          console.log(`Neuer Kunde angelegt: ${kundeName} (ID: ${kundeId})`);
+        } catch (err) {
+          console.error('Fehler beim Anlegen des Kunden:', err);
+          // Fahre trotzdem fort, aber ohne kunde_id
+          kundeName = kundeNameEingabe;
+        }
+      }
+    }
+
+    // Arbeitszeiten mit Teile-Status erstellen
+    let arbeitszeitenDetails = {};
+    if (teileStatus) {
+      arbeitszeitenDetails[beschreibung] = {
+        zeit: Math.round(zeitStunden * 60),
+        teile_status: teileStatus
+      };
     }
 
     const termin = {
@@ -3914,7 +4101,8 @@ class App {
       ist_schwebend: 1,
       abholung_typ: 'warten',
       abholung_details: 'Wartende Aktion',
-      status: 'wartend'
+      status: 'wartend',
+      arbeitszeiten_details: teileStatus ? JSON.stringify(arbeitszeitenDetails) : null
     };
 
     try {
@@ -3925,6 +4113,12 @@ class App {
       document.getElementById('wartendeAktionForm').reset();
       document.getElementById('wartendGefundenerKunde').style.display = 'none';
       document.getElementById('wartend_kunde_id').value = '';
+      
+      // Status-Badge zurücksetzen
+      const statusBadge = document.getElementById('wartendKundeStatusAnzeige');
+      if (statusBadge) {
+        statusBadge.style.display = 'none';
+      }
 
       // Liste aktualisieren
       this.loadWartendeAktionen();
@@ -3962,6 +4156,34 @@ class App {
         const erstelltAm = termin.erstellt_am ? new Date(termin.erstellt_am).toLocaleDateString('de-DE') : 'Unbekannt';
         const zeitAnzeige = termin.geschaetzte_zeit ? `${(termin.geschaetzte_zeit / 60).toFixed(1)} h` : '-';
         
+        // Teile-Status aus arbeitszeiten_details extrahieren
+        let teileStatusHtml = '';
+        if (termin.arbeitszeiten_details) {
+          try {
+            const details = typeof termin.arbeitszeiten_details === 'string' 
+              ? JSON.parse(termin.arbeitszeiten_details) 
+              : termin.arbeitszeiten_details;
+            
+            // Suche nach teile_status in den Details
+            for (const key of Object.keys(details)) {
+              if (details[key] && details[key].teile_status) {
+                const status = details[key].teile_status;
+                const statusMap = {
+                  'bestellen': { icon: '⚠️', text: 'Muss bestellt werden', class: 'teile-bestellen' },
+                  'bestellt': { icon: '📦', text: 'Teile bestellt', class: 'teile-bestellt' },
+                  'eingetroffen': { icon: '🚚', text: 'Teile eingetroffen', class: 'teile-eingetroffen' },
+                  'vorraetig': { icon: '✅', text: 'Teile vorrätig', class: 'teile-vorraetig' }
+                };
+                const statusInfo = statusMap[status] || { icon: '📦', text: status, class: '' };
+                teileStatusHtml = `<span class="wartende-teile-status ${statusInfo.class}">${statusInfo.icon} ${statusInfo.text}</span>`;
+                break;
+              }
+            }
+          } catch (e) {
+            console.error('Fehler beim Parsen der arbeitszeiten_details:', e);
+          }
+        }
+        
         return `
           <div class="wartende-karte" data-termin-id="${termin.id}">
             <div class="wartende-karte-erstellt">Erstellt: ${erstelltAm}</div>
@@ -3971,6 +4193,7 @@ class App {
             </div>
             <div class="wartende-karte-body">
               <div class="wartende-karte-beschreibung">${this.escapeHtml(termin.arbeit || '')}</div>
+              ${teileStatusHtml}
               <div class="wartende-karte-meta">
                 ${termin.fahrzeugtyp ? `<span>🚗 ${termin.fahrzeugtyp}</span>` : ''}
                 <span>⏱️ ${zeitAnzeige}</span>
@@ -3980,6 +4203,9 @@ class App {
             <div class="wartende-karte-footer">
               <button class="btn btn-einplanen" onclick="app.wartendeAktionEinplanen(${termin.id})">
                 📅 Einplanen
+              </button>
+              <button class="btn btn-teile-status" onclick="app.wartendeAktionTeileStatus(${termin.id})" title="Teile-Status ändern">
+                📦
               </button>
               <button class="btn btn-bearbeiten-wartend" onclick="app.showTerminDetails(${termin.id})">
                 ✏️ Bearbeiten
@@ -4037,6 +4263,161 @@ class App {
       this.loadDashboard();
     } catch (error) {
       console.error('Fehler beim Löschen:', error);
+      alert('Fehler: ' + (error.message || 'Unbekannter Fehler'));
+    }
+  }
+
+  async wartendeAktionTeileStatus(terminId) {
+    try {
+      const termin = await TermineService.getById(terminId);
+      
+      // Aktuellen Teile-Status ermitteln
+      let currentStatus = '';
+      if (termin.arbeitszeiten_details) {
+        try {
+          const details = typeof termin.arbeitszeiten_details === 'string' 
+            ? JSON.parse(termin.arbeitszeiten_details) 
+            : termin.arbeitszeiten_details;
+          
+          for (const key of Object.keys(details)) {
+            if (details[key] && details[key].teile_status) {
+              currentStatus = details[key].teile_status;
+              break;
+            }
+          }
+        } catch (e) {
+          console.error('Fehler beim Parsen:', e);
+        }
+      }
+
+      // Modal anzeigen
+      const modal = document.getElementById('teileStatusModal');
+      const terminInfo = document.getElementById('teileStatusTerminInfo');
+      const aktuellDiv = document.getElementById('teileStatusAktuell');
+      const closeBtn = document.getElementById('closeTeileStatusModal');
+      const statusBtns = modal.querySelectorAll('.teile-status-btn');
+
+      // Status-Labels
+      const statusLabels = {
+        '': '❌ Nicht relevant',
+        'bestellen': '⚠️ Muss bestellt werden',
+        'bestellt': '📦 Teile bestellt',
+        'eingetroffen': '🚚 Teile eingetroffen',
+        'vorraetig': '✅ Teile vorrätig'
+      };
+
+      // Termin-Info anzeigen
+      terminInfo.innerHTML = `
+        <strong>${termin.kunde_name || 'Unbekannter Kunde'}</strong><br>
+        <span style="color: #666;">${termin.arbeit || 'Keine Arbeit angegeben'}</span>
+      `;
+
+      // Aktuellen Status markieren
+      aktuellDiv.innerHTML = `<strong>Aktueller Status:</strong> ${statusLabels[currentStatus] || 'Nicht gesetzt'}`;
+
+      // Aktiven Button hervorheben
+      statusBtns.forEach(btn => {
+        const btnStatus = btn.dataset.status;
+        if (btnStatus === currentStatus) {
+          btn.style.boxShadow = '0 0 0 3px #ff9800';
+          btn.style.transform = 'scale(1.02)';
+        } else {
+          btn.style.boxShadow = 'none';
+          btn.style.transform = 'none';
+        }
+      });
+
+      // Modal anzeigen (mit display und opacity für Sichtbarkeit)
+      modal.style.display = 'flex';
+      modal.style.opacity = '1';
+      modal.classList.add('active');
+
+      // Event-Handler für Status-Buttons
+      const handleStatusClick = async (e) => {
+        const btn = e.target.closest('.teile-status-btn');
+        if (!btn) return;
+
+        const selectedStatus = btn.dataset.status;
+
+        // Event-Handler entfernen
+        statusBtns.forEach(b => b.removeEventListener('click', handleStatusClick));
+        closeBtn.removeEventListener('click', handleClose);
+        modal.removeEventListener('click', handleOutsideClick);
+
+        // Modal schließen
+        modal.style.display = 'none';
+        modal.style.opacity = '0';
+        modal.classList.remove('active');
+
+        // Status speichern
+        await this.saveTeileStatus(termin, selectedStatus);
+      };
+
+      const handleClose = () => {
+        statusBtns.forEach(b => b.removeEventListener('click', handleStatusClick));
+        closeBtn.removeEventListener('click', handleClose);
+        modal.removeEventListener('click', handleOutsideClick);
+        modal.style.display = 'none';
+        modal.style.opacity = '0';
+        modal.classList.remove('active');
+      };
+
+      const handleOutsideClick = (e) => {
+        if (e.target === modal) {
+          handleClose();
+        }
+      };
+
+      // Event-Listener hinzufügen
+      statusBtns.forEach(btn => btn.addEventListener('click', handleStatusClick));
+      closeBtn.addEventListener('click', handleClose);
+      modal.addEventListener('click', handleOutsideClick);
+      
+    } catch (error) {
+      console.error('Fehler beim Öffnen des Teile-Status-Dialogs:', error);
+      alert('Fehler: ' + (error.message || 'Unbekannter Fehler'));
+    }
+  }
+
+  async saveTeileStatus(termin, selectedStatus) {
+    try {
+      // Arbeitszeiten_details aktualisieren
+      let arbeitszeitenDetails = {};
+      if (termin.arbeitszeiten_details) {
+        try {
+          arbeitszeitenDetails = typeof termin.arbeitszeiten_details === 'string' 
+            ? JSON.parse(termin.arbeitszeiten_details) 
+            : termin.arbeitszeiten_details;
+        } catch (e) {
+          arbeitszeitenDetails = {};
+        }
+      }
+
+      // Wenn keine Details vorhanden, erstelle neuen Eintrag
+      const arbeit = termin.arbeit || 'Arbeit';
+      if (!arbeitszeitenDetails[arbeit]) {
+        arbeitszeitenDetails[arbeit] = {
+          zeit: termin.geschaetzte_zeit || 60
+        };
+      }
+      
+      if (selectedStatus) {
+        arbeitszeitenDetails[arbeit].teile_status = selectedStatus;
+      } else {
+        delete arbeitszeitenDetails[arbeit].teile_status;
+      }
+
+      // Speichern
+      await TermineService.update(termin.id, {
+        arbeitszeiten_details: JSON.stringify(arbeitszeitenDetails)
+      });
+
+      // Kurze Erfolgsanzeige
+      this.showToast('Teile-Status aktualisiert!', 'success');
+      this.loadWartendeAktionen();
+      
+    } catch (error) {
+      console.error('Fehler beim Speichern des Teile-Status:', error);
       alert('Fehler: ' + (error.message || 'Unbekannter Fehler'));
     }
   }
@@ -7369,8 +7750,12 @@ class App {
   handleNameSuche() {
     const eingabe = document.getElementById('terminNameSuche')?.value.trim() || '';
     const vorschlaegeDiv = document.getElementById('nameSucheVorschlaege');
+    const statusBadge = document.getElementById('kundeStatusAnzeige');
     
     if (!vorschlaegeDiv) return;
+    
+    // Status-Badge aktualisieren
+    this.updateKundeStatusBadge(eingabe, statusBadge);
     
     if (eingabe.length < 2) {
       vorschlaegeDiv.classList.remove('aktiv');
@@ -7386,7 +7771,7 @@ class App {
     ).slice(0, 10); // Max 10 Ergebnisse
     
     if (treffer.length === 0) {
-      vorschlaegeDiv.innerHTML = '<div class="keine-vorschlaege">Kein Kunde gefunden</div>';
+      vorschlaegeDiv.innerHTML = '<div class="keine-vorschlaege">Kein Kunde gefunden - wird als neuer Kunde angelegt</div>';
       vorschlaegeDiv.classList.add('aktiv');
       return;
     }
@@ -7404,6 +7789,78 @@ class App {
     vorschlaegeDiv.classList.add('aktiv');
     this.aktuelleVorschlaegeIndex = -1;
     this.aktuelleVorschlaege = treffer;
+  }
+
+  // Status-Badge für Neuer Kunde / Gefunden aktualisieren
+  updateKundeStatusBadge(eingabe, statusBadge) {
+    const kennzeichenField = document.getElementById('kennzeichen');
+    const kennzeichenLabel = kennzeichenField?.parentElement?.querySelector('label');
+    
+    if (!statusBadge) return;
+    
+    if (!eingabe || eingabe.length < 2) {
+      statusBadge.style.display = 'none';
+      // Kennzeichen-Pflichtmarkierung entfernen
+      this.setKennzeichenPflicht(false, kennzeichenField, kennzeichenLabel);
+      return;
+    }
+    
+    const lower = eingabe.toLowerCase();
+    const kundeId = document.getElementById('kunde_id')?.value;
+    
+    // Prüfe ob exakter Kunde ausgewählt wurde
+    if (kundeId) {
+      statusBadge.textContent = '✓ Kunde ausgewählt';
+      statusBadge.className = 'kunde-status-badge gefunden';
+      statusBadge.style.display = 'inline-block';
+      // Kennzeichen ist nicht mehr Pflicht bei existierendem Kunden
+      this.setKennzeichenPflicht(false, kennzeichenField, kennzeichenLabel);
+      return;
+    }
+    
+    // Prüfe ob Kunde mit genau diesem Namen existiert
+    const exakterTreffer = (this.kundenCache || []).find(kunde => 
+      kunde.name && kunde.name.toLowerCase() === lower
+    );
+    
+    if (exakterTreffer) {
+      statusBadge.textContent = '✓ Bekannter Kunde';
+      statusBadge.className = 'kunde-status-badge gefunden';
+      statusBadge.style.display = 'inline-block';
+      // Kennzeichen ist nicht mehr Pflicht bei existierendem Kunden
+      this.setKennzeichenPflicht(false, kennzeichenField, kennzeichenLabel);
+    } else {
+      statusBadge.textContent = '+ Neuer Kunde';
+      statusBadge.className = 'kunde-status-badge neuer-kunde';
+      statusBadge.style.display = 'inline-block';
+      // Kennzeichen ist Pflicht bei Neukunden!
+      this.setKennzeichenPflicht(true, kennzeichenField, kennzeichenLabel);
+    }
+  }
+
+  // Kennzeichen-Feld als Pflichtfeld markieren/entmarkieren
+  setKennzeichenPflicht(isPflicht, kennzeichenField, kennzeichenLabel) {
+    if (kennzeichenField) {
+      if (isPflicht) {
+        kennzeichenField.style.borderColor = '#ff9800';
+        kennzeichenField.style.background = '#fff8e1';
+        kennzeichenField.setAttribute('required', 'required');
+      } else {
+        kennzeichenField.style.borderColor = '';
+        kennzeichenField.style.background = '';
+        kennzeichenField.removeAttribute('required');
+      }
+    }
+    
+    if (kennzeichenLabel) {
+      // Pflicht-Stern hinzufügen/entfernen
+      const originalText = 'Kennzeichen:';
+      if (isPflicht) {
+        kennzeichenLabel.innerHTML = '🚗 Kennzeichen: <span style="color: #e65100; font-weight: bold;">* (Pflicht bei Neukunde)</span>';
+      } else {
+        kennzeichenLabel.textContent = originalText;
+      }
+    }
   }
 
   // Kennzeichen-Suche mit 3 Feldern
@@ -7808,6 +8265,14 @@ class App {
     
     // Kunde gefunden anzeigen
     this.showGefundenerKunde(kunde.name, kunde.telefon);
+    
+    // Status-Badge aktualisieren (Kunde wurde ausgewählt)
+    const statusBadge = document.getElementById('kundeStatusAnzeige');
+    if (statusBadge) {
+      statusBadge.textContent = '✓ Kunde ausgewählt';
+      statusBadge.className = 'kunde-status-badge gefunden';
+      statusBadge.style.display = 'inline-block';
+    }
   }
 
   // Kennzeichen aus Kennzeichensuche auswählen
