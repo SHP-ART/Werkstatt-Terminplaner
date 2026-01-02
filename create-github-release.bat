@@ -48,8 +48,8 @@ echo Sie sind bei GitHub eingeloggt!
 echo.
 
 REM Variablen setzen
-set TAG=v1.0.3
-set TITLE=Release v1.0.3 - Interner Termin Fix und Auftragsnummer
+set TAG=v1.0.5
+set TITLE=Release v1.0.5 - Autostart, Version display, Nur Service calculation
 set REPO=SHP-ART/Werkstatt-Terminplaner
 
 echo Repository: %REPO%
