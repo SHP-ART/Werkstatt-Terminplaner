@@ -69,34 +69,52 @@ class MitarbeiterController {
       return res.status(400).json({ error: 'Ungültige ID' });
     }
 
-    const { name, arbeitsstunden_pro_tag, nebenzeit_prozent, aktiv, nur_service, mittagspause_start } = req.body;
-    const data = {};
-
-    if (name !== undefined) {
-      data.name = name.trim();
-    }
-    if (arbeitsstunden_pro_tag !== undefined) {
-      data.arbeitsstunden_pro_tag = parseInt(arbeitsstunden_pro_tag, 10);
-    }
-    if (nebenzeit_prozent !== undefined) {
-      data.nebenzeit_prozent = parseFloat(nebenzeit_prozent);
-    }
-    if (aktiv !== undefined) {
-      data.aktiv = aktiv ? 1 : 0;
-    }
-    if (nur_service !== undefined) {
-      data.nur_service = nur_service ? 1 : 0;
-    }
-    if (mittagspause_start !== undefined) {
-      data.mittagspause_start = mittagspause_start;
-    }
-
-    MitarbeiterModel.update(id, data, (err, result) => {
+    // Prüfe zuerst, ob der Mitarbeiter existiert
+    MitarbeiterModel.getById(id, (err, mitarbeiter) => {
       if (err) {
-        res.status(500).json({ error: err.message });
-      } else {
-        res.json({ changes: (result && result.changes) || 0, message: 'Mitarbeiter aktualisiert' });
+        return res.status(500).json({ error: err.message });
       }
+      if (!mitarbeiter) {
+        return res.status(404).json({ error: 'Mitarbeiter nicht gefunden' });
+      }
+
+      const { name, arbeitsstunden_pro_tag, nebenzeit_prozent, aktiv, nur_service, mittagspause_start } = req.body;
+      const data = {};
+
+      if (name !== undefined) {
+        data.name = name.trim();
+      }
+      if (arbeitsstunden_pro_tag !== undefined) {
+        data.arbeitsstunden_pro_tag = parseInt(arbeitsstunden_pro_tag, 10);
+      }
+      if (nebenzeit_prozent !== undefined) {
+        data.nebenzeit_prozent = parseFloat(nebenzeit_prozent);
+      }
+      if (aktiv !== undefined) {
+        data.aktiv = aktiv ? 1 : 0;
+      }
+      if (nur_service !== undefined) {
+        data.nur_service = nur_service ? 1 : 0;
+      }
+      if (mittagspause_start !== undefined) {
+        data.mittagspause_start = mittagspause_start;
+      }
+
+      MitarbeiterModel.update(id, data, (updateErr, result) => {
+        if (updateErr) {
+          return res.status(500).json({ error: updateErr.message });
+        }
+        
+        const changes = (result && result.changes) || 0;
+        if (changes === 0) {
+          return res.status(200).json({ 
+            changes: 0, 
+            message: 'Keine Änderungen vorgenommen (Daten identisch)' 
+          });
+        }
+        
+        res.json({ changes, message: 'Mitarbeiter aktualisiert' });
+      });
     });
   }
 

@@ -71,33 +71,53 @@ class LehrlingeController {
       return res.status(400).json({ error: 'Ungültige ID' });
     }
 
-    const { name, nebenzeit_prozent, aufgabenbewaeltigung_prozent, aktiv, mittagspause_start } = req.body;
-    const data = {};
-
-    if (name !== undefined) {
-      data.name = name.trim();
-    }
-    if (nebenzeit_prozent !== undefined) {
-      data.nebenzeit_prozent = parseFloat(nebenzeit_prozent);
-    }
-    if (aufgabenbewaeltigung_prozent !== undefined) {
-      data.aufgabenbewaeltigung_prozent = parseFloat(aufgabenbewaeltigung_prozent);
-    }
-    if (aktiv !== undefined) {
-      data.aktiv = aktiv ? 1 : 0;
-    }
-    if (mittagspause_start !== undefined) {
-      data.mittagspause_start = mittagspause_start;
-    }
-
-    LehrlingeModel.update(id, data, (err, result) => {
+    // Prüfe zuerst, ob der Lehrling existiert
+    LehrlingeModel.getById(id, (err, lehrling) => {
       if (err) {
-        res.status(500).json({ error: err.message });
-      } else {
+        return res.status(500).json({ error: err.message });
+      }
+      if (!lehrling) {
+        return res.status(404).json({ error: 'Lehrling nicht gefunden' });
+      }
+
+      const { name, nebenzeit_prozent, aufgabenbewaeltigung_prozent, aktiv, mittagspause_start } = req.body;
+      const data = {};
+
+      if (name !== undefined) {
+        data.name = name.trim();
+      }
+      if (nebenzeit_prozent !== undefined) {
+        data.nebenzeit_prozent = parseFloat(nebenzeit_prozent);
+      }
+      if (aufgabenbewaeltigung_prozent !== undefined) {
+        data.aufgabenbewaeltigung_prozent = parseFloat(aufgabenbewaeltigung_prozent);
+      }
+      if (aktiv !== undefined) {
+        data.aktiv = aktiv ? 1 : 0;
+      }
+      if (mittagspause_start !== undefined) {
+        data.mittagspause_start = mittagspause_start;
+      }
+
+      LehrlingeModel.update(id, data, (updateErr, result) => {
+        if (updateErr) {
+          return res.status(500).json({ error: updateErr.message });
+        }
+        
+        const changes = (result && result.changes) || 0;
+        
         // Cache invalidieren, da Lehrlingsänderungen die Auslastung beeinflussen
         TermineController.invalidateAuslastungCache(null);
-        res.json({ changes: (result && result.changes) || 0, message: 'Lehrling aktualisiert' });
-      }
+        
+        if (changes === 0) {
+          return res.status(200).json({ 
+            changes: 0, 
+            message: 'Keine Änderungen vorgenommen (Daten identisch)' 
+          });
+        }
+        
+        res.json({ changes, message: 'Lehrling aktualisiert' });
+      });
     });
   }
 

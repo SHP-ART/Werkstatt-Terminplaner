@@ -469,16 +469,20 @@ class TermineController {
     // Hole erst das Datum des Termins, um Cache zu invalidierten
     TermineModel.getById(req.params.id, (err, termin) => {
       if (err) {
-        res.status(500).json({ error: err.message });
-        return;
+        return res.status(500).json({ error: err.message });
+      }
+      
+      if (!termin) {
+        return res.status(404).json({ error: 'Termin nicht gefunden' });
       }
 
       TermineModel.update(req.params.id, updateData, (updateErr, result) => {
         if (updateErr) {
-          res.status(500).json({ error: updateErr.message });
-          return;
+          return res.status(500).json({ error: updateErr.message });
         }
 
+        const changes = (result && result.changes) || 0;
+        
         // Cache invalidierten
         if (termin && termin.datum) {
           invalidateAuslastungCache(termin.datum);
@@ -494,7 +498,14 @@ class TermineController {
         //   });
         // }
 
-        res.json({ changes: (result && result.changes) || 0, message: 'Termin aktualisiert' });
+        if (changes === 0) {
+          return res.status(200).json({ 
+            changes: 0, 
+            message: 'Keine Änderungen vorgenommen (Daten identisch)' 
+          });
+        }
+
+        res.json({ changes, message: 'Termin aktualisiert' });
       });
     });
   }

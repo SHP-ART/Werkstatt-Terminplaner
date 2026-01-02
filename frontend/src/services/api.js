@@ -1,7 +1,29 @@
 class ApiService {
   static async request(endpoint, options = {}) {
+    // #region agent log
+    fetch('http://127.0.0.1:7245/ingest/66565fa5-16de-456a-af21-71213d9bb5d2',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'api.js:2',message:'ApiService.request called',data:{endpoint,hasConfig:typeof CONFIG!=='undefined',configApiUrl:typeof CONFIG!=='undefined'?CONFIG.API_URL:'CONFIG_UNDEFINED'},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+    // #endregion
     // Verwende die dynamische Konfiguration aus config.js
-    const url = `${CONFIG.API_URL}${endpoint}`;
+    // #region agent log
+    const configCheck = typeof CONFIG !== 'undefined' ? (typeof CONFIG.API_URL !== 'undefined' ? CONFIG.API_URL : 'CONFIG_API_URL_UNDEFINED') : 'CONFIG_UNDEFINED';
+    fetch('http://127.0.0.1:7245/ingest/66565fa5-16de-456a-af21-71213d9bb5d2',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'api.js:4',message:'CONFIG.API_URL check',data:{configApiUrl:configCheck},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
+    // #endregion
+    // Prüfe ob CONFIG verfügbar ist
+    if (typeof CONFIG === 'undefined' || typeof CONFIG.API_URL === 'undefined') {
+      const error = new Error('API-Konfiguration nicht verfügbar. Bitte Seite neu laden.');
+      // #region agent log
+      fetch('http://127.0.0.1:7245/ingest/66565fa5-16de-456a-af21-71213d9bb5d2',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'api.js:11',message:'CONFIG undefined error',data:{endpoint,hasConfig:typeof CONFIG!=='undefined'},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+      // #endregion
+      console.error('API Service Error: CONFIG ist nicht verfügbar', error);
+      throw error;
+    }
+    // URL korrekt konstruieren (doppelte Slashes vermeiden)
+    const baseUrl = CONFIG.API_URL.endsWith('/') ? CONFIG.API_URL.slice(0, -1) : CONFIG.API_URL;
+    const endpointPath = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
+    const url = `${baseUrl}${endpointPath}`;
+    // #region agent log
+    fetch('http://127.0.0.1:7245/ingest/66565fa5-16de-456a-af21-71213d9bb5d2',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'api.js:20',message:'URL constructed',data:{url,endpoint,baseUrl},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
+    // #endregion
     const config = {
       headers: {
         'Content-Type': 'application/json',
@@ -11,6 +33,9 @@ class ApiService {
     };
 
     try {
+      // #region agent log
+      fetch('http://127.0.0.1:7245/ingest/66565fa5-16de-456a-af21-71213d9bb5d2',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'api.js:14',message:'Before fetch call',data:{url,method:config.method||'GET'},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
+      // #endregion
       const response = await fetch(url, config);
 
       if (!response.ok) {
@@ -26,9 +51,53 @@ class ApiService {
         throw error;
       }
 
+      // #region agent log
+      fetch('http://127.0.0.1:7245/ingest/66565fa5-16de-456a-af21-71213d9bb5d2',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'api.js:29',message:'Fetch successful',data:{url,status:response.status,ok:response.ok},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
+      // #endregion
       return await response.json();
     } catch (error) {
+      // #region agent log
+      const errorInfo = {
+        location: 'api.js:57',
+        message: 'Fetch error caught',
+        data: {
+          url,
+          endpoint,
+          errorType: error.constructor.name,
+          errorMessage: error.message,
+          errorName: error.name,
+          errorStack: error.stack?.substring(0, 200),
+          isNetworkError: error.name === 'TypeError' && (error.message.includes('fetch') || error.message.includes('Failed to fetch') || error.message.includes('NetworkError'))
+        },
+        timestamp: Date.now(),
+        sessionId: 'debug-session',
+        runId: 'run1',
+        hypothesisId: 'C'
+      };
+      console.error('[DEBUG] API Error:', errorInfo);
+      fetch('http://127.0.0.1:7245/ingest/66565fa5-16de-456a-af21-71213d9bb5d2',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(errorInfo)}).catch((logError) => {
+        console.error('[DEBUG] Failed to send log:', logError);
+      });
+      // #endregion
       console.error('API Request Error:', error);
+      
+      // Verbesserte Fehlerbehandlung für Netzwerkfehler
+      if (error.name === 'TypeError' && (error.message.includes('fetch') || error.message.includes('Failed to fetch') || error.message.includes('NetworkError'))) {
+        // Netzwerkfehler (Backend nicht erreichbar, CORS, etc.)
+        const networkError = new Error(`Verbindung zum Server fehlgeschlagen. Bitte prüfen Sie, ob das Backend läuft und erreichbar ist. (${url})`);
+        networkError.isNetworkError = true;
+        networkError.originalError = error;
+        networkError.url = url;
+        console.error('[DEBUG] Network error detected:', networkError);
+        throw networkError;
+      }
+      
+      // Wenn der Fehler bereits eine Status-Eigenschaft hat, ist es ein HTTP-Fehler
+      if (error.status) {
+        throw error;
+      }
+      
+      // Unbekannter Fehler
       throw error;
     }
   }

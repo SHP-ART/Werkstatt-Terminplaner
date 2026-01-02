@@ -19,8 +19,14 @@ class App {
   }
 
   init() {
+    // #region agent log
+    fetch('http://127.0.0.1:7245/ingest/66565fa5-16de-456a-af21-71213d9bb5d2',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app.js:21',message:'App.init called',data:{hasConfig:typeof CONFIG!=='undefined',configApiUrl:typeof CONFIG!=='undefined'?CONFIG.API_URL:'CONFIG_UNDEFINED'},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+    // #endregion
     this.setupEventListeners();
     this.initSubTabs(); // Sub-Tabs initialisieren
+    // #region agent log
+    fetch('http://127.0.0.1:7245/ingest/66565fa5-16de-456a-af21-71213d9bb5d2',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app.js:24',message:'Before loadInitialData',data:{hasConfig:typeof CONFIG!=='undefined'},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'})}).catch(()=>{});
+    // #endregion
     this.loadInitialData();
     this.setTodayDate();
     this.setInternerTerminTodayDate();
@@ -41,7 +47,13 @@ class App {
   }
 
   setupWebSocket() {
+    // #region agent log
+    fetch('http://127.0.0.1:7245/ingest/66565fa5-16de-456a-af21-71213d9bb5d2',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app.js:43',message:'setupWebSocket called',data:{hasConfig:typeof CONFIG!=='undefined'},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+    // #endregion
     const serverConfig = CONFIG.getServerConfig();
+    // #region agent log
+    fetch('http://127.0.0.1:7245/ingest/66565fa5-16de-456a-af21-71213d9bb5d2',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app.js:44',message:'serverConfig retrieved',data:{hasServerConfig:!!serverConfig,ip:serverConfig?.ip,port:serverConfig?.port},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
+    // #endregion
     if (!serverConfig || !serverConfig.ip || !serverConfig.port) {
         console.error("Server-Konfiguration nicht gefunden. WebSocket kann nicht gestartet werden.");
         return;
@@ -1667,18 +1679,40 @@ class App {
   }
 
   loadInitialData() {
-    this.loadKunden();
-    this.loadTermineCache(); // Lade alle Termine für Cache
-    this.loadTermine();
-    this.loadArbeitszeiten();
-    this.loadDashboard();
-    this.loadWerkstattSettings();
-    this.loadTermineZeiten();
+    // #region agent log
+    console.log('[DEBUG] loadInitialData called');
+    fetch('http://127.0.0.1:7245/ingest/66565fa5-16de-456a-af21-71213d9bb5d2',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app.js:1681',message:'loadInitialData starting',data:{hasConfig:typeof CONFIG!=='undefined',configApiUrl:typeof CONFIG!=='undefined'?CONFIG.API_URL:'CONFIG_UNDEFINED'},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'})}).catch((e) => console.error('[DEBUG] Log failed:', e));
+    // #endregion
+    // Lade Daten - Fehler werden in den einzelnen Funktionen behandelt
+    this.loadKunden().catch(err => {
+      console.error('[DEBUG] loadKunden failed:', err);
+    });
+    this.loadTermineCache().catch(err => {
+      console.error('[DEBUG] loadTermineCache failed:', err);
+    });
+    this.loadTermine().catch(err => {
+      console.error('[DEBUG] loadTermine failed:', err);
+    });
+    this.loadArbeitszeiten().catch(err => {
+      console.error('[DEBUG] loadArbeitszeiten failed:', err);
+    });
+    this.loadDashboard().catch(err => {
+      console.error('[DEBUG] loadDashboard failed:', err);
+    });
+    this.loadWerkstattSettings().catch(err => {
+      console.error('[DEBUG] loadWerkstattSettings failed:', err);
+    });
+    this.loadTermineZeiten().catch(err => {
+      console.error('[DEBUG] loadTermineZeiten failed:', err);
+    });
     this.heuteTermine = [];
   }
 
   async loadTermineCache() {
     // Lade alle Termine (ohne Datum-Filter) für den Cache
+    // #region agent log
+    fetch('http://127.0.0.1:7245/ingest/66565fa5-16de-456a-af21-71213d9bb5d2',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app.js:1680',message:'loadTermineCache called',data:{hasConfig:typeof CONFIG!=='undefined'},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'})}).catch(()=>{});
+    // #endregion
     try {
       const alleTermine = await TermineService.getAll(null);
       this.termineCache = alleTermine;
@@ -1689,6 +1723,9 @@ class App {
   }
 
   async loadKunden() {
+    // #region agent log
+    fetch('http://127.0.0.1:7245/ingest/66565fa5-16de-456a-af21-71213d9bb5d2',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app.js:1691',message:'loadKunden called',data:{hasConfig:typeof CONFIG!=='undefined',configApiUrl:typeof CONFIG!=='undefined'?CONFIG.API_URL:'CONFIG_UNDEFINED'},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'})}).catch(()=>{});
+    // #endregion
     try {
       const kunden = await KundenService.getAll();
       this.kundenCache = kunden;
@@ -1713,7 +1750,22 @@ class App {
       this.updateTerminSuchliste();
     } catch (error) {
       console.error('Fehler beim Laden der Kunden:', error);
-      alert('Fehler beim Laden der Kunden. Ist das Backend gestartet?');
+      // #region agent log
+      console.error('[DEBUG] loadKunden error details:', {
+        errorType: error.constructor.name,
+        errorMessage: error.message,
+        isNetworkError: error.isNetworkError,
+        url: error.url
+      });
+      fetch('http://127.0.0.1:7245/ingest/66565fa5-16de-456a-af21-71213d9bb5d2',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app.js:1732',message:'loadKunden error',data:{errorType:error.constructor.name,errorMessage:error.message,isNetworkError:error.isNetworkError,url:error.url},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch((e) => console.error('[DEBUG] Log failed:', e));
+      // #endregion
+      let errorMessage = 'Fehler beim Laden der Kunden.';
+      if (error.isNetworkError) {
+        errorMessage = `Verbindung zum Server fehlgeschlagen. Bitte prüfen Sie, ob das Backend läuft und erreichbar ist.\n\nFehler: ${error.message}`;
+      } else if (error.message) {
+        errorMessage = `Fehler beim Laden der Kunden: ${error.message}`;
+      }
+      alert(errorMessage);
     }
   }
 
@@ -4966,6 +5018,12 @@ class App {
         </div>
         
         <div class="form-group" style="margin-top: 15px;">
+          <label for="einplanenBringzeit"><strong>Bringzeit (optional):</strong></label>
+          <input type="time" id="einplanenBringzeit" class="form-control" style="font-size: 16px; padding: 10px;" placeholder="z.B. 08:00">
+          <small style="color: #666; display: block; margin-top: 5px;">Zeit, zu der das Fahrzeug gebracht werden soll</small>
+        </div>
+        
+        <div class="form-group" style="margin-top: 15px;">
           <label><strong>Arbeiten hinzufügen (optional):</strong></label>
           <div style="display: flex; gap: 10px; margin-top: 5px;">
             <input type="text" id="einplanenArbeitText" class="form-control" style="flex: 1;" placeholder="Arbeit eingeben...">
@@ -5005,6 +5063,12 @@ class App {
       datumInput.value = termin.datum;
     } else {
       datumInput.value = new Date().toISOString().split('T')[0];
+    }
+    
+    // Bringzeit vorbelegen (falls vorhanden)
+    const bringzeitInput = document.getElementById('einplanenBringzeit');
+    if (bringzeitInput && termin.bring_zeit) {
+      bringzeitInput.value = termin.bring_zeit;
     }
     
     // Speichere aktuelle Termin-ID
@@ -5568,8 +5632,10 @@ class App {
   async confirmEinplanenDatum() {
     const datumInput = document.getElementById('einplanenDatum');
     const uhrzeitInput = document.getElementById('einplanenUhrzeit');
+    const bringzeitInput = document.getElementById('einplanenBringzeit');
     const neuesDatum = datumInput.value;
     const neueUhrzeit = uhrzeitInput ? uhrzeitInput.value : null;
+    const neueBringzeit = bringzeitInput ? (bringzeitInput.value || null) : null;
     
     if (!neuesDatum) {
       alert('Bitte ein Datum wählen!');
@@ -5631,6 +5697,11 @@ class App {
       // Update-Daten vorbereiten
       const updateData = { datum: neuesDatum };
       
+      // Bringzeit übernehmen (falls angegeben)
+      if (neueBringzeit !== null) {
+        updateData.bring_zeit = neueBringzeit;
+      }
+      
       // Arbeiten aus der Liste übernehmen (komplett ersetzen)
       let details = {};
       
@@ -5683,6 +5754,9 @@ class App {
       termin.arbeit = updateData.arbeit;
       termin.geschaetzte_zeit = updateData.geschaetzte_zeit;
       termin.arbeitszeiten_details = updateData.arbeitszeiten_details;
+      if (updateData.bring_zeit !== undefined) {
+        termin.bring_zeit = updateData.bring_zeit;
+      }
       
       // Button-Text aktualisieren
       this.updateSchwebendButton(false);

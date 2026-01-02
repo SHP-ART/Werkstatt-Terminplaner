@@ -68,12 +68,31 @@ class KundenController {
   }
 
   static update(req, res) {
-    KundenModel.update(req.params.id, req.body, (err, result) => {
+    // Prüfe zuerst, ob der Kunde existiert
+    KundenModel.getById(req.params.id, (err, kunde) => {
       if (err) {
-        res.status(500).json({ error: err.message });
-      } else {
-        res.json({ changes: (result && result.changes) || 0, message: 'Kunde aktualisiert' });
+        return res.status(500).json({ error: err.message });
       }
+      if (!kunde) {
+        return res.status(404).json({ error: 'Kunde nicht gefunden' });
+      }
+
+      // Führe Update durch
+      KundenModel.update(req.params.id, req.body, (updateErr, result) => {
+        if (updateErr) {
+          return res.status(500).json({ error: updateErr.message });
+        }
+        
+        const changes = (result && result.changes) || 0;
+        if (changes === 0) {
+          return res.status(200).json({ 
+            changes: 0, 
+            message: 'Keine Änderungen vorgenommen (Daten identisch)' 
+          });
+        }
+        
+        res.json({ changes, message: 'Kunde aktualisiert' });
+      });
     });
   }
 
