@@ -593,3 +593,53 @@ ipcMain.handle('update-get-status', async () => {
   };
 });
 // ===== ENDE AUTO-UPDATE IPC HANDLER =====
+
+// ===== AUTOSTART IPC HANDLER =====
+// Autostart-Status abrufen
+ipcMain.handle('autostart-get', async () => {
+  try {
+    const settings = app.getLoginItemSettings();
+    return {
+      success: true,
+      enabled: settings.openAtLogin,
+      wasOpenedAtLogin: settings.wasOpenedAtLogin || false
+    };
+  } catch (error) {
+    safeError('Fehler beim Abrufen des Autostart-Status:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+// Autostart aktivieren/deaktivieren
+ipcMain.handle('autostart-set', async (event, enabled) => {
+  try {
+    // Setze Login-Item-Einstellungen für Windows
+    app.setLoginItemSettings({
+      openAtLogin: enabled,
+      // Bei Windows: App minimiert starten (optional)
+      openAsHidden: false,
+      // Pfad zur EXE (wichtig für installierte Apps)
+      path: process.execPath,
+      // Argumente beim Start (optional)
+      args: []
+    });
+    
+    // Verifiziere die Einstellung
+    const newSettings = app.getLoginItemSettings();
+    safeLog(`Autostart ${enabled ? 'aktiviert' : 'deaktiviert'}:`, newSettings);
+    
+    // Speichere auch in der Konfiguration
+    const config = loadConfig();
+    config.autostart = enabled;
+    saveConfig(config);
+    
+    return {
+      success: true,
+      enabled: newSettings.openAtLogin
+    };
+  } catch (error) {
+    safeError('Fehler beim Setzen des Autostart:', error);
+    return { success: false, error: error.message };
+  }
+});
+// ===== ENDE AUTOSTART IPC HANDLER =====

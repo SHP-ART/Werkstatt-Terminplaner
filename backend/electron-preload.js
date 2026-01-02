@@ -23,5 +23,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   downloadUpdate: () => ipcRenderer.invoke('update-download'),
   installUpdate: () => ipcRenderer.invoke('update-install'),
   getUpdateStatus: () => ipcRenderer.invoke('update-get-status'),
-  onUpdateStatus: (callback) => ipcRenderer.on('update-status', (event, ...args) => callback(...args))
+  onUpdateStatus: (callback) => ipcRenderer.on('update-status', (event, ...args) => callback(...args)),
+  // Autostart Funktionen
+  getAutostartStatus: () => ipcRenderer.invoke('autostart-get'),
+  setAutostart: (enabled) => ipcRenderer.invoke('autostart-set', enabled)
 });

@@ -112,6 +112,11 @@ function showTab(tabName) {
     if (tabName === 'update') {
         loadUpdateStatus();
     }
+    
+    // Bei Settings-Tab: Autostart-Status laden
+    if (tabName === 'settings') {
+        loadAutostartStatus();
+    }
 }
 
 // Backup-Status laden
@@ -529,6 +534,95 @@ async function installUpdate() {
 // Update-Nachricht anzeigen
 function showUpdateMessage(type, message) {
     const msgEl = document.getElementById('updateMessage');
+    if (msgEl) {
+        msgEl.className = `backup-status ${type}`;
+        msgEl.textContent = message;
+        msgEl.style.display = 'block';
+        
+        setTimeout(() => {
+            msgEl.style.display = 'none';
+        }, 5000);
+    }
+}
+
+// ===== AUTOSTART FUNKTIONEN =====
+
+// Autostart-Status laden
+async function loadAutostartStatus() {
+    try {
+        const result = await window.electronAPI.getAutostartStatus();
+        const statusEl = document.getElementById('autostartStatus');
+        const btnEnable = document.getElementById('btnEnableAutostart');
+        const btnDisable = document.getElementById('btnDisableAutostart');
+        
+        if (result.success) {
+            statusEl.textContent = result.enabled ? '✅ Aktiviert' : '❌ Deaktiviert';
+            statusEl.style.color = result.enabled ? '#28a745' : '#dc3545';
+            
+            // Buttons entsprechend aktualisieren
+            btnEnable.disabled = result.enabled;
+            btnDisable.disabled = !result.enabled;
+            btnEnable.style.opacity = result.enabled ? '0.5' : '1';
+            btnDisable.style.opacity = result.enabled ? '1' : '0.5';
+        } else {
+            statusEl.textContent = 'Fehler';
+            statusEl.style.color = '#dc3545';
+        }
+    } catch (error) {
+        console.error('Fehler beim Laden des Autostart-Status:', error);
+        document.getElementById('autostartStatus').textContent = 'Fehler';
+    }
+}
+
+// Autostart aktivieren
+async function enableAutostart() {
+    const btn = document.getElementById('btnEnableAutostart');
+    btn.disabled = true;
+    btn.textContent = '⏳ Aktiviere...';
+    
+    try {
+        const result = await window.electronAPI.setAutostart(true);
+        
+        if (result.success) {
+            showAutostartMessage('success', '✅ Autostart wurde aktiviert!');
+            loadAutostartStatus();
+        } else {
+            showAutostartMessage('error', `❌ Fehler: ${result.error}`);
+        }
+    } catch (error) {
+        showAutostartMessage('error', `❌ Fehler: ${error.message}`);
+    } finally {
+        btn.textContent = '✅ Aktivieren';
+        loadAutostartStatus();
+    }
+}
+
+// Autostart deaktivieren
+async function disableAutostart() {
+    const btn = document.getElementById('btnDisableAutostart');
+    btn.disabled = true;
+    btn.textContent = '⏳ Deaktiviere...';
+    
+    try {
+        const result = await window.electronAPI.setAutostart(false);
+        
+        if (result.success) {
+            showAutostartMessage('success', '✅ Autostart wurde deaktiviert!');
+            loadAutostartStatus();
+        } else {
+            showAutostartMessage('error', `❌ Fehler: ${result.error}`);
+        }
+    } catch (error) {
+        showAutostartMessage('error', `❌ Fehler: ${error.message}`);
+    } finally {
+        btn.textContent = '❌ Deaktivieren';
+        loadAutostartStatus();
+    }
+}
+
+// Autostart-Nachricht anzeigen
+function showAutostartMessage(type, message) {
+    const msgEl = document.getElementById('autostartMessage');
     if (msgEl) {
         msgEl.className = `backup-status ${type}`;
         msgEl.textContent = message;
