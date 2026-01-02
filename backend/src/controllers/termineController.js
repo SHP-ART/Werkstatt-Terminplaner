@@ -184,14 +184,20 @@ function berechneAuslastungErgebnis(params) {
     let belegtMitNebenzeit = Math.round(belegtRoh * nebenzeitFaktor);
     let belegtMitService = belegtMitNebenzeit;
     let verfuegbarNachService = verfuegbar;
+    let nebenzeitMinuten = 0;
     
     if (nurService) {
+      // VEREINFACHTE BERECHNUNG für "Nur Service" Mitarbeiter:
+      // Belegt = Servicezeit + Arbeitszeit (ohne Nebenzeit-Aufschlag)
+      // Nebenzeit wird separat als Prozent berechnet und angezeigt
       servicezeitFuerMitarbeiter = gesamtTerminAnzahlFuerService * servicezeitWert;
-      belegtMitService = belegtMitNebenzeit + servicezeitFuerMitarbeiter;
+      belegtMitService = belegtRoh + servicezeitFuerMitarbeiter; // Ohne Nebenzeit-Faktor
+      nebenzeitMinuten = Math.round(belegtMitService * (globaleNebenzeit / 100));
       verfuegbarNachService = verfuegbar;
     } else {
       servicezeitFuerMitarbeiter = 0;
       belegtMitService = belegtMitNebenzeit;
+      nebenzeitMinuten = belegtMitNebenzeit - belegtRoh;
       verfuegbarNachService = verfuegbar;
       if (!istAbwesend) {
         gesamtVerfuegbar += verfuegbar;
@@ -207,10 +213,12 @@ function berechneAuslastungErgebnis(params) {
       mitarbeiter_name: m.name,
       arbeitsstunden_pro_tag: m.arbeitsstunden_pro_tag,
       nebenzeit_prozent: globaleNebenzeit,
+      nebenzeit_minuten: nebenzeitMinuten,
       nur_service: nurService,
       ist_abwesend: istAbwesend,
       verfuegbar_minuten: verfuegbarNachService,
       belegt_minuten: belegtMitService,
+      belegt_minuten_roh: belegtRoh,
       servicezeit_minuten: servicezeitFuerMitarbeiter,
       auslastung_prozent: Math.round(prozent),
       geplant_minuten: ma.geplant_minuten || 0,

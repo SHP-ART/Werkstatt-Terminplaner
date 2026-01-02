@@ -1,3 +1,34 @@
+# Release Notes - Version 1.0.5
+
+## 🆕 Neue Features
+
+### Windows Autostart
+- **Feature**: Neuer Tab "Einstellungen" im Server-Status-Fenster
+- **Funktion**: Werkstatt Terminplaner kann beim Windows-Start automatisch starten
+- **Speicherung**: Einstellung wird in `werkstatt-config.json` gespeichert
+
+### Versionsanzeige
+- **Server-Status**: Version wird im Status-Tab angezeigt
+- **Frontend-Banner**: Version wird oben rechts im Header angezeigt
+- **API**: Neue `/api/server-info` Endpoint liefert Version
+
+### Vereinfachte Auslastung für "Nur Service" Mitarbeiter
+- **Berechnung**: Für Mitarbeiter mit Typ "Nur Service" wird eine einfachere Berechnung verwendet
+- **Formel**: Belegt = Servicezeit + Arbeitszeit (ohne Nebenzeit-Faktor)
+- **Anzeige**: Separate Darstellung mit Arbeitszeit, Servicezeit, Nebenzeit (Info) und Termine
+
+---
+
+# Release Notes - Version 1.0.4
+
+## 🐛 Bugfixes
+
+### Debug-Logging entfernt
+- **Problem**: Übermäßiges Debug-Logging in der Konsole
+- **Lösung**: Debug-Ausgaben entfernt für saubere Logs
+
+---
+
 # Release Notes - Version 1.0.3
 
 ## 🐛 Bugfixes & Verbesserungen

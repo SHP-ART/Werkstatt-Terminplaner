@@ -6145,6 +6145,22 @@ class App {
             const cardStyle = istAbwesend 
               ? 'margin-bottom: 20px; padding: 15px; background: linear-gradient(135deg, #ffebee 0%, #ffcdd2 100%); border-radius: 8px; border-left: 4px solid #c62828;'
               : `margin-bottom: 20px; padding: 15px; background: #f8f9fa; border-radius: 8px; border-left: 4px solid ${prozentColor};`;
+            
+            // Für "Nur Service" Mitarbeiter: Vereinfachte Anzeige mit Servicezeit + Arbeitszeit + Nebenzeit
+            const detailsRow = ma.nur_service 
+              ? `<div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 5px; font-size: 0.9em; color: #666; margin-bottom: 5px;">
+                  <div>Arbeitszeit: ${this.formatMinutesToHours(ma.belegt_minuten_roh || 0)}</div>
+                  <div>Servicezeit: ${this.formatMinutesToHours(ma.servicezeit_minuten || 0)}</div>
+                  <div>Nebenzeit: ${ma.nebenzeit_prozent || 0}% (${this.formatMinutesToHours(ma.nebenzeit_minuten || 0)})</div>
+                  <div>Termine: ${ma.termin_anzahl || 0}</div>
+                </div>`
+              : `<div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 5px; font-size: 0.9em; color: #666; margin-bottom: 5px;">
+                  <div>Geplant: ${this.formatMinutesToHours(ma.geplant_minuten)}</div>
+                  <div>In Arbeit: ${this.formatMinutesToHours(ma.in_arbeit_minuten)}</div>
+                  <div>Abgeschlossen: ${this.formatMinutesToHours(ma.abgeschlossen_minuten)}</div>
+                  <div>Servicezeit: ${this.formatMinutesToHours(ma.servicezeit_minuten || 0)}</div>
+                </div>`;
+            
             return `
               <div style="${cardStyle}">
                 <h4 style="margin: 0 0 10px 0;">${ma.mitarbeiter_name}${abwesendBadge}${nurServiceBadge}</h4>
@@ -6153,12 +6169,7 @@ class App {
                   <div><strong>Belegt:</strong> ${this.formatMinutesToHours(ma.belegt_minuten)}</div>
                   <div><strong>Auslastung:</strong> <span style="color: ${prozentColor}; font-weight: bold;">${istAbwesend ? '-' : ma.auslastung_prozent + '%'}</span></div>
                 </div>
-                <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 5px; font-size: 0.9em; color: #666; margin-bottom: 5px;">
-                  <div>Geplant: ${this.formatMinutesToHours(ma.geplant_minuten)}</div>
-                  <div>In Arbeit: ${this.formatMinutesToHours(ma.in_arbeit_minuten)}</div>
-                  <div>Abgeschlossen: ${this.formatMinutesToHours(ma.abgeschlossen_minuten)}</div>
-                  <div>Servicezeit: ${this.formatMinutesToHours(ma.servicezeit_minuten || 0)}</div>
-                </div>
+                ${detailsRow}
                 <div style="margin-top: 10px; height: 20px; background: #e0e0e0; border-radius: 4px; overflow: hidden; position: relative;">
                   <div style="height: 100%; width: ${istAbwesend ? 0 : Math.min(ma.auslastung_prozent, 100)}%; background: ${prozentColor}; transition: width 0.3s;"></div>
                 </div>
