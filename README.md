@@ -1,6 +1,6 @@
 # Werkstatt Terminplaner
 
-[![Version](https://img.shields.io/badge/version-1.0.5-blue.svg)](https://github.com/SHP-ART/Werkstatt-Terminplaner/releases)
+[![Version](https://img.shields.io/badge/version-1.0.7-blue.svg)](https://github.com/SHP-ART/Werkstatt-Terminplaner/releases)
 [![Node.js](https://img.shields.io/badge/node-%3E%3D14.0.0-brightgreen.svg)](https://nodejs.org)
 [![License](https://img.shields.io/badge/license-Proprietary-red.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey.svg)](README.md)

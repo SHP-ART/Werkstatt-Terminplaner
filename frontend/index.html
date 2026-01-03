@@ -2271,7 +2271,10 @@
                     <small style="display: block; color: #666; margin-top: 8px; margin-left: 32px;">Markiere diesen Termin, wenn noch Daten ergänzt werden müssen. Erscheint dann bei "Offene Termine".</small>
                 </div>
 
-                <button id="saveArbeitszeitenBtn" class="btn btn-primary" style="margin-top: 20px;">Zeiten & Status speichern</button>
+                <div style="display: flex; gap: 10px; margin-top: 20px;">
+                    <button id="saveArbeitszeitenBtn" class="btn btn-primary" style="flex: 1;">Zeiten & Status speichern</button>
+                    <button id="backToDetailsBtn" class="btn btn-secondary" style="flex: 0 0 auto;" onclick="app.backToTerminDetails()">← Zurück zu Details</button>
+                </div>
             </div>
         </div>
     </div>

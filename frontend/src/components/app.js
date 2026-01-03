@@ -5302,6 +5302,57 @@ class App {
     document.getElementById('terminDetailsModal').style.display = 'none';
   }
 
+  // Zurück zu Termin-Details vom Arbeitszeiten-Modal
+  backToTerminDetails() {
+    // Schließe Arbeitszeiten-Modal
+    document.getElementById('arbeitszeitenModal').style.display = 'none';
+    
+    // Öffne Termin-Details wieder, falls eine Termin-ID gespeichert ist
+    if (this.currentTerminId) {
+      this.showTerminDetails(this.currentTerminId);
+    }
+  }
+
+  // Navigation zu Standardzeiten-Einstellungen
+  navigateToStandardzeiten() {
+    // Wechsle zum Einstellungen-Tab
+    document.querySelectorAll('.tab-button').forEach(btn => {
+      btn.classList.remove('active');
+      if (btn.getAttribute('data-tab') === 'einstellungen') {
+        btn.classList.add('active');
+      }
+    });
+    
+    document.querySelectorAll('.tab-content').forEach(content => {
+      content.classList.remove('active');
+    });
+    const einstellungenTab = document.getElementById('einstellungen');
+    if (einstellungenTab) {
+      einstellungenTab.classList.add('active');
+    }
+    
+    // Wechsle zum Standardzeiten Sub-Tab
+    document.querySelectorAll('.sub-tab-button').forEach(btn => {
+      btn.classList.remove('active');
+      if (btn.getAttribute('data-sub-tab') === 'standardzeiten') {
+        btn.classList.add('active');
+      }
+    });
+    
+    document.querySelectorAll('.sub-tab-content').forEach(content => {
+      content.classList.remove('active');
+      content.style.display = 'none';
+    });
+    const standardzeitenTab = document.getElementById('standardzeiten');
+    if (standardzeitenTab) {
+      standardzeitenTab.classList.add('active');
+      standardzeitenTab.style.display = 'block';
+      
+      // Lade Arbeitszeiten neu
+      this.loadArbeitszeiten();
+    }
+  }
+
   // ============================================
   // TERMIN-SPLIT & SCHWEBEND FUNKTIONEN
   // ============================================
