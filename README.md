@@ -1,6 +1,25 @@
 # Werkstatt Terminplaner
 
-Ein vollständiger Werkstatt-Terminplaner mit Auslastungsanzeige, Kundenverwaltung und Zeitplanung.
+[![Version](https://img.shields.io/badge/version-1.0.5-blue.svg)](https://github.com/SHP-ART/Werkstatt-Terminplaner/releases)
+[![Node.js](https://img.shields.io/badge/node-%3E%3D14.0.0-brightgreen.svg)](https://nodejs.org)
+[![License](https://img.shields.io/badge/license-Proprietary-red.svg)](LICENSE)
+[![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey.svg)](README.md)
+
+> 🔧 **Professioneller Werkstatt-Terminplaner** für Kfz-Betriebe mit Echtzeit-Auslastung, Mitarbeiterverwaltung, Ersatzauto-System und Multi-PC-Netzwerkunterstützung.
+
+Ein vollständiger Werkstatt-Terminplaner mit intelligenter Auslastungsanzeige, umfassender Kundenverwaltung, Zeitplanung und Multi-PC-Unterstützung. Entwickelt für Kfz-Werkstätten zur effizienten Verwaltung von Terminen, Mitarbeitern, Fahrzeugen und Ersatzautos.
+
+## 🚀 Hauptfunktionen
+
+- **Multi-PC-Netzwerkfähig**: Mehrere PCs können gleichzeitig auf eine zentrale Datenbank zugreifen
+- **Kundenverwaltung**: Umfassende Kundendaten mit Fahrzeugverwaltung und Locosoft-Import
+- **Terminplanung**: Erweiterte Terminverwaltung mit Phasen, Split-Terminen und Schwebend-Funktion
+- **Mitarbeiterverwaltung**: Mitarbeiter und Lehrlinge mit individuellen Abwesenheiten
+- **Ersatzauto-System**: Verwaltung von Ersatzfahrzeugen mit Buchungen und Verfügbarkeit
+- **Auslastungsanzeige**: Echtzeit-Visualisierung mit automatischer Farbcodierung
+- **Backup-System**: Automatische und manuelle Backups mit Restore-Funktion
+- **Windows Autostart**: Automatischer Start beim Systemstart (Windows)
+- **WebSocket Live-Updates**: Änderungen werden in Echtzeit auf alle Clients übertragen
 
 ## Projektstruktur
 
@@ -26,23 +45,51 @@ Werkstatt-Terminplaner/
     └── config.js              # Frontend-Konfiguration
 ```
 
-## Funktionen
+## 📦 Verfügbare Pakete
 
-- **Kundenverwaltung**: Speicherung von Kundendaten in SQL-Datenbank
-- **Terminplanung**: Erfassung von Terminen mit Kennzeichen, Arbeit, Umfang und Zeitberechnung
-- **Zeitverwaltung**: Anpassung von Standard-Arbeitszeiten
-- **Auslastungsanzeige**: Visueller Balken (Rot/Grün) zur Anzeige der täglichen Auslastung
-- **Locosoft-Import**: Vorbereitet für Import von Kundendaten aus Locosoft
-- **Netzwerkzugriff**: Läuft als Webserver, zugänglich im lokalen Netzwerk
-- **🆕 Multi-PC-Unterstützung**: Mehrere PCs können gleichzeitig auf eine zentrale Datenbank zugreifen
-- **🆕 Server-Konfiguration**: Einfache Einstellung der Server-Verbindung über die Weboberfläche
-- **🆕 Verbindungstest**: Testen Sie die Verbindung zum Server direkt in den Einstellungen
+### Windows Installer (Empfohlen für Windows)
+- **Werkstatt Terminplaner Setup.exe** (~230 MB)
+- Vollständiger Installer mit Setup-Assistent
+- Automatische Installation und Desktop-Verknüpfung
+- Inkludiert alle Abhängigkeiten
+- ➡️ [Download vom neuesten Release](https://github.com/SHP-ART/Werkstatt-Terminplaner/releases/latest)
+
+### Portable Versionen (Windows)
+
+#### All-in-One Version (Empfohlen für Einzelplatz)
+- **Werkstatt-Terminplaner-Complete.exe** (~226 MB)
+- Backend + Frontend in einer Anwendung
+- Automatisches Server-Status-Fenster
+- Ideal für Einzelplatz oder Server-PC
+- Keine Installation erforderlich
+
+#### Netzwerk-Installation
+- **Werkstatt-Server.exe** (~226 MB) - Für den Server-PC
+- **Werkstatt-Frontend.exe** (~73 MB) - Für Client-PCs
+- Zentrale Datenbankfreigabe für mehrere Benutzer
+
+### macOS & Linux
+- Manuelle Installation mit Start-Skripten (siehe unten)
+- Node.js und Python erforderlich
+
+Siehe [NETZWERK-INSTALLATION.md](NETZWERK-INSTALLATION.md) für Details.
 
 ## Schnellstart
 
-### 🚀 Netzwerk-Installation (mehrere PCs)
+### 🚀 Windows (Empfohlen)
 
-**NEU:** Der Werkstattplaner kann jetzt auf mehreren PCs im Netzwerk verwendet werden!
+#### Option 1: Windows Installer (Einfachste Methode)
+1. **[Setup.exe herunterladen](https://github.com/SHP-ART/Werkstatt-Terminplaner/releases/latest)** vom neuesten Release
+2. Installer ausführen und Anweisungen folgen
+3. Desktop-Verknüpfung nutzen oder Start-Menü öffnen
+4. Fertig! ✅
+
+#### Option 2: Portable Version
+- **Werkstatt-Terminplaner-Complete.exe** herunterladen und direkt ausführen
+- Keine Installation erforderlich
+
+#### Option 3: Netzwerk-Installation (mehrere PCs)
+**NEU:** Der Werkstattplaner kann auf mehreren PCs im Netzwerk verwendet werden!
 
 - **Schnellanleitung**: Siehe [SCHNELLSTART.md](SCHNELLSTART.md)
 - **Detaillierte Anleitung**: Siehe [NETZWERK-INSTALLATION.md](NETZWERK-INSTALLATION.md)
@@ -52,15 +99,13 @@ Werkstatt-Terminplaner/
 - **Alle PCs**: Doppelklick auf `werkstattplaner-oeffnen.bat` (öffnet die Anwendung)
 - **Konfiguration**: Im Browser → Einstellungen → Server-Verbindung einstellen
 
-### Einfacher Start mit Skripten (Einzelplatz)
-
-**macOS / Linux:**
+### 🍎 macOS / 🐧 Linux: Einfacher Start mit Skripten
 ```bash
 ./start.sh    # Server starten
 ./stop.sh     # Server stoppen
 ```
 
-**Windows (alte Methode):**
+**Windows (alte Methode ohne Installer):**
 ```cmd
 start.bat     # Server starten
 stop.bat      # Server stoppen
@@ -188,60 +233,336 @@ Um Ihre IP-Adresse zu finden:
 http://localhost:3001/api
 ```
 
-### Endpoints
+### 🏢 Kunden-Endpoints
 
-#### Kunden
-- `GET /api/kunden` - Alle Kunden abrufen
-- `GET /api/kunden/:id` - Kunde nach ID
-- `POST /api/kunden` - Neuen Kunden erstellen
-- `POST /api/kunden/import` - Mehrere Kunden importieren
-- `PUT /api/kunden/:id` - Kunde aktualisieren
-- `DELETE /api/kunden/:id` - Kunde löschen
+#### Kunden verwalten
+- **GET** `/api/kunden` - Alle Kunden abrufen
+- **GET** `/api/kunden/:id` - Einzelnen Kunden abrufen
+- **GET** `/api/kunden/search?q=suchbegriff` - Kunden suchen (Name, Telefon, Email)
+- **POST** `/api/kunden` - Neuen Kunden erstellen
+  ```json
+  {
+    "name": "Max Mustermann",
+    "telefon": "030123456",
+    "email": "max@example.com",
+    "adresse": "Musterstr. 1, 12345 Berlin",
+    "locosoft_id": "LS001"
+  }
+  ```
+- **PUT** `/api/kunden/:id` - Kunde aktualisieren
+- **DELETE** `/api/kunden/:id` - Kunde löschen
+- **POST** `/api/kunden/import` - Mehrere Kunden importieren (Array von Kunden)
 
-#### Termine
-- `GET /api/termine` - Alle Termine (optional: ?datum=YYYY-MM-DD)
-- `POST /api/termine` - Neuen Termin erstellen
-- `PUT /api/termine/:id` - Termin aktualisieren
-- `DELETE /api/termine/:id` - Termin löschen
+#### Fahrzeuge verwalten
+- **GET** `/api/kunden/:id/fahrzeuge` - Alle Fahrzeuge eines Kunden
+- **GET** `/api/kunden/stats/fahrzeuge` - Anzahl Fahrzeuge pro Kunde
+- **POST** `/api/kunden/:id/fahrzeuge` - Neues Fahrzeug hinzufügen
+  ```json
+  {
+    "kennzeichen": "B-AB 1234",
+    "marke": "VW",
+    "modell": "Golf",
+    "hsn_tsn": "0603/ABS",
+    "fahrgestellnummer": "WVWZZZ1KZ1234567",
+    "erstzulassung": "2020-01-15"
+  }
+  ```
+- **PUT** `/api/kunden/:id/fahrzeuge/:kennzeichen` - Fahrzeug aktualisieren
+- **DELETE** `/api/kunden/:id/fahrzeuge/:kennzeichen` - Fahrzeug löschen
 
-#### Arbeitszeiten
-- `GET /api/arbeitszeiten` - Alle Standardarbeitszeiten
-- `POST /api/arbeitszeiten` - Neue Arbeitszeit erstellen
-- `PUT /api/arbeitszeiten/:id` - Arbeitszeit aktualisieren
-- `DELETE /api/arbeitszeiten/:id` - Arbeitszeit löschen
+---
 
-#### Auslastung
-- `GET /api/auslastung/:datum` - Auslastung für ein Datum
+### 📅 Termin-Endpoints
 
-#### Health Check
-- `GET /api/health` - Server-Status prüfen
+#### Termine verwalten
+- **GET** `/api/termine` - Alle Termine (optional: `?datum=YYYY-MM-DD` oder `?von=YYYY-MM-DD&bis=YYYY-MM-DD`)
+- **GET** `/api/termine/:id` - Einzelnen Termin abrufen
+- **POST** `/api/termine` - Neuen Termin erstellen
+  ```json
+  {
+    "kunde_id": 1,
+    "kennzeichen": "B-AB 1234",
+    "arbeit": "Inspektion",
+    "umfang": "60.000 km Service",
+    "datum": "2026-01-15",
+    "geschaetzte_zeit": 120,
+    "status": "geplant",
+    "prioritaet": "normal",
+    "notizen": "Kunde möchte Ersatzauto"
+  }
+  ```
+- **PUT** `/api/termine/:id` - Termin aktualisieren
+- **DELETE** `/api/termine/:id` - Termin löschen (Soft-Delete)
 
-## Verwendung
+#### Erweiterte Termin-Funktionen
+- **GET** `/api/termine/papierkorb` - Gelöschte Termine abrufen
+- **POST** `/api/termine/:id/restore` - Gelöschten Termin wiederherstellen
+- **DELETE** `/api/termine/:id/permanent` - Termin permanent löschen
+- **POST** `/api/termine/:id/schwebend` - Termin als schwebend markieren (ohne Datum)
+- **POST** `/api/termine/:id/split` - Termin auf mehrere Tage aufteilen
+  ```json
+  {
+    "phasen": [
+      {"datum": "2026-01-15", "stunden": 4},
+      {"datum": "2026-01-16", "stunden": 2}
+    ]
+  }
+  ```
+- **GET** `/api/termine/:id/split-termine` - Alle Phasen eines Split-Termins
 
-### Tab: Termine
+#### Termin-Validierung & Vorschläge
+- **GET** `/api/termine/verfuegbarkeit?datum=YYYY-MM-DD&dauer=120` - Verfügbarkeit prüfen
+- **POST** `/api/termine/validate` - Termin validieren (Überbuchung, Konflikte)
+- **GET** `/api/termine/vorschlaege?dauer=120&tage=7` - Terminvorschläge für nächste freie Slots
 
-1. **Neuer Termin erstellen**:
-   - Kunde aus Liste auswählen
-   - Kennzeichen eingeben
-   - Arbeit aus Standardliste wählen (Zeit wird automatisch vorgeschlagen)
-   - Optional: Umfang/Details eingeben
-   - Geschätzte Zeit anpassen falls nötig
-   - Datum wählen
-   - "Termin erstellen" klicken
+---
 
-2. **Termine verwalten**:
-   - Nach Datum filtern oder alle Termine anzeigen
-   - Termine bearbeiten: Zeit anpassen und Status ändern (geplant/in Arbeit/abgeschlossen)
+### 🧑‍🔧 Mitarbeiter & Lehrlinge
 
-### Tab: Kunden
+#### Mitarbeiter
+- **GET** `/api/mitarbeiter` - Alle Mitarbeiter
+- **GET** `/api/mitarbeiter/aktive` - Nur aktive Mitarbeiter
+- **GET** `/api/mitarbeiter/:id` - Einzelnen Mitarbeiter
+- **POST** `/api/mitarbeiter` - Neuen Mitarbeiter erstellen
+  ```json
+  {
+    "name": "Hans Meier",
+    "kuerzel": "HM",
+    "typ": "Service",
+    "stunden_pro_tag": 8,
+    "aktiv": 1
+  }
+  ```
+- **PUT** `/api/mitarbeiter/:id` - Mitarbeiter aktualisieren
+- **DELETE** `/api/mitarbeiter/:id` - Mitarbeiter löschen
 
-1. **Neuen Kunden anlegen**:
-   - Name, Telefon, Email, Adresse eingeben
-   - Optional: Locosoft ID eintragen
-   - "Kunde anlegen" klicken
+#### Lehrlinge
+- **GET** `/api/lehrlinge` - Alle Lehrlinge
+- **GET** `/api/lehrlinge/aktive` - Nur aktive Lehrlinge
+- **GET** `/api/lehrlinge/:id` - Einzelnen Lehrling
+- **POST** `/api/lehrlinge` - Neuen Lehrling erstellen
+  ```json
+  {
+    "name": "Tom Schmidt",
+    "lehrjahr": 2,
+    "aktiv": 1
+  }
+  ```
+- **PUT** `/api/lehrlinge/:id` - Lehrling aktualisieren
+- **DELETE** `/api/lehrlinge/:id` - Lehrling löschen
+
+---
+
+### 📊 Abwesenheiten
+
+- **GET** `/api/abwesenheiten/liste` - Alle Abwesenheiten
+- **GET** `/api/abwesenheiten/range?von=YYYY-MM-DD&bis=YYYY-MM-DD` - Abwesenheiten im Zeitraum
+- **GET** `/api/abwesenheiten/item/:id` - Einzelne Abwesenheit
+- **POST** `/api/abwesenheiten` - Neue Abwesenheit erstellen
+  ```json
+  {
+    "person_typ": "mitarbeiter",
+    "person_id": 1,
+    "datum": "2026-01-20",
+    "grund": "Urlaub",
+    "ganztags": 1
+  }
+  ```
+- **DELETE** `/api/abwesenheiten/item/:id` - Abwesenheit löschen
+
+#### Legacy-Routes (Datum-basiert)
+- **GET** `/api/abwesenheiten/:datum` - Abwesenheiten für Datum (alte Tabelle)
+- **PUT** `/api/abwesenheiten/:datum` - Abwesenheiten für Datum aktualisieren
+
+---
+
+### 🚗 Ersatzautos
+
+#### Ersatzauto-Verwaltung
+- **GET** `/api/ersatzautos` - Alle Ersatzautos
+- **GET** `/api/ersatzautos/aktiv` - Nur aktive/verfügbare Ersatzautos
+- **GET** `/api/ersatzautos/:id` - Einzelnes Ersatzauto
+- **POST** `/api/ersatzautos` - Neues Ersatzauto erstellen
+  ```json
+  {
+    "kennzeichen": "B-EA 999",
+    "marke": "VW",
+    "modell": "Polo",
+    "farbe": "Blau",
+    "aktiv": 1
+  }
+  ```
+- **PUT** `/api/ersatzautos/:id` - Ersatzauto aktualisieren
+
+#### Verfügbarkeit & Buchungen
+- **GET** `/api/ersatzautos/buchungen/aktuell` - Aktuelle Buchungen (heute + laufend)
+- **GET** `/api/ersatzautos/verfuegbarkeit/:datum` - Verfügbare Ersatzautos für Datum
+- **GET** `/api/ersatzautos/verfuegbarkeit/:datum/details` - Detaillierte Verfügbarkeit
+
+#### Sperrungen
+- **POST** `/api/ersatzautos/:id/toggle-gesperrt` - Manuelle Sperrung umschalten
+- **PUT** `/api/ersatzautos/:id/gesperrt` - Sperrung setzen (body: `{"gesperrt": true}`)
+- **POST** `/api/ersatzautos/:id/sperren-bis` - Zeitbasierte Sperrung (body: `{"bis": "2026-01-30"}`)
+- **POST** `/api/ersatzautos/:id/entsperren` - Sperrung aufheben
+
+---
+
+### ⏱️ Arbeitszeiten & Phasen
+
+#### Arbeitszeiten (Standard-Zeiten)
+- **GET** `/api/arbeitszeiten` - Alle Standardarbeitszeiten
+- **GET** `/api/arbeitszeiten/:id` - Einzelne Arbeitszeit
+- **POST** `/api/arbeitszeiten` - Neue Standardarbeitszeit
+  ```json
+  {
+    "arbeit": "Ölwechsel",
+    "standard_zeit": 30,
+    "interne_auftragsnummer": "AZ-001"
+  }
+  ```
+- **PUT** `/api/arbeitszeiten/:id` - Arbeitszeit aktualisieren
+- **DELETE** `/api/arbeitszeiten/:id` - Arbeitszeit löschen
+
+#### Phasen (Split-Termine)
+- **GET** `/api/phasen/datum/:datum` - Alle Phasen für ein Datum (für Auslastung)
+- **GET** `/api/phasen/termin/:terminId` - Alle Phasen eines Termins
+- **GET** `/api/phasen/:id` - Einzelne Phase
+- **POST** `/api/phasen` - Neue Phase erstellen
+- **PUT** `/api/phasen/:id` - Phase aktualisieren
+- **PUT** `/api/phasen/termin/:terminId/sync` - Phasen synchronisieren (alle ersetzen)
+- **DELETE** `/api/phasen/:id` - Phase löschen
+
+---
+
+### 📈 Auslastung
+
+- **GET** `/api/auslastung/:datum` - Auslastungsberechnung für ein Datum
+  
+  **Response:**
+  ```json
+  {
+    "datum": "2026-01-15",
+    "verfuegbare_zeit": 480,
+    "belegte_zeit": 360,
+    "prozent": 75,
+    "status": "gut",
+    "details": {
+      "mitarbeiter": [...],
+      "termine": [...]
+    }
+  }
+  ```
+
+---
+
+### 💾 Backup & Restore
+
+- **GET** `/api/backup/status` - Backup-System-Status
+- **GET** `/api/backup/list` - Alle verfügbaren Backups
+- **POST** `/api/backup/create` - Manuelles Backup erstellen
+  ```json
+  {
+    "beschreibung": "Vor großem Update"
+  }
+  ```
+- **POST** `/api/backup/restore` - Backup wiederherstellen
+  ```json
+  {
+    "filename": "backup_20260115_120000.db"
+  }
+  ```
+- **GET** `/api/backup/download/:filename` - Backup-Datei herunterladen
+- **POST** `/api/backup/upload` - Backup hochladen (multipart/form-data)
+- **POST** `/api/backup/delete` - Backup löschen
+  ```json
+  {
+    "filename": "backup_20260115_120000.db"
+  }
+  ```
+
+---
+
+### ⚙️ Einstellungen
+
+- **GET** `/api/einstellungen/werkstatt` - Werkstatt-Einstellungen abrufen
+- **PUT** `/api/einstellungen/werkstatt` - Werkstatt-Einstellungen aktualisieren
+  ```json
+  {
+    "anzahl_mitarbeiter": 4,
+    "stunden_pro_tag": 8
+  }
+  ```
+- **GET** `/api/einstellungen/ersatzauto/:datum` - Ersatzauto-Verfügbarkeit für Datum
+
+---
+
+### 🔍 System & Health
+
+- **GET** `/api/health` - Server-Status prüfen
+- **GET** `/api/server-info` - Server-Informationen (Version, Uptime)
+  ```json
+  {
+    "version": "1.0.5",
+    "uptime": 3600,
+    "database": "connected"
+  }
+  ```
+
+---
+
+### 📝 Hinweise zur API
+
+#### Authentifizierung
+Aktuell keine Authentifizierung implementiert. Für Produktionsumgebungen wird empfohlen, Authentifizierung hinzuzufügen.
+
+#### CORS
+Der Server ist für `http://localhost:3000` konfiguriert. Für andere Origins muss die CORS-Konfiguration in `backend/src/server.js` angepasst werden.
+
+#### Fehlerbehandlung
+Alle Endpoints geben strukturierte Fehler zurück:
+```json
+{
+  "error": "Fehlertyp",
+  "message": "Detaillierte Fehlermeldung",
+  "details": {...}
+}
+```
+
+HTTP-Statuscodes:
+- `200` - Erfolg
+- `201` - Erstellt
+- `400` - Ungültige Anfrage
+- `404` - Nicht gefunden
+- `500` - Serverfehler
+
+## 📖 Verwendung
+
+### Frontend-Oberfläche
+
+#### Tab: Termine
+1. **Neuer Termin**:
+   - Kunde aus Liste auswählen oder suchen
+   - Kennzeichen eingeben (mit Fahrzeug-Dropdown)
+   - Arbeit aus Standardliste wählen
+   - Datum, Zeit und Details eingeben
+   - Optional: Split-Termin erstellen für mehrtägige Arbeiten
+   
+2. **Schwebende Termine**:
+   - Termine ohne festes Datum vormerken
+   - Später auf konkretes Datum verschieben
+
+3. **Papierkorb**:
+   - Gelöschte Termine wiederherstellen
+   - Permanent löschen
+
+#### Tab: Kunden
+1. **Kundenverwaltung**:
+   - Neuen Kunden mit allen Details anlegen
+   - Fahrzeuge pro Kunde verwalten
+   - Suche nach Name, Telefon oder Email
 
 2. **Locosoft Import**:
-   - JSON-Daten im folgenden Format einfügen:
+   - JSON-Format für Massenimport:
    ```json
    [
      {
@@ -253,127 +574,222 @@ http://localhost:3001/api
      }
    ]
    ```
-   - "Import starten" klicken
 
-### Tab: Zeitverwaltung
+#### Tab: Mitarbeiter & Lehrlinge
+- Mitarbeiter mit Kürzel und Typ (Service/Nur Service) verwalten
+- Lehrlinge mit Lehrjahr erfassen
+- Abwesenheiten (Urlaub/Krank) pro Person planen
 
-- Standardzeiten für verschiedene Arbeiten anpassen
-- Neue Werte eingeben und "Speichern" klicken
-- Diese Zeiten werden als Vorschlag bei neuen Terminen verwendet
+#### Tab: Ersatzautos
+- Ersatzfahrzeuge erfassen und verwalten
+- Verfügbarkeit pro Datum prüfen
+- Manuelle oder zeitbasierte Sperrungen
+- Buchungsübersicht
 
-### Tab: Auslastung
+#### Tab: Zeitverwaltung
+- Standardzeiten für Arbeiten definieren
+- Interne Auftragsnummern zuweisen
+- Neue Arbeitstypen hinzufügen
 
-- Datum auswählen
-- Auslastungsanzeige zeigt:
-  - Belegte Zeit (Minuten)
-  - Verfügbare Zeit (Minuten)
-  - Auslastung in Prozent
-  - Visueller Balken mit Farbcodierung:
-    - **Grün**: 0-80% (Gut)
-    - **Gelb**: 80-100% (Voll)
-    - **Rot**: >100% (Überlastet)
+#### Tab: Auslastung
+- Datum auswählen für Auslastungsanzeige
+- Visueller Balken mit Farbcodierung:
+  - **Grün** (0-80%): Gut
+  - **Gelb** (80-100%): Voll
+  - **Rot** (>100%): Überlastet
+- Details zu Mitarbeitern, Abwesenheiten und Terminen
 
-### Tab: Einstellungen
+#### Tab: Backup
+- Manuelle Backups erstellen
+- Automatische Backups konfigurieren
+- Backup wiederherstellen
+- Backups herunterladen/hochladen
 
-**Server-Verbindung (NEU):**
-- Server-IP-Adresse einstellen (z.B. `192.168.1.100` für Client-PCs, `localhost` für Server-PC)
-- Port anpassen (Standard: 3001)
-- Verbindung testen mit einem Klick
-- Änderungen werden lokal im Browser gespeichert
+#### Tab: Einstellungen
+- **Server-Verbindung**: IP-Adresse und Port konfigurieren
+- **Werkstatt**: Anzahl Mitarbeiter und Standardstunden
+- **Verbindungstest**: Server-Erreichbarkeit prüfen
 
-**Werkstatt-Einstellungen:**
-- Anzahl Mitarbeiter festlegen
-- Arbeitsstunden pro Tag pro Mitarbeiter einstellen
-- Abwesenheiten (Urlaub/Krank) für bestimmte Tage erfassen
+## 💾 Datenbank
 
-## Datenbank
+Die Anwendung verwendet **SQLite** als Datenbank. Die Datei `werkstatt.db` wird automatisch beim ersten Start im Verzeichnis `backend/database/` erstellt.
 
-Die Anwendung verwendet SQLite. Die Datenbankdatei `werkstatt.db` wird automatisch beim ersten Start im `backend/database/` Ordner erstellt.
+### Datenbankstruktur
 
-### Datenbankstruktur:
+#### Haupttabellen
+- **kunden**: Kundenstammdaten mit Locosoft-Integration
+- **fahrzeuge**: Fahrzeuge mit Kennzeichen, HSN/TSN, Fahrgestellnummer
+- **termine**: Terminplanung mit Status, Priorität und Soft-Delete
+- **phasen**: Split-Termine über mehrere Tage
+- **mitarbeiter**: Mitarbeiter mit Typ (Service/Nur Service) und Stunden
+- **lehrlinge**: Lehrlinge mit Lehrjahr
+- **abwesenheiten**: Individuelle Abwesenheiten (Urlaub/Krank) pro Person
+- **abwesenheiten_legacy**: Alte werkstattweite Abwesenheiten
+- **arbeitszeiten**: Standard-Arbeitszeiten mit interner Auftragsnummer
+- **ersatzautos**: Ersatzfahrzeuge mit Sperrungsstatus
+- **einstellungen**: Werkstatt-Konfiguration (Mitarbeiteranzahl, Stunden)
 
-- **kunden**: Kundendaten mit Locosoft-ID
-- **termine**: Terminplanung mit Zeitberechnung
-- **arbeitszeiten**: Standard-Arbeitszeiten für verschiedene Tätigkeiten
-
-## Standardarbeiten
-
-Bei der ersten Einrichtung werden folgende Standardarbeiten angelegt:
-
-- Ölwechsel: 30 Min
-- Inspektion klein: 60 Min
-- Inspektion groß: 120 Min
-- Bremsen vorne: 90 Min
-- Bremsen hinten: 90 Min
-- Reifen wechseln: 45 Min
-- TÜV-Vorbereitung: 60 Min
-- Diagnose: 30 Min
-
-Diese können im Tab "Zeitverwaltung" angepasst werden.
-
-## Architektur
-
-### Backend (MVC-Pattern)
-- **Models**: Datenbank-Zugriff und Datenlogik
-- **Controllers**: Business-Logik und Request-Handling
-- **Routes**: API-Endpoint-Definitionen
-- **Config**: Datenbank- und Server-Konfiguration
-
-### Frontend (Komponentenbasiert)
-- **Components**: UI-Logik und Event-Handling
-- **Services**: API-Kommunikation
-- **Styles**: CSS-Styling
-
-## Technologie-Stack
-
-- **Backend**: Node.js, Express, SQLite3
-- **Frontend**: Vanilla JavaScript (ES6+), HTML5, CSS3
-- **Design**: Responsive, Mobile-freundlich
-
-## Firewall-Einstellungen
-
-Für Netzwerkzugriff:
-- **Windows**: Windows Defender Firewall > Erweiterte Einstellungen > Eingehende Regeln
-  - Port 3000 (Frontend) freigeben
-  - Port 3001 (Backend) freigeben
-- **Mac**: Systemeinstellungen > Sicherheit > Firewall
-
-## Backup
-
-Sichern Sie regelmäßig die Datei `backend/database/werkstatt.db` für ein Backup Ihrer Daten.
+### Backup & Migration
+Backups können über die Web-Oberfläche oder manuell erstellt werden:
 
 ```bash
-# Backup erstellen
-cp backend/database/werkstatt.db backup_$(date +%Y%m%d).db
+# Manuelles Backup
+cp backend/database/werkstatt.db backend/backups/backup_$(date +%Y%m%d_%H%M%S).db
+
+# Restore
+cp backend/backups/backup_YYYYMMDD_HHMMSS.db backend/database/werkstatt.db
 ```
 
-## Development
+**Automatische Backups** können in den Einstellungen konfiguriert werden.
 
-### Backend-Entwicklung
-```bash
-cd backend
-npm run dev  # Startet mit nodemon für Auto-Reload
-```
+## 🔧 Standard-Arbeitszeiten
 
-### Frontend-Entwicklung
-Das Frontend verwendet Vanilla JavaScript ohne Build-Prozess. Änderungen sind sofort sichtbar nach Browser-Reload.
+Bei der ersten Einrichtung werden folgende Standardarbeiten automatisch angelegt:
 
-## Troubleshooting
+| Arbeit | Zeit | Beschreibung |
+|--------|------|--------------|
+| Ölwechsel | 30 Min | Motoröl wechseln |
+| Inspektion klein | 60 Min | Kleine Wartung |
+| Inspektion groß | 120 Min | Große Wartung |
+| Bremsen vorne | 90 Min | Vordere Bremsanlage |
+| Bremsen hinten | 90 Min | Hintere Bremsanlage |
+| Reifen wechseln | 45 Min | Sommer/Winter-Reifen |
+| TÜV-Vorbereitung | 60 Min | Vorbereitung Hauptuntersuchung |
+| Diagnose | 30 Min | Fehlerdiagnose |
+
+Diese Zeiten können im Tab **Zeitverwaltung** individuell angepasst werden. Neue Arbeitstypen können jederzeit hinzugefügt werden.
+
+## ⚙️ Technologie-Stack
+
+### Backend
+- **Node.js** (v14+) - JavaScript-Runtime
+- **Express** (v4) - Web-Framework
+- **SQLite3** - Eingebettete Datenbank
+- **Electron** (optional) - Desktop-App-Wrapper
+- **WebSocket** - Live-Updates zwischen Clients
+
+### Frontend
+- **Vanilla JavaScript** (ES6+) - Keine Frameworks
+- **HTML5** - Semantisches Markup
+- **CSS3** - Modernes Styling mit Flexbox/Grid
+- **LocalStorage** - Client-seitige Konfiguration
+
+### Architektur (MVC-Pattern)
+
+#### Backend
+- **Models** (`backend/src/models/`): Datenbank-Zugriff und SQL-Queries
+- **Controllers** (`backend/src/controllers/`): Business-Logik und Request-Handling
+- **Routes** (`backend/src/routes/`): API-Endpoint-Definitionen
+- **Config** (`backend/src/config/`): Datenbank- und Server-Konfiguration
+
+#### Frontend
+- **Components** (`frontend/src/components/`): UI-Logik und Event-Handling
+- **Services** (`frontend/src/services/`): API-Kommunikation
+- **Styles** (`frontend/src/styles/`): CSS-Styling
+
+### Build & Deployment
+- **electron-builder**: Windows .exe Pakete erstellen
+- Kein Build-Prozess für Frontend (Vanilla JS)
+- Portable SQLite-Datenbank
+
+## 🔥 Firewall-Einstellungen
+
+Für Netzwerkzugriff müssen folgende Ports freigegeben werden:
+
+### Windows Firewall
+1. **Windows Defender Firewall** öffnen
+2. **Erweiterte Einstellungen** → **Eingehende Regeln**
+3. **Neue Regel** erstellen:
+   - **Port 3001** (Backend-API) freigeben
+   - **Port 3000** (Frontend) freigeben (nur bei manueller Installation)
+
+**Schnell-Lösung:** Die Start-Skripte erstellen automatisch Firewall-Regeln (Admin-Rechte erforderlich).
+
+### macOS Firewall
+1. **Systemeinstellungen** → **Sicherheit** → **Firewall**
+2. Bei Aufforderung: Node.js/Python eingehende Verbindungen erlauben
+
+### Router/Netzwerk
+Falls Zugriff von außerhalb des lokalen Netzwerks gewünscht:
+- Port-Forwarding für 3001 einrichten
+- **Nicht empfohlen** ohne Authentifizierung!
+
+## 🐛 Troubleshooting
 
 ### Backend startet nicht
-- Prüfen Sie, ob Port 3001 bereits belegt ist
-- Überprüfen Sie die `.env` Datei
-- Stellen Sie sicher, dass Node.js installiert ist
+- **Port belegt**: Prüfen Sie mit `netstat -an | grep 3001` (Mac/Linux) oder `netstat -an | findstr 3001` (Windows)
+- **Fehlende Dependencies**: `cd backend && npm install` ausführen
+- **Node.js fehlt**: Node.js von https://nodejs.org installieren
+- **Datenbank-Fehler**: Prüfen Sie Schreibrechte im `backend/database/` Ordner
 
 ### Frontend kann Backend nicht erreichen
-- Prüfen Sie die API-URL in `frontend/src/services/api.js`
-- Stellen Sie sicher, dass das Backend läuft
-- Überprüfen Sie CORS-Einstellungen in `backend/src/server.js`
+- **Server läuft nicht**: Backend-Server starten mit `npm start`
+- **Falsche API-URL**: In Einstellungen → Server-Verbindung die korrekte IP eingeben
+- **CORS-Fehler**: Überprüfen Sie `backend/src/server.js` CORS-Konfiguration
+- **Firewall blockiert**: Port 3001 in Firewall freigeben
 
-### Datenbank-Fehler
-- Löschen Sie `backend/database/werkstatt.db` und starten Sie neu
-- Die Datenbank wird automatisch neu erstellt
+### Verbindungstest schlägt fehl
+- **Server-IP prüfen**: Auf Server-PC `ipconfig` (Windows) oder `ifconfig` (Mac/Linux)
+- **Ping-Test**: Von Client `ping <server-ip>` ausführen
+- **Port-Test**: `telnet <server-ip> 3001` (Windows: Telnet-Client aktivieren)
 
-## Lizenz
+### Datenbank-Probleme
+- **Datenbank neu erstellen**: `werkstatt.db` löschen, Server neu starten
+- **Backup wiederherstellen**: Über Web-Interface oder manuell kopieren
+- **Schreibrechte fehlen**: Ordner `backend/database/` Vollzugriff geben
+
+### Electron-App startet nicht
+- **Port bereits belegt**: Andere Instanz schließen oder Port ändern
+- **Windows Defender**: App-Ausführung erlauben
+- **Fehlende .NET**: Microsoft .NET Framework installieren
+
+### Performance-Probleme
+- **Alte Termine aufräumen**: Papierkorb regelmäßig leeren
+- **Datenbank optimieren**: Über Backup → Restore neu aufbauen
+- **Zu viele Clients**: Maximale Verbindungen in Electron-App prüfen
+
+### Logs prüfen
+- Backend-Logs: `logs/backend.log`
+- Frontend-Logs: Browser-Konsole (F12)
+- Electron-Logs: Im Server-Status-Fenster
+
+## 🔐 Sicherheitshinweise
+
+⚠️ **Wichtig**: Die Anwendung hat aktuell **keine Authentifizierung**!
+
+### Empfehlungen für Produktivumgebungen
+1. **Netzwerk-Isolation**: Nur im lokalen/vertrauenswürdigen Netzwerk betreiben
+2. **Firewall**: Zugriff auf vertrauenswürdige IPs beschränken
+3. **VPN**: Für externen Zugriff VPN verwenden
+4. **Backups**: Regelmäßige automatische Backups aktivieren
+5. **Updates**: Software regelmäßig aktualisieren
+
+### Für Internet-Zugriff (nicht empfohlen ohne Anpassungen)
+- Authentifizierung implementieren (JWT, Session-basiert)
+- HTTPS mit SSL-Zertifikaten
+- Rate-Limiting für API-Endpoints
+- Input-Validierung verstärken
+
+## 📚 Weitere Dokumentation
+
+- [SCHNELLSTART.md](SCHNELLSTART.md) - Schnelle Inbetriebnahme
+- [NETZWERK-INSTALLATION.md](NETZWERK-INSTALLATION.md) - Detaillierte Netzwerk-Anleitung
+- [RELEASE-NOTES.md](RELEASE-NOTES.md) - Versionshistorie und Änderungen
+- [AGENTS.md](AGENTS.md) - Entwickler-Richtlinien
+
+## 🤝 Beitragen
+
+Für Entwickler siehe [AGENTS.md](AGENTS.md) für:
+- Code-Style und Konventionen
+- Commit-Richtlinien
+- Testing-Praktiken
+- PR-Prozess
+
+## 📄 Lizenz
 
 Proprietäre Software für interne Nutzung.
+
+---
+
+**Version**: 1.0.5  
+**Letztes Update**: Januar 2026
