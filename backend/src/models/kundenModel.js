@@ -230,10 +230,14 @@ class KundenModel {
       return callback(null, []);
     }
 
+    // Normalisiere Suchbegriff: Entferne Leerzeichen und Bindestriche
+    const normalizedSearch = searchTerm.trim().replace(/[\s\-]/g, '');
     const searchPattern = `%${searchTerm.trim()}%`;
+    const normalizedPattern = `%${normalizedSearch}%`;
     
     // Suche Kunden nach Name oder Kennzeichen (über Termine)
     // Verwende DISTINCT um Duplikate zu vermeiden
+    // Für Kennzeichen: normalisiere auch die DB-Werte (entferne Leerzeichen und Bindestriche)
     const query = `
       SELECT DISTINCT
         k.id,
@@ -245,11 +249,13 @@ class KundenModel {
         k.erstellt_am
       FROM kunden k
       LEFT JOIN termine t ON k.id = t.kunde_id
-      WHERE k.name LIKE ? OR t.kennzeichen LIKE ?
+      WHERE k.name LIKE ? 
+         OR REPLACE(REPLACE(UPPER(t.kennzeichen), ' ', ''), '-', '') LIKE UPPER(?)
+         OR REPLACE(REPLACE(UPPER(k.kennzeichen), ' ', ''), '-', '') LIKE UPPER(?)
       ORDER BY k.name
     `;
 
-    db.all(query, [searchPattern, searchPattern], (err, kunden) => {
+    db.all(query, [searchPattern, normalizedPattern, normalizedPattern], (err, kunden) => {
       if (err) {
         return callback(err);
       }

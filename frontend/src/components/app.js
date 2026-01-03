@@ -1842,13 +1842,22 @@ class App {
 
     // Filtere Kunden basierend auf Suchbegriff
     const lower = suchBegriff.toLowerCase();
+    // Normalisiere Suchbegriff für Kennzeichen (entferne Leerzeichen und Bindestriche)
+    const normalizedSearch = suchBegriff.replace(/[\s\-]/g, '').toLowerCase();
+    
     const gefilterteKunden = kunden.filter(kunde => {
-      return (kunde.name && kunde.name.toLowerCase().includes(lower)) ||
-             (kunde.telefon && kunde.telefon.toLowerCase().includes(lower)) ||
-             (kunde.email && kunde.email.toLowerCase().includes(lower)) ||
-             (kunde.kennzeichen && kunde.kennzeichen.toLowerCase().includes(lower)) ||
-             (kunde.fahrzeugtyp && kunde.fahrzeugtyp.toLowerCase().includes(lower)) ||
-             (kunde.locosoft_id && kunde.locosoft_id.toLowerCase().includes(lower));
+      // Normale Suche in allen Feldern
+      const normalMatch = (kunde.name && kunde.name.toLowerCase().includes(lower)) ||
+                          (kunde.telefon && kunde.telefon.toLowerCase().includes(lower)) ||
+                          (kunde.email && kunde.email.toLowerCase().includes(lower)) ||
+                          (kunde.fahrzeugtyp && kunde.fahrzeugtyp.toLowerCase().includes(lower)) ||
+                          (kunde.locosoft_id && kunde.locosoft_id.toLowerCase().includes(lower));
+      
+      // Spezielle normalisierte Suche für Kennzeichen
+      const kennzeichenMatch = kunde.kennzeichen && 
+                               kunde.kennzeichen.replace(/[\s\-]/g, '').toLowerCase().includes(normalizedSearch);
+      
+      return normalMatch || kennzeichenMatch;
     });
 
     if (badge) {
@@ -3793,15 +3802,30 @@ class App {
       }
     });
     
-    // Filtern nach den eingegebenen Teilen
+    // Filtern nach den eingegebenen Teilen (flexible Suche)
     const treffer = [];
     alleKennzeichen.forEach((data) => {
       const kzParts = this.parseKennzeichen(data.kennzeichen);
+      const normalized = this.normalizeKennzeichen(data.kennzeichen);
       
-      let match = true;
-      if (bezirk && !kzParts.bezirk.includes(bezirk)) match = false;
-      if (buchstaben && !kzParts.buchstaben.includes(buchstaben)) match = false;
-      if (nummer && !kzParts.nummer.includes(nummer)) match = false;
+      let match = false;
+      
+      // Flexible Suche: Kombiniere alle eingegebenen Teile
+      const suchMuster = (bezirk || '') + (buchstaben || '') + (nummer || '');
+      
+      if (suchMuster) {
+        // Prüfe ob das Suchmuster im normalisierten Kennzeichen vorkommt
+        match = normalized.includes(suchMuster);
+        
+        // Zusätzliche Prüfung: Einzelne Felder müssen auch passen
+        if (match) {
+          // Wenn separate Felder genutzt werden, prüfe auch Teilmatches
+          if (bezirk && buchstaben) {
+            // Beide Felder gefüllt: Bezirk muss beginnen, Buchstaben passen
+            match = kzParts.bezirk.startsWith(bezirk) || normalized.startsWith(suchMuster);
+          }
+        }
+      }
       
       if (match) {
         treffer.push(data);
@@ -7965,15 +7989,30 @@ class App {
       }
     });
     
-    // Filtern nach den eingegebenen Teilen
+    // Filtern nach den eingegebenen Teilen (flexible Suche)
     const treffer = [];
     alleKennzeichen.forEach((data) => {
       const kzParts = this.parseKennzeichen(data.kennzeichen);
+      const normalized = this.normalizeKennzeichen(data.kennzeichen);
       
-      let match = true;
-      if (bezirk && !kzParts.bezirk.includes(bezirk)) match = false;
-      if (buchstaben && !kzParts.buchstaben.includes(buchstaben)) match = false;
-      if (nummer && !kzParts.nummer.includes(nummer)) match = false;
+      let match = false;
+      
+      // Flexible Suche: Kombiniere alle eingegebenen Teile
+      const suchMuster = (bezirk || '') + (buchstaben || '') + (nummer || '');
+      
+      if (suchMuster) {
+        // Prüfe ob das Suchmuster im normalisierten Kennzeichen vorkommt
+        match = normalized.includes(suchMuster);
+        
+        // Zusätzliche Prüfung: Einzelne Felder müssen auch passen
+        if (match) {
+          // Wenn separate Felder genutzt werden, prüfe auch Teilmatches
+          if (bezirk && buchstaben) {
+            // Beide Felder gefüllt: Bezirk muss beginnen, Buchstaben passen
+            match = kzParts.bezirk.startsWith(bezirk) || normalized.startsWith(suchMuster);
+          }
+        }
+      }
       
       if (match) {
         treffer.push(data);
@@ -8058,36 +8097,56 @@ class App {
 
   // Kennzeichen mit Highlight formatieren
   formatKennzeichenHighlight(kz, bezirk, buchstaben, nummer) {
-    const parts = this.parseKennzeichen(kz);
-    
-    let result = '';
-    
-    // Bezirk
-    if (bezirk && parts.bezirk.includes(bezirk)) {
-      result += `<span class="vorschlag-match">${parts.bezirk}</span>`;
-    } else {
-      result += parts.bezirk;
+    // Zeige das Original-Kennzeichen mit Highlighting statt neu zusammenzubauen
+    if (!bezirk && !buchstaben && !nummer) {
+      return kz; // Keine Suche, zeige Original
     }
     
-    result += '-';
+    // Baue Suchmuster und highlighte im Original
+    const suchMuster = (bezirk || '') + (buchstaben || '') + (nummer || '');
+    const normalized = this.normalizeKennzeichen(kz);
     
-    // Buchstaben
-    if (buchstaben && parts.buchstaben.includes(buchstaben)) {
-      result += `<span class="vorschlag-match">${parts.buchstaben}</span>`;
-    } else {
-      result += parts.buchstaben;
+    // Finde Position des Suchmusters im normalisierten Kennzeichen
+    const pos = normalized.indexOf(suchMuster.toUpperCase());
+    
+    if (pos === -1) {
+      return kz; // Kein Match, zeige Original
     }
     
-    result += ' ';
+    // Highlighte den gefundenen Teil im Original-Kennzeichen
+    // Zähle Zeichen im Original bis zur Match-Position (überspringe Leerzeichen/Bindestriche)
+    let origPos = 0;
+    let normPos = 0;
     
-    // Nummer
-    if (nummer && parts.nummer.includes(nummer)) {
-      result += `<span class="vorschlag-match">${parts.nummer}</span>`;
-    } else {
-      result += parts.nummer;
+    // Finde Start-Position im Original
+    while (normPos < pos && origPos < kz.length) {
+      const char = kz[origPos];
+      if (char !== ' ' && char !== '-') {
+        normPos++;
+      }
+      origPos++;
     }
     
-    return result;
+    const startPos = origPos;
+    let matchLength = 0;
+    let charsCounted = 0;
+    
+    // Finde End-Position im Original
+    while (charsCounted < suchMuster.length && origPos < kz.length) {
+      const char = kz[origPos];
+      if (char !== ' ' && char !== '-') {
+        charsCounted++;
+      }
+      matchLength++;
+      origPos++;
+    }
+    
+    // Baue Ergebnis mit Highlight
+    const before = kz.substring(0, startPos);
+    const match = kz.substring(startPos, startPos + matchLength);
+    const after = kz.substring(startPos + matchLength);
+    
+    return `${before}<span class="vorschlag-match">${match}</span>${after}`;
   }
 
   // Text mit Highlight für Suchmatch
@@ -8505,10 +8564,11 @@ class App {
       );
     }
     
-    // Suche auch nach Kennzeichen in Kundendaten
+    // Suche auch nach Kennzeichen in Kundendaten (normalisiert)
     if (!kundeMatch) {
+      const normalizedInput = eingabe.replace(/[\s\-]/g, '').toLowerCase();
       kundeMatch = (this.kundenCache || []).find(kunde => 
-        kunde.kennzeichen && kunde.kennzeichen.toLowerCase() === lower
+        kunde.kennzeichen && kunde.kennzeichen.replace(/[\s\-]/g, '').toLowerCase() === normalizedInput
       );
     }
     
@@ -8544,9 +8604,10 @@ class App {
       return;
     }
 
-    // Suche Kennzeichen in Terminen
+    // Suche Kennzeichen in Terminen (normalisiert: ohne Leerzeichen und Bindestriche)
+    const normalizedLower = eingabe.replace(/[\s\-]/g, '').toLowerCase();
     const terminMatch = (this.termineCache || []).find(termin =>
-      termin.kennzeichen && termin.kennzeichen.toLowerCase() === lower
+      termin.kennzeichen && termin.kennzeichen.replace(/[\s\-]/g, '').toLowerCase() === normalizedLower
     );
     if (terminMatch) {
       document.getElementById('kennzeichen').value = terminMatch.kennzeichen;
@@ -8580,8 +8641,9 @@ class App {
     }
     
     // Suche Kennzeichen direkt in Kundentabelle (für importierte Kunden ohne Termine)
+    // Normalisiert: ohne Leerzeichen und Bindestriche
     const kundeByKennzeichen = (this.kundenCache || []).find(kunde =>
-      kunde.kennzeichen && kunde.kennzeichen.toLowerCase() === lower
+      kunde.kennzeichen && kunde.kennzeichen.replace(/[\s\-]/g, '').toLowerCase() === normalizedLower
     );
     if (kundeByKennzeichen) {
       document.getElementById('kennzeichen').value = kundeByKennzeichen.kennzeichen;
