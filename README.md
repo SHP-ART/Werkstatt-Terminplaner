@@ -18,8 +18,9 @@ Ein vollständiger Werkstatt-Terminplaner mit intelligenter Auslastungsanzeige, 
 - **Ersatzauto-System**: Verwaltung von Ersatzfahrzeugen mit Buchungen und Verfügbarkeit
 - **Auslastungsanzeige**: Echtzeit-Visualisierung mit automatischer Farbcodierung
 - **Backup-System**: Automatische und manuelle Backups mit Restore-Funktion
-- **Windows Autostart**: Automatischer Start beim Systemstart (Windows)
+- **Windows Autostart**: Automatischer Start beim Systemstart mit sauberem Shutdown beim Herunterfahren
 - **WebSocket Live-Updates**: Änderungen werden in Echtzeit auf alle Clients übertragen
+- **Sicherer Betrieb**: Automatische Datenbankschließung und Cleanup bei PC-Herunterfahren/Abmeldung
 
 ## Projektstruktur
 
@@ -118,6 +119,96 @@ Die Skripte erledigen automatisch:
 - Anzeige der Zugriffs-URLs
 - Erstellung von Log-Dateien
 
+## 💻 Systemvoraussetzungen
+
+### Minimale Anforderungen (Einzelplatz bis 5 Termine/Tag)
+- **Prozessor**: Intel Core i3 / AMD Ryzen 3 oder höher (2 Kerne)
+- **RAM**: 4 GB
+- **Festplatte**: 500 MB freier Speicher
+- **Betriebssystem**:
+  - Windows 10/11 (64-bit)
+  - macOS 10.15 (Catalina) oder neuer
+  - Linux (Ubuntu 20.04+, Debian 10+)
+
+### Empfohlene Konfiguration (Werkstatt-Alltag: 10 Termine/Tag, 4 Mitarbeiter)
+- **Prozessor**: Intel Core i5 / AMD Ryzen 5 oder höher (4 Kerne)
+- **RAM**: 8 GB (besser 16 GB für gleichzeitige Client-Zugriffe)
+- **Festplatte**: 
+  - **System**: 10 GB freier Speicher
+  - **Datensicherung (10 Jahre)**: 20-50 GB für Backups
+    - ~5 MB pro Backup bei 10 Terminen/Tag
+    - ~2-5 GB pro Jahr (tägliche Backups)
+    - SSD empfohlen für bessere Performance
+- **Netzwerk**: 
+  - 100 Mbit/s LAN (bei Netzwerk-Betrieb)
+  - Stabiles WLAN (5 GHz) für Client-PCs
+- **Betriebssystem**: 
+  - **Windows 10/11 Pro** (empfohlen für Server)
+  - macOS 11 (Big Sur) oder neuer
+  - Linux Server (Ubuntu 22.04 LTS)
+
+### Server-PC Anforderungen (Multi-PC-Betrieb mit 3-5 Clients)
+- **Prozessor**: Intel Core i5-8xxx / AMD Ryzen 5 3xxx oder neuer (6 Kerne)
+- **RAM**: 16 GB
+- **Festplatte**: 
+  - 50 GB SSD für System und Datenbank
+  - 100 GB HDD/SSD für langfristige Backups
+- **Netzwerk**: Gigabit LAN (kabelgebunden empfohlen)
+- **Unterbrechungsfreie Stromversorgung (USV)**: Empfohlen zum Schutz der Datenbank
+
+### Client-PC Anforderungen
+- **Prozessor**: Intel Core i3 / AMD Ryzen 3
+- **RAM**: 4 GB
+- **Browser**: Aktueller Chrome, Firefox, Edge oder Safari
+- **Netzwerk**: Stabiles LAN/WLAN zum Server
+
+### Software-Voraussetzungen (nur bei manueller Installation)
+- **Node.js**: Version 14.0 oder höher - [Download](https://nodejs.org)
+- **npm**: Wird mit Node.js automatisch installiert
+- **Python**: 
+  - Python 3.7+ (macOS/Linux)
+  - Python 3.7+ (Windows, für Frontend-Server)
+
+**Hinweis**: Bei Verwendung des Windows Installers oder der .exe-Dateien sind **keine** zusätzlichen Software-Installationen erforderlich!
+
+### Speicherplatz-Berechnung für 10 Jahre
+
+#### Datenbank-Größe (bei 10 Terminen/Tag, 4 Mitarbeiter)
+- **Jahr 1**: ~15-25 MB (3.650 Termine + Kunden + Mitarbeiter)
+- **Jahr 5**: ~75-125 MB
+- **Jahr 10**: ~150-250 MB
+- **Gesamt mit Wachstum**: 300-500 MB
+
+#### Backup-Größe (tägliche automatische Backups)
+- **Tägliche Backups**: 365 Backups/Jahr × 5 MB = ~2 GB/Jahr
+- **Wöchentliche Langzeit-Backups**: 52 × 5 MB = ~260 MB/Jahr
+- **Empfohlenes Backup-Konzept für 10 Jahre**:
+  - **Tägliche Backups**: Letzten 30 Tage (2 GB)
+  - **Wöchentliche Backups**: Letztes Jahr (3 GB)
+  - **Monatliche Backups**: 10 Jahre (600 MB)
+  - **Gesamt**: ~6-10 GB für umfassendes Backup-System
+
+#### Gesamtspeicherbedarf (10 Jahre)
+- **Datenbank**: 500 MB
+- **Backups**: 10 GB
+- **System + Logs**: 2 GB
+- **Reserve**: 5 GB
+- **Empfohlen**: **20-30 GB freier Speicher**
+
+### Leistungsmetriken (Benchmark mit 10 Terminen/Tag)
+- **Startzeit**: 2-5 Sekunden
+- **Termin erstellen**: <500 ms
+- **Auslastung berechnen**: <1 Sekunde
+- **Backup erstellen**: 1-2 Sekunden
+- **Gleichzeitige Benutzer**: 5-10 (bei empfohlener Hardware)
+- **Datenbank-Zugriff**: <100 ms (SQLite, lokal)
+
+### Netzwerk-Anforderungen (Multi-PC)
+- **Bandbreite pro Client**: ~1-5 Mbit/s (geringe Last)
+- **Latenz**: <50 ms (LAN), <100 ms (WLAN)
+- **Offene Ports**: TCP 3001 (Backend-API)
+- **Firewall**: Windows Defender / macOS Firewall konfiguriert
+
 ### Was die Skripte tun
 
 **start.sh / start.bat:**
@@ -134,16 +225,18 @@ Die Skripte erledigen automatisch:
 - Gibt Ports 3000 und 3001 frei
 - Bereinigt PID-Dateien
 
+### Voraussetzungen für manuelle Installation
+- Node.js (Version 14 oder höher) - https://nodejs.org
+- npm (wird mit Node.js installiert)
+- Python 3 (macOS/Linux) oder Python (Windows) - https://python.org
+
+**Hinweis**: Bei Verwendung des Windows Installers oder der .exe-Dateien sind keine Voraussetzungen erforderlich!
+
 ### Zugriff nach dem Start
 
 - **Frontend**: http://localhost:3000
 - **Backend**: http://localhost:3001
 - **API**: http://localhost:3001/api
-
-### Voraussetzungen
-- Node.js (Version 14 oder höher) - https://nodejs.org
-- npm (wird mit Node.js installiert)
-- Python 3 (macOS/Linux) oder Python (Windows) - https://python.org
 
 ## Manuelle Installation
 
