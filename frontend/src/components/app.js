@@ -510,12 +510,12 @@ class App {
     const showDetails = abholungTyp === 'hol_bring' || abholungTyp === 'ruecksprache' || abholungTyp === 'bringen';
     detailsGroup.style.display = showDetails ? 'block' : 'none';
 
-    // Zeitfelder anzeigen bei abholung, hol_bring oder bringen
-    const showZeitRow = abholungTyp === 'hol_bring' || abholungTyp === 'bringen' || abholungTyp === 'warten';
+    // Zeitfelder anzeigen bei abholung, hol_bring, bringen, warten oder ruecksprache
+    const showZeitRow = abholungTyp === 'hol_bring' || abholungTyp === 'bringen' || abholungTyp === 'warten' || abholungTyp === 'ruecksprache';
     zeitRow.style.display = showZeitRow ? 'flex' : 'none';
 
-    // Bringzeit nur bei hol_bring, bringen oder warten
-    const showBringzeit = abholungTyp === 'hol_bring' || abholungTyp === 'bringen' || abholungTyp === 'warten';
+    // Bringzeit bei hol_bring, bringen, warten oder ruecksprache
+    const showBringzeit = abholungTyp === 'hol_bring' || abholungTyp === 'bringen' || abholungTyp === 'warten' || abholungTyp === 'ruecksprache';
     bringzeitGroup.style.display = showBringzeit ? 'block' : 'none';
 
     // Abholzeit bei hol_bring oder bringen
