@@ -1,6 +1,6 @@
 const fs = require('fs');
 const path = require('path');
-const { db, dbPath, dataDir, initializeDatabase } = require('../config/database');
+const { db, dbPath, dataDir, initializeDatabase, reconnectDatabase } = require('../config/database');
 
 const backupDir = path.join(dataDir, 'backups');
 
@@ -79,7 +79,7 @@ const BackupController = {
     }
   },
 
-  restore: (req, res) => {
+  restore: async (req, res) => {
     try {
       const { filename } = req.body;
       if (!filename) {
@@ -92,24 +92,34 @@ const BackupController = {
       }
 
       ensureBackupDir();
+      
+      // Wichtig: Erst Datenbankverbindung schließen, dann Datei ersetzen, dann neu verbinden
+      console.log('🔄 Bereite Backup-Restore vor...');
+      await reconnectDatabase(); // Schließt alte Verbindung
+      
+      // Jetzt Datei ersetzen (Verbindung ist geschlossen)
       fs.copyFileSync(source, dbPath);
+      console.log('📁 Backup-Datei kopiert:', path.basename(source));
+      
+      // Verbindung neu herstellen
+      await reconnectDatabase();
       
       // Führe Migrationen auf der wiederhergestellten Datenbank aus
       initializeDatabase();
-      console.log('Backup eingespielt und Migrationen ausgeführt:', path.basename(source));
+      console.log('✅ Backup eingespielt und Migrationen ausgeführt:', path.basename(source));
       
       res.json({ 
         message: 'Backup eingespielt und Migrationen ausgeführt', 
         restored: path.basename(source),
-        hinweis: 'Ein Server-Neustart wird empfohlen für volle Kompatibilität'
+        hinweis: 'Die Datenbank wurde neu verbunden. Ein Browser-Refresh wird empfohlen.'
       });
     } catch (error) {
       console.error('Backup Restore Fehler:', error);
-      res.status(500).json({ error: 'Backup konnte nicht eingespielt werden' });
+      res.status(500).json({ error: 'Backup konnte nicht eingespielt werden: ' + error.message });
     }
   },
 
-  upload: (req, res) => {
+  upload: async (req, res) => {
     try {
       const { filename, fileBase64, restoreNow } = req.body || {};
       if (!filename || !fileBase64) {
@@ -124,10 +134,19 @@ const BackupController = {
       fs.writeFileSync(target, buffer);
 
       if (restoreNow) {
+        // Wichtig: Erst Datenbankverbindung schließen, dann Datei ersetzen, dann neu verbinden
+        console.log('🔄 Bereite Upload+Restore vor...');
+        await reconnectDatabase(); // Schließt alte Verbindung
+        
         fs.copyFileSync(target, dbPath);
+        console.log('📁 Backup-Datei kopiert:', safeName);
+        
+        // Verbindung neu herstellen
+        await reconnectDatabase();
+        
         // Führe Migrationen auf der wiederhergestellten Datenbank aus
         initializeDatabase();
-        console.log('Backup hochgeladen, eingespielt und Migrationen ausgeführt:', safeName);
+        console.log('✅ Backup hochgeladen, eingespielt und Migrationen ausgeführt:', safeName);
       }
 
       const stats = fs.statSync(target);
@@ -135,11 +154,11 @@ const BackupController = {
         message: restoreNow ? 'Backup hochgeladen, eingespielt und Migrationen ausgeführt' : 'Backup hochgeladen',
         backup: { name: safeName, sizeBytes: stats.size, createdAt: stats.mtime },
         restored: !!restoreNow,
-        hinweis: restoreNow ? 'Ein Server-Neustart wird empfohlen für volle Kompatibilität' : undefined
+        hinweis: restoreNow ? 'Die Datenbank wurde neu verbunden. Ein Browser-Refresh wird empfohlen.' : undefined
       });
     } catch (error) {
       console.error('Backup Upload Fehler:', error);
-      res.status(500).json({ error: 'Backup konnte nicht hochgeladen werden' });
+      res.status(500).json({ error: 'Backup konnte nicht hochgeladen werden: ' + error.message });
     }
   },
 
