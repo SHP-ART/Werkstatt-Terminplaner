@@ -5086,6 +5086,30 @@ class App {
     const wochentage = ['So', 'Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa'];
     const datumFormatiert = `${wochentage[datumObj.getDay()]}, ${termin.datum.split('-').reverse().join('.')}`;
 
+    // Berechne Gesamtzeit aus arbeitszeiten_details wenn vorhanden
+    let gesamtzeitBerechnet = null;
+    if (termin.arbeitszeiten_details) {
+      try {
+        const arbeitszeitenDetails = JSON.parse(termin.arbeitszeiten_details);
+        let summeMinuten = 0;
+        const arbeitenListe = this.parseArbeiten(termin.arbeit || '');
+        
+        arbeitenListe.forEach(arbeit => {
+          if (arbeitszeitenDetails[arbeit]) {
+            const details = arbeitszeitenDetails[arbeit];
+            const zeitMinuten = typeof details === 'object' ? (details.zeit || 0) : details;
+            summeMinuten += zeitMinuten;
+          }
+        });
+        
+        if (summeMinuten > 0) {
+          gesamtzeitBerechnet = this.formatMinutesToHours(summeMinuten);
+        }
+      } catch (e) {
+        console.error('Fehler beim Berechnen der Gesamtzeit:', e);
+      }
+    }
+
     body.innerHTML = `
       <!-- Header-Bereich mit Termin-Nr und Status -->
       <div class="detail-header">
@@ -5134,6 +5158,11 @@ class App {
             <span class="detail-label">Geschätzte Zeit</span>
             <span class="detail-value detail-value-highlight">${this.formatMinutesToHours(termin.geschaetzte_zeit || 0)}</span>
           </div>
+          ${gesamtzeitBerechnet ? `
+          <div class="detail-item">
+            <span class="detail-label">Berechnete Arbeitszeit</span>
+            <span class="detail-value detail-value-highlight">⏱️ ${gesamtzeitBerechnet}</span>
+          </div>` : ''}
           <div class="detail-item">
             <span class="detail-label">Interne Auftragsnr.</span>
             <span class="detail-value detail-value-highlight">${termin.interne_auftragsnummer || '-'}</span>
