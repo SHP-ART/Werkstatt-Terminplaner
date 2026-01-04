@@ -1,3 +1,45 @@
+# Release Notes - Version 1.0.8
+
+## 🏗️ Architektur-Verbesserungen
+
+### Error-Handling komplett überarbeitet
+- **Feature**: Zentrales Error-Handler-Middleware-System
+- **Dateien**: 
+  - `backend/src/middleware/errorHandler.js` - Globaler Error-Handler
+  - `backend/src/utils/errors.js` - Custom Error-Klassen (ValidationError, NotFoundError, DatabaseError, etc.)
+  - `backend/src/utils/response.js` - Einheitliche Response-Helper
+- **Vorteile**:
+  - Konsistente API-Responses für alle Fehler
+  - SQLite-Error-Handling (UNIQUE, FOREIGN KEY Constraints)
+  - Strukturiertes Logging
+  - Produktionsbereit (sensitive Fehler werden versteckt)
+- **Response-Format**:
+  ```json
+  // Erfolg:
+  { "success": true, "data": {...}, "message": "..." }
+  // Fehler:
+  { "success": false, "error": "...", "details": {...} }
+  ```
+
+### 404-Handler implementiert
+- **Feature**: Nicht gefundene API-Routen liefern jetzt strukturierte 404-Responses
+- **Format**: `{"success":false,"error":"Route /api/xyz nicht gefunden"}`
+
+### Async Error-Wrapper
+- **Feature**: `asyncHandler()` für sauberes Error-Handling in async Controllern
+- **Vorbereitung**: Basis für kommende async/await Migration
+
+## 📋 Dokumentation
+
+### CONTROLLER-OPTIMIERUNG.md
+- **Feature**: Umfassende TODO-Liste für alle geplanten Optimierungen
+- **Struktur**: 34 Tasks in 7 Kategorien
+- **Prioritäten**: Kritisch, Wichtig, Mittelfristig, Langfristig, Testing, Dokumentation
+- **Sprint-Planung**: 5 Sprints à 1-2 Wochen
+- **Status**: 3/34 Tasks (9%) - Error-Handling komplett ✅
+
+---
+
 # Release Notes - Version 1.0.5
 
 ## 🆕 Neue Features

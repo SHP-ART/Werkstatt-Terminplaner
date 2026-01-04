@@ -8,6 +8,7 @@ const { initializeDatabase } = require('./config/database');
 const routes = require('./routes');
 const { WebSocketServer } = require('ws');
 const http = require('http');
+const { errorHandler, notFoundHandler } = require('./middleware/errorHandler');
 
 let wss;
 
@@ -120,10 +121,11 @@ function startServer(clientCountCallback, requestLogCallback) {
         console.log('Frontend wird auf / ausgeliefert');
     }
 
-    app.use((err, req, res, next) => {
-        console.error(err.stack);
-        res.status(500).json({ error: 'Interner Serverfehler' });
-    });
+    // 404-Handler für nicht gefundene Routen (MUSS vor Error-Handler)
+    app.use(notFoundHandler);
+
+    // Globaler Error-Handler (MUSS am Ende)
+    app.use(errorHandler);
 
     const server = http.createServer(app);
 
