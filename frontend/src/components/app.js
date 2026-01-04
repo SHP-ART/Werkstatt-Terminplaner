@@ -7447,12 +7447,21 @@ class App {
       }
 
       // Berechne Prozentanteile für die Segmente
-      // Wenn keine Kapazität, nutze belegte Zeit als Referenz für den Balken
-      const belegteZeit = (data.geplant_minuten || 0) + (data.in_arbeit_minuten || 0) + (data.abgeschlossen_minuten || 0);
-      const referenzMinuten = data.gesamt_minuten > 0 ? data.gesamt_minuten : (belegteZeit > 0 ? belegteZeit : 1);
-      const geplantProzent = ((data.geplant_minuten || 0) / referenzMinuten) * 100;
-      const inArbeitProzent = ((data.in_arbeit_minuten || 0) / referenzMinuten) * 100;
-      const abgeschlossenProzent = ((data.abgeschlossen_minuten || 0) / referenzMinuten) * 100;
+      // Verwende belegt_minuten (inkl. Nebenzeit) für die Balkenberechnung
+      const belegtMinuten = data.belegt_minuten_mit_service || data.belegt_minuten || 0;
+      const referenzMinuten = data.gesamt_minuten > 0 ? data.gesamt_minuten : (belegtMinuten > 0 ? belegtMinuten : 1);
+      
+      // Berechne die Anteile basierend auf der belegten Zeit (proportional)
+      const geplantRoh = data.geplant_minuten || 0;
+      const inArbeitRoh = data.in_arbeit_minuten || 0;
+      const abgeschlossenRoh = data.abgeschlossen_minuten || 0;
+      const belegteZeitRoh = geplantRoh + inArbeitRoh + abgeschlossenRoh;
+      
+      // Skaliere die Segmente auf die tatsächliche Auslastung
+      const auslastungFaktor = belegteZeitRoh > 0 ? belegtMinuten / belegteZeitRoh : 1;
+      const geplantProzent = ((geplantRoh * auslastungFaktor) / referenzMinuten) * 100;
+      const inArbeitProzent = ((inArbeitRoh * auslastungFaktor) / referenzMinuten) * 100;
+      const abgeschlossenProzent = ((abgeschlossenRoh * auslastungFaktor) / referenzMinuten) * 100;
 
       // Setze die Breite der Segmente
       const geplantSegment = document.getElementById('progressGeplant');

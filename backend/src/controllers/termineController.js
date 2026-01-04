@@ -378,28 +378,12 @@ function berechneAuslastungErgebnis(params) {
   const belegtMitService = belegtOhneNurService + lehrlingeZusaetzlicheZeit;
   const verfuegbar = Math.max(gesamtVerfuegbar - belegtMitService, 0);
   
-  // Auslastung berechnen: 
-  // Wenn alle Termine "nur Service" Mitarbeitern zugeordnet sind, nutze deren Auslastung
-  // Sonst berechne normale Auslastung basierend auf Gesamtkapazität
+  // Auslastung berechnen: Belegte Zeit / Verfügbare Zeit
   let prozent = 0;
   
-  // Finde die höchste Auslastung aller aktiven (nicht abwesenden) Mitarbeiter/Lehrlinge
-  const maxMitarbeiterAuslastung = mitarbeiterAuslastung
-    .filter(m => !m.ist_abwesend && m.termin_anzahl > 0)
-    .reduce((max, m) => Math.max(max, m.auslastung_prozent), 0);
-  
-  const maxLehrlingAuslastung = lehrlingeAuslastung
-    .filter(l => !l.ist_abwesend && l.termin_anzahl > 0)
-    .reduce((max, l) => Math.max(max, l.auslastung_prozent), 0);
-  
-  const maxEinzelAuslastung = Math.max(maxMitarbeiterAuslastung, maxLehrlingAuslastung);
-  
-  if (gesamtVerfuegbar > 0 && belegtMitService > 0) {
-    // Normale Berechnung, aber mindestens die höchste Einzel-Auslastung
-    prozent = Math.max((belegtMitService / gesamtVerfuegbar) * 100, maxEinzelAuslastung);
-  } else if (maxEinzelAuslastung > 0) {
-    // Keine allgemeine Kapazität, aber Mitarbeiter haben Termine - nutze höchste Einzel-Auslastung
-    prozent = maxEinzelAuslastung;
+  if (gesamtVerfuegbar > 0) {
+    // Einfache Berechnung: belegte Zeit / verfügbare Gesamtzeit
+    prozent = (belegtMitService / gesamtVerfuegbar) * 100;
   } else if (belegtMitService > 0) {
     // Es gibt Termine aber keine Kapazität - zeige 100% (voll ausgelastet)
     prozent = 100;
