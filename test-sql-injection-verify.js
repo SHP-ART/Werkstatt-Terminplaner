@@ -112,8 +112,8 @@ async function runTests() {
     telefon: '999-INJECT-TEST'
   });
   
-  if (createResponse.status === 200) {
-    log('yellow', `   → Server accepted request (Status 200)`);
+  if (createResponse.status === 200 || createResponse.status === 201) {
+    log('yellow', `   → Server accepted request (Status ${createResponse.status})`);
     
     // Prüfe ob der Payload wirklich als String in DB steht
     try {
