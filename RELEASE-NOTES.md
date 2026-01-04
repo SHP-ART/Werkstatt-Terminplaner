@@ -1,3 +1,14 @@
+# Release Notes - Version 1.0.10
+
+## 🐛 Bugfixes
+
+### Kunden-Import repariert
+- **Problem**: Kunden-Import schlug mit "db is not defined" fehl
+- **Ursache**: Nach der async/await Migration wurden noch veraltete `db.prepare()` Aufrufe verwendet
+- **Lösung**: Alle `db.prepare()` und `stmt.run()` durch `runAsync()` ersetzt
+
+---
+
 # Release Notes - Version 1.0.9
 
 ## 🔒 Sicherheit
