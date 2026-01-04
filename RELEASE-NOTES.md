@@ -1,3 +1,73 @@
+# Release Notes - Version 1.0.9
+
+## 🔒 Sicherheit
+
+### SQL-Injection Schutz (KRITISCH)
+- **Feature**: Umfassende SQL-Injection-Absicherung aller Datenbank-Abfragen
+- **Dateien**: Alle Controller und Models überarbeitet
+- **Tests**: 62 Tests, 60 bestanden (96.8%)
+- **Dokumentation**: `SQL-INJECTION-TEST-REPORT.md`
+
+## 🚀 Performance & Architektur
+
+### Async/Await Migration komplett
+- **Feature**: Alle Datenbank-Operationen auf async/await umgestellt
+- **Vorteil**: Bessere Lesbarkeit, weniger Callback-Hell, bessere Fehlerbehandlung
+
+### DB-Transaktionen
+- **Feature**: Transaktions-Support für kritische Datenbankoperationen
+- **Datei**: `backend/src/utils/transaction.js`
+- **Dokumentation**: Getestet und dokumentiert
+
+### Controller-Optimierung (32% abgeschlossen)
+- **Status**: 11/34 Tasks erfolgreich umgesetzt
+- **Dokumentation**: `CONTROLLER-OPTIMIERUNG-REPORT.md`
+
+## 🐛 Bugfixes
+
+### Auslastungs-Cache bei Einstellungsänderung invalidieren
+- **Problem**: Cache wurde bei Änderung der Einstellungen nicht aktualisiert
+- **Lösung**: Cache-Invalidierung bei relevanten Einstellungsänderungen
+
+### Auslastungsberechnung und Balkenanzeige korrigiert
+- **Problem**: Fehlerhafte Berechnung und Darstellung der Auslastungsbalken
+- **Lösung**: Korrigierte Berechnungslogik
+
+### Verbessertes Scrolling im Tagesübersicht-Modal
+- **Problem**: Bei vielen Terminen war Scrolling problematisch
+- **Lösung**: Optimiertes Scroll-Verhalten
+
+## 🆕 Neue Features
+
+### Backup-Restore mit automatischen Migrationen
+- **Feature**: Bei Wiederherstellung eines Backups werden automatisch DB-Migrationen ausgeführt
+- **Vorteil**: Alte Backups sind kompatibel mit neuen Versionen
+
+### Verbesserte Zeitleiste
+- **Feature**: Endzeit-Berechnung und Halbstunden-Markierungen
+- **Vorteil**: Bessere visuelle Darstellung der Termine
+
+## 🛠️ Technische Verbesserungen
+
+### Neues Middleware-System
+- **Dateien**:
+  - `backend/src/middleware/errorHandler.js` - Globaler Error-Handler
+  - `backend/src/middleware/validation.js` - Input-Validierung
+- **Vorteil**: Konsistente Fehlerbehandlung
+
+### Neue Utility-Module
+- **Dateien**:
+  - `backend/src/utils/dbHelper.js` - Datenbank-Hilfsfunktionen
+  - `backend/src/utils/errors.js` - Custom Error-Klassen
+  - `backend/src/utils/response.js` - Einheitliche Response-Helper
+  - `backend/src/utils/transaction.js` - DB-Transaktions-Support
+
+### Konstanten-Modul
+- **Datei**: `backend/src/config/constants.js`
+- **Vorteil**: Zentrale Verwaltung von Konstanten
+
+---
+
 # Release Notes - Version 1.0.8
 
 ## 🏗️ Architektur-Verbesserungen
