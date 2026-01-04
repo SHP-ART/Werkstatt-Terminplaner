@@ -1,33 +1,28 @@
-const { db } = require('../config/database');
+const { getAsync, allAsync, runAsync } = require('../utils/dbHelper');
 
 class LehrlingeModel {
-  static getAll(callback) {
-    db.all('SELECT * FROM lehrlinge ORDER BY name', callback);
+  static async getAll() {
+    return await allAsync('SELECT * FROM lehrlinge ORDER BY name', []);
   }
 
-  static getById(id, callback) {
-    db.get('SELECT * FROM lehrlinge WHERE id = ?', [id], callback);
+  static async getById(id) {
+    return await getAsync('SELECT * FROM lehrlinge WHERE id = ?', [id]);
   }
 
-  static getAktive(callback) {
-    db.all('SELECT * FROM lehrlinge WHERE aktiv = 1 ORDER BY name', callback);
+  static async getAktive() {
+    return await allAsync('SELECT * FROM lehrlinge WHERE aktiv = 1 ORDER BY name', []);
   }
 
-  static create(data, callback) {
+  static async create(data) {
     const { name, nebenzeit_prozent, aufgabenbewaeltigung_prozent, aktiv, mittagspause_start } = data;
-    db.run(
+    const result = await runAsync(
       'INSERT INTO lehrlinge (name, nebenzeit_prozent, aufgabenbewaeltigung_prozent, aktiv, mittagspause_start) VALUES (?, ?, ?, ?, ?)',
-      [name, nebenzeit_prozent || 0, aufgabenbewaeltigung_prozent || 100, aktiv !== undefined ? aktiv : 1, mittagspause_start || '12:00'],
-      function(err) {
-        if (err) {
-          return callback(err);
-        }
-        callback(null, { id: this.lastID, ...data });
-      }
+      [name, nebenzeit_prozent || 0, aufgabenbewaeltigung_prozent || 100, aktiv !== undefined ? aktiv : 1, mittagspause_start || '12:00']
     );
+    return { id: result.lastID, ...data };
   }
 
-  static update(id, data, callback) {
+  static async update(id, data) {
     const { name, nebenzeit_prozent, aufgabenbewaeltigung_prozent, aktiv, mittagspause_start } = data;
     const updates = [];
     const values = [];
@@ -54,30 +49,21 @@ class LehrlingeModel {
     }
 
     if (updates.length === 0) {
-      return callback(new Error('Keine Felder zum Aktualisieren'));
+      throw new Error('Keine Felder zum Aktualisieren');
     }
 
     values.push(id);
 
-    db.run(
+    const result = await runAsync(
       `UPDATE lehrlinge SET ${updates.join(', ')} WHERE id = ?`,
-      values,
-      function(err) {
-        if (err) {
-          return callback(err);
-        }
-        callback(null, { changes: this.changes });
-      }
+      values
     );
+    return { changes: result.changes };
   }
 
-  static delete(id, callback) {
-    db.run('DELETE FROM lehrlinge WHERE id = ?', [id], function(err) {
-      if (err) {
-        return callback(err);
-      }
-      callback(null, { changes: this.changes });
-    });
+  static async delete(id) {
+    const result = await runAsync('DELETE FROM lehrlinge WHERE id = ?', [id]);
+    return { changes: result.changes };
   }
 }
 

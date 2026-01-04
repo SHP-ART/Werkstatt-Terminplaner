@@ -2,44 +2,42 @@ const LehrlingeModel = require('../models/lehrlingeModel');
 const TermineController = require('./termineController');
 
 class LehrlingeController {
-  static getAll(req, res) {
-    LehrlingeModel.getAll((err, rows) => {
-      if (err) {
-        res.status(500).json({ error: err.message });
-      } else {
-        res.json(rows);
-      }
-    });
+  static async getAll(req, res) {
+    try {
+      const rows = await LehrlingeModel.getAll();
+      res.json(rows);
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
   }
 
-  static getById(req, res) {
+  static async getById(req, res) {
     const id = parseInt(req.params.id, 10);
     if (!Number.isFinite(id)) {
       return res.status(400).json({ error: 'Ungültige ID' });
     }
 
-    LehrlingeModel.getById(id, (err, row) => {
-      if (err) {
-        res.status(500).json({ error: err.message });
-      } else if (!row) {
-        res.status(404).json({ error: 'Lehrling nicht gefunden' });
-      } else {
-        res.json(row);
+    try {
+      const row = await LehrlingeModel.getById(id);
+      if (!row) {
+        return res.status(404).json({ error: 'Lehrling nicht gefunden' });
       }
-    });
+      res.json(row);
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
   }
 
-  static getAktive(req, res) {
-    LehrlingeModel.getAktive((err, rows) => {
-      if (err) {
-        res.status(500).json({ error: err.message });
-      } else {
-        res.json(rows);
-      }
-    });
+  static async getAktive(req, res) {
+    try {
+      const rows = await LehrlingeModel.getAktive();
+      res.json(rows);
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
   }
 
-  static create(req, res) {
+  static async create(req, res) {
     const { name, nebenzeit_prozent, aufgabenbewaeltigung_prozent, aktiv, mittagspause_start } = req.body;
 
     if (!name || name.trim() === '') {
@@ -54,28 +52,25 @@ class LehrlingeController {
       mittagspause_start: mittagspause_start || '12:00'
     };
 
-    LehrlingeModel.create(data, (err, result) => {
-      if (err) {
-        res.status(500).json({ error: err.message });
-      } else {
-        // Cache invalidieren, da neue Lehrlinge die Auslastung beeinflussen
-        TermineController.invalidateAuslastungCache(null);
-        res.json({ id: result.id, message: 'Lehrling erstellt', ...result });
-      }
-    });
+    try {
+      const result = await LehrlingeModel.create(data);
+      // Cache invalidieren, da neue Lehrlinge die Auslastung beeinflussen
+      TermineController.invalidateAuslastungCache(null);
+      res.json({ id: result.id, message: 'Lehrling erstellt', ...result });
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
   }
 
-  static update(req, res) {
+  static async update(req, res) {
     const id = parseInt(req.params.id, 10);
     if (!Number.isFinite(id)) {
       return res.status(400).json({ error: 'Ungültige ID' });
     }
 
-    // Prüfe zuerst, ob der Lehrling existiert
-    LehrlingeModel.getById(id, (err, lehrling) => {
-      if (err) {
-        return res.status(500).json({ error: err.message });
-      }
+    try {
+      // Prüfe zuerst, ob der Lehrling existiert
+      const lehrling = await LehrlingeModel.getById(id);
       if (!lehrling) {
         return res.status(404).json({ error: 'Lehrling nicht gefunden' });
       }
@@ -99,47 +94,43 @@ class LehrlingeController {
         data.mittagspause_start = mittagspause_start;
       }
 
-      LehrlingeModel.update(id, data, (updateErr, result) => {
-        if (updateErr) {
-          return res.status(500).json({ error: updateErr.message });
-        }
-        
-        const changes = (result && result.changes) || 0;
-        
-        // Cache invalidieren, da Lehrlingsänderungen die Auslastung beeinflussen
-        TermineController.invalidateAuslastungCache(null);
-        
-        if (changes === 0) {
-          return res.status(200).json({ 
-            changes: 0, 
-            message: 'Keine Änderungen vorgenommen (Daten identisch)' 
-          });
-        }
-        
-        res.json({ changes, message: 'Lehrling aktualisiert' });
-      });
-    });
+      const result = await LehrlingeModel.update(id, data);
+      const changes = (result && result.changes) || 0;
+      
+      // Cache invalidieren, da Lehrlingsänderungen die Auslastung beeinflussen
+      TermineController.invalidateAuslastungCache(null);
+      
+      if (changes === 0) {
+        return res.status(200).json({ 
+          changes: 0, 
+          message: 'Keine Änderungen vorgenommen (Daten identisch)' 
+        });
+      }
+      
+      res.json({ changes, message: 'Lehrling aktualisiert' });
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
   }
 
-  static delete(req, res) {
+  static async delete(req, res) {
     const id = parseInt(req.params.id, 10);
     if (!Number.isFinite(id)) {
       return res.status(400).json({ error: 'Ungültige ID' });
     }
 
-    LehrlingeModel.delete(id, (err, result) => {
-      if (err) {
-        res.status(500).json({ error: err.message });
-      } else {
-        const changes = (result && result.changes) || 0;
-        if (changes === 0) {
-          return res.status(404).json({ error: 'Lehrling nicht gefunden', changes: 0 });
-        }
-        // Cache invalidieren, da gelöschte Lehrlinge die Auslastung beeinflussen
-        TermineController.invalidateAuslastungCache(null);
-        res.json({ changes: changes, message: 'Lehrling gelöscht' });
+    try {
+      const result = await LehrlingeModel.delete(id);
+      const changes = (result && result.changes) || 0;
+      if (changes === 0) {
+        return res.status(404).json({ error: 'Lehrling nicht gefunden', changes: 0 });
       }
-    });
+      // Cache invalidieren, da gelöschte Lehrlinge die Auslastung beeinflussen
+      TermineController.invalidateAuslastungCache(null);
+      res.json({ changes: changes, message: 'Lehrling gelöscht' });
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
   }
 }
 

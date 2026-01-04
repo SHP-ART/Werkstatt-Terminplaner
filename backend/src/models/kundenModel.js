@@ -1,23 +1,22 @@
-const { db } = require('../config/database');
-const { withTransaction, runAsync, allAsync } = require('../utils/transaction');
+const { getAsync, allAsync, runAsync } = require('../utils/dbHelper');
+const { withTransaction } = require('../utils/transaction');
 
 class KundenModel {
-  static getAll(callback) {
-    db.all('SELECT * FROM kunden ORDER BY name', callback);
+  static async getAll() {
+    return await allAsync('SELECT * FROM kunden ORDER BY name', []);
   }
 
-  static create(kunde, callback) {
+  static async create(kunde) {
     const { name, telefon, email, adresse, locosoft_id, kennzeichen, vin, fahrzeugtyp } = kunde;
-    db.run(
+    return await runAsync(
       'INSERT INTO kunden (name, telefon, email, adresse, locosoft_id, kennzeichen, vin, fahrzeugtyp) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-      [name, telefon, email, adresse, locosoft_id, kennzeichen || null, vin || null, fahrzeugtyp || null],
-      callback
+      [name, telefon, email, adresse, locosoft_id, kennzeichen || null, vin || null, fahrzeugtyp || null]
     );
   }
 
-  static importMultiple(kunden, callback) {
+  static async importMultiple(kunden) {
     // Verwende withTransaction für atomare Operationen
-    withTransaction(async () => {
+    return await withTransaction(async () => {
       const stmtKunde = db.prepare('INSERT INTO kunden (name, telefon, email, adresse, locosoft_id, kennzeichen, vin, fahrzeugtyp) VALUES (?, ?, ?, ?, ?, ?, ?, ?)');
       const stmtFahrzeug = db.prepare('INSERT INTO termine (kunde_id, kennzeichen, fahrzeugtyp, vin, arbeit, geschaetzte_zeit, datum, status, umfang) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)');
 
@@ -190,41 +189,30 @@ class KundenModel {
       stmtFahrzeug.finalize();
 
       return { imported, skipped, fahrzeugeHinzugefuegt, errors };
-    })
-    .then(result => callback(null, result))
-    .catch(err => callback(err));
-  }
-
-  static getById(id, callback) {
-    db.get('SELECT * FROM kunden WHERE id = ?', [id], callback);
-  }
-
-  static update(id, kunde, callback) {
-    const { name, telefon, email, adresse, locosoft_id, kennzeichen, vin, fahrzeugtyp } = kunde;
-    db.run(
-      'UPDATE kunden SET name = ?, telefon = ?, email = ?, adresse = ?, locosoft_id = ?, kennzeichen = ?, vin = ?, fahrzeugtyp = ? WHERE id = ?',
-      [name, telefon, email, adresse, locosoft_id, kennzeichen || null, vin || null, fahrzeugtyp || null, id],
-      function(err) {
-        if (err) {
-          return callback(err);
-        }
-        callback(null, { changes: this.changes });
-      }
-    );
-  }
-
-  static delete(id, callback) {
-    db.run('DELETE FROM kunden WHERE id = ?', [id], function(err) {
-      if (err) {
-        return callback(err);
-      }
-      callback(null, { changes: this.changes });
     });
   }
 
-  static searchWithTermine(searchTerm, callback) {
+  static async getById(id) {
+    return await getAsync('SELECT * FROM kunden WHERE id = ?', [id]);
+  }
+
+  static async update(id, kunde) {
+    const { name, telefon, email, adresse, locosoft_id, kennzeichen, vin, fahrzeugtyp } = kunde;
+    const result = await runAsync(
+      'UPDATE kunden SET name = ?, telefon = ?, email = ?, adresse = ?, locosoft_id = ?, kennzeichen = ?, vin = ?, fahrzeugtyp = ? WHERE id = ?',
+      [name, telefon, email, adresse, locosoft_id, kennzeichen || null, vin || null, fahrzeugtyp || null, id]
+    );
+    return { changes: result.changes };
+  }
+
+  static async delete(id) {
+    const result = await runAsync('DELETE FROM kunden WHERE id = ?', [id]);
+    return { changes: result.changes };
+  }
+
+  static async searchWithTermine(searchTerm) {
     if (!searchTerm || searchTerm.trim().length === 0) {
-      return callback(null, []);
+      return [];
     }
 
     // Normalisiere Suchbegriff: Entferne Leerzeichen und Bindestriche
@@ -252,63 +240,55 @@ class KundenModel {
       ORDER BY k.name
     `;
 
-    db.all(query, [searchPattern, normalizedPattern, normalizedPattern], (err, kunden) => {
-      if (err) {
-        return callback(err);
+    const kunden = await allAsync(query, [searchPattern, normalizedPattern, normalizedPattern]);
+
+    if (kunden.length === 0) {
+      return [];
+    }
+
+    // Hole für jeden Kunden alle Termine
+    const kundenIds = kunden.map(k => k.id);
+    const placeholders = kundenIds.map(() => '?').join(',');
+    
+    const termineQuery = `
+      SELECT 
+        t.id,
+        t.termin_nr,
+        t.kunde_id,
+        t.kennzeichen,
+        t.arbeit,
+        t.umfang,
+        t.geschaetzte_zeit,
+        t.tatsaechliche_zeit,
+        t.datum,
+        t.status
+      FROM termine t
+      WHERE t.kunde_id IN (${placeholders})
+      ORDER BY t.datum DESC, t.erstellt_am DESC
+    `;
+
+    const termine = await allAsync(termineQuery, kundenIds);
+
+    // Gruppiere Termine nach kunde_id
+    const termineByKunde = {};
+    termine.forEach(termin => {
+      if (!termineByKunde[termin.kunde_id]) {
+        termineByKunde[termin.kunde_id] = [];
       }
-
-      if (kunden.length === 0) {
-        return callback(null, []);
-      }
-
-      // Hole für jeden Kunden alle Termine
-      const kundenIds = kunden.map(k => k.id);
-      const placeholders = kundenIds.map(() => '?').join(',');
-      
-      const termineQuery = `
-        SELECT 
-          t.id,
-          t.termin_nr,
-          t.kunde_id,
-          t.kennzeichen,
-          t.arbeit,
-          t.umfang,
-          t.geschaetzte_zeit,
-          t.tatsaechliche_zeit,
-          t.datum,
-          t.status
-        FROM termine t
-        WHERE t.kunde_id IN (${placeholders})
-        ORDER BY t.datum DESC, t.erstellt_am DESC
-      `;
-
-      db.all(termineQuery, kundenIds, (err, termine) => {
-        if (err) {
-          return callback(err);
-        }
-
-        // Gruppiere Termine nach kunde_id
-        const termineByKunde = {};
-        termine.forEach(termin => {
-          if (!termineByKunde[termin.kunde_id]) {
-            termineByKunde[termin.kunde_id] = [];
-          }
-          termineByKunde[termin.kunde_id].push(termin);
-        });
-
-        // Füge Termine zu Kunden hinzu
-        const result = kunden.map(kunde => ({
-          ...kunde,
-          termine: termineByKunde[kunde.id] || []
-        }));
-
-        callback(null, result);
-      });
+      termineByKunde[termin.kunde_id].push(termin);
     });
+
+    // Füge Termine zu Kunden hinzu
+    const result = kunden.map(kunde => ({
+      ...kunde,
+      termine: termineByKunde[kunde.id] || []
+    }));
+
+    return result;
   }
 
   // Alle Fahrzeuge (Kennzeichen) eines Kunden aus Terminen holen
-  static getFahrzeuge(kundeId, callback) {
+  static async getFahrzeuge(kundeId) {
     const query = `
       SELECT DISTINCT 
         t.kennzeichen,
@@ -322,180 +302,145 @@ class KundenModel {
       ORDER BY MAX(t.datum) DESC
     `;
     
-    db.all(query, [kundeId], (err, fahrzeuge) => {
-      if (err) {
-        return callback(err);
-      }
-      
-      // Hole auch das Kennzeichen aus dem Kundenstamm
-      db.get('SELECT kennzeichen, fahrzeugtyp, vin FROM kunden WHERE id = ?', [kundeId], (err, kunde) => {
-        if (err) {
-          return callback(err);
-        }
-        
-        // Kombiniere beide Quellen
-        const alleKennzeichen = new Map();
-        
-        // Aus Terminen
-        fahrzeuge.forEach(fz => {
-          const kzNorm = (fz.kennzeichen || '').toUpperCase().replace(/[\s\-]/g, '');
-          if (kzNorm && !alleKennzeichen.has(kzNorm)) {
-            alleKennzeichen.set(kzNorm, {
-              kennzeichen: fz.kennzeichen,
-              fahrzeugtyp: fz.fahrzeugtyp || '',
-              vin: fz.vin || '',
-              letzter_termin: fz.letzter_termin,
-              letzter_km_stand: fz.letzter_km_stand,
-              quelle: 'termin'
-            });
-          }
+    const fahrzeuge = await allAsync(query, [kundeId]);
+    
+    // Hole auch das Kennzeichen aus dem Kundenstamm
+    const kunde = await getAsync('SELECT kennzeichen, fahrzeugtyp, vin FROM kunden WHERE id = ?', [kundeId]);
+    
+    // Kombiniere beide Quellen
+    const alleKennzeichen = new Map();
+    
+    // Aus Terminen
+    fahrzeuge.forEach(fz => {
+      const kzNorm = (fz.kennzeichen || '').toUpperCase().replace(/[\s\-]/g, '');
+      if (kzNorm && !alleKennzeichen.has(kzNorm)) {
+        alleKennzeichen.set(kzNorm, {
+          kennzeichen: fz.kennzeichen,
+          fahrzeugtyp: fz.fahrzeugtyp || '',
+          vin: fz.vin || '',
+          letzter_termin: fz.letzter_termin,
+          letzter_km_stand: fz.letzter_km_stand,
+          quelle: 'termin'
         });
-        
-        // Aus Kundenstamm (falls nicht schon vorhanden)
-        if (kunde && kunde.kennzeichen) {
-          const kzNorm = kunde.kennzeichen.toUpperCase().replace(/[\s\-]/g, '');
-          if (!alleKennzeichen.has(kzNorm)) {
-            alleKennzeichen.set(kzNorm, {
-              kennzeichen: kunde.kennzeichen,
-              fahrzeugtyp: kunde.fahrzeugtyp || '',
-              vin: kunde.vin || '',
-              letzter_termin: null,
-              letzter_km_stand: null,
-              quelle: 'kundenstamm'
-            });
-          }
-        }
-        
-        callback(null, Array.from(alleKennzeichen.values()));
-      });
+      }
     });
+    
+    // Aus Kundenstamm (falls nicht schon vorhanden)
+    if (kunde && kunde.kennzeichen) {
+      const kzNorm = kunde.kennzeichen.toUpperCase().replace(/[\s\-]/g, '');
+      if (!alleKennzeichen.has(kzNorm)) {
+        alleKennzeichen.set(kzNorm, {
+          kennzeichen: kunde.kennzeichen,
+          fahrzeugtyp: kunde.fahrzeugtyp || '',
+          vin: kunde.vin || '',
+          letzter_termin: null,
+          letzter_km_stand: null,
+          quelle: 'kundenstamm'
+        });
+      }
+    }
+    
+    return Array.from(alleKennzeichen.values());
   }
 
   // Fahrzeug zu einem Kunden hinzufügen (als Dummy-Termin)
-  static addFahrzeug(kundeId, fahrzeug, callback) {
+  static async addFahrzeug(kundeId, fahrzeug) {
     const { kennzeichen, fahrzeugtyp, vin } = fahrzeug;
     
     if (!kennzeichen) {
-      return callback(new Error('Kennzeichen ist erforderlich'));
+      throw new Error('Kennzeichen ist erforderlich');
     }
     
     // Prüfe ob Kennzeichen bereits existiert
     const kzNorm = kennzeichen.toUpperCase().replace(/[\s\-]/g, '');
     
-    db.get(
+    const existing = await getAsync(
       `SELECT id FROM termine WHERE kunde_id = ? AND UPPER(REPLACE(REPLACE(kennzeichen, ' ', ''), '-', '')) = ?`,
-      [kundeId, kzNorm],
-      (err, existing) => {
-        if (err) return callback(err);
-        
-        if (existing) {
-          return callback(new Error('Dieses Kennzeichen existiert bereits für diesen Kunden'));
-        }
-        
-        // Prüfe auch im Kundenstamm
-        db.get(
-          `SELECT id FROM kunden WHERE id = ? AND UPPER(REPLACE(REPLACE(kennzeichen, ' ', ''), '-', '')) = ?`,
-          [kundeId, kzNorm],
-          (err, kundeWithKz) => {
-            if (err) return callback(err);
-            
-            if (kundeWithKz) {
-              return callback(new Error('Dieses Kennzeichen ist bereits als Hauptkennzeichen gespeichert'));
-            }
-            
-            // Füge als Dummy-Termin ein
-            const heute = new Date().toISOString().split('T')[0];
-            db.run(
-              `INSERT INTO termine (kunde_id, kennzeichen, fahrzeugtyp, vin, arbeit, geschaetzte_zeit, datum, status, umfang) 
-               VALUES (?, ?, ?, ?, 'Fahrzeug hinzugefügt', 0, ?, 'abgeschlossen', 'klein')`,
-              [kundeId, kennzeichen, fahrzeugtyp || null, vin || null, heute],
-              function(err) {
-                if (err) return callback(err);
-                callback(null, { id: this.lastID, message: 'Fahrzeug erfolgreich hinzugefügt' });
-              }
-            );
-          }
-        );
-      }
+      [kundeId, kzNorm]
     );
+    
+    if (existing) {
+      throw new Error('Dieses Kennzeichen existiert bereits für diesen Kunden');
+    }
+    
+    // Prüfe auch im Kundenstamm
+    const kundeWithKz = await getAsync(
+      `SELECT id FROM kunden WHERE id = ? AND UPPER(REPLACE(REPLACE(kennzeichen, ' ', ''), '-', '')) = ?`,
+      [kundeId, kzNorm]
+    );
+    
+    if (kundeWithKz) {
+      throw new Error('Dieses Kennzeichen ist bereits als Hauptkennzeichen gespeichert');
+    }
+    
+    // Füge als Dummy-Termin ein
+    const heute = new Date().toISOString().split('T')[0];
+    const result = await runAsync(
+      `INSERT INTO termine (kunde_id, kennzeichen, fahrzeugtyp, vin, arbeit, geschaetzte_zeit, datum, status, umfang) 
+       VALUES (?, ?, ?, ?, 'Fahrzeug hinzugefügt', 0, ?, 'abgeschlossen', 'klein')`,
+      [kundeId, kennzeichen, fahrzeugtyp || null, vin || null, heute]
+    );
+    return { id: result.lastID, message: 'Fahrzeug erfolgreich hinzugefügt' };
   }
 
   // Fahrzeug eines Kunden löschen
-  static deleteFahrzeug(kundeId, kennzeichen, callback) {
+  static async deleteFahrzeug(kundeId, kennzeichen) {
     const kzNorm = kennzeichen.toUpperCase().replace(/[\s\-]/g, '');
     
     // Prüfe ob es das Hauptkennzeichen im Kundenstamm ist
-    db.get(
+    const kundeKz = await getAsync(
       `SELECT kennzeichen FROM kunden WHERE id = ? AND UPPER(REPLACE(REPLACE(kennzeichen, ' ', ''), '-', '')) = ?`,
-      [kundeId, kzNorm],
-      (err, kundeKz) => {
-        if (err) return callback(err);
-        
-        if (kundeKz) {
-          // Lösche aus Kundenstamm
-          db.run(
-            `UPDATE kunden SET kennzeichen = NULL, fahrzeugtyp = NULL, vin = NULL WHERE id = ?`,
-            [kundeId],
-            function(err) {
-              if (err) return callback(err);
-              callback(null, { changes: this.changes, message: 'Hauptfahrzeug aus Kundenstamm entfernt' });
-            }
-          );
-        } else {
-          // Lösche alle Termine mit diesem Kennzeichen für diesen Kunden
-          db.run(
-            `DELETE FROM termine WHERE kunde_id = ? AND UPPER(REPLACE(REPLACE(kennzeichen, ' ', ''), '-', '')) = ?`,
-            [kundeId, kzNorm],
-            function(err) {
-              if (err) return callback(err);
-              callback(null, { changes: this.changes, message: 'Fahrzeug und zugehörige Termine gelöscht' });
-            }
-          );
-        }
-      }
+      [kundeId, kzNorm]
     );
+    
+    if (kundeKz) {
+      // Lösche aus Kundenstamm
+      const result = await runAsync(
+        `UPDATE kunden SET kennzeichen = NULL, fahrzeugtyp = NULL, vin = NULL WHERE id = ?`,
+        [kundeId]
+      );
+      return { changes: result.changes, message: 'Hauptfahrzeug aus Kundenstamm entfernt' };
+    } else {
+      // Lösche alle Termine mit diesem Kennzeichen für diesen Kunden
+      const result = await runAsync(
+        `DELETE FROM termine WHERE kunde_id = ? AND UPPER(REPLACE(REPLACE(kennzeichen, ' ', ''), '-', '')) = ?`,
+        [kundeId, kzNorm]
+      );
+      return { changes: result.changes, message: 'Fahrzeug und zugehörige Termine gelöscht' };
+    }
   }
 
   // Fahrzeugdaten aktualisieren
-  static updateFahrzeug(kundeId, altesKennzeichen, neuesDaten, callback) {
+  static async updateFahrzeug(kundeId, altesKennzeichen, neuesDaten) {
     const altKzNorm = altesKennzeichen.toUpperCase().replace(/[\s\-]/g, '');
     const { kennzeichen, fahrzeugtyp, vin } = neuesDaten;
     
     // Prüfe ob es im Kundenstamm ist
-    db.get(
+    const kundeKz = await getAsync(
       `SELECT id FROM kunden WHERE id = ? AND UPPER(REPLACE(REPLACE(kennzeichen, ' ', ''), '-', '')) = ?`,
-      [kundeId, altKzNorm],
-      (err, kundeKz) => {
-        if (err) return callback(err);
-        
-        if (kundeKz) {
-          // Update im Kundenstamm
-          db.run(
-            `UPDATE kunden SET kennzeichen = ?, fahrzeugtyp = ?, vin = ? WHERE id = ?`,
-            [kennzeichen, fahrzeugtyp || null, vin || null, kundeId],
-            function(err) {
-              if (err) return callback(err);
-              callback(null, { changes: this.changes, message: 'Hauptfahrzeug aktualisiert' });
-            }
-          );
-        } else {
-          // Update in allen Terminen mit diesem Kennzeichen
-          db.run(
-            `UPDATE termine SET kennzeichen = ?, fahrzeugtyp = ?, vin = ? 
-             WHERE kunde_id = ? AND UPPER(REPLACE(REPLACE(kennzeichen, ' ', ''), '-', '')) = ?`,
-            [kennzeichen, fahrzeugtyp || null, vin || null, kundeId, altKzNorm],
-            function(err) {
-              if (err) return callback(err);
-              callback(null, { changes: this.changes, message: 'Fahrzeug in Terminen aktualisiert' });
-            }
-          );
-        }
-      }
+      [kundeId, altKzNorm]
     );
+    
+    if (kundeKz) {
+      // Update im Kundenstamm
+      const result = await runAsync(
+        `UPDATE kunden SET kennzeichen = ?, fahrzeugtyp = ?, vin = ? WHERE id = ?`,
+        [kennzeichen, fahrzeugtyp || null, vin || null, kundeId]
+      );
+      return { changes: result.changes, message: 'Hauptfahrzeug aktualisiert' };
+    } else {
+      // Update in allen Terminen mit diesem Kennzeichen
+      const result = await runAsync(
+        `UPDATE termine SET kennzeichen = ?, fahrzeugtyp = ?, vin = ? 
+         WHERE kunde_id = ? AND UPPER(REPLACE(REPLACE(kennzeichen, ' ', ''), '-', '')) = ?`,
+        [kennzeichen, fahrzeugtyp || null, vin || null, kundeId, altKzNorm]
+      );
+      return { changes: result.changes, message: 'Fahrzeug in Terminen aktualisiert' };
+    }
   }
 
   // Zähle alle eindeutigen Fahrzeuge (Kennzeichen) in der Datenbank
-  static countAlleFahrzeuge(callback) {
+  static async countAlleFahrzeuge() {
     const query = `
       SELECT COUNT(DISTINCT UPPER(REPLACE(REPLACE(kennzeichen, ' ', ''), '-', ''))) as anzahl
       FROM (
@@ -506,10 +451,8 @@ class KundenModel {
         WHERE kennzeichen IS NOT NULL AND kennzeichen != ''
       )
     `;
-    db.get(query, [], (err, row) => {
-      if (err) return callback(err);
-      callback(null, row ? row.anzahl : 0);
-    });
+    const row = await getAsync(query, []);
+    return row ? row.anzahl : 0;
   }
 }
 

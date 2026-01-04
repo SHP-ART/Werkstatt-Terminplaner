@@ -1,62 +1,56 @@
 const ArbeitszeitenModel = require('../models/arbeitszeitenModel');
 
 class ArbeitszeitenController {
-  static getAll(req, res) {
-    ArbeitszeitenModel.getAll((err, rows) => {
-      if (err) {
-        res.status(500).json({ error: err.message });
-      } else {
-        res.json(rows);
-      }
-    });
-  }
-
-  static update(req, res) {
-    const { standard_minuten, bezeichnung, aliase } = req.body;
-    const minuten = parseInt(standard_minuten, 10);
-    const data = {
-      standard_minuten: Number.isFinite(minuten) ? minuten : standard_minuten,
-      bezeichnung: bezeichnung,
-      aliase: aliase
-    };
-    ArbeitszeitenModel.update(req.params.id, data, (err, result) => {
-      if (err) {
-        res.status(500).json({ error: err.message });
-      } else {
-        res.json({ changes: (result && result.changes) || 0, message: 'Arbeitszeit aktualisiert' });
-      }
-    });
-  }
-
-  static create(req, res) {
-    const standard_minuten = parseInt(req.body.standard_minuten, 10);
-    const payload = {
-      bezeichnung: req.body.bezeichnung,
-      standard_minuten: Number.isFinite(standard_minuten) ? standard_minuten : req.body.standard_minuten,
-      aliase: req.body.aliase || ''
-    };
-
-    ArbeitszeitenModel.create(payload, function(err) {
-      if (err) {
-        res.status(500).json({ error: err.message });
-      } else {
-        res.json({ id: this.lastID, message: 'Arbeitszeit erstellt' });
-      }
-    });
-  }
-
-  static delete(req, res) {
-    const id = req.params.id;
-    
-    if (!id) {
-      return res.status(400).json({ error: 'ID fehlt' });
+  static async getAll(req, res) {
+    try {
+      const rows = await ArbeitszeitenModel.getAll();
+      res.json(rows);
+    } catch (err) {
+      res.status(500).json({ error: err.message });
     }
+  }
 
-    ArbeitszeitenModel.delete(id, (err, result) => {
-      if (err) {
-        return res.status(500).json({ error: err.message });
-      }
+  static async update(req, res) {
+    try {
+      const { standard_minuten, bezeichnung, aliase } = req.body;
+      const minuten = parseInt(standard_minuten, 10);
+      const data = {
+        standard_minuten: Number.isFinite(minuten) ? minuten : standard_minuten,
+        bezeichnung: bezeichnung,
+        aliase: aliase
+      };
+      const result = await ArbeitszeitenModel.update(req.params.id, data);
+      res.json({ changes: (result && result.changes) || 0, message: 'Arbeitszeit aktualisiert' });
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  }
+
+  static async create(req, res) {
+    try {
+      const standard_minuten = parseInt(req.body.standard_minuten, 10);
+      const payload = {
+        bezeichnung: req.body.bezeichnung,
+        standard_minuten: Number.isFinite(standard_minuten) ? standard_minuten : req.body.standard_minuten,
+        aliase: req.body.aliase || ''
+      };
+
+      const result = await ArbeitszeitenModel.create(payload);
+      res.json({ id: result.lastID, message: 'Arbeitszeit erstellt' });
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  }
+
+  static async delete(req, res) {
+    try {
+      const id = req.params.id;
       
+      if (!id) {
+        return res.status(400).json({ error: 'ID fehlt' });
+      }
+
+      const result = await ArbeitszeitenModel.delete(id);
       const changes = (result && result.changes) || 0;
       
       if (changes === 0) {
@@ -64,7 +58,9 @@ class ArbeitszeitenController {
       }
       
       res.json({ changes: changes, message: 'Arbeitszeit gelöscht' });
-    });
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
   }
 }
 

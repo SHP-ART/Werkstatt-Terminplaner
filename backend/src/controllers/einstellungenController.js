@@ -1,17 +1,16 @@
 const EinstellungenModel = require('../models/einstellungenModel');
 
 class EinstellungenController {
-  static getWerkstatt(req, res) {
-    EinstellungenModel.getWerkstatt((err, row) => {
-      if (err) {
-        res.status(500).json({ error: err.message });
-      } else {
-        res.json(row || { pufferzeit_minuten: 15, servicezeit_minuten: 10, ersatzauto_anzahl: 2 });
-      }
-    });
+  static async getWerkstatt(req, res) {
+    try {
+      const row = await EinstellungenModel.getWerkstatt();
+      res.json(row || { pufferzeit_minuten: 15, servicezeit_minuten: 10, ersatzauto_anzahl: 2 });
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
   }
 
-  static updateWerkstatt(req, res) {
+  static async updateWerkstatt(req, res) {
     const payload = {
       pufferzeit_minuten: req.body.pufferzeit_minuten !== undefined 
         ? parseInt(req.body.pufferzeit_minuten, 10) 
@@ -30,28 +29,26 @@ class EinstellungenController {
         : undefined
     };
 
-    EinstellungenModel.updateWerkstatt(payload, (err, result) => {
-      if (err) {
-        res.status(500).json({ error: err.message });
-      } else {
-        res.json({ message: 'Einstellungen aktualisiert', ...result });
-      }
-    });
+    try {
+      const result = await EinstellungenModel.updateWerkstatt(payload);
+      res.json({ message: 'Einstellungen aktualisiert', ...result });
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
   }
 
-  static getErsatzautoVerfuegbarkeit(req, res) {
+  static async getErsatzautoVerfuegbarkeit(req, res) {
     const { datum } = req.params;
     if (!datum) {
       return res.status(400).json({ error: 'Datum erforderlich' });
     }
     
-    EinstellungenModel.getErsatzautoVerfuegbarkeit(datum, (err, result) => {
-      if (err) {
-        res.status(500).json({ error: err.message });
-      } else {
-        res.json(result);
-      }
-    });
+    try {
+      const result = await EinstellungenModel.getErsatzautoVerfuegbarkeit(datum);
+      res.json(result);
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
   }
 }
 

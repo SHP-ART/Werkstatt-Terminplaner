@@ -1,44 +1,42 @@
 const MitarbeiterModel = require('../models/mitarbeiterModel');
 
 class MitarbeiterController {
-  static getAll(req, res) {
-    MitarbeiterModel.getAll((err, rows) => {
-      if (err) {
-        res.status(500).json({ error: err.message });
-      } else {
-        res.json(rows);
-      }
-    });
+  static async getAll(req, res) {
+    try {
+      const rows = await MitarbeiterModel.getAll();
+      res.json(rows);
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
   }
 
-  static getById(req, res) {
+  static async getById(req, res) {
     const id = parseInt(req.params.id, 10);
     if (!Number.isFinite(id)) {
       return res.status(400).json({ error: 'Ungültige ID' });
     }
 
-    MitarbeiterModel.getById(id, (err, row) => {
-      if (err) {
-        res.status(500).json({ error: err.message });
-      } else if (!row) {
-        res.status(404).json({ error: 'Mitarbeiter nicht gefunden' });
-      } else {
-        res.json(row);
+    try {
+      const row = await MitarbeiterModel.getById(id);
+      if (!row) {
+        return res.status(404).json({ error: 'Mitarbeiter nicht gefunden' });
       }
-    });
+      res.json(row);
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
   }
 
-  static getAktive(req, res) {
-    MitarbeiterModel.getAktive((err, rows) => {
-      if (err) {
-        res.status(500).json({ error: err.message });
-      } else {
-        res.json(rows);
-      }
-    });
+  static async getAktive(req, res) {
+    try {
+      const rows = await MitarbeiterModel.getAktive();
+      res.json(rows);
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
   }
 
-  static create(req, res) {
+  static async create(req, res) {
     const { name, arbeitsstunden_pro_tag, nebenzeit_prozent, aktiv, nur_service, mittagspause_start } = req.body;
 
     if (!name || name.trim() === '') {
@@ -54,26 +52,23 @@ class MitarbeiterController {
       mittagspause_start: mittagspause_start || '12:00'
     };
 
-    MitarbeiterModel.create(data, (err, result) => {
-      if (err) {
-        res.status(500).json({ error: err.message });
-      } else {
-        res.json({ id: result.id, message: 'Mitarbeiter erstellt', ...result });
-      }
-    });
+    try {
+      const result = await MitarbeiterModel.create(data);
+      res.json({ id: result.id, message: 'Mitarbeiter erstellt', ...result });
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
   }
 
-  static update(req, res) {
+  static async update(req, res) {
     const id = parseInt(req.params.id, 10);
     if (!Number.isFinite(id)) {
       return res.status(400).json({ error: 'Ungültige ID' });
     }
 
-    // Prüfe zuerst, ob der Mitarbeiter existiert
-    MitarbeiterModel.getById(id, (err, mitarbeiter) => {
-      if (err) {
-        return res.status(500).json({ error: err.message });
-      }
+    try {
+      // Prüfe zuerst, ob der Mitarbeiter existiert
+      const mitarbeiter = await MitarbeiterModel.getById(id);
       if (!mitarbeiter) {
         return res.status(404).json({ error: 'Mitarbeiter nicht gefunden' });
       }
@@ -100,41 +95,37 @@ class MitarbeiterController {
         data.mittagspause_start = mittagspause_start;
       }
 
-      MitarbeiterModel.update(id, data, (updateErr, result) => {
-        if (updateErr) {
-          return res.status(500).json({ error: updateErr.message });
-        }
-        
-        const changes = (result && result.changes) || 0;
-        if (changes === 0) {
-          return res.status(200).json({ 
-            changes: 0, 
-            message: 'Keine Änderungen vorgenommen (Daten identisch)' 
-          });
-        }
-        
-        res.json({ changes, message: 'Mitarbeiter aktualisiert' });
-      });
-    });
+      const result = await MitarbeiterModel.update(id, data);
+      const changes = (result && result.changes) || 0;
+      if (changes === 0) {
+        return res.status(200).json({ 
+          changes: 0, 
+          message: 'Keine Änderungen vorgenommen (Daten identisch)' 
+        });
+      }
+      
+      res.json({ changes, message: 'Mitarbeiter aktualisiert' });
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
   }
 
-  static delete(req, res) {
+  static async delete(req, res) {
     const id = parseInt(req.params.id, 10);
     if (!Number.isFinite(id)) {
       return res.status(400).json({ error: 'Ungültige ID' });
     }
 
-    MitarbeiterModel.delete(id, (err, result) => {
-      if (err) {
-        res.status(500).json({ error: err.message });
-      } else {
-        const changes = (result && result.changes) || 0;
-        if (changes === 0) {
-          return res.status(404).json({ error: 'Mitarbeiter nicht gefunden', changes: 0 });
-        }
-        res.json({ changes: changes, message: 'Mitarbeiter gelöscht' });
+    try {
+      const result = await MitarbeiterModel.delete(id);
+      const changes = (result && result.changes) || 0;
+      if (changes === 0) {
+        return res.status(404).json({ error: 'Mitarbeiter nicht gefunden', changes: 0 });
       }
-    });
+      res.json({ changes: changes, message: 'Mitarbeiter gelöscht' });
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
   }
 }
 

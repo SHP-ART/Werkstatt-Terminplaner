@@ -1,23 +1,22 @@
-const { db } = require('../config/database');
+const { getAsync, allAsync, runAsync } = require('../utils/dbHelper');
 
 class AbwesenheitenModel {
   // Legacy-Methoden für alte Abwesenheiten-Tabelle
-  static getByDatum(datum, callback) {
-    db.get('SELECT * FROM abwesenheiten WHERE datum = ?', [datum], callback);
+  static async getByDatum(datum) {
+    return await getAsync('SELECT * FROM abwesenheiten WHERE datum = ?', [datum]);
   }
 
-  static upsert(datum, urlaub, krank, callback) {
-    db.run(
+  static async upsert(datum, urlaub, krank) {
+    return await runAsync(
       `INSERT INTO abwesenheiten (datum, urlaub, krank)
        VALUES (?, ?, ?)
        ON CONFLICT(datum) DO UPDATE SET urlaub = excluded.urlaub, krank = excluded.krank`,
-      [datum, urlaub, krank],
-      callback
+      [datum, urlaub, krank]
     );
   }
 
   // Neue Methoden für individuelle Mitarbeiter-/Lehrlinge-Abwesenheiten
-  static getAll(callback) {
+  static async getAll() {
     const query = `
       SELECT
         ma.id,
@@ -34,10 +33,10 @@ class AbwesenheitenModel {
       LEFT JOIN lehrlinge l ON ma.lehrling_id = l.id
       ORDER BY ma.von_datum DESC
     `;
-    db.all(query, [], callback);
+    return await allAsync(query, []);
   }
 
-  static getByDateRange(vonDatum, bisDatum, callback) {
+  static async getByDateRange(vonDatum, bisDatum) {
     const query = `
       SELECT
         ma.id,
@@ -56,10 +55,10 @@ class AbwesenheitenModel {
          OR (ma.von_datum >= ? AND ma.von_datum <= ?)
       ORDER BY ma.von_datum
     `;
-    db.all(query, [bisDatum, vonDatum, vonDatum, bisDatum], callback);
+    return await allAsync(query, [bisDatum, vonDatum, vonDatum, bisDatum]);
   }
 
-  static getForDate(datum, callback) {
+  static async getForDate(datum) {
     const query = `
       SELECT
         ma.id,
@@ -76,26 +75,25 @@ class AbwesenheitenModel {
       WHERE ma.von_datum <= ? AND ma.bis_datum >= ?
       ORDER BY ma.von_datum
     `;
-    db.all(query, [datum, datum], callback);
+    return await allAsync(query, [datum, datum]);
   }
 
-  static create(data, callback) {
+  static async create(data) {
     const { mitarbeiter_id, lehrling_id, typ, von_datum, bis_datum } = data;
 
-    db.run(
+    return await runAsync(
       `INSERT INTO mitarbeiter_abwesenheiten
        (mitarbeiter_id, lehrling_id, typ, von_datum, bis_datum)
        VALUES (?, ?, ?, ?, ?)`,
-      [mitarbeiter_id || null, lehrling_id || null, typ, von_datum, bis_datum],
-      callback
+      [mitarbeiter_id || null, lehrling_id || null, typ, von_datum, bis_datum]
     );
   }
 
-  static delete(id, callback) {
-    db.run('DELETE FROM mitarbeiter_abwesenheiten WHERE id = ?', [id], callback);
+  static async delete(id) {
+    return await runAsync('DELETE FROM mitarbeiter_abwesenheiten WHERE id = ?', [id]);
   }
 
-  static getById(id, callback) {
+  static async getById(id) {
     const query = `
       SELECT
         ma.id,
@@ -112,7 +110,7 @@ class AbwesenheitenModel {
       LEFT JOIN lehrlinge l ON ma.lehrling_id = l.id
       WHERE ma.id = ?
     `;
-    db.get(query, [id], callback);
+    return await getAsync(query, [id]);
   }
 }
 

@@ -1,113 +1,91 @@
-const { db } = require('../config/database');
+const { getAsync, allAsync, runAsync } = require('../utils/dbHelper');
 
 class ErsatzautosModel {
-  static getAll(callback) {
-    db.all('SELECT * FROM ersatzautos ORDER BY name ASC', callback);
+  static async getAll() {
+    return await allAsync('SELECT * FROM ersatzautos ORDER BY name ASC', []);
   }
 
   // Manuelle Sperrung umschalten (mit optionalem Bis-Datum)
-  static toggleManuellGesperrt(id, callback) {
+  static async toggleManuellGesperrt(id) {
     // Behandle NULL als 0 (nicht gesperrt)
-    db.run(
+    await runAsync(
       'UPDATE ersatzautos SET manuell_gesperrt = CASE WHEN COALESCE(manuell_gesperrt, 0) = 1 THEN 0 ELSE 1 END, gesperrt_bis = NULL WHERE id = ?',
-      [id],
-      function(err) {
-        if (err) return callback(err);
-        // Hole das aktualisierte Auto zurück
-        ErsatzautosModel.getById(id, callback);
-      }
+      [id]
     );
+    // Hole das aktualisierte Auto zurück
+    return await ErsatzautosModel.getById(id);
   }
 
   // Manuelle Sperrung direkt setzen
-  static setManuellGesperrt(id, gesperrt, callback) {
-    db.run(
+  static async setManuellGesperrt(id, gesperrt) {
+    await runAsync(
       'UPDATE ersatzautos SET manuell_gesperrt = ?, gesperrt_bis = NULL WHERE id = ?',
-      [gesperrt ? 1 : 0, id],
-      function(err) {
-        if (err) return callback(err);
-        ErsatzautosModel.getById(id, callback);
-      }
+      [gesperrt ? 1 : 0, id]
     );
+    return await ErsatzautosModel.getById(id);
   }
 
   // Zeitbasierte Sperrung setzen (sperren bis zu einem bestimmten Datum)
-  static sperrenBis(id, bisDatum, callback) {
-    db.run(
+  static async sperrenBis(id, bisDatum) {
+    await runAsync(
       'UPDATE ersatzautos SET manuell_gesperrt = 1, gesperrt_bis = ? WHERE id = ?',
-      [bisDatum, id],
-      function(err) {
-        if (err) return callback(err);
-        ErsatzautosModel.getById(id, callback);
-      }
+      [bisDatum, id]
     );
+    return await ErsatzautosModel.getById(id);
   }
 
   // Sperrung aufheben
-  static entsperren(id, callback) {
-    db.run(
+  static async entsperren(id) {
+    await runAsync(
       'UPDATE ersatzautos SET manuell_gesperrt = 0, gesperrt_bis = NULL WHERE id = ?',
-      [id],
-      function(err) {
-        if (err) return callback(err);
-        ErsatzautosModel.getById(id, callback);
-      }
+      [id]
     );
+    return await ErsatzautosModel.getById(id);
   }
 
-  static getActive(callback) {
-    db.all('SELECT * FROM ersatzautos WHERE aktiv = 1 ORDER BY name ASC', callback);
+  static async getActive() {
+    return await allAsync('SELECT * FROM ersatzautos WHERE aktiv = 1 ORDER BY name ASC', []);
   }
 
-  static getById(id, callback) {
-    db.get('SELECT * FROM ersatzautos WHERE id = ?', [id], callback);
+  static async getById(id) {
+    return await getAsync('SELECT * FROM ersatzautos WHERE id = ?', [id]);
   }
 
-  static create(data, callback) {
+  static async create(data) {
     const { kennzeichen, name, typ, aktiv } = data;
-    db.run(
+    const result = await runAsync(
       'INSERT INTO ersatzautos (kennzeichen, name, typ, aktiv) VALUES (?, ?, ?, ?)',
-      [kennzeichen, name, typ || null, aktiv !== undefined ? aktiv : 1],
-      function(err) {
-        if (err) return callback(err);
-        callback(null, { id: this.lastID, ...data });
-      }
+      [kennzeichen, name, typ || null, aktiv !== undefined ? aktiv : 1]
     );
+    return { id: result.lastID, ...data };
   }
 
-  static update(id, data, callback) {
+  static async update(id, data) {
     const { kennzeichen, name, typ, aktiv } = data;
-    db.run(
+    await runAsync(
       'UPDATE ersatzautos SET kennzeichen = ?, name = ?, typ = ?, aktiv = ? WHERE id = ?',
-      [kennzeichen, name, typ || null, aktiv !== undefined ? aktiv : 1, id],
-      function(err) {
-        if (err) return callback(err);
-        ErsatzautosModel.getById(id, callback);
-      }
+      [kennzeichen, name, typ || null, aktiv !== undefined ? aktiv : 1, id]
     );
+    return await ErsatzautosModel.getById(id);
   }
 
-  static delete(id, callback) {
-    db.run('DELETE FROM ersatzautos WHERE id = ?', [id], function(err) {
-      if (err) return callback(err);
-      callback(null, { changes: this.changes });
-    });
+  static async delete(id) {
+    const result = await runAsync('DELETE FROM ersatzautos WHERE id = ?', [id]);
+    return { changes: result.changes };
   }
 
-  static getAnzahlAktiv(callback) {
-    db.get('SELECT COUNT(*) as anzahl FROM ersatzautos WHERE aktiv = 1', (err, row) => {
-      if (err) return callback(err);
-      callback(null, row.anzahl);
-    });
+  static async getAnzahlAktiv() {
+    const row = await getAsync('SELECT COUNT(*) as anzahl FROM ersatzautos WHERE aktiv = 1', []);
+    return row.anzahl;
   }
 
   // Anzahl aktiver UND nicht gesperrter Autos (berücksichtigt gesperrt_bis Datum)
-  static getAnzahlVerfuegbar(callback, datum = null) {
+  static async getAnzahlVerfuegbar(datum = null) {
     const heute = datum || new Date().toISOString().split('T')[0];
     // Ein Auto ist verfügbar wenn:
     // - manuell_gesperrt = 0 ODER
     // - manuell_gesperrt = 1 aber gesperrt_bis < heute (Sperrung abgelaufen)
-    db.get(
+    const row = await getAsync(
       `SELECT COUNT(*) as anzahl FROM ersatzautos 
        WHERE aktiv = 1 
        AND (
@@ -115,89 +93,73 @@ class ErsatzautosModel {
          OR manuell_gesperrt IS NULL 
          OR (manuell_gesperrt = 1 AND gesperrt_bis IS NOT NULL AND gesperrt_bis < ?)
        )`,
-      [heute],
-      (err, row) => {
-        if (err) return callback(err);
-        callback(null, row.anzahl);
-      }
+      [heute]
     );
+    return row.anzahl;
   }
 
   // Anzahl manuell gesperrter Autos (nur aktive Sperren)
-  static getAnzahlGesperrt(callback, datum = null) {
+  static async getAnzahlGesperrt(datum = null) {
     const heute = datum || new Date().toISOString().split('T')[0];
     // Ein Auto ist gesperrt wenn:
     // - manuell_gesperrt = 1 UND (gesperrt_bis ist NULL ODER gesperrt_bis >= heute)
-    db.get(
+    const row = await getAsync(
       `SELECT COUNT(*) as anzahl FROM ersatzautos 
        WHERE aktiv = 1 
        AND manuell_gesperrt = 1
        AND (gesperrt_bis IS NULL OR gesperrt_bis >= ?)`,
-      [heute],
-      (err, row) => {
-        if (err) return callback(err);
-        callback(null, row.anzahl);
-      }
+      [heute]
     );
+    return row.anzahl;
   }
 
   // Verfügbarkeit für ein bestimmtes Datum prüfen
   // Berücksichtigt jetzt auch mehrtägige Buchungen UND manuell gesperrte Autos
-  static getVerfuegbarkeit(datum, callback) {
+  static async getVerfuegbarkeit(datum) {
     // Erst die Anzahl aktiver UND nicht gesperrter Autos holen (für das spezifische Datum)
-    ErsatzautosModel.getAnzahlVerfuegbar((err, verfuegbareAutos) => {
-      if (err) return callback(err);
-      
-      // Auch Gesamtzahl aktiver Autos für Anzeige
-      ErsatzautosModel.getAnzahlAktiv((err2, gesamt) => {
-        if (err2) return callback(err2);
-        
-        // Anzahl gesperrter Autos (für das spezifische Datum)
-        ErsatzautosModel.getAnzahlGesperrt((err3, gesperrt) => {
-          if (err3) return callback(err3);
-      
-          // Zähle wie viele Ersatzautos an diesem Tag vergeben sind
-          const query = `
-            SELECT COUNT(*) as vergeben FROM termine 
-            WHERE ersatzauto = 1 
-            AND status != 'storniert'
-            AND geloescht_am IS NULL
-            AND (
-              -- Eintägige Termine am gewählten Datum
-              (datum = ? AND ersatzauto_bis_datum IS NULL AND abholung_datum IS NULL)
-              -- Oder mehrtägige Termine, die das Datum einschließen
-              OR (datum <= ? AND (
-                ersatzauto_bis_datum >= ?
-                OR abholung_datum >= ?
-                OR (ersatzauto_tage IS NOT NULL AND date(datum, '+' || (ersatzauto_tage - 1) || ' days') >= ?)
-              ))
-            )
-          `;
-          
-          db.get(query, [datum, datum, datum, datum, datum], (err4, row) => {
-            if (err4) return callback(err4);
-            
-            const vergeben = row?.vergeben || 0;
-            // Verfügbar = nicht gesperrte Autos - vergebene Autos
-            callback(null, {
-              gesamt,
-              gesperrt,
-              vergeben,
-              verfuegbar: Math.max(0, verfuegbareAutos - vergeben)
-            });
-          });
-        }, datum);
-      });
-    }, datum);
+    const verfuegbareAutos = await ErsatzautosModel.getAnzahlVerfuegbar(datum);
+    
+    // Auch Gesamtzahl aktiver Autos für Anzeige
+    const gesamt = await ErsatzautosModel.getAnzahlAktiv();
+    
+    // Anzahl gesperrter Autos (für das spezifische Datum)
+    const gesperrt = await ErsatzautosModel.getAnzahlGesperrt(datum);
+
+    // Zähle wie viele Ersatzautos an diesem Tag vergeben sind
+    const query = `
+      SELECT COUNT(*) as vergeben FROM termine 
+      WHERE ersatzauto = 1 
+      AND status != 'storniert'
+      AND geloescht_am IS NULL
+      AND (
+        -- Eintägige Termine am gewählten Datum
+        (datum = ? AND ersatzauto_bis_datum IS NULL AND abholung_datum IS NULL)
+        -- Oder mehrtägige Termine, die das Datum einschließen
+        OR (datum <= ? AND (
+          ersatzauto_bis_datum >= ?
+          OR abholung_datum >= ?
+          OR (ersatzauto_tage IS NOT NULL AND date(datum, '+' || (ersatzauto_tage - 1) || ' days') >= ?)
+        ))
+      )
+    `;
+    
+    const row = await getAsync(query, [datum, datum, datum, datum, datum]);
+    const vergeben = row?.vergeben || 0;
+    // Verfügbar = nicht gesperrte Autos - vergebene Autos
+    return {
+      gesamt,
+      gesperrt,
+      vergeben,
+      verfuegbar: Math.max(0, verfuegbareAutos - vergeben)
+    };
   }
 
   // Detaillierte Verfügbarkeit mit Fahrzeug-Info
-  static getVerfuegbarkeitDetails(datum, callback) {
-    ErsatzautosModel.getActive((err, alleAutos) => {
-      if (err) return callback(err);
-      
-      // Hole alle Termine mit Ersatzauto an diesem Tag (inkl. mehrtägige)
-      const query = `
+  static async getVerfuegbarkeitDetails(datum) {
+    const alleAutos = await ErsatzautosModel.getActive();
+    
+    // Hole alle Termine mit Ersatzauto an diesem Tag (inkl. mehrtägige)
+    const query = `
         SELECT t.*, 
                COALESCE(k.name, t.kunde_name) as kunde_name,
                k.telefon as kunde_telefon
@@ -218,22 +180,19 @@ class ErsatzautosModel {
         )
         ORDER BY t.datum ASC
       `;
-      
-      db.all(query, [datum, datum, datum, datum, datum], (err, termineAmTag) => {
-        if (err) return callback(err);
-        
-        callback(null, {
-          autos: alleAutos,
-          vergeben: termineAmTag.length,
-          verfuegbar: Math.max(0, alleAutos.length - termineAmTag.length),
-          termine: termineAmTag
-        });
-      });
-    });
+    
+    const termineAmTag = await allAsync(query, [datum, datum, datum, datum, datum]);
+    
+    return {
+      autos: alleAutos,
+      vergeben: termineAmTag.length,
+      verfuegbar: Math.max(0, alleAutos.length - termineAmTag.length),
+      termine: termineAmTag
+    };
   }
 
   // Alle aktuellen Buchungen (heute und laufende) holen
-  static getAktuelleBuchungen(callback) {
+  static async getAktuelleBuchungen() {
     const heute = new Date().toISOString().split('T')[0];
     
     const query = `
@@ -268,7 +227,7 @@ class ErsatzautosModel {
       ORDER BY t.datum ASC
     `;
     
-    db.all(query, [heute, heute, heute, heute, heute], callback);
+    return await allAsync(query, [heute, heute, heute, heute, heute]);
   }
 }
 module.exports = ErsatzautosModel;

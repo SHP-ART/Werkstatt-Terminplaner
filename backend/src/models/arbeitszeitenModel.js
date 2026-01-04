@@ -1,11 +1,11 @@
-const { db } = require('../config/database');
+const { getAsync, allAsync, runAsync } = require('../utils/dbHelper');
 
 class ArbeitszeitenModel {
-  static getAll(callback) {
-    db.all('SELECT * FROM arbeitszeiten ORDER BY bezeichnung', callback);
+  static async getAll() {
+    return await allAsync('SELECT * FROM arbeitszeiten ORDER BY bezeichnung', []);
   }
 
-  static update(id, data, callback) {
+  static async update(id, data) {
     const { standard_minuten, bezeichnung, aliase } = data;
 
     // Baue die SQL-Query dynamisch auf, je nachdem welche Felder vorhanden sind
@@ -28,103 +28,80 @@ class ArbeitszeitenModel {
     }
 
     if (updates.length === 0) {
-      return callback(new Error('Keine Felder zum Aktualisieren'));
+      throw new Error('Keine Felder zum Aktualisieren');
     }
 
     values.push(id);
 
-    db.run(
+    const result = await runAsync(
       `UPDATE arbeitszeiten SET ${updates.join(', ')} WHERE id = ?`,
-      values,
-      function(err) {
-        if (err) {
-          return callback(err);
-        }
-        callback(null, { changes: this.changes });
-      }
+      values
     );
+    return { changes: result.changes };
   }
 
-  static create(arbeit, callback) {
+  static async create(arbeit) {
     const { bezeichnung, standard_minuten, aliase } = arbeit;
-    db.run(
+    return await runAsync(
       'INSERT INTO arbeitszeiten (bezeichnung, standard_minuten, aliase) VALUES (?, ?, ?)',
-      [bezeichnung, standard_minuten, aliase || ''],
-      callback
+      [bezeichnung, standard_minuten, aliase || '']
     );
   }
 
-  static delete(id, callback) {
-    db.run('DELETE FROM arbeitszeiten WHERE id = ?', [id], function(err) {
-      if (err) {
-        return callback(err);
-      }
-      callback(null, { changes: this.changes });
-    });
+  static async delete(id) {
+    const result = await runAsync('DELETE FROM arbeitszeiten WHERE id = ?', [id]);
+    return { changes: result.changes };
   }
 
-  static findByBezeichnung(bezeichnung, callback) {
+  static async findByBezeichnung(bezeichnung) {
     // Suche zuerst nach exakter Bezeichnung
-    db.get(
+    const row = await getAsync(
       'SELECT * FROM arbeitszeiten WHERE LOWER(bezeichnung) = LOWER(?)',
-      [bezeichnung],
-      (err, row) => {
-        if (err) return callback(err);
-        if (row) return callback(null, row);
-        
-        // Falls nicht gefunden, suche in Aliasen
-        db.all('SELECT * FROM arbeitszeiten WHERE aliase IS NOT NULL AND aliase != ""', (err, rows) => {
-          if (err) return callback(err);
-          
-          const suchBegriff = bezeichnung.toLowerCase();
-          for (const arbeit of rows) {
-            if (arbeit.aliase) {
-              const aliasListe = arbeit.aliase.split(',').map(a => a.trim().toLowerCase());
-              if (aliasListe.includes(suchBegriff)) {
-                return callback(null, arbeit);
-              }
-            }
-          }
-          callback(null, null);
-        });
-      }
+      [bezeichnung]
     );
+    
+    if (row) return row;
+    
+    // Falls nicht gefunden, suche in Aliasen
+    const rows = await allAsync('SELECT * FROM arbeitszeiten WHERE aliase IS NOT NULL AND aliase != ""', []);
+    
+    const suchBegriff = bezeichnung.toLowerCase();
+    for (const arbeit of rows) {
+      if (arbeit.aliase) {
+        const aliasListe = arbeit.aliase.split(',').map(a => a.trim().toLowerCase());
+        if (aliasListe.includes(suchBegriff)) {
+          return arbeit;
+        }
+      }
+    }
+    return null;
   }
 
-  static updateByBezeichnung(bezeichnung, neueStandardzeit, callback) {
+  static async updateByBezeichnung(bezeichnung, neueStandardzeit) {
     // Gewichteter Durchschnitt: 70% alte Zeit, 30% neue Zeit
-    db.get(
+    const row = await getAsync(
       'SELECT * FROM arbeitszeiten WHERE LOWER(bezeichnung) = LOWER(?)',
-      [bezeichnung],
-      (err, row) => {
-        if (err) {
-          return callback(err);
-        }
-
-        if (!row) {
-          return callback(null, { changes: 0, message: 'Arbeit nicht gefunden' });
-        }
-
-        const alteZeit = row.standard_minuten || 30;
-        const gewichteteZeit = Math.round((alteZeit * 0.7) + (neueStandardzeit * 0.3));
-
-        db.run(
-          'UPDATE arbeitszeiten SET standard_minuten = ? WHERE LOWER(bezeichnung) = LOWER(?)',
-          [gewichteteZeit, bezeichnung],
-          function(updateErr) {
-            if (updateErr) {
-              return callback(updateErr);
-            }
-            callback(null, {
-              changes: this.changes,
-              alte_zeit: alteZeit,
-              neue_zeit: gewichteteZeit,
-              tatsaechliche_zeit: neueStandardzeit
-            });
-          }
-        );
-      }
+      [bezeichnung]
     );
+
+    if (!row) {
+      return { changes: 0, message: 'Arbeit nicht gefunden' };
+    }
+
+    const alteZeit = row.standard_minuten || 30;
+    const gewichteteZeit = Math.round((alteZeit * 0.7) + (neueStandardzeit * 0.3));
+
+    const result = await runAsync(
+      'UPDATE arbeitszeiten SET standard_minuten = ? WHERE LOWER(bezeichnung) = LOWER(?)',
+      [gewichteteZeit, bezeichnung]
+    );
+    
+    return {
+      changes: result.changes,
+      alte_zeit: alteZeit,
+      neue_zeit: gewichteteZeit,
+      tatsaechliche_zeit: neueStandardzeit
+    };
   }
 }
 
