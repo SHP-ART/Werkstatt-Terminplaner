@@ -1,6 +1,6 @@
 # Werkstatt Terminplaner
 
-[![Version](https://img.shields.io/badge/version-1.0.7-blue.svg)](https://github.com/SHP-ART/Werkstatt-Terminplaner/releases)
+[![Version](https://img.shields.io/badge/version-1.0.8-blue.svg)](https://github.com/SHP-ART/Werkstatt-Terminplaner/releases)
 [![Node.js](https://img.shields.io/badge/node-%3E%3D14.0.0-brightgreen.svg)](https://nodejs.org)
 [![License](https://img.shields.io/badge/license-Proprietary-red.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey.svg)](README.md)
@@ -16,11 +16,11 @@ Ein vollständiger Werkstatt-Terminplaner mit intelligenter Auslastungsanzeige, 
 - **Terminplanung**: Erweiterte Terminverwaltung mit Phasen, Split-Terminen und Schwebend-Funktion
 - **Mitarbeiterverwaltung**: Mitarbeiter und Lehrlinge mit individuellen Abwesenheiten
 - **Ersatzauto-System**: Verwaltung von Ersatzfahrzeugen mit Buchungen und Verfügbarkeit
-- **Auslastungsanzeige**: Echtzeit-Visualisierung mit automatischer Farbcodierung
-- **Backup-System**: Automatische und manuelle Backups mit Restore-Funktion
+- **Auslastungsanzeige**: Echtzeit-Visualisierung mit dynamischer Nebenzeit-Berechnung
+- **Backup-System**: Automatische und manuelle Backups mit Restore-Funktion inkl. Auto-Migration
 - **Windows Autostart**: Automatischer Start beim Systemstart mit sauberem Shutdown beim Herunterfahren
 - **WebSocket Live-Updates**: Änderungen werden in Echtzeit auf alle Clients übertragen
-- **Sicherer Betrieb**: Automatische Datenbankschließung und Cleanup bei PC-Herunterfahren/Abmeldung
+- **Sicherer Betrieb**: SQL-Injection-Schutz, async/await-Architektur, automatische Datenbankschließung
 
 ## Projektstruktur
 
@@ -870,6 +870,27 @@ Falls Zugriff von außerhalb des lokalen Netzwerks gewünscht:
 - [RELEASE-NOTES.md](RELEASE-NOTES.md) - Versionshistorie und Änderungen
 - [AGENTS.md](AGENTS.md) - Entwickler-Richtlinien
 
+## 🆕 Neueste Änderungen (v1.0.8)
+
+### Architektur & Sicherheit
+- **SQL-Injection-Schutz**: Alle Controller verwenden jetzt parametrisierte Queries
+- **Async/Await Migration**: Komplette Modernisierung der Datenbank-Operationen
+- **Error-Handling**: Zentrales Middleware-System mit strukturierten Responses
+- **Validierungs-Framework**: express-validator für Input-Sanitierung
+
+### Auslastung & Berechnung
+- **Dynamische Nebenzeit**: Änderungen an Einstellungen wirken sich sofort auf alle Auslastungsberechnungen aus
+- **Verbesserte Zeitleiste**: Endzeit-Berechnung mit Halbstunden-Markierungen
+- **Korrigierte Balkenanzeige**: Auslastungsbalken zeigen jetzt korrekte Werte
+
+### Backup & Restore
+- **Auto-Migration**: Nach Backup-Restore werden fehlende Tabellen/Spalten automatisch erstellt
+- **Tagesübersicht**: Zeigt korrekte Dauer inkl. Nebenzeit und Erweiterungen
+
+### UI-Verbesserungen
+- **Verbessertes Scrolling**: Tagesübersicht-Modal scrollt korrekt bei vielen Terminen
+- **Kennzeichen-Suche**: Leerzeichen und Bindestriche werden bei der Suche ignoriert
+
 ## 🤝 Beitragen
 
 Für Entwickler siehe [AGENTS.md](AGENTS.md) für:
@@ -884,5 +905,5 @@ Proprietäre Software für interne Nutzung.
 
 ---
 
-**Version**: 1.0.5  
+**Version**: 1.0.8  
 **Letztes Update**: Januar 2026
