@@ -1,4 +1,5 @@
 const { db } = require('../config/database');
+const { withTransaction, runAsync, allAsync } = require('../utils/transaction');
 
 class KundenModel {
   static getAll(callback) {
@@ -15,19 +16,18 @@ class KundenModel {
   }
 
   static importMultiple(kunden, callback) {
-    const stmtKunde = db.prepare('INSERT INTO kunden (name, telefon, email, adresse, locosoft_id, kennzeichen, vin, fahrzeugtyp) VALUES (?, ?, ?, ?, ?, ?, ?, ?)');
-    const stmtFahrzeug = db.prepare('INSERT INTO termine (kunde_id, kennzeichen, fahrzeugtyp, vin, arbeit, geschaetzte_zeit, datum, status, umfang) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)');
+    // Verwende withTransaction für atomare Operationen
+    withTransaction(async () => {
+      const stmtKunde = db.prepare('INSERT INTO kunden (name, telefon, email, adresse, locosoft_id, kennzeichen, vin, fahrzeugtyp) VALUES (?, ?, ?, ?, ?, ?, ?, ?)');
+      const stmtFahrzeug = db.prepare('INSERT INTO termine (kunde_id, kennzeichen, fahrzeugtyp, vin, arbeit, geschaetzte_zeit, datum, status, umfang) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)');
 
-    let imported = 0;
-    let skipped = 0;
-    let fahrzeugeHinzugefuegt = 0;
-    const errors = [];
+      let imported = 0;
+      let skipped = 0;
+      let fahrzeugeHinzugefuegt = 0;
+      const errors = [];
 
-    // Prüfe auf existierende Kunden (mit ID für Fahrzeug-Zuordnung)
-    db.all('SELECT id, name, kennzeichen FROM kunden', [], (err, existingKunden) => {
-      if (err) {
-        return callback(err);
-      }
+      // Prüfe auf existierende Kunden (mit ID für Fahrzeug-Zuordnung)
+      const existingKunden = await allAsync('SELECT id, name, kennzeichen FROM kunden', []);
 
       // Map für schnellen Zugriff: name (lowercase) -> kunde
       const kundenByName = new Map();
@@ -38,132 +38,130 @@ class KundenModel {
       });
 
       // Set für bereits verwendete Kennzeichen (aus Kunden und Terminen)
-      db.all('SELECT DISTINCT UPPER(REPLACE(REPLACE(kennzeichen, \' \', \'\'), \'-\', \'\')) as kz_norm FROM kunden WHERE kennzeichen IS NOT NULL UNION SELECT DISTINCT UPPER(REPLACE(REPLACE(kennzeichen, \' \', \'\'), \'-\', \'\')) as kz_norm FROM termine WHERE kennzeichen IS NOT NULL', [], (err, existingKz) => {
-        if (err) {
-          return callback(err);
-        }
+      const existingKz = await allAsync(
+        'SELECT DISTINCT UPPER(REPLACE(REPLACE(kennzeichen, \' \', \'\'), \'-\', \'\')) as kz_norm FROM kunden WHERE kennzeichen IS NOT NULL UNION SELECT DISTINCT UPPER(REPLACE(REPLACE(kennzeichen, \' \', \'\'), \'-\', \'\')) as kz_norm FROM termine WHERE kennzeichen IS NOT NULL',
+        []
+      );
 
-        const existingKennzeichen = new Set(existingKz.map(k => k.kz_norm).filter(k => k));
-        
-        // Map für neue Kunden während des Imports (um mehrere Fahrzeuge zu sammeln)
-        const neueKundenMap = new Map(); // name (lowercase) -> {kunde, fahrzeuge: []}
+      const existingKennzeichen = new Set(existingKz.map(k => k.kz_norm).filter(k => k));
+      
+      // Map für neue Kunden während des Imports (um mehrere Fahrzeuge zu sammeln)
+      const neueKundenMap = new Map(); // name (lowercase) -> {kunde, fahrzeuge: []}
 
-        // Erster Durchlauf: Kunden gruppieren
-        kunden.forEach((kunde, index) => {
-          if (!kunde.name) {
-            errors.push(`Zeile ${index + 1}: Kein Name angegeben`);
-            return;
-          }
-
-          const nameLower = kunde.name.toLowerCase().trim();
-          const kennzeichenNorm = kunde.kennzeichen ? kunde.kennzeichen.toUpperCase().replace(/[\s\-]/g, '') : null;
-
-          // Prüfe ob Kennzeichen bereits existiert
-          if (kennzeichenNorm && existingKennzeichen.has(kennzeichenNorm)) {
-            skipped++;
-            errors.push(`Zeile ${index + 1}: Kennzeichen "${kunde.kennzeichen}" existiert bereits`);
-            return;
-          }
-
-          // Kunde existiert bereits in der Datenbank?
-          const existingKunde = kundenByName.get(nameLower);
-          if (existingKunde) {
-            // Zusätzliches Fahrzeug für bestehenden Kunden
-            if (kunde.kennzeichen && kennzeichenNorm) {
-              // Erstelle einen Dummy-Termin um das Fahrzeug zu speichern
-              const heute = new Date().toISOString().split('T')[0];
-              stmtFahrzeug.run([
-                existingKunde.id,
-                kunde.kennzeichen,
-                kunde.fahrzeugtyp || null,
-                kunde.vin || null,
-                'Fahrzeug aus Import',
-                0,
-                heute,
-                'abgeschlossen',
-                'klein'
-              ], (err) => {
-                if (!err) {
-                  fahrzeugeHinzugefuegt++;
-                  existingKennzeichen.add(kennzeichenNorm);
-                } else {
-                  errors.push(`Zeile ${index + 1}: Fahrzeug konnte nicht hinzugefügt werden: ${err.message}`);
-                }
-              });
-            } else {
-              skipped++;
-              errors.push(`Zeile ${index + 1}: Kunde "${kunde.name}" existiert bereits (ohne neues Kennzeichen)`);
-            }
-            return;
-          }
-
-          // Neuer Kunde - prüfe ob im aktuellen Import bereits vorhanden
-          if (neueKundenMap.has(nameLower)) {
-            // Zusätzliches Fahrzeug für neuen Kunden im gleichen Import
-            if (kunde.kennzeichen && kennzeichenNorm) {
-              neueKundenMap.get(nameLower).fahrzeuge.push({
-                kennzeichen: kunde.kennzeichen,
-                fahrzeugtyp: kunde.fahrzeugtyp,
-                vin: kunde.vin
-              });
-              existingKennzeichen.add(kennzeichenNorm);
-            }
-          } else {
-            // Komplett neuer Kunde
-            neueKundenMap.set(nameLower, {
-              kunde: kunde,
-              fahrzeuge: kunde.kennzeichen ? [{
-                kennzeichen: kunde.kennzeichen,
-                fahrzeugtyp: kunde.fahrzeugtyp,
-                vin: kunde.vin
-              }] : []
-            });
-            if (kennzeichenNorm) {
-              existingKennzeichen.add(kennzeichenNorm);
-            }
-          }
-        });
-
-        // Zweiter Durchlauf: Neue Kunden einfügen
-        const neueKundenArray = Array.from(neueKundenMap.values());
-        let processed = 0;
-
-        if (neueKundenArray.length === 0) {
-          stmtKunde.finalize();
-          stmtFahrzeug.finalize(() => {
-            callback(null, { imported, skipped, fahrzeugeHinzugefuegt, errors });
-          });
+      // Erster Durchlauf: Kunden gruppieren
+      kunden.forEach((kunde, index) => {
+        if (!kunde.name) {
+          errors.push(`Zeile ${index + 1}: Kein Name angegeben`);
           return;
         }
 
-        neueKundenArray.forEach((entry) => {
-          const kunde = entry.kunde;
-          const fahrzeuge = entry.fahrzeuge;
-          
-          // Erstes Kennzeichen wird im Kundenstamm gespeichert
-          const erstesKennzeichen = fahrzeuge.length > 0 ? fahrzeuge[0].kennzeichen : null;
-          const ersterFahrzeugtyp = fahrzeuge.length > 0 ? fahrzeuge[0].fahrzeugtyp : null;
-          const ersteVin = fahrzeuge.length > 0 ? fahrzeuge[0].vin : null;
+        const nameLower = kunde.name.toLowerCase().trim();
+        const kennzeichenNorm = kunde.kennzeichen ? kunde.kennzeichen.toUpperCase().replace(/[\s\-]/g, '') : null;
 
-          stmtKunde.run([
-            kunde.name, 
-            kunde.telefon, 
-            kunde.email, 
-            kunde.adresse, 
-            kunde.locosoft_id, 
-            erstesKennzeichen,
-            ersteVin,
-            ersterFahrzeugtyp
-          ], function(err) {
-            if (!err) {
-              imported++;
-              const neueKundeId = this.lastID;
-              
-              // Zusätzliche Fahrzeuge als Termine einfügen (ab dem 2. Fahrzeug)
-              if (fahrzeuge.length > 1) {
-                const heute = new Date().toISOString().split('T')[0];
-                fahrzeuge.slice(1).forEach((fz) => {
-                  stmtFahrzeug.run([
+        // Prüfe ob Kennzeichen bereits existiert
+        if (kennzeichenNorm && existingKennzeichen.has(kennzeichenNorm)) {
+          skipped++;
+          errors.push(`Zeile ${index + 1}: Kennzeichen "${kunde.kennzeichen}" existiert bereits`);
+          return;
+        }
+
+        // Kunde existiert bereits in der Datenbank?
+        const existingKunde = kundenByName.get(nameLower);
+        if (existingKunde) {
+          // Zusätzliches Fahrzeug für bestehenden Kunden
+          if (kunde.kennzeichen && kennzeichenNorm) {
+            // Erstelle einen Dummy-Termin um das Fahrzeug zu speichern
+            const heute = new Date().toISOString().split('T')[0];
+            stmtFahrzeug.run([
+              existingKunde.id,
+              kunde.kennzeichen,
+              kunde.fahrzeugtyp || null,
+              kunde.vin || null,
+              'Fahrzeug aus Import',
+              0,
+              heute,
+              'abgeschlossen',
+              'klein'
+            ], (err) => {
+              if (!err) {
+                fahrzeugeHinzugefuegt++;
+                existingKennzeichen.add(kennzeichenNorm);
+              } else {
+                errors.push(`Zeile ${index + 1}: Fahrzeug konnte nicht hinzugefügt werden: ${err.message}`);
+              }
+            });
+          } else {
+            skipped++;
+            errors.push(`Zeile ${index + 1}: Kunde "${kunde.name}" existiert bereits (ohne neues Kennzeichen)`);
+          }
+          return;
+        }
+
+        // Neuer Kunde - prüfe ob im aktuellen Import bereits vorhanden
+        if (neueKundenMap.has(nameLower)) {
+          // Zusätzliches Fahrzeug für neuen Kunden im gleichen Import
+          if (kunde.kennzeichen && kennzeichenNorm) {
+            neueKundenMap.get(nameLower).fahrzeuge.push({
+              kennzeichen: kunde.kennzeichen,
+              fahrzeugtyp: kunde.fahrzeugtyp,
+              vin: kunde.vin
+            });
+            existingKennzeichen.add(kennzeichenNorm);
+          }
+        } else {
+          // Komplett neuer Kunde
+          neueKundenMap.set(nameLower, {
+            kunde: kunde,
+            fahrzeuge: kunde.kennzeichen ? [{
+              kennzeichen: kunde.kennzeichen,
+              fahrzeugtyp: kunde.fahrzeugtyp,
+              vin: kunde.vin
+            }] : []
+          });
+          if (kennzeichenNorm) {
+            existingKennzeichen.add(kennzeichenNorm);
+          }
+        }
+      });
+
+      // Zweiter Durchlauf: Neue Kunden einfügen
+      const neueKundenArray = Array.from(neueKundenMap.values());
+
+      for (const entry of neueKundenArray) {
+        const kunde = entry.kunde;
+        const fahrzeuge = entry.fahrzeuge;
+        
+        // Erstes Kennzeichen wird im Kundenstamm gespeichert
+        const erstesKennzeichen = fahrzeuge.length > 0 ? fahrzeuge[0].kennzeichen : null;
+        const ersterFahrzeugtyp = fahrzeuge.length > 0 ? fahrzeuge[0].fahrzeugtyp : null;
+        const ersteVin = fahrzeuge.length > 0 ? fahrzeuge[0].vin : null;
+
+        try {
+          const result = await runAsync(
+            'INSERT INTO kunden (name, telefon, email, adresse, locosoft_id, kennzeichen, vin, fahrzeugtyp) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+            [
+              kunde.name, 
+              kunde.telefon, 
+              kunde.email, 
+              kunde.adresse, 
+              kunde.locosoft_id, 
+              erstesKennzeichen,
+              ersteVin,
+              ersterFahrzeugtyp
+            ]
+          );
+          
+          imported++;
+          const neueKundeId = result.lastID;
+          
+          // Zusätzliche Fahrzeuge als Termine einfügen (ab dem 2. Fahrzeug)
+          if (fahrzeuge.length > 1) {
+            const heute = new Date().toISOString().split('T')[0];
+            for (const fz of fahrzeuge.slice(1)) {
+              try {
+                await runAsync(
+                  'INSERT INTO termine (kunde_id, kennzeichen, fahrzeugtyp, vin, arbeit, geschaetzte_zeit, datum, status, umfang) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+                  [
                     neueKundeId,
                     fz.kennzeichen,
                     fz.fahrzeugtyp || null,
@@ -173,29 +171,28 @@ class KundenModel {
                     heute,
                     'abgeschlossen',
                     'klein'
-                  ], (err) => {
-                    if (!err) {
-                      fahrzeugeHinzugefuegt++;
-                    }
-                  });
-                });
+                  ]
+                );
+                fahrzeugeHinzugefuegt++;
+              } catch (err) {
+                // Fehler bei Zusatzfahrzeug - wirft Fehler und löst Rollback aus
+                throw new Error(`Zusatzfahrzeug für "${kunde.name}": ${err.message}`);
               }
-            } else {
-              skipped++;
-              errors.push(`Kunde "${kunde.name}": ${err.message}`);
             }
-            
-            processed++;
-            if (processed === neueKundenArray.length) {
-              stmtKunde.finalize();
-              stmtFahrzeug.finalize(() => {
-                callback(null, { imported, skipped, fahrzeugeHinzugefuegt, errors });
-              });
-            }
-          });
-        });
-      });
-    });
+          }
+        } catch (err) {
+          // Bei Fehler: Transaction wird automatisch zurückgerollt
+          throw new Error(`Kunde "${kunde.name}": ${err.message}`);
+        }
+      }
+
+      stmtKunde.finalize();
+      stmtFahrzeug.finalize();
+
+      return { imported, skipped, fahrzeugeHinzugefuegt, errors };
+    })
+    .then(result => callback(null, result))
+    .catch(err => callback(err));
   }
 
   static getById(id, callback) {

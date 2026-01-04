@@ -1,4 +1,5 @@
 const { db } = require('../config/database');
+const { withTransaction } = require('../utils/transaction');
 
 class PhasenModel {
   // Alle Phasen eines Termins abrufen
@@ -144,29 +145,31 @@ class PhasenModel {
     });
   }
 
-  // Mehrere Phasen auf einmal erstellen/aktualisieren
+  // Mehrere Phasen auf einmal erstellen/aktualisieren (mit Transaction)
   static async syncPhasen(terminId, phasen) {
-    // Erst alle bestehenden Phasen löschen
-    await this.deleteByTerminId(terminId);
-    
-    // Dann neue Phasen erstellen
-    const results = [];
-    for (let i = 0; i < phasen.length; i++) {
-      const phase = phasen[i];
-      const result = await this.create({
-        termin_id: terminId,
-        phase_nr: i + 1,
-        bezeichnung: phase.bezeichnung,
-        datum: phase.datum,
-        geschaetzte_zeit: phase.geschaetzte_zeit,
-        mitarbeiter_id: phase.mitarbeiter_id,
-        lehrling_id: phase.lehrling_id,
-        notizen: phase.notizen
-      });
-      results.push(result);
-    }
-    
-    return results;
+    return await withTransaction(async () => {
+      // Erst alle bestehenden Phasen löschen
+      await this.deleteByTerminId(terminId);
+      
+      // Dann neue Phasen erstellen
+      const results = [];
+      for (let i = 0; i < phasen.length; i++) {
+        const phase = phasen[i];
+        const result = await this.create({
+          termin_id: terminId,
+          phase_nr: i + 1,
+          bezeichnung: phase.bezeichnung,
+          datum: phase.datum,
+          geschaetzte_zeit: phase.geschaetzte_zeit,
+          mitarbeiter_id: phase.mitarbeiter_id,
+          lehrling_id: phase.lehrling_id,
+          notizen: phase.notizen
+        });
+        results.push(result);
+      }
+      
+      return results;
+    });
   }
 
   // Gesamtzeit aller Phasen eines Termins

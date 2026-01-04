@@ -146,9 +146,13 @@
   - Besonders bei Status-Änderungen mit Auslastungs-Neuberechnung
   - Priority: ⚠️ WICHTIG
 
-- [ ] **Transaction-Helper erstellen**
+- [x] **Transaction-Helper erstellen** ✅
   - Datei: `backend/src/utils/transaction.js`
-  - Funktionen: `withTransaction(callback)`
+  - Funktionen: `withTransaction(callback)`, `runAsync()`, `allAsync()`
+  - `phasenModel.syncPhasen()` mit Transaction umgebaut
+  - `kundenModel.importMultiple()` mit Transaction umgebaut
+  - **Getestet**: Rollback bei Fehlern funktioniert einwandfrei
+  - **Integriert in v1.0.8**
   - Priority: ⚠️ WICHTIG
 
 ---
