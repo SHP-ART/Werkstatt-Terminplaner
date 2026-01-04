@@ -1,6 +1,6 @@
 const fs = require('fs');
 const path = require('path');
-const { dbPath, dataDir } = require('../config/database');
+const { db, dbPath, dataDir, initializeDatabase } = require('../config/database');
 
 const backupDir = path.join(dataDir, 'backups');
 
@@ -93,7 +93,16 @@ const BackupController = {
 
       ensureBackupDir();
       fs.copyFileSync(source, dbPath);
-      res.json({ message: 'Backup eingespielt', restored: path.basename(source) });
+      
+      // Führe Migrationen auf der wiederhergestellten Datenbank aus
+      initializeDatabase();
+      console.log('Backup eingespielt und Migrationen ausgeführt:', path.basename(source));
+      
+      res.json({ 
+        message: 'Backup eingespielt und Migrationen ausgeführt', 
+        restored: path.basename(source),
+        hinweis: 'Ein Server-Neustart wird empfohlen für volle Kompatibilität'
+      });
     } catch (error) {
       console.error('Backup Restore Fehler:', error);
       res.status(500).json({ error: 'Backup konnte nicht eingespielt werden' });
@@ -116,13 +125,17 @@ const BackupController = {
 
       if (restoreNow) {
         fs.copyFileSync(target, dbPath);
+        // Führe Migrationen auf der wiederhergestellten Datenbank aus
+        initializeDatabase();
+        console.log('Backup hochgeladen, eingespielt und Migrationen ausgeführt:', safeName);
       }
 
       const stats = fs.statSync(target);
       res.json({
-        message: restoreNow ? 'Backup hochgeladen und eingespielt' : 'Backup hochgeladen',
+        message: restoreNow ? 'Backup hochgeladen, eingespielt und Migrationen ausgeführt' : 'Backup hochgeladen',
         backup: { name: safeName, sizeBytes: stats.size, createdAt: stats.mtime },
-        restored: !!restoreNow
+        restored: !!restoreNow,
+        hinweis: restoreNow ? 'Ein Server-Neustart wird empfohlen für volle Kompatibilität' : undefined
       });
     } catch (error) {
       console.error('Backup Upload Fehler:', error);

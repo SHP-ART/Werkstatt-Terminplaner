@@ -11889,12 +11889,23 @@ class App {
         // Uhrzeit ermitteln (bring_zeit hat Vorrang)
         const uhrzeitAnzeige = termin.bring_zeit || termin.abholung_zeit || '';
 
-        // Berechne Dauer - verwende tatsächliche Zeit wenn vorhanden, sonst geschätzte Zeit
+        // Berechne Dauer - verwende endzeit_berechnet wenn verfügbar (enthält Nebenzeit + Erweiterungen)
         let dauerText = '';
-        const arbeitszeit = termin.tatsaechliche_zeit || termin.geschaetzte_zeit;
-        if (arbeitszeit && arbeitszeit > 0) {
-          const stunden = Math.floor(arbeitszeit / 60);
-          const minuten = arbeitszeit % 60;
+        let dauerMinuten = 0;
+        
+        if (termin.startzeit && termin.endzeit_berechnet) {
+          // Berechne aus Start- und Endzeit (inkl. Nebenzeit und Erweiterungen)
+          const [startH, startM] = termin.startzeit.split(':').map(Number);
+          const [endH, endM] = termin.endzeit_berechnet.split(':').map(Number);
+          dauerMinuten = (endH * 60 + endM) - (startH * 60 + startM);
+        } else {
+          // Fallback: tatsächliche oder geschätzte Zeit
+          dauerMinuten = termin.tatsaechliche_zeit || termin.geschaetzte_zeit || 0;
+        }
+        
+        if (dauerMinuten > 0) {
+          const stunden = Math.floor(dauerMinuten / 60);
+          const minuten = dauerMinuten % 60;
           if (stunden > 0 && minuten > 0) {
             dauerText = `${stunden}h ${minuten}min`;
           } else if (stunden > 0) {
