@@ -1,3 +1,18 @@
+# Release Notes - Version 1.0.11
+
+## 🐛 Bugfixes
+
+### Datenbank-Reconnect nach Backup-Restore
+- **Problem**: Nach Wiederherstellung eines Backups konnte die Datenbank-Verbindung fehlschlagen
+- **Lösung**: Verbesserter Reconnect-Mechanismus nach Backup-Restore
+
+## 📖 Dokumentation
+
+### README aktualisiert
+- Dokumentation auf aktuellen Stand gebracht
+
+---
+
 # Release Notes - Version 1.0.10
 
 ## 🐛 Bugfixes
