@@ -294,6 +294,35 @@ function initializeDatabase() {
       }
     });
 
+    // Erweiterungs-Felder für Auftragserweiterung
+    // Referenz zum Original-Termin bei Erweiterungen
+    db.run(`ALTER TABLE termine ADD COLUMN erweiterung_von_id INTEGER`, (err) => {
+      if (err && !err.message.includes('duplicate column')) {
+        console.error('Fehler beim Hinzufügen von erweiterung_von_id:', err);
+      }
+    });
+
+    // Flag ob Termin eine Erweiterung ist (0=normal, 1=erweiterung)
+    db.run(`ALTER TABLE termine ADD COLUMN ist_erweiterung INTEGER DEFAULT 0`, (err) => {
+      if (err && !err.message.includes('duplicate column')) {
+        console.error('Fehler beim Hinzufügen von ist_erweiterung:', err);
+      }
+    });
+
+    // Typ der Erweiterung ('anschluss', 'morgen', 'datum')
+    db.run(`ALTER TABLE termine ADD COLUMN erweiterung_typ TEXT`, (err) => {
+      if (err && !err.message.includes('duplicate column')) {
+        console.error('Fehler beim Hinzufügen von erweiterung_typ:', err);
+      }
+    });
+
+    // Teile-Status für Erweiterungen
+    db.run(`ALTER TABLE termine ADD COLUMN teile_status TEXT DEFAULT 'vorraetig'`, (err) => {
+      if (err && !err.message.includes('duplicate column')) {
+        console.error('Fehler beim Hinzufügen von teile_status:', err);
+      }
+    });
+
     // Interne Auftragsnummer
     db.run(`ALTER TABLE termine ADD COLUMN interne_auftragsnummer TEXT`, (err) => {
       if (err && !err.message.includes('duplicate column')) {

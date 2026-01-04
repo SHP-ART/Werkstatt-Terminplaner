@@ -150,7 +150,8 @@ class TermineModel {
       mitarbeiter_id, dringlichkeit, kennzeichen, umfang, datum, abholung_typ,
       abholung_details, abholung_zeit, abholung_datum, bring_zeit, kontakt_option,
       kilometerstand, ersatzauto, ersatzauto_tage, ersatzauto_bis_datum, ersatzauto_bis_zeit,
-      vin, fahrzeugtyp, muss_bearbeitet_werden, interne_auftragsnummer
+      vin, fahrzeugtyp, muss_bearbeitet_werden, interne_auftragsnummer,
+      startzeit, endzeit_berechnet
     } = data;
     
     // Baue die SQL-Query dynamisch auf
@@ -176,6 +177,14 @@ class TermineModel {
     if (arbeitszeiten_details !== undefined) {
       updates.push('arbeitszeiten_details = ?');
       values.push(arbeitszeiten_details);
+    }
+    if (startzeit !== undefined) {
+      updates.push('startzeit = ?');
+      values.push(startzeit);
+    }
+    if (endzeit_berechnet !== undefined) {
+      updates.push('endzeit_berechnet = ?');
+      values.push(endzeit_berechnet);
     }
     if (mitarbeiter_id !== undefined) {
       updates.push('mitarbeiter_id = ?');
@@ -797,6 +806,390 @@ class TermineModel {
       ORDER BY t.split_teil ASC, t.datum ASC
     `;
     return await allAsync(query, [parentId, parentId]);
+  }
+
+  // =====================================================
+  // AUFTRAGSERWEITERUNG FUNKTIONEN
+  // =====================================================
+
+  /**
+   * Erstellt einen Erweiterungs-Termin basierend auf einem bestehenden Termin
+   * @param {number} originalTerminId - ID des Original-Termins
+   * @param {Object} erweiterungsDaten - Daten für die Erweiterung
+   * @returns {Object} Ergebnis mit Erweiterungs-Termin-ID und ggf. verschobenen Terminen
+   */
+  static async erweiterungErstellen(originalTerminId, erweiterungsDaten) {
+    const {
+      neue_arbeit,
+      arbeitszeit_minuten,
+      teile_status,
+      erweiterung_typ,      // 'anschluss', 'morgen', 'datum'
+      datum,                // Zieldatum für 'datum' und 'morgen'
+      uhrzeit,              // Optionale Uhrzeit für 'datum'
+      mitarbeiter_id,       // Optionaler anderer Mitarbeiter
+      ist_gleicher_mitarbeiter  // true = gleicher MA, false = anderer MA
+    } = erweiterungsDaten;
+
+    // Original-Termin laden
+    const originalTermin = await this.getById(originalTerminId);
+    if (!originalTermin) {
+      throw new Error('Original-Termin nicht gefunden');
+    }
+
+    // Neue Termin-Nummer generieren
+    const terminNrResult = await getAsync(`SELECT MAX(CAST(SUBSTR(termin_nr, 3) AS INTEGER)) as max_nr FROM termine WHERE termin_nr LIKE 'T-%'`);
+    const neueNr = (terminNrResult && terminNrResult.max_nr) ? terminNrResult.max_nr + 1 : 1;
+    const terminNr = `T-${String(neueNr).padStart(5, '0')}`;
+
+    let result;
+    let verschobeneTermine = [];
+
+    // IMMER einen separaten Erweiterungs-Termin erstellen
+    const zielMitarbeiterId = mitarbeiter_id || originalTermin.mitarbeiter_id;
+    
+    // Berechne Startzeit und Datum für den neuen Termin
+    let startZeit = uhrzeit;
+    let zielDatum = datum || originalTermin.datum;
+    
+    if (erweiterung_typ === 'anschluss') {
+      // Bei "Im Anschluss": Startzeit = Endzeit des Original-Termins, gleiches Datum
+      startZeit = this.berechneEndzeit(originalTermin.bring_zeit, originalTermin.geschaetzte_zeit);
+      zielDatum = originalTermin.datum;
+    } else if (erweiterung_typ === 'morgen' && !uhrzeit) {
+      // Bei "Morgen" ohne Uhrzeit: Standardzeit 08:00
+      startZeit = '08:00';
+    }
+
+    const insertResult = await runAsync(
+      `INSERT INTO termine (
+        kunde_id, kunde_name, kunde_telefon, kennzeichen,
+        datum, bring_zeit, geschaetzte_zeit, arbeit, umfang,
+        status, mitarbeiter_id, ersatzauto,
+        abholung_typ, abholung_zeit, abholung_details,
+        kontakt_option, teile_status, kilometerstand,
+        arbeitszeiten_details, dringlichkeit, vin, fahrzeugtyp,
+        erweiterung_von_id, ist_erweiterung, erweiterung_typ, termin_nr
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        originalTermin.kunde_id,
+        originalTermin.kunde_name,
+        originalTermin.kunde_telefon,
+        originalTermin.kennzeichen,
+        zielDatum,
+        startZeit || '08:00',
+        arbeitszeit_minuten,
+        neue_arbeit,  // Nur die neue Arbeit, ohne Prefix
+        `Erweiterung zu ${originalTermin.termin_nr || '#' + originalTerminId}: ${neue_arbeit}`,
+        'geplant',
+        zielMitarbeiterId,
+        0, // Kein Ersatzauto für Erweiterung
+        originalTermin.abholung_typ,
+        originalTermin.abholung_zeit,
+        null,
+        originalTermin.kontakt_option,
+        teile_status || 'vorraetig',
+        originalTermin.kilometerstand,
+        null,
+        originalTermin.dringlichkeit,
+        originalTermin.vin,
+        originalTermin.fahrzeugtyp,
+        originalTerminId,  // erweiterung_von_id
+        1,                 // ist_erweiterung
+        erweiterung_typ,   // erweiterung_typ
+        terminNr
+      ]
+    );
+
+    result = {
+      typ: 'neuer_termin',
+      erweiterungs_termin_id: insertResult.lastID,
+      termin_nr: terminNr,
+      original_termin_id: originalTerminId,
+      datum: zielDatum,
+      arbeitszeit: arbeitszeit_minuten,
+      mitarbeiter_id: zielMitarbeiterId
+    };
+
+    return {
+      success: true,
+      ergebnis: result,
+      verschobene_termine: verschobeneTermine
+    };
+  }
+
+  /**
+   * Verschiebt alle Folgetermine eines Mitarbeiters nach hinten
+   * @param {string} datum - Das Datum
+   * @param {number} mitarbeiterId - Der Mitarbeiter
+   * @param {string} abStartzeit - Ab welcher Uhrzeit verschoben werden soll
+   * @param {number} verschiebungMinuten - Um wie viele Minuten verschoben werden soll
+   * @returns {Array} Liste der verschobenen Termine
+   */
+  static async verschiebeFollgetermine(datum, mitarbeiterId, abStartzeit, verschiebungMinuten) {
+    // Alle Termine des Mitarbeiters an dem Tag ab der Startzeit laden
+    const folgetermine = await allAsync(
+      `SELECT id, bring_zeit, geschaetzte_zeit, termin_nr, kunde_name
+       FROM termine 
+       WHERE datum = ? 
+         AND mitarbeiter_id = ? 
+         AND bring_zeit >= ?
+         AND status != 'abgeschlossen'
+         AND geloescht_am IS NULL
+       ORDER BY bring_zeit ASC`,
+      [datum, mitarbeiterId, abStartzeit]
+    );
+
+    const verschoben = [];
+
+    for (const termin of folgetermine) {
+      const alteBringzeit = termin.bring_zeit;
+      const neueBringzeit = this.addMinutesToTime(alteBringzeit, verschiebungMinuten);
+
+      await runAsync(
+        `UPDATE termine SET bring_zeit = ? WHERE id = ?`,
+        [neueBringzeit, termin.id]
+      );
+
+      verschoben.push({
+        id: termin.id,
+        termin_nr: termin.termin_nr,
+        kunde_name: termin.kunde_name,
+        alte_zeit: alteBringzeit,
+        neue_zeit: neueBringzeit
+      });
+    }
+
+    return verschoben;
+  }
+
+  /**
+   * Prüft auf Konflikte wenn ein Termin verlängert wird
+   * @param {number} terminId - Der zu verlängernde Termin
+   * @param {number} zusaetzlicheMinuten - Zusätzliche Zeit
+   * @returns {Object} Konflikt-Informationen
+   */
+  static async pruefeErweiterungsKonflikte(terminId, zusaetzlicheMinuten) {
+    const termin = await this.getById(terminId);
+    if (!termin) {
+      throw new Error('Termin nicht gefunden');
+    }
+
+    const endzeitAktuell = this.berechneEndzeit(termin.bring_zeit, termin.geschaetzte_zeit);
+    const endzeitNeu = this.berechneEndzeit(termin.bring_zeit, (termin.geschaetzte_zeit || 0) + zusaetzlicheMinuten);
+
+    // Suche nach Terminen die kollidieren würden
+    const konflikte = await allAsync(
+      `SELECT t.id, t.termin_nr, t.bring_zeit, t.geschaetzte_zeit, 
+              t.kunde_name, t.kennzeichen, m.name as mitarbeiter_name
+       FROM termine t
+       LEFT JOIN mitarbeiter m ON t.mitarbeiter_id = m.id
+       WHERE t.datum = ?
+         AND t.mitarbeiter_id = ?
+         AND t.id != ?
+         AND t.bring_zeit >= ?
+         AND t.bring_zeit < ?
+         AND t.status != 'abgeschlossen'
+         AND t.geloescht_am IS NULL
+       ORDER BY t.bring_zeit ASC`,
+      [termin.datum, termin.mitarbeiter_id, terminId, endzeitAktuell, endzeitNeu]
+    );
+
+    // Alle Folgetermine die verschoben werden müssten
+    const folgetermine = await allAsync(
+      `SELECT t.id, t.termin_nr, t.bring_zeit, t.geschaetzte_zeit,
+              t.kunde_name, t.kennzeichen
+       FROM termine t
+       WHERE t.datum = ?
+         AND t.mitarbeiter_id = ?
+         AND t.id != ?
+         AND t.bring_zeit >= ?
+         AND t.status != 'abgeschlossen'
+         AND t.geloescht_am IS NULL
+       ORDER BY t.bring_zeit ASC`,
+      [termin.datum, termin.mitarbeiter_id, terminId, endzeitAktuell]
+    );
+
+    return {
+      hat_konflikte: konflikte.length > 0,
+      direkte_konflikte: konflikte,
+      folgetermine_zum_verschieben: folgetermine,
+      aktuelle_endzeit: endzeitAktuell,
+      neue_endzeit: endzeitNeu,
+      original_termin: {
+        id: termin.id,
+        termin_nr: termin.termin_nr,
+        bring_zeit: termin.bring_zeit,
+        geschaetzte_zeit: termin.geschaetzte_zeit,
+        mitarbeiter_id: termin.mitarbeiter_id,
+        datum: termin.datum
+      }
+    };
+  }
+
+  /**
+   * Findet verfügbare Mitarbeiter für einen bestimmten Zeitraum
+   * @param {string} datum - Das Datum
+   * @param {string} startzeit - Startzeit (HH:MM)
+   * @param {number} dauerMinuten - Dauer in Minuten
+   * @returns {Array} Liste verfügbarer Mitarbeiter mit freien Slots
+   */
+  static async findeVerfuegbareMitarbeiter(datum, startzeit, dauerMinuten) {
+    const MitarbeiterModel = require('./mitarbeiterModel');
+    const AbwesenheitenModel = require('./abwesenheitenModel');
+    
+    // Alle aktiven Mitarbeiter laden
+    const alleMitarbeiter = await MitarbeiterModel.getAktive();
+    
+    // Abwesenheiten für das Datum laden
+    const abwesenheiten = await AbwesenheitenModel.getByDateRange(datum, datum);
+    const abwesendeIds = new Set(abwesenheiten.filter(a => a.mitarbeiter_id).map(a => a.mitarbeiter_id));
+    
+    const verfuegbare = [];
+    
+    for (const ma of alleMitarbeiter) {
+      if (abwesendeIds.has(ma.id)) continue;
+      
+      // Termine des Mitarbeiters an dem Tag laden
+      const termine = await allAsync(
+        `SELECT bring_zeit, geschaetzte_zeit 
+         FROM termine 
+         WHERE datum = ? AND mitarbeiter_id = ? AND status != 'abgeschlossen' AND geloescht_am IS NULL
+         ORDER BY bring_zeit ASC`,
+        [datum, ma.id]
+      );
+      
+      // Berechne belegte Zeitslots
+      const belegteSlots = termine.map(t => ({
+        start: t.bring_zeit,
+        ende: this.berechneEndzeit(t.bring_zeit, t.geschaetzte_zeit)
+      }));
+      
+      // Prüfe ob der gewünschte Zeitraum frei ist
+      const gewuenschteEndzeit = this.berechneEndzeit(startzeit, dauerMinuten);
+      const istFrei = !belegteSlots.some(slot => 
+        (startzeit < slot.ende && gewuenschteEndzeit > slot.start)
+      );
+      
+      // Finde nächsten freien Slot
+      let naechsterFreierSlot = startzeit;
+      const arbeitsbeginn = '08:00';
+      const arbeitsende = this.berechneEndzeit(arbeitsbeginn, (ma.arbeitsstunden_pro_tag || 8) * 60);
+      
+      if (!istFrei) {
+        // Sortiere Slots und finde Lücke
+        const sortierteSlots = [...belegteSlots].sort((a, b) => a.start.localeCompare(b.start));
+        
+        for (let i = 0; i < sortierteSlots.length; i++) {
+          const slotEnde = sortierteSlots[i].ende;
+          const naechsterStart = sortierteSlots[i + 1]?.start || arbeitsende;
+          
+          if (slotEnde >= startzeit) {
+            const luecke = this.zeitDifferenzMinuten(slotEnde, naechsterStart);
+            if (luecke >= dauerMinuten) {
+              naechsterFreierSlot = slotEnde;
+              break;
+            }
+          }
+        }
+      }
+      
+      // Berechne Restkapazität
+      const gesamtBelegt = termine.reduce((sum, t) => sum + (t.geschaetzte_zeit || 0), 0);
+      const kapazitaet = (ma.arbeitsstunden_pro_tag || 8) * 60;
+      const restkapazitaet = kapazitaet - gesamtBelegt;
+      
+      verfuegbare.push({
+        id: ma.id,
+        name: ma.name,
+        ist_sofort_verfuegbar: istFrei,
+        naechster_freier_slot: naechsterFreierSlot,
+        restkapazitaet_minuten: restkapazitaet,
+        arbeitsstunden_pro_tag: ma.arbeitsstunden_pro_tag || 8
+      });
+    }
+    
+    // Sortiere: Sofort verfügbare zuerst, dann nach Restkapazität
+    return verfuegbare.sort((a, b) => {
+      if (a.ist_sofort_verfuegbar !== b.ist_sofort_verfuegbar) {
+        return a.ist_sofort_verfuegbar ? -1 : 1;
+      }
+      return b.restkapazitaet_minuten - a.restkapazitaet_minuten;
+    });
+  }
+
+  /**
+   * Lädt alle Erweiterungen eines Termins
+   * @param {number} terminId - Original-Termin-ID
+   * @returns {Array} Liste der Erweiterungs-Termine
+   */
+  static async getErweiterungen(terminId) {
+    const query = `
+      SELECT t.*,
+             COALESCE(k.name, t.kunde_name) as kunde_name,
+             COALESCE(k.telefon, t.kunde_telefon) as kunde_telefon,
+             m.name as mitarbeiter_name
+      FROM termine t
+      LEFT JOIN kunden k ON t.kunde_id = k.id
+      LEFT JOIN mitarbeiter m ON t.mitarbeiter_id = m.id
+      WHERE t.erweiterung_von_id = ? AND t.geloescht_am IS NULL
+      ORDER BY t.datum ASC, t.bring_zeit ASC
+    `;
+    return await allAsync(query, [terminId]);
+  }
+
+  /**
+   * Zählt Erweiterungen eines Termins
+   * @param {number} terminId - Original-Termin-ID
+   * @returns {number} Anzahl der Erweiterungen
+   */
+  static async countErweiterungen(terminId) {
+    const result = await getAsync(
+      `SELECT COUNT(*) as count FROM termine WHERE erweiterung_von_id = ? AND geloescht_am IS NULL`,
+      [terminId]
+    );
+    return result ? result.count : 0;
+  }
+
+  // Hilfsfunktion: Berechnet Endzeit aus Startzeit und Dauer
+  static berechneEndzeit(startzeit, dauerMinuten) {
+    if (!startzeit) return '08:00';
+    const [h, m] = startzeit.split(':').map(Number);
+    const gesamtMinuten = h * 60 + m + (dauerMinuten || 0);
+    const endH = Math.floor(gesamtMinuten / 60);
+    const endM = gesamtMinuten % 60;
+    return `${String(endH).padStart(2, '0')}:${String(endM).padStart(2, '0')}`;
+  }
+
+  // Hilfsfunktion: Addiert Minuten zu einer Uhrzeit
+  static addMinutesToTime(zeit, minuten) {
+    if (!zeit) return '08:00';
+    const [h, m] = zeit.split(':').map(Number);
+    const gesamtMinuten = h * 60 + m + minuten;
+    const neueH = Math.floor(gesamtMinuten / 60);
+    const neueM = gesamtMinuten % 60;
+    return `${String(neueH).padStart(2, '0')}:${String(neueM).padStart(2, '0')}`;
+  }
+
+  // Hilfsfunktion: Differenz zwischen zwei Uhrzeiten in Minuten
+  static zeitDifferenzMinuten(zeit1, zeit2) {
+    const [h1, m1] = zeit1.split(':').map(Number);
+    const [h2, m2] = zeit2.split(':').map(Number);
+    return (h2 * 60 + m2) - (h1 * 60 + m1);
+  }
+
+  /**
+   * Findet den nächsten freien Arbeitstag (überspringt Sonntage)
+   * @param {string} datum - Ausgangsdatum
+   * @returns {string} Nächster Arbeitstag im Format YYYY-MM-DD
+   */
+  static naechsterArbeitstag(datum) {
+    const d = new Date(datum + 'T12:00:00');
+    d.setDate(d.getDate() + 1);
+    // Sonntag überspringen
+    if (d.getDay() === 0) {
+      d.setDate(d.getDate() + 1);
+    }
+    return d.toISOString().split('T')[0];
   }
 }
 

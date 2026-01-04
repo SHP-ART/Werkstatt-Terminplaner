@@ -201,6 +201,45 @@ class TermineService {
   static async getSplitTermine(id) {
     return ApiService.get(`/termine/${id}/split-termine`);
   }
+
+  // =====================================================
+  // AUFTRAGSERWEITERUNG FUNKTIONEN
+  // =====================================================
+
+  /**
+   * Prüft Konflikte für eine geplante Erweiterung
+   */
+  static async pruefeErweiterungsKonflikte(terminId, minuten) {
+    return ApiService.get(`/termine/${terminId}/erweiterung/konflikte?minuten=${minuten}`);
+  }
+
+  /**
+   * Findet verfügbare Mitarbeiter für einen Zeitraum
+   */
+  static async findeVerfuegbareMitarbeiter(datum, startzeit, dauer) {
+    return ApiService.get(`/termine/erweiterung/verfuegbare-mitarbeiter?datum=${datum}&startzeit=${startzeit}&dauer=${dauer}`);
+  }
+
+  /**
+   * Erstellt eine Auftragserweiterung
+   */
+  static async erweiterungErstellen(terminId, erweiterungsDaten) {
+    return ApiService.post(`/termine/${terminId}/erweiterung`, erweiterungsDaten);
+  }
+
+  /**
+   * Lädt alle Erweiterungen eines Termins
+   */
+  static async getErweiterungen(terminId) {
+    return ApiService.get(`/termine/${terminId}/erweiterungen`);
+  }
+
+  /**
+   * Zählt Erweiterungen eines Termins
+   */
+  static async countErweiterungen(terminId) {
+    return ApiService.get(`/termine/${terminId}/erweiterungen/count`);
+  }
 }
 
 class ArbeitszeitenService {

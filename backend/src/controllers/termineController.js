@@ -5,6 +5,104 @@ const ArbeitszeitenModel = require('../models/arbeitszeitenModel');
 const MitarbeiterModel = require('../models/mitarbeiterModel');
 const LehrlingeModel = require('../models/lehrlingeModel');
 
+// =====================================================
+// HILFSFUNKTION: Berechnet Endzeit für einen Termin
+// =====================================================
+async function berechneEndzeitFuerTermin(termin, arbeitszeitenDetails) {
+  try {
+    // Lade Einstellungen
+    const einstellungen = await EinstellungenModel.getWerkstatt();
+    const nebenzeitProzent = einstellungen.nebenzeit_prozent || 0;
+    
+    // Lade Mitarbeiter und Lehrlinge für Aufgabenbewältigung
+    const mitarbeiter = await MitarbeiterModel.getAll();
+    const lehrlinge = await LehrlingeModel.getAll();
+    const mitarbeiterMap = {};
+    const lehrlingeMap = {};
+    mitarbeiter.forEach(m => mitarbeiterMap[m.id] = m);
+    lehrlinge.forEach(l => lehrlingeMap[l.id] = l);
+    
+    let gesamtMinuten = 0;
+    let fruehesteStartzeit = null;
+    
+    // Parse arbeitszeiten_details
+    let details = null;
+    if (arbeitszeitenDetails) {
+      try {
+        details = typeof arbeitszeitenDetails === 'string' 
+          ? JSON.parse(arbeitszeitenDetails) 
+          : arbeitszeitenDetails;
+      } catch (e) {
+        details = null;
+      }
+    }
+    
+    if (details) {
+      for (const [key, value] of Object.entries(details)) {
+        // Überspringe Meta-Felder
+        if (key.startsWith('_')) {
+          if (key === '_startzeit' && value) {
+            fruehesteStartzeit = value;
+          }
+          continue;
+        }
+        
+        let zeitMinuten = typeof value === 'object' ? (value.zeit || 0) : value;
+        
+        // Globale Nebenzeit anwenden
+        if (nebenzeitProzent > 0 && zeitMinuten > 0) {
+          zeitMinuten = zeitMinuten * (1 + nebenzeitProzent / 100);
+        }
+        
+        // Individuelle Faktoren (Lehrling Aufgabenbewältigung)
+        if (typeof value === 'object' && zeitMinuten > 0) {
+          if (value.type === 'lehrling' && value.mitarbeiter_id) {
+            const lehr = lehrlingeMap[value.mitarbeiter_id];
+            if (lehr && lehr.aufgabenbewaeltigung_prozent && lehr.aufgabenbewaeltigung_prozent !== 100) {
+              zeitMinuten = zeitMinuten * (lehr.aufgabenbewaeltigung_prozent / 100);
+            }
+          }
+        }
+        
+        gesamtMinuten += zeitMinuten;
+        
+        // Startzeit aus Arbeit
+        if (typeof value === 'object' && value.startzeit && value.startzeit !== '') {
+          if (!fruehesteStartzeit || value.startzeit < fruehesteStartzeit) {
+            fruehesteStartzeit = value.startzeit;
+          }
+        }
+      }
+    } else if (termin.geschaetzte_zeit) {
+      // Fallback auf geschätzte Zeit
+      gesamtMinuten = termin.geschaetzte_zeit;
+      if (nebenzeitProzent > 0) {
+        gesamtMinuten = gesamtMinuten * (1 + nebenzeitProzent / 100);
+      }
+    }
+    
+    // Startzeit bestimmen
+    const startzeit = fruehesteStartzeit || termin.startzeit || termin.bring_zeit;
+    
+    if (!startzeit || gesamtMinuten <= 0) {
+      return { startzeit: startzeit || null, endzeit: null };
+    }
+    
+    // Endzeit berechnen
+    const [startH, startM] = startzeit.split(':').map(Number);
+    const startInMinuten = startH * 60 + startM;
+    const endInMinuten = startInMinuten + Math.round(gesamtMinuten);
+    const endH = Math.floor(endInMinuten / 60);
+    const endM = endInMinuten % 60;
+    const endzeit = `${String(endH).padStart(2, '0')}:${String(endM).padStart(2, '0')}`;
+    
+    return { startzeit, endzeit };
+  } catch (e) {
+    console.error('Fehler bei Endzeit-Berechnung:', e);
+    return { startzeit: null, endzeit: null };
+  }
+}
+
 // Einfacher In-Memory-Cache für Auslastungsdaten
 const auslastungCache = new Map();
 const CACHE_TTL = 5 * 60 * 1000; // 5 Minuten
@@ -473,6 +571,14 @@ class TermineController {
       
       if (!termin) {
         return res.status(404).json({ error: 'Termin nicht gefunden' });
+      }
+
+      // Wenn arbeitszeiten_details geändert wird, berechne Endzeit neu
+      if (updateData.arbeitszeiten_details !== undefined) {
+        const terminMitUpdate = { ...termin, ...updateData };
+        const { startzeit, endzeit } = await berechneEndzeitFuerTermin(terminMitUpdate, updateData.arbeitszeiten_details);
+        if (startzeit) updateData.startzeit = startzeit;
+        if (endzeit) updateData.endzeit_berechnet = endzeit;
       }
 
       const result = await TermineModel.update(req.params.id, updateData);
@@ -1193,6 +1299,166 @@ class TermineController {
       const { id } = req.params;
       const termine = await TermineModel.getSplitTermine(id);
       res.json(termine);
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  }
+
+  // =====================================================
+  // AUFTRAGSERWEITERUNG ENDPOINTS
+  // =====================================================
+
+  /**
+   * Prüft Konflikte für eine geplante Erweiterung
+   * GET /termine/:id/erweiterung/konflikte?minuten=30
+   */
+  static async pruefeErweiterungsKonflikte(req, res) {
+    try {
+      const { id } = req.params;
+      const { minuten } = req.query;
+
+      if (!minuten || isNaN(parseInt(minuten))) {
+        return res.status(400).json({ error: 'Minuten müssen angegeben werden' });
+      }
+
+      const konflikte = await TermineModel.pruefeErweiterungsKonflikte(id, parseInt(minuten));
+      res.json(konflikte);
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  }
+
+  /**
+   * Findet verfügbare Mitarbeiter für einen Zeitraum
+   * GET /termine/erweiterung/verfuegbare-mitarbeiter?datum=2026-01-05&startzeit=10:00&dauer=60
+   */
+  static async findeVerfuegbareMitarbeiter(req, res) {
+    try {
+      const { datum, startzeit, dauer } = req.query;
+
+      if (!datum || !startzeit || !dauer) {
+        return res.status(400).json({ error: 'Datum, Startzeit und Dauer müssen angegeben werden' });
+      }
+
+      const verfuegbare = await TermineModel.findeVerfuegbareMitarbeiter(
+        datum, 
+        startzeit, 
+        parseInt(dauer)
+      );
+      res.json(verfuegbare);
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  }
+
+  /**
+   * Erstellt eine Auftragserweiterung
+   * POST /termine/:id/erweiterung
+   */
+  static async erweiterungErstellen(req, res) {
+    try {
+      const { id } = req.params;
+      const {
+        neue_arbeit,
+        arbeitszeit_minuten,
+        teile_status,
+        erweiterung_typ,
+        datum,
+        uhrzeit,
+        mitarbeiter_id,
+        ist_gleicher_mitarbeiter,
+        folgetermine_verschieben
+      } = req.body;
+
+      // Validierung
+      if (!neue_arbeit || !neue_arbeit.trim()) {
+        return res.status(400).json({ error: 'Neue Arbeit muss angegeben werden' });
+      }
+      if (!arbeitszeit_minuten || arbeitszeit_minuten <= 0) {
+        return res.status(400).json({ error: 'Arbeitszeit muss größer als 0 sein' });
+      }
+      if (!erweiterung_typ || !['anschluss', 'morgen', 'datum'].includes(erweiterung_typ)) {
+        return res.status(400).json({ error: 'Ungültiger Erweiterungstyp' });
+      }
+
+      // Original-Termin laden für Datum und Cache-Invalidierung
+      const originalTermin = await TermineModel.getById(id);
+      if (!originalTermin) {
+        return res.status(404).json({ error: 'Original-Termin nicht gefunden' });
+      }
+
+      // Bestimme Zieldatum
+      let zielDatum = datum;
+      if (erweiterung_typ === 'anschluss') {
+        zielDatum = originalTermin.datum;
+      } else if (erweiterung_typ === 'morgen') {
+        zielDatum = TermineModel.naechsterArbeitstag(originalTermin.datum);
+      }
+
+      // Bei "Im Anschluss" und gleicher Mitarbeiter: Folgetermine verschieben falls gewünscht
+      let verschobeneTermine = [];
+      if (erweiterung_typ === 'anschluss' && ist_gleicher_mitarbeiter && folgetermine_verschieben) {
+        const endzeit = TermineModel.berechneEndzeit(originalTermin.bring_zeit, originalTermin.geschaetzte_zeit);
+        verschobeneTermine = await TermineModel.verschiebeFollgetermine(
+          originalTermin.datum,
+          originalTermin.mitarbeiter_id,
+          endzeit,
+          arbeitszeit_minuten
+        );
+      }
+
+      // Erweiterung erstellen
+      const result = await TermineModel.erweiterungErstellen(id, {
+        neue_arbeit: neue_arbeit.trim(),
+        arbeitszeit_minuten: parseInt(arbeitszeit_minuten),
+        teile_status,
+        erweiterung_typ,
+        datum: zielDatum,
+        uhrzeit,
+        mitarbeiter_id,
+        ist_gleicher_mitarbeiter
+      });
+
+      // Cache invalidieren
+      invalidateAuslastungCache(originalTermin.datum);
+      if (zielDatum && zielDatum !== originalTermin.datum) {
+        invalidateAuslastungCache(zielDatum);
+      }
+
+      res.json({
+        message: 'Auftragserweiterung erfolgreich erstellt',
+        ...result,
+        verschobene_termine: verschobeneTermine
+      });
+    } catch (err) {
+      console.error('Fehler bei Erweiterungserstellung:', err);
+      res.status(500).json({ error: err.message });
+    }
+  }
+
+  /**
+   * Lädt alle Erweiterungen eines Termins
+   * GET /termine/:id/erweiterungen
+   */
+  static async getErweiterungen(req, res) {
+    try {
+      const { id } = req.params;
+      const erweiterungen = await TermineModel.getErweiterungen(id);
+      res.json(erweiterungen);
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  }
+
+  /**
+   * Zählt Erweiterungen eines Termins
+   * GET /termine/:id/erweiterungen/count
+   */
+  static async countErweiterungen(req, res) {
+    try {
+      const { id } = req.params;
+      const count = await TermineModel.countErweiterungen(id);
+      res.json({ count });
     } catch (err) {
       res.status(500).json({ error: err.message });
     }

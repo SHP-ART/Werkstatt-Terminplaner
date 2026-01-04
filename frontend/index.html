@@ -1578,17 +1578,49 @@
                     <div class="zeitleiste-header">
                         <div class="zeitleiste-label-col">Mitarbeiter</div>
                         <div class="zeitleiste-stunden">
-                            <span class="stunde-marker">8</span>
-                            <span class="stunde-marker">9</span>
-                            <span class="stunde-marker">10</span>
-                            <span class="stunde-marker">11</span>
-                            <span class="stunde-marker">12</span>
-                            <span class="stunde-marker">13</span>
-                            <span class="stunde-marker">14</span>
-                            <span class="stunde-marker">15</span>
-                            <span class="stunde-marker">16</span>
-                            <span class="stunde-marker">17</span>
-                            <span class="stunde-marker">18</span>
+                            <div class="stunde-marker-group">
+                                <span class="stunde-marker">8</span>
+                                <span class="halbe-stunde">:30</span>
+                            </div>
+                            <div class="stunde-marker-group">
+                                <span class="stunde-marker">9</span>
+                                <span class="halbe-stunde">:30</span>
+                            </div>
+                            <div class="stunde-marker-group">
+                                <span class="stunde-marker">10</span>
+                                <span class="halbe-stunde">:30</span>
+                            </div>
+                            <div class="stunde-marker-group">
+                                <span class="stunde-marker">11</span>
+                                <span class="halbe-stunde">:30</span>
+                            </div>
+                            <div class="stunde-marker-group">
+                                <span class="stunde-marker">12</span>
+                                <span class="halbe-stunde">:30</span>
+                            </div>
+                            <div class="stunde-marker-group">
+                                <span class="stunde-marker">13</span>
+                                <span class="halbe-stunde">:30</span>
+                            </div>
+                            <div class="stunde-marker-group">
+                                <span class="stunde-marker">14</span>
+                                <span class="halbe-stunde">:30</span>
+                            </div>
+                            <div class="stunde-marker-group">
+                                <span class="stunde-marker">15</span>
+                                <span class="halbe-stunde">:30</span>
+                            </div>
+                            <div class="stunde-marker-group">
+                                <span class="stunde-marker">16</span>
+                                <span class="halbe-stunde">:30</span>
+                            </div>
+                            <div class="stunde-marker-group">
+                                <span class="stunde-marker">17</span>
+                                <span class="halbe-stunde">:30</span>
+                            </div>
+                            <div class="stunde-marker-group stunde-marker-last">
+                                <span class="stunde-marker">18</span>
+                            </div>
                         </div>
                     </div>
                     
@@ -2092,6 +2124,184 @@
                 <button class="btn btn-secondary" id="terminSplitBtn" onclick="app.openSplitModal()">
                     ✂️ Aufteilen
                 </button>
+                <button class="btn btn-primary" id="terminErweiternBtn" onclick="app.openErweiterungModal()">
+                    ➕ Auftrag erweitern
+                </button>
+                <button class="btn btn-danger" id="terminLoeschenBtn" onclick="app.deleteTerminFromDetails()">
+                    🗑️ Löschen
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Auftragserweiterung Modal -->
+    <div id="erweiterungModal" class="modal">
+        <div class="modal-content erweiterung-modal-content">
+            <span class="close" id="closeErweiterungModal">&times;</span>
+            <h3>➕ Auftrag erweitern</h3>
+            
+            <div id="erweiterungModalBody">
+                <!-- Original-Termin Info -->
+                <div class="erweiterung-info-box" id="erweiterungOriginalInfo">
+                    <strong>🎫 Original-Termin</strong>
+                    <div id="erweiterungTerminDetails"></div>
+                </div>
+
+                <!-- Neue Arbeit eingeben -->
+                <div class="form-section erweiterung-section">
+                    <h4>🔧 Neue Arbeit hinzufügen</h4>
+                    <div class="form-group">
+                        <label for="erweiterungNeueArbeit">Arbeitsbeschreibung *</label>
+                        <textarea id="erweiterungNeueArbeit" rows="3" placeholder="z.B. Bremsen hinten wechseln, Ölwechsel..."></textarea>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="erweiterungArbeitszeit">Arbeitszeit (Stunden) *</label>
+                            <input type="number" id="erweiterungArbeitszeit" min="0.1" step="0.25" value="0.5" 
+                                   oninput="app.updateErweiterungVorschau()">
+                        </div>
+                        <div class="form-group">
+                            <label for="erweiterungTeileStatus">Teile-Status</label>
+                            <select id="erweiterungTeileStatus">
+                                <option value="vorraetig">✅ Vorrätig</option>
+                                <option value="bestellen">🛒 Müssen bestellt werden</option>
+                                <option value="bestellt">📦 Bereits bestellt</option>
+                                <option value="eingetroffen">📬 Eingetroffen</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Arbeitsbeginn Optionen -->
+                <div class="form-section erweiterung-section">
+                    <h4>📅 Wann soll die Arbeit erledigt werden?</h4>
+                    
+                    <div class="erweiterung-optionen">
+                        <!-- Option 1: Im Anschluss -->
+                        <div class="erweiterung-option" id="optionAnschluss">
+                            <input type="radio" name="erweiterungTyp" id="typAnschluss" value="anschluss" checked 
+                                   onchange="app.updateErweiterungTyp()">
+                            <label for="typAnschluss">
+                                <span class="option-icon">⏩</span>
+                                <span class="option-title">Im Anschluss</span>
+                                <span class="option-desc">Direkt nach dem aktuellen Termin</span>
+                            </label>
+                        </div>
+
+                        <!-- Option 2: Morgen -->
+                        <div class="erweiterung-option" id="optionMorgen">
+                            <input type="radio" name="erweiterungTyp" id="typMorgen" value="morgen"
+                                   onchange="app.updateErweiterungTyp()">
+                            <label for="typMorgen">
+                                <span class="option-icon">🌅</span>
+                                <span class="option-title">Morgen</span>
+                                <span class="option-desc" id="morgenDatumAnzeige">Nächster Arbeitstag</span>
+                            </label>
+                        </div>
+
+                        <!-- Option 3: Datum wählen -->
+                        <div class="erweiterung-option" id="optionDatum">
+                            <input type="radio" name="erweiterungTyp" id="typDatum" value="datum"
+                                   onchange="app.updateErweiterungTyp()">
+                            <label for="typDatum">
+                                <span class="option-icon">📆</span>
+                                <span class="option-title">Datum & Uhrzeit</span>
+                                <span class="option-desc">Selbst festlegen</span>
+                            </label>
+                        </div>
+                    </div>
+
+                    <!-- Datum/Uhrzeit Auswahl (nur bei Option 3) -->
+                    <div class="erweiterung-datum-auswahl" id="erweiterungDatumAuswahl" style="display: none;">
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="erweiterungDatum">Datum *</label>
+                                <input type="date" id="erweiterungDatum">
+                            </div>
+                            <div class="form-group">
+                                <label for="erweiterungUhrzeit">Uhrzeit (optional)</label>
+                                <input type="time" id="erweiterungUhrzeit" placeholder="Erste freie Zeit">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Konflikt-Anzeige -->
+                <div class="erweiterung-konflikte" id="erweiterungKonflikte" style="display: none;">
+                    <div class="konflikt-header">
+                        <span class="konflikt-icon">⚠️</span>
+                        <span class="konflikt-title">Terminkonflikt erkannt</span>
+                    </div>
+                    <div class="konflikt-body" id="konfliktDetails"></div>
+                    
+                    <!-- Mitarbeiter-Auswahl bei Konflikt -->
+                    <div class="konflikt-optionen" id="konfliktOptionen">
+                        <div class="konflikt-option">
+                            <input type="radio" name="konfliktLoesung" id="loesungGleicherMA" value="gleicher" checked
+                                   onchange="app.updateKonfliktLoesung()">
+                            <label for="loesungGleicherMA">
+                                <strong>Gleicher Mitarbeiter</strong>
+                                <span>Alle Folgetermine werden verschoben</span>
+                            </label>
+                        </div>
+                        <div class="konflikt-option">
+                            <input type="radio" name="konfliktLoesung" id="loesungAndererMA" value="anderer"
+                                   onchange="app.updateKonfliktLoesung()">
+                            <label for="loesungAndererMA">
+                                <strong>Anderer Mitarbeiter</strong>
+                                <span>Erweiterung als separater Termin</span>
+                            </label>
+                        </div>
+                    </div>
+                    
+                    <!-- Verfügbare Mitarbeiter (wenn anderer MA gewählt) -->
+                    <div class="verfuegbare-mitarbeiter" id="verfuegbareMitarbeiter" style="display: none;">
+                        <label>Verfügbare Mitarbeiter:</label>
+                        <select id="erweiterungMitarbeiterSelect">
+                            <option value="">Wird geladen...</option>
+                        </select>
+                        <div class="verfuegbarkeit-info" id="verfuegbarkeitInfo"></div>
+                    </div>
+                </div>
+
+                <!-- Smart-Vorschläge -->
+                <div class="erweiterung-vorschlaege" id="erweiterungVorschlaege" style="display: none;">
+                    <h5>💡 Vorschläge</h5>
+                    <div id="vorschlaegeContent"></div>
+                </div>
+
+                <!-- Vorschau -->
+                <div class="erweiterung-vorschau" id="erweiterungVorschau">
+                    <h5>📋 Vorschau</h5>
+                    <div class="vorschau-grid" id="vorschauContent">
+                        <div class="vorschau-item">
+                            <span class="vorschau-label">Neue Arbeitszeit</span>
+                            <span class="vorschau-value" id="vorschauArbeitszeit">30 Min</span>
+                        </div>
+                        <div class="vorschau-item">
+                            <span class="vorschau-label">Geplant für</span>
+                            <span class="vorschau-value" id="vorschauDatum">--</span>
+                        </div>
+                        <div class="vorschau-item">
+                            <span class="vorschau-label">Mitarbeiter</span>
+                            <span class="vorschau-value" id="vorschauMitarbeiter">--</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Buttons -->
+                <div class="erweiterung-actions">
+                    <button class="btn btn-secondary" onclick="app.closeErweiterungModal()">
+                        Abbrechen
+                    </button>
+                    <button class="btn btn-primary btn-sparkle" id="erweiterungSpeichernBtn" onclick="app.speichereErweiterung()">
+                        <svg class="sparkle-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M12 2L14.09 8.26L20 9.27L15.55 13.97L16.91 20L12 16.9L7.09 20L8.45 13.97L4 9.27L9.91 8.26L12 2Z" fill="currentColor"/>
+                        </svg>
+                        <span class="btn-text">Erweiterung erstellen</span>
+                        <div class="dots-border"></div>
+                    </button>
+                </div>
             </div>
         </div>
     </div>
@@ -2108,9 +2318,18 @@
                 <span class="icon">✂️</span>
                 <span>Termin aufteilen</span>
             </button>
+            <button class="zeitleiste-kontextmenu-item" onclick="app.zeitleisteKontextErweitern()">
+                <span class="icon">➕</span>
+                <span>Auftrag erweitern</span>
+            </button>
             <button class="zeitleiste-kontextmenu-item" onclick="app.zeitleisteKontextDetails()">
                 <span class="icon">📋</span>
                 <span>Termin-Details</span>
+            </button>
+            <div style="border-top: 1px solid #e0e0e0; margin: 5px 0;"></div>
+            <button class="zeitleiste-kontextmenu-item zeitleiste-kontextmenu-item-danger" onclick="app.zeitleisteKontextLoeschen()">
+                <span class="icon">🗑️</span>
+                <span>Löschen</span>
             </button>
         </div>
     </div>

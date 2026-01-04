@@ -14,6 +14,13 @@ router.post('/:id/schwebend', TermineController.setSchwebend);
 router.post('/:id/split', TermineController.splitTermin);
 router.get('/:id/split-termine', TermineController.getSplitTermine);
 
+// Auftragserweiterung Routes
+router.get('/erweiterung/verfuegbare-mitarbeiter', TermineController.findeVerfuegbareMitarbeiter);
+router.get('/:id/erweiterung/konflikte', TermineController.pruefeErweiterungsKonflikte);
+router.post('/:id/erweiterung', TermineController.erweiterungErstellen);
+router.get('/:id/erweiterungen', TermineController.getErweiterungen);
+router.get('/:id/erweiterungen/count', TermineController.countErweiterungen);
+
 // Andere spezifische Routes
 router.get('/verfuegbarkeit', TermineController.checkAvailability);
 router.post('/validate', TermineController.validate);

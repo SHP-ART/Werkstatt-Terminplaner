@@ -6,7 +6,20 @@ class App {
     this.termineById = {};
     this.autocompleteSelectedIndex = -1;
     this.uhrzeitInterval = null;
+    
+    // Test-Datum Override: Setze auf null für echtes Datum, oder z.B. '2026-01-04' für Tests
+    // Kann auch über Browser-Konsole gesetzt werden: app.testDatum = '2026-01-05'
+    this.testDatum = null; // null = echtes Systemdatum verwenden
+    
     this.init();
+  }
+
+  // Gibt das aktuelle "Heute"-Datum zurück (für Tests überschreibbar)
+  getToday() {
+    if (this.testDatum) {
+      return new Date(this.testDatum + 'T12:00:00');
+    }
+    return new Date();
   }
 
   // Hilfsfunktion: Datum lokal formatieren (YYYY-MM-DD) ohne Zeitzonenkonvertierung
@@ -456,6 +469,55 @@ class App {
       closeSplitModal.addEventListener('click', () => this.closeSplitModal());
     }
 
+    // Erweiterungs-Modal Event-Listener
+    const closeErweiterungModal = document.getElementById('closeErweiterungModal');
+    if (closeErweiterungModal) {
+      closeErweiterungModal.addEventListener('click', () => this.closeErweiterungModal());
+    }
+
+    // Erweiterungs-Typ Radio-Buttons
+    const erweiterungTypRadios = document.querySelectorAll('input[name="erweiterungTyp"]');
+    erweiterungTypRadios.forEach(radio => {
+      radio.addEventListener('change', () => this.updateErweiterungTyp());
+    });
+
+    // Erweiterungs-Konfliktlösung Radio-Buttons
+    const konfliktLoesungRadios = document.querySelectorAll('input[name="konfliktLoesung"]');
+    konfliktLoesungRadios.forEach(radio => {
+      radio.addEventListener('change', () => this.updateKonfliktLoesung());
+    });
+
+    // Erweiterungs-Arbeitszeit-Feld
+    const erweiterungArbeitszeit = document.getElementById('erweiterungArbeitszeit');
+    if (erweiterungArbeitszeit) {
+      erweiterungArbeitszeit.addEventListener('change', () => {
+        this.updateErweiterungVorschau();
+        if (document.querySelector('input[name="erweiterungTyp"]:checked')?.value === 'anschluss') {
+          this.pruefeErweiterungsKonflikte();
+        }
+      });
+    }
+
+    // Erweiterungs-Datum-Feld
+    const erweiterungDatum = document.getElementById('erweiterungDatum');
+    if (erweiterungDatum) {
+      erweiterungDatum.addEventListener('change', () => this.updateErweiterungVorschau());
+    }
+
+    // Erweiterungs-Mitarbeiter-Select
+    const erweiterungMitarbeiterSelect = document.getElementById('erweiterungMitarbeiterSelect');
+    if (erweiterungMitarbeiterSelect) {
+      erweiterungMitarbeiterSelect.addEventListener('change', () => this.updateErweiterungVorschau());
+    }
+
+    // Erweiterungs-Speichern-Button - NICHT hier, wird über onclick im HTML aufgerufen
+
+    // Auftrag-erweitern Button im Termin-Details-Modal
+    const terminErweiternBtn = document.getElementById('terminErweiternBtn');
+    if (terminErweiternBtn) {
+      terminErweiternBtn.addEventListener('click', () => this.openErweiterungModal());
+    }
+
     // Modal Phasen Event-Listener
     const modalMehrtaegigCheckbox = document.getElementById('modalMehrtaegigCheckbox');
     if (modalMehrtaegigCheckbox) {
@@ -472,6 +534,7 @@ class App {
       const arbeitszeitenModal = document.getElementById('arbeitszeitenModal');
       const tagesUebersichtModal = document.getElementById('tagesUebersichtModal');
       const splitModal = document.getElementById('terminSplitModal');
+      const erweiterungModal = document.getElementById('erweiterungModal');
       const autocomplete = document.getElementById('arbeitAutocomplete');
       const arbeitEingabe = document.getElementById('arbeitEingabe');
 
@@ -489,6 +552,9 @@ class App {
       }
       if (event.target === splitModal) {
         this.closeSplitModal();
+      }
+      if (event.target === erweiterungModal) {
+        this.closeErweiterungModal();
       }
 
       // Schließe Autocomplete wenn außerhalb geklickt wird
@@ -5063,6 +5129,19 @@ class App {
       ? '<span style="background: #ff9800; color: white; padding: 2px 8px; border-radius: 4px; font-size: 0.85em; margin-left: 10px;">⏸️ Schwebend</span>'
       : '';
     
+    // Verknüpfungs-Badge (Erweiterungen) anzeigen
+    const erweiterungenCount = Object.values(this.termineById).filter(
+      t => t.erweiterung_von_id === termin.id && !t.ist_geloescht
+    ).length;
+    const istErweiterung = termin.ist_erweiterung === 1 || termin.ist_erweiterung === true;
+    
+    let verknuepfungsBadge = '';
+    if (erweiterungenCount > 0) {
+      verknuepfungsBadge = `<span style="background: #1976d2; color: white; padding: 2px 8px; border-radius: 4px; font-size: 0.85em; margin-left: 10px; cursor: pointer;" onclick="app.showVerknuepfteTermine(${termin.id})">🔗 ${erweiterungenCount} Erweiterung(en)</span>`;
+    } else if (istErweiterung) {
+      verknuepfungsBadge = `<span style="background: #0d47a1; color: white; padding: 2px 8px; border-radius: 4px; font-size: 0.85em; margin-left: 10px; cursor: pointer;" onclick="app.showVerknuepfteTermine(${termin.id})">🔗 Erweiterung</span>`;
+    }
+    
     // Split-Info anzeigen wenn vorhanden
     const splitInfo = termin.split_teil 
       ? `<p><strong>Aufgeteilter Termin:</strong> Teil ${termin.split_teil} ${termin.parent_termin_id ? '(Fortsetzung)' : ''}</p>`
@@ -5088,25 +5167,202 @@ class App {
 
     // Berechne Gesamtzeit aus arbeitszeiten_details wenn vorhanden
     let gesamtzeitBerechnet = null;
+    let gesamtzeitMinuten = 0;
+    let fruehesteStartzeit = null;
+    
+    // Lade globale Werkstatt-Einstellungen (Nebenzeit %)
+    let globaleNebenzeitProzent = 0;
+    try {
+      const werkstattEinstellungen = await EinstellungenService.getWerkstatt();
+      globaleNebenzeitProzent = werkstattEinstellungen.nebenzeit_prozent || 0;
+    } catch (e) {
+      console.warn('Konnte Werkstatt-Einstellungen nicht laden:', e);
+    }
+    
+    // Lade Mitarbeiter und Lehrlinge für individuelle Nebenzeit/Aufgabenbewältigung
+    let mitarbeiterMap = {};
+    let lehrlingeMap = {};
+    try {
+      const mitarbeiter = await MitarbeiterService.getAll();
+      const lehrlinge = await LehrlingeService.getAll();
+      mitarbeiter.forEach(m => mitarbeiterMap[m.id] = m);
+      lehrlinge.forEach(l => lehrlingeMap[l.id] = l);
+    } catch (e) {
+      console.warn('Konnte Mitarbeiter/Lehrlinge nicht laden:', e);
+    }
+    
     if (termin.arbeitszeiten_details) {
       try {
         const arbeitszeitenDetails = JSON.parse(termin.arbeitszeiten_details);
         let summeMinuten = 0;
-        const arbeitenListe = this.parseArbeiten(termin.arbeit || '');
         
-        arbeitenListe.forEach(arbeit => {
-          if (arbeitszeitenDetails[arbeit]) {
-            const details = arbeitszeitenDetails[arbeit];
-            const zeitMinuten = typeof details === 'object' ? (details.zeit || 0) : details;
-            summeMinuten += zeitMinuten;
+        // Iteriere über ALLE Einträge in arbeitszeiten_details (inkl. Erweiterungen)
+        for (const [key, value] of Object.entries(arbeitszeitenDetails)) {
+          // Überspringe Meta-Felder
+          if (key.startsWith('_')) {
+            if (key === '_startzeit' && value) {
+              fruehesteStartzeit = value;
+            }
+            continue;
           }
-        });
+          
+          let zeitMinuten = typeof value === 'object' ? (value.zeit || 0) : value;
+          
+          // Wende Nebenzeit/Aufgabenbewältigung an
+          if (typeof value === 'object' && zeitMinuten > 0) {
+            // Globale Nebenzeit immer anwenden
+            if (globaleNebenzeitProzent > 0) {
+              zeitMinuten = zeitMinuten * (1 + globaleNebenzeitProzent / 100);
+            }
+            
+            // Zusätzlich individuelle Faktoren
+            if (value.type === 'mitarbeiter' && value.mitarbeiter_id) {
+              const ma = mitarbeiterMap[value.mitarbeiter_id];
+              if (ma && ma.nebenzeit_prozent > 0) {
+                zeitMinuten = zeitMinuten * (1 + ma.nebenzeit_prozent / 100);
+              }
+            } else if (value.type === 'lehrling' && value.mitarbeiter_id) {
+              const lehr = lehrlingeMap[value.mitarbeiter_id];
+              if (lehr) {
+                // Individuelle Nebenzeit hinzufügen
+                if (lehr.nebenzeit_prozent > 0) {
+                  zeitMinuten = zeitMinuten * (1 + lehr.nebenzeit_prozent / 100);
+                }
+                // Aufgabenbewältigung anwenden (z.B. 150% = braucht 1.5x so lange)
+                if (lehr.aufgabenbewaeltigung_prozent && lehr.aufgabenbewaeltigung_prozent !== 100) {
+                  zeitMinuten = zeitMinuten * (lehr.aufgabenbewaeltigung_prozent / 100);
+                }
+              }
+            }
+          }
+          
+          summeMinuten += zeitMinuten;
+          
+          // Früheste Startzeit finden
+          if (typeof value === 'object' && value.startzeit && value.startzeit !== '') {
+            if (!fruehesteStartzeit || value.startzeit < fruehesteStartzeit) {
+              fruehesteStartzeit = value.startzeit;
+            }
+          }
+        }
         
         if (summeMinuten > 0) {
-          gesamtzeitBerechnet = this.formatMinutesToHours(summeMinuten);
+          gesamtzeitBerechnet = this.formatMinutesToHours(Math.round(summeMinuten));
+          gesamtzeitMinuten = Math.round(summeMinuten);
         }
       } catch (e) {
         console.error('Fehler beim Berechnen der Gesamtzeit:', e);
+      }
+    }
+    
+    // Fallback auf geschätzte Zeit wenn keine Details vorhanden
+    if (gesamtzeitMinuten === 0 && termin.geschaetzte_zeit) {
+      gesamtzeitMinuten = termin.geschaetzte_zeit;
+      // Auch für Fallback globale Nebenzeit anwenden
+      if (globaleNebenzeitProzent > 0) {
+        gesamtzeitMinuten = Math.round(gesamtzeitMinuten * (1 + globaleNebenzeitProzent / 100));
+      }
+    }
+    
+    // Prüfe ob es separate Erweiterungs-Termine gibt
+    let erweiterungen = [];
+    let erweiterungenZeitMinuten = 0;
+    try {
+      const alleTermine = await TermineService.getAll();
+      erweiterungen = alleTermine.filter(
+        t => t.erweiterung_von_id === termin.id && !t.ist_geloescht
+      );
+      
+      // Prüfe ob Haupttermin bereits [Erweiterung]-Einträge in arbeitszeiten_details hat
+      const haupttermineArbeitenKeys = termin.arbeitszeiten_details 
+        ? Object.keys(JSON.parse(termin.arbeitszeiten_details))
+        : [];
+      const hatErweiterungenInDetails = haupttermineArbeitenKeys.some(k => k.startsWith('[Erweiterung]'));
+      
+      // Nur zusätzliche Zeit berechnen, wenn KEINE Erweiterungen in arbeitszeiten_details sind
+      // (sonst wurden sie dort bereits erfasst)
+      if (!hatErweiterungenInDetails) {
+        erweiterungen.forEach(erw => {
+          let erwZeit = 0;
+          
+          if (erw.arbeitszeiten_details) {
+            try {
+              const details = JSON.parse(erw.arbeitszeiten_details);
+              for (const [key, value] of Object.entries(details)) {
+                if (!key.startsWith('_')) {
+                  let zeit = typeof value === 'object' ? (value.zeit || 0) : value;
+                  // Globale Nebenzeit anwenden
+                  if (globaleNebenzeitProzent > 0) {
+                    zeit = zeit * (1 + globaleNebenzeitProzent / 100);
+                  }
+                  // Individuelle Faktoren anwenden
+                  if (typeof value === 'object') {
+                    if (value.type === 'lehrling' && value.mitarbeiter_id) {
+                      const lehr = lehrlingeMap[value.mitarbeiter_id];
+                      if (lehr && lehr.aufgabenbewaeltigung_prozent && lehr.aufgabenbewaeltigung_prozent !== 100) {
+                        zeit = zeit * (lehr.aufgabenbewaeltigung_prozent / 100);
+                      }
+                    }
+                  }
+                  erwZeit += zeit;
+                }
+              }
+            } catch (e) {}
+          } else if (erw.geschaetzte_zeit) {
+            erwZeit = erw.geschaetzte_zeit;
+            // Globale Nebenzeit auch auf geschätzte Zeit anwenden
+            if (globaleNebenzeitProzent > 0) {
+              erwZeit = erwZeit * (1 + globaleNebenzeitProzent / 100);
+            }
+          }
+          
+          erweiterungenZeitMinuten += erwZeit;
+        });
+      }
+      
+      erweiterungenZeitMinuten = Math.round(erweiterungenZeitMinuten);
+    } catch (e) {
+      console.error('Fehler beim Laden der Erweiterungen:', e);
+    }
+    
+    // Endzeit: Verwende gespeicherte endzeit_berechnet wenn vorhanden
+    let endzeitFormatiert = '-';
+    
+    // Für Erweiterungs-Termine: Hole endzeit_berechnet vom Haupttermin
+    let effektiveEndzeit = termin.endzeit_berechnet;
+    if (!effektiveEndzeit && termin.erweiterung_von_id) {
+      // Dies ist eine Erweiterung - hole Endzeit vom Haupttermin
+      try {
+        const hauptTermin = await TermineService.getById(termin.erweiterung_von_id);
+        if (hauptTermin && hauptTermin.endzeit_berechnet) {
+          effektiveEndzeit = hauptTermin.endzeit_berechnet;
+        }
+      } catch (e) {
+        console.error('Fehler beim Laden des Haupttermins:', e);
+      }
+    }
+    
+    if (effektiveEndzeit) {
+      // Gespeicherte berechnete Endzeit verwenden
+      endzeitFormatiert = effektiveEndzeit;
+      if (erweiterungen.length > 0) {
+        endzeitFormatiert += ` (inkl. ${erweiterungen.length} Erw.)`;
+      }
+    } else {
+      // Fallback: Berechne lokal
+      const startzeit = fruehesteStartzeit || termin.startzeit || termin.bring_zeit;
+      const gesamtMinutenInklErw = gesamtzeitMinuten + erweiterungenZeitMinuten;
+      
+      if (startzeit && gesamtMinutenInklErw > 0) {
+        const [startH, startM] = startzeit.split(':').map(Number);
+        const startInMinuten = startH * 60 + startM;
+        const endInMinuten = startInMinuten + gesamtMinutenInklErw;
+        const endH = Math.floor(endInMinuten / 60);
+        const endM = endInMinuten % 60;
+        endzeitFormatiert = `${String(endH).padStart(2, '0')}:${String(endM).padStart(2, '0')}`;
+        if (erweiterungen.length > 0) {
+          endzeitFormatiert += ` (inkl. ${erweiterungen.length} Erw.)`;
+        }
       }
     }
 
@@ -5116,6 +5372,7 @@ class App {
         <div class="detail-header-left">
           <span class="detail-termin-nr">🎫 ${termin.termin_nr || '-'}</span>
           ${schwebendBadge}
+          ${verknuepfungsBadge}
         </div>
         <div class="detail-header-right">
           ${statusBadge}
@@ -5194,6 +5451,10 @@ class App {
           <div class="detail-item">
             <span class="detail-label">Bringzeit</span>
             <span class="detail-value">${termin.bring_zeit || '-'}</span>
+          </div>
+          <div class="detail-item">
+            <span class="detail-label">Fertig ca.</span>
+            <span class="detail-value detail-value-highlight">${endzeitFormatiert}</span>
           </div>
           <div class="detail-item">
             <span class="detail-label">Abholzeit</span>
@@ -5457,6 +5718,129 @@ class App {
         btn.title = 'Termin als schwebend markieren (wird nicht in Auslastung gezählt)';
       }
     }
+  }
+
+  // Termin aus Details-Modal löschen
+  async deleteTerminFromDetails() {
+    console.log('deleteTerminFromDetails aufgerufen');
+    console.log('currentDetailTerminId:', this.currentDetailTerminId);
+    
+    if (!this.currentDetailTerminId) {
+      console.log('Keine currentDetailTerminId vorhanden!');
+      alert('Kein Termin ausgewählt');
+      return;
+    }
+    
+    // Schließe das Details-Modal
+    const modal = document.getElementById('terminDetailsModal');
+    if (modal) modal.style.display = 'none';
+    
+    // Rufe die bestehende deleteTermin-Funktion auf
+    await this.deleteTermin(this.currentDetailTerminId);
+  }
+
+  /**
+   * Zeigt alle verknüpften Termine (Original + Erweiterungen) in einem Modal
+   */
+  showVerknuepfteTermine(terminId) {
+    const termin = this.termineById[terminId];
+    if (!termin) return;
+
+    // Sammle alle verknüpften Termine
+    const verknuepfte = [];
+    
+    // Finde den Original-Termin (falls dieser eine Erweiterung ist)
+    let originalId = terminId;
+    if (termin.erweiterung_von_id) {
+      originalId = termin.erweiterung_von_id;
+    }
+    
+    // Hole den Original-Termin
+    const originalTermin = this.termineById[originalId];
+    if (originalTermin) {
+      verknuepfte.push({
+        ...originalTermin,
+        istOriginal: true,
+        istErweiterung: false
+      });
+    }
+    
+    // Hole alle Erweiterungen zum Original
+    Object.values(this.termineById).forEach(t => {
+      if (t.erweiterung_von_id === originalId && !t.ist_geloescht) {
+        verknuepfte.push({
+          ...t,
+          istOriginal: false,
+          istErweiterung: true
+        });
+      }
+    });
+    
+    // Sortiere nach Datum und Zeit
+    verknuepfte.sort((a, b) => {
+      const datumA = a.datum || '';
+      const datumB = b.datum || '';
+      if (datumA !== datumB) return datumA.localeCompare(datumB);
+      const zeitA = a.bring_zeit || '00:00';
+      const zeitB = b.bring_zeit || '00:00';
+      return zeitA.localeCompare(zeitB);
+    });
+    
+    // Erstelle Modal falls nicht vorhanden
+    let modal = document.getElementById('verknuepfteTermineModal');
+    if (!modal) {
+      modal = document.createElement('div');
+      modal.id = 'verknuepfteTermineModal';
+      modal.className = 'modal';
+      document.body.appendChild(modal);
+    }
+    
+    // Baue Modal-Inhalt
+    const terminListe = verknuepfte.map(t => {
+      const icon = t.istOriginal ? '📋' : '🔗';
+      const typClass = t.istOriginal ? 'original' : 'erweiterung';
+      const typText = t.istOriginal ? 'Original' : 'Erweiterung';
+      const datumFormatiert = this.formatDateGerman(t.datum);
+      const endzeit = this.berechneEndzeit(t.bring_zeit, t.geschaetzte_zeit);
+      const dauerText = this.formatMinutesToHours(t.geschaetzte_zeit || 0);
+      const aktuellerTermin = t.id === terminId ? ' style="background: #e3f2fd; border-left: 3px solid #1976d2;"' : '';
+      
+      return `
+        <div class="verkn-termin-item"${aktuellerTermin} onclick="app.showTerminDetails(${t.id}); document.getElementById('verknuepfteTermineModal').style.display='none';">
+          <div class="verkn-termin-icon">${icon}</div>
+          <div class="verkn-termin-info">
+            <div class="verkn-termin-nr">${t.termin_nr || '#' + t.id}</div>
+            <div class="verkn-termin-arbeit">${this.escapeHtml(t.arbeit || '-')}</div>
+            <div class="verkn-termin-details">
+              📅 ${datumFormatiert} | ⏰ ${t.bring_zeit || '08:00'} - ${endzeit} | ⏱️ ${dauerText}
+            </div>
+          </div>
+          <div class="verkn-termin-typ ${typClass}">${typText}</div>
+        </div>
+      `;
+    }).join('');
+    
+    const kundenInfo = originalTermin ? `${originalTermin.kunde_name || 'Kunde'} - ${originalTermin.kennzeichen || '-'}` : '-';
+    
+    modal.innerHTML = `
+      <div class="modal-content verkn-modal-content">
+        <span class="close" onclick="document.getElementById('verknuepfteTermineModal').style.display='none'">&times;</span>
+        <h3>🔗 Verknüpfte Termine</h3>
+        <p style="color: #666; margin-bottom: 15px;">${kundenInfo} • ${verknuepfte.length} verknüpfte(r) Termin(e)</p>
+        <div class="verkn-termin-liste">
+          ${terminListe}
+        </div>
+      </div>
+    `;
+    
+    modal.style.display = 'block';
+    
+    // Schließen bei Klick außerhalb
+    modal.onclick = (e) => {
+      if (e.target === modal) {
+        modal.style.display = 'none';
+      }
+    };
   }
 
   // Einplanen-Datum Modal öffnen
@@ -6389,6 +6773,550 @@ class App {
   }
 
   // ============================================
+  // AUFTRAGSERWEITERUNG FUNKTIONEN
+  // ============================================
+
+  /**
+   * Öffnet das Erweiterungs-Modal für den aktuellen Termin
+   */
+  async openErweiterungModal() {
+    console.log('openErweiterungModal aufgerufen');
+    console.log('currentDetailTerminId:', this.currentDetailTerminId);
+    
+    if (!this.currentDetailTerminId) {
+      alert('Kein Termin ausgewählt.');
+      return;
+    }
+
+    const termin = this.termineById[this.currentDetailTerminId];
+    console.log('Termin gefunden:', termin);
+    
+    if (!termin) {
+      alert('Termin nicht gefunden.');
+      return;
+    }
+
+    // Speichere Termin-Daten für spätere Verwendung
+    this.erweiterungTermin = termin;
+    this.erweiterungKonflikte = null;
+
+    // Fülle Original-Termin-Info
+    const detailsEl = document.getElementById('erweiterungTerminDetails');
+    const endzeitBerechnet = this.berechneEndzeit(termin.bring_zeit, termin.geschaetzte_zeit);
+    
+    detailsEl.innerHTML = `
+      <span><strong>Nr:</strong> ${termin.termin_nr || '-'}</span>
+      <span><strong>Kunde:</strong> ${termin.kunde_name || '-'}</span>
+      <span><strong>Kennzeichen:</strong> ${termin.kennzeichen || '-'}</span>
+      <span><strong>Datum:</strong> ${this.formatDateGerman(termin.datum)}</span>
+      <span><strong>Zeit:</strong> ${termin.bring_zeit || '08:00'} - ${endzeitBerechnet}</span>
+      <span><strong>Dauer:</strong> ${termin.geschaetzte_zeit || 0} Min</span>
+    `;
+
+    // Berechne "Morgen"-Datum (nächster Arbeitstag)
+    const morgenDatum = this.naechsterArbeitstag(termin.datum);
+    document.getElementById('morgenDatumAnzeige').textContent = this.formatDateGerman(morgenDatum);
+
+    // Setze Mindestdatum für Datumswahl
+    document.getElementById('erweiterungDatum').min = termin.datum;
+    document.getElementById('erweiterungDatum').value = morgenDatum;
+
+    // Reset Formular
+    document.getElementById('erweiterungNeueArbeit').value = '';
+    document.getElementById('erweiterungArbeitszeit').value = '0.5';
+    document.getElementById('erweiterungTeileStatus').value = 'vorraetig';
+    document.getElementById('typAnschluss').checked = true;
+    document.getElementById('erweiterungDatumAuswahl').style.display = 'none';
+    document.getElementById('erweiterungKonflikte').style.display = 'none';
+    document.getElementById('erweiterungVorschlaege').style.display = 'none';
+
+    // Initiale Vorschau aktualisieren
+    this.updateErweiterungVorschau();
+
+    // Modal anzeigen
+    document.getElementById('erweiterungModal').style.display = 'block';
+
+    // Prüfe Konflikte für "Im Anschluss"
+    this.pruefeErweiterungsKonflikte();
+  }
+
+  /**
+   * Schließt das Erweiterungs-Modal
+   */
+  closeErweiterungModal() {
+    document.getElementById('erweiterungModal').style.display = 'none';
+    this.erweiterungTermin = null;
+    this.erweiterungKonflikte = null;
+  }
+
+  /**
+   * Zeitleisten-Kontextmenü: Auftrag erweitern
+   */
+  zeitleisteKontextErweitern() {
+    this.closeZeitleisteKontextmenu();
+    if (this.zeitleisteKontextTerminId) {
+      this.currentDetailTerminId = this.zeitleisteKontextTerminId;
+      // Stelle sicher dass der Termin im Cache ist
+      if (!this.termineById[this.zeitleisteKontextTerminId]) {
+        // Lade den Termin
+        TermineService.getById(this.zeitleisteKontextTerminId).then(termin => {
+          if (termin) {
+            this.termineById[termin.id] = termin;
+            this.openErweiterungModal();
+          }
+        });
+      } else {
+        this.openErweiterungModal();
+      }
+    }
+  }
+
+  /**
+   * Wird aufgerufen wenn der Erweiterungstyp geändert wird
+   */
+  updateErweiterungTyp() {
+    const typ = document.querySelector('input[name="erweiterungTyp"]:checked').value;
+    const datumAuswahl = document.getElementById('erweiterungDatumAuswahl');
+    const konflikteSection = document.getElementById('erweiterungKonflikte');
+    
+    if (typ === 'datum') {
+      datumAuswahl.style.display = 'block';
+      konflikteSection.style.display = 'none';
+    } else {
+      datumAuswahl.style.display = 'none';
+      
+      if (typ === 'anschluss') {
+        this.pruefeErweiterungsKonflikte();
+      } else {
+        konflikteSection.style.display = 'none';
+      }
+    }
+    
+    this.updateErweiterungVorschau();
+    this.ladeSmartVorschlaege();
+  }
+
+  /**
+   * Prüft auf Konflikte bei "Im Anschluss" Option
+   */
+  async pruefeErweiterungsKonflikte() {
+    if (!this.erweiterungTermin) return;
+    
+    const arbeitszeitStunden = parseFloat(document.getElementById('erweiterungArbeitszeit').value) || 0.5;
+    const arbeitszeit = Math.round(arbeitszeitStunden * 60); // In Minuten umrechnen
+    const konflikteSection = document.getElementById('erweiterungKonflikte');
+    const konfliktDetails = document.getElementById('konfliktDetails');
+    
+    try {
+      const konflikte = await TermineService.pruefeErweiterungsKonflikte(
+        this.erweiterungTermin.id, 
+        arbeitszeit
+      );
+      
+      this.erweiterungKonflikte = konflikte;
+      
+      if (konflikte.hat_konflikte || konflikte.folgetermine_zum_verschieben.length > 0) {
+        // Es gibt Konflikte oder zu verschiebende Termine
+        let detailsHtml = `
+          <p><strong>Neue Endzeit:</strong> ${konflikte.neue_endzeit} (aktuell: ${konflikte.aktuelle_endzeit})</p>
+        `;
+        
+        if (konflikte.folgetermine_zum_verschieben.length > 0) {
+          detailsHtml += `
+            <p style="margin-top: 10px;"><strong>Folgende Termine werden verschoben:</strong></p>
+            <ul style="margin: 5px 0; padding-left: 20px;">
+          `;
+          konflikte.folgetermine_zum_verschieben.forEach(t => {
+            detailsHtml += `<li>${t.termin_nr || '#' + t.id} - ${t.kunde_name || 'Kunde'} (${t.bring_zeit})</li>`;
+          });
+          detailsHtml += '</ul>';
+        }
+        
+        konfliktDetails.innerHTML = detailsHtml;
+        konflikteSection.style.display = 'block';
+        
+        // Lade verfügbare Mitarbeiter
+        this.ladeVerfuegbareMitarbeiter();
+      } else {
+        konflikteSection.style.display = 'none';
+      }
+    } catch (error) {
+      console.error('Fehler beim Prüfen der Konflikte:', error);
+      konflikteSection.style.display = 'none';
+    }
+  }
+
+  /**
+   * Wird aufgerufen wenn die Konfliktlösung geändert wird
+   */
+  updateKonfliktLoesung() {
+    const loesung = document.querySelector('input[name="konfliktLoesung"]:checked').value;
+    const verfuegbareSection = document.getElementById('verfuegbareMitarbeiter');
+    
+    if (loesung === 'anderer') {
+      verfuegbareSection.style.display = 'block';
+      this.ladeVerfuegbareMitarbeiter();
+    } else {
+      verfuegbareSection.style.display = 'none';
+    }
+    
+    this.updateErweiterungVorschau();
+  }
+
+  /**
+   * Lädt verfügbare Mitarbeiter für den Zeitraum
+   */
+  async ladeVerfuegbareMitarbeiter() {
+    if (!this.erweiterungTermin) return;
+    
+    const arbeitszeitStunden = parseFloat(document.getElementById('erweiterungArbeitszeit').value) || 0.5;
+    const arbeitszeit = Math.round(arbeitszeitStunden * 60); // In Minuten umrechnen
+    const endzeit = this.berechneEndzeit(this.erweiterungTermin.bring_zeit, this.erweiterungTermin.geschaetzte_zeit);
+    
+    const select = document.getElementById('erweiterungMitarbeiterSelect');
+    const infoEl = document.getElementById('verfuegbarkeitInfo');
+    
+    select.innerHTML = '<option value="">Wird geladen...</option>';
+    
+    try {
+      const verfuegbare = await TermineService.findeVerfuegbareMitarbeiter(
+        this.erweiterungTermin.datum,
+        endzeit,
+        arbeitszeit
+      );
+      
+      if (verfuegbare.length === 0) {
+        select.innerHTML = '<option value="">Keine Mitarbeiter verfügbar</option>';
+        infoEl.innerHTML = '⚠️ Kein Mitarbeiter hat ausreichend freie Kapazität.';
+        infoEl.className = 'verfuegbarkeit-info nicht-verfuegbar';
+      } else {
+        select.innerHTML = verfuegbare.map(ma => {
+          const status = ma.ist_sofort_verfuegbar ? '✅' : '⏰';
+          const zeitInfo = ma.ist_sofort_verfuegbar 
+            ? 'sofort verfügbar' 
+            : `ab ${ma.naechster_freier_slot}`;
+          return `<option value="${ma.id}" data-sofort="${ma.ist_sofort_verfuegbar}" data-slot="${ma.naechster_freier_slot}">
+            ${status} ${ma.name} (${zeitInfo}, ${ma.restkapazitaet_minuten} Min frei)
+          </option>`;
+        }).join('');
+        
+        const erster = verfuegbare[0];
+        if (erster.ist_sofort_verfuegbar) {
+          infoEl.innerHTML = `✅ ${erster.name} kann die Arbeit direkt im Anschluss übernehmen.`;
+          infoEl.className = 'verfuegbarkeit-info';
+        } else {
+          infoEl.innerHTML = `⏰ ${erster.name} hat den nächsten freien Slot um ${erster.naechster_freier_slot}.`;
+          infoEl.className = 'verfuegbarkeit-info nicht-verfuegbar';
+        }
+      }
+    } catch (error) {
+      console.error('Fehler beim Laden der verfügbaren Mitarbeiter:', error);
+      select.innerHTML = '<option value="">Fehler beim Laden</option>';
+    }
+  }
+
+  /**
+   * Lädt Smart-Vorschläge für die Erweiterung
+   */
+  async ladeSmartVorschlaege() {
+    if (!this.erweiterungTermin) return;
+    
+    const vorschlaegeSection = document.getElementById('erweiterungVorschlaege');
+    const vorschlaegeContent = document.getElementById('vorschlaegeContent');
+    const typ = document.querySelector('input[name="erweiterungTyp"]:checked').value;
+    const arbeitszeitStunden = parseFloat(document.getElementById('erweiterungArbeitszeit').value) || 0.5;
+    const arbeitszeit = Math.round(arbeitszeitStunden * 60); // In Minuten umrechnen
+    
+    try {
+      // Lade verfügbare Mitarbeiter für verschiedene Szenarien
+      const endzeit = this.berechneEndzeit(this.erweiterungTermin.bring_zeit, this.erweiterungTermin.geschaetzte_zeit);
+      const morgenDatum = this.naechsterArbeitstag(this.erweiterungTermin.datum);
+      
+      const [verfuegbareHeute, verfuegbareMorgen] = await Promise.all([
+        TermineService.findeVerfuegbareMitarbeiter(this.erweiterungTermin.datum, endzeit, arbeitszeit),
+        TermineService.findeVerfuegbareMitarbeiter(morgenDatum, '08:00', arbeitszeit)
+      ]);
+      
+      let vorschlaege = [];
+      
+      // Vorschlag 1: Sofort verfügbarer anderer MA heute
+      const sofortVerfuegbar = verfuegbareHeute.find(ma => 
+        ma.ist_sofort_verfuegbar && ma.id !== this.erweiterungTermin.mitarbeiter_id
+      );
+      if (sofortVerfuegbar && typ === 'anschluss') {
+        vorschlaege.push({
+          text: `${sofortVerfuegbar.name} kann heute ab ${endzeit} übernehmen`,
+          action: 'Auswählen →',
+          onClick: () => {
+            document.getElementById('loesungAndererMA').checked = true;
+            this.updateKonfliktLoesung();
+            document.getElementById('erweiterungMitarbeiterSelect').value = sofortVerfuegbar.id;
+          }
+        });
+      }
+      
+      // Vorschlag 2: Morgen früh beim gleichen MA
+      const gleicheMaMorgen = verfuegbareMorgen.find(ma => ma.id === this.erweiterungTermin.mitarbeiter_id);
+      if (gleicheMaMorgen && typ !== 'morgen') {
+        vorschlaege.push({
+          text: `Morgen früh bei ${gleicheMaMorgen.name} (${gleicheMaMorgen.restkapazitaet_minuten} Min frei)`,
+          action: 'Morgen wählen →',
+          onClick: () => {
+            document.getElementById('typMorgen').checked = true;
+            this.updateErweiterungTyp();
+          }
+        });
+      }
+      
+      if (vorschlaege.length > 0) {
+        vorschlaegeContent.innerHTML = vorschlaege.map((v, i) => `
+          <div class="vorschlag-item" onclick="app.erweiterungVorschlagAusfuehren(${i})">
+            <span class="vorschlag-text">${v.text}</span>
+            <span class="vorschlag-action">${v.action}</span>
+          </div>
+        `).join('');
+        
+        // Speichere onClick-Handler
+        this.erweiterungVorschlaege = vorschlaege;
+        vorschlaegeSection.style.display = 'block';
+      } else {
+        vorschlaegeSection.style.display = 'none';
+      }
+    } catch (error) {
+      console.error('Fehler beim Laden der Vorschläge:', error);
+      vorschlaegeSection.style.display = 'none';
+    }
+  }
+
+  erweiterungVorschlagAusfuehren(index) {
+    if (this.erweiterungVorschlaege && this.erweiterungVorschlaege[index]) {
+      this.erweiterungVorschlaege[index].onClick();
+    }
+  }
+
+  /**
+   * Aktualisiert die Vorschau
+   */
+  updateErweiterungVorschau() {
+    const arbeitszeitStunden = parseFloat(document.getElementById('erweiterungArbeitszeit').value) || 0;
+    const typ = document.querySelector('input[name="erweiterungTyp"]:checked')?.value || 'anschluss';
+    
+    document.getElementById('vorschauArbeitszeit').textContent = `${arbeitszeitStunden} h`;
+    
+    let datumText = '--';
+    let mitarbeiterText = '--';
+    
+    if (this.erweiterungTermin) {
+      if (typ === 'anschluss') {
+        datumText = this.formatDateGerman(this.erweiterungTermin.datum) + ' (Anschluss)';
+        
+        const konfliktLoesung = document.querySelector('input[name="konfliktLoesung"]:checked')?.value;
+        if (konfliktLoesung === 'anderer') {
+          const select = document.getElementById('erweiterungMitarbeiterSelect');
+          const selectedOption = select.options[select.selectedIndex];
+          mitarbeiterText = selectedOption?.text?.split('(')[0]?.trim() || 'Anderer MA';
+        } else {
+          mitarbeiterText = this.erweiterungTermin.mitarbeiter_name || 'Gleicher MA';
+        }
+      } else if (typ === 'morgen') {
+        const morgenDatum = this.naechsterArbeitstag(this.erweiterungTermin.datum);
+        datumText = this.formatDateGerman(morgenDatum);
+        mitarbeiterText = this.erweiterungTermin.mitarbeiter_name || 'Gleicher MA';
+      } else if (typ === 'datum') {
+        const datum = document.getElementById('erweiterungDatum').value;
+        datumText = datum ? this.formatDateGerman(datum) : '--';
+        mitarbeiterText = this.erweiterungTermin.mitarbeiter_name || 'Gleicher MA';
+      }
+    }
+    
+    document.getElementById('vorschauDatum').textContent = datumText;
+    document.getElementById('vorschauMitarbeiter').textContent = mitarbeiterText;
+  }
+
+  /**
+   * Speichert die Erweiterung
+   */
+  async speichereErweiterung() {
+    if (!this.erweiterungTermin) {
+      alert('Kein Termin ausgewählt.');
+      return;
+    }
+
+    const neueArbeit = document.getElementById('erweiterungNeueArbeit').value.trim();
+    const arbeitszeitStunden = parseFloat(document.getElementById('erweiterungArbeitszeit').value) || 0;
+    const arbeitszeit = Math.round(arbeitszeitStunden * 60); // In Minuten umrechnen
+    const teileStatus = document.getElementById('erweiterungTeileStatus').value;
+    const typ = document.querySelector('input[name="erweiterungTyp"]:checked').value;
+
+    // Validierung
+    if (!neueArbeit) {
+      alert('Bitte geben Sie eine Arbeitsbeschreibung ein.');
+      document.getElementById('erweiterungNeueArbeit').focus();
+      return;
+    }
+    if (arbeitszeitStunden < 0.1) {
+      alert('Die Arbeitszeit muss mindestens 0.1 Stunden (6 Min) betragen.');
+      document.getElementById('erweiterungArbeitszeit').focus();
+      return;
+    }
+
+    // Daten sammeln
+    const erweiterungsDaten = {
+      neue_arbeit: neueArbeit,
+      arbeitszeit_minuten: arbeitszeit,
+      teile_status: teileStatus,
+      erweiterung_typ: typ
+    };
+
+    // Typ-spezifische Daten
+    if (typ === 'anschluss') {
+      const konfliktLoesung = document.querySelector('input[name="konfliktLoesung"]:checked')?.value || 'gleicher';
+      erweiterungsDaten.ist_gleicher_mitarbeiter = konfliktLoesung === 'gleicher';
+      
+      if (konfliktLoesung === 'anderer') {
+        const mitarbeiterId = document.getElementById('erweiterungMitarbeiterSelect').value;
+        if (!mitarbeiterId) {
+          alert('Bitte wählen Sie einen Mitarbeiter aus.');
+          return;
+        }
+        erweiterungsDaten.mitarbeiter_id = parseInt(mitarbeiterId);
+      }
+      
+      // Folgetermine verschieben wenn gleicher MA und Konflikte vorhanden
+      if (konfliktLoesung === 'gleicher' && this.erweiterungKonflikte?.folgetermine_zum_verschieben?.length > 0) {
+        const verschieben = confirm(
+          `${this.erweiterungKonflikte.folgetermine_zum_verschieben.length} Folgetermin(e) werden um ${arbeitszeit} Minuten nach hinten verschoben.\n\nFortfahren?`
+        );
+        if (!verschieben) return;
+        erweiterungsDaten.folgetermine_verschieben = true;
+      }
+    } else if (typ === 'morgen') {
+      erweiterungsDaten.datum = this.naechsterArbeitstag(this.erweiterungTermin.datum);
+      erweiterungsDaten.ist_gleicher_mitarbeiter = false;
+    } else if (typ === 'datum') {
+      const datum = document.getElementById('erweiterungDatum').value;
+      const uhrzeit = document.getElementById('erweiterungUhrzeit').value;
+      
+      if (!datum) {
+        alert('Bitte wählen Sie ein Datum aus.');
+        return;
+      }
+      
+      erweiterungsDaten.datum = datum;
+      erweiterungsDaten.uhrzeit = uhrzeit || null;
+      erweiterungsDaten.ist_gleicher_mitarbeiter = false;
+    }
+
+    // Speichern
+    const speichernBtn = document.getElementById('erweiterungSpeichernBtn');
+    speichernBtn.disabled = true;
+    speichernBtn.innerHTML = '⏳ Wird gespeichert...';
+
+    try {
+      const result = await TermineService.erweiterungErstellen(this.erweiterungTermin.id, erweiterungsDaten);
+      
+      let meldung = '✅ Auftragserweiterung erfolgreich erstellt!';
+      
+      // Hilfsfunktion: Minuten in h:mm formatieren
+      const formatZeit = (minuten) => {
+        const h = Math.floor(minuten / 60);
+        const m = minuten % 60;
+        return h > 0 ? `${h}h ${m > 0 ? m + 'min' : ''}`.trim() : `${m}min`;
+      };
+      
+      // Berechne effektive Arbeitszeit inkl. Nebenzeit für Anzeige
+      const effektiveArbeitszeit = await this.berechneEffektiveArbeitszeit(arbeitszeit);
+      
+      // Immer neuer Termin
+      meldung += `\n\n📋 Neuer Erweiterungs-Termin: ${result.ergebnis.termin_nr}`;
+      meldung += `\n📅 Datum: ${this.formatDateGerman(result.ergebnis.datum)}`;
+      meldung += `\n⏱️ Arbeitszeit: ${formatZeit(arbeitszeit)} (effektiv: ${formatZeit(effektiveArbeitszeit)})`;
+      
+      if (typ === 'anschluss') {
+        // Berechne effektive Endzeit mit Nebenzeit
+        const bringZeit = this.erweiterungTermin.bring_zeit || this.erweiterungTermin.startzeit || '08:00';
+        const originalGeschaetzt = this.erweiterungTermin.geschaetzte_zeit || 0;
+        const effektiveOriginal = await this.berechneEffektiveArbeitszeit(originalGeschaetzt);
+        const originalEndzeit = this.berechneEndzeit(bringZeit, effektiveOriginal);
+        const neueEndzeit = this.berechneEndzeit(originalEndzeit, effektiveArbeitszeit);
+        meldung += `\n🏁 Erweiterung endet ca.: ${neueEndzeit} Uhr`;
+      }
+      
+      if (result.verschobene_termine && result.verschobene_termine.length > 0) {
+        meldung += `\n\n🔄 ${result.verschobene_termine.length} Folgetermin(e) wurden verschoben.`;
+      }
+      
+      alert(meldung);
+      
+      this.closeErweiterungModal();
+      this.closeTerminDetails();
+      this.loadTermine();
+      this.loadAuslastung();
+      
+    } catch (error) {
+      console.error('Fehler beim Erstellen der Erweiterung:', error);
+      alert('Fehler: ' + (error.message || 'Unbekannter Fehler'));
+    } finally {
+      speichernBtn.disabled = false;
+      speichernBtn.innerHTML = `
+        <svg class="sparkle-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M12 2L14.09 8.26L20 9.27L15.55 13.97L16.91 20L12 16.9L7.09 20L8.45 13.97L4 9.27L9.91 8.26L12 2Z" fill="currentColor"/>
+        </svg>
+        <span class="btn-text">Erweiterung erstellen</span>
+        <div class="dots-border"></div>
+      `;
+    }
+  }
+
+  // Hilfsfunktion: Berechnet Endzeit aus Startzeit und Dauer
+  berechneEndzeit(startzeit, dauerMinuten) {
+    if (!startzeit) return '08:00';
+    const [h, m] = startzeit.split(':').map(Number);
+    const gesamtMinuten = h * 60 + m + (dauerMinuten || 0);
+    const endH = Math.floor(gesamtMinuten / 60);
+    const endM = gesamtMinuten % 60;
+    return `${String(endH).padStart(2, '0')}:${String(endM).padStart(2, '0')}`;
+  }
+
+  // Hilfsfunktion: Berechnet effektive Arbeitszeit mit Nebenzeit
+  async berechneEffektiveArbeitszeit(dauerMinuten) {
+    if (!dauerMinuten) return 0;
+    try {
+      const werkstattEinstellungen = await EinstellungenService.getWerkstatt();
+      const nebenzeitProzent = werkstattEinstellungen.nebenzeit_prozent || 0;
+      if (nebenzeitProzent > 0) {
+        return Math.round(dauerMinuten * (1 + nebenzeitProzent / 100));
+      }
+    } catch (e) {
+      console.warn('Konnte Nebenzeit nicht laden:', e);
+    }
+    return dauerMinuten;
+  }
+
+  // Hilfsfunktion: Nächster Arbeitstag (überspringt Sonntage)
+  naechsterArbeitstag(datum) {
+    const d = new Date(datum + 'T12:00:00');
+    d.setDate(d.getDate() + 1);
+    // Sonntag überspringen
+    if (d.getDay() === 0) {
+      d.setDate(d.getDate() + 1);
+    }
+    return d.toISOString().split('T')[0];
+  }
+
+  // Hilfsfunktion: Formatiert Datum auf Deutsch
+  formatDateGerman(datum) {
+    if (!datum) return '--';
+    const d = new Date(datum + 'T12:00:00');
+    const wochentage = ['So', 'Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa'];
+    return `${wochentage[d.getDay()]}, ${datum.split('-').reverse().join('.')}`;
+  }
+
+  // ============================================
+  // ENDE AUFTRAGSERWEITERUNG FUNKTIONEN
+  // ============================================
+
+  // ============================================
   // ENDE TERMIN-SPLIT & SCHWEBEND FUNKTIONEN
   // ============================================
 
@@ -6994,7 +7922,7 @@ class App {
 
   async loadDashboardStats() {
     try {
-      const today = this.formatDateLocal(new Date());
+      const today = this.formatDateLocal(this.getToday());
 
       const termineHeute = await TermineService.getAll(today);
       const allKunden = await KundenService.getAll();
@@ -7038,7 +7966,7 @@ class App {
 
   async loadDashboardTermineHeute() {
     try {
-      const today = this.formatDateLocal(new Date());
+      const today = this.formatDateLocal(this.getToday());
       const termine = await TermineService.getAll(today);
       termine.forEach(t => {
         this.termineById[t.id] = t;
@@ -7627,7 +8555,7 @@ class App {
     try {
       const allTermine = await TermineService.getAll();
       const weekDays = this.getWeekDays();
-      const today = this.formatDateLocal(new Date());
+      const today = this.formatDateLocal(this.getToday());
 
       for (const [index, day] of weekDays.entries()) {
         const dayName = ['montag', 'dienstag', 'mittwoch', 'donnerstag', 'freitag', 'samstag'][index];
@@ -7691,7 +8619,7 @@ class App {
   // Gibt Wochen für die Monatsübersicht zurück (5 Wochen, Mo-Sa)
   getWeeksForMonthView() {
     const weeks = [];
-    const today = new Date();
+    const today = new Date(this.getToday());
     today.setHours(12, 0, 0, 0);
     
     // Finde den Montag der aktuellen Woche
@@ -7730,7 +8658,7 @@ class App {
     try {
       const allTermine = await TermineService.getAll();
       const weeks = this.getWeeksForMonthView();
-      const today = this.formatDateLocal(new Date());
+      const today = this.formatDateLocal(this.getToday());
 
       // Sammle alle Tage für Auslastungsabfrage
       const allDays = weeks.flat();
@@ -8874,17 +9802,118 @@ class App {
   // Papierkorb-Funktionen
   async deleteTermin(terminId) {
     const termin = this.termineById[terminId];
-    if (!termin) return;
-
-    const confirmMsg = `Möchten Sie den Termin "${termin.termin_nr || termin.id}" wirklich in den Papierkorb verschieben?\n\nKunde: ${termin.kunde_name}\nKennzeichen: ${termin.kennzeichen}\nArbeit: ${termin.arbeit}`;
-
-    if (!confirm(confirmMsg)) {
+    if (!termin) {
+      console.log('deleteTermin: Termin nicht im Cache gefunden, lade neu...');
+      // Versuche den Termin zu laden
+      try {
+        const freshTermin = await TermineService.getById(terminId);
+        if (freshTermin) {
+          this.termineById[terminId] = freshTermin;
+          return this.deleteTermin(terminId); // Retry mit frischem Termin
+        }
+      } catch (e) {
+        console.error('Fehler beim Nachladen des Termins:', e);
+      }
       return;
     }
 
+    console.log('deleteTermin aufgerufen für:', terminId);
+    console.log('Termin-Daten:', termin);
+    console.log('ist_erweiterung:', termin.ist_erweiterung);
+    console.log('erweiterung_von_id:', termin.erweiterung_von_id);
+
+    // Prüfe ob dieser Termin eine Erweiterung ist
+    const istErweiterung = termin.ist_erweiterung === 1 || termin.ist_erweiterung === true || termin.erweiterung_von_id;
+    
+    // Prüfe ob dieser Termin Erweiterungen hat
+    const hatErweiterungen = Object.values(this.termineById).some(
+      t => t.erweiterung_von_id === terminId && !t.ist_geloescht
+    );
+
+    console.log('istErweiterung:', istErweiterung);
+    console.log('hatErweiterungen:', hatErweiterungen);
+
+    let loeschAktion = 'einzeln'; // 'einzeln' oder 'alle'
+
+    if (istErweiterung) {
+      // Dieser Termin ist eine Erweiterung - frage ob nur diese oder Original + alle Erweiterungen
+      const originalTermin = this.termineById[termin.erweiterung_von_id];
+      const originalInfo = originalTermin 
+        ? `\n\nOriginal-Termin: ${originalTermin.termin_nr || originalTermin.id} - ${originalTermin.arbeit}`
+        : '';
+      
+      const wahl = confirm(
+        `Dieser Termin ist eine Erweiterung.${originalInfo}\n\n` +
+        `OK = Nur diese Erweiterung löschen\n` +
+        `Abbrechen = Nichts löschen\n\n` +
+        `(Um den Original-Termin mit allen Erweiterungen zu löschen, öffnen Sie den Original-Termin)`
+      );
+      
+      if (!wahl) {
+        return; // Abbrechen gewählt
+      }
+      loeschAktion = 'einzeln';
+      
+    } else if (hatErweiterungen) {
+      // Dieser Termin hat Erweiterungen - frage ob nur dieser oder alle
+      const erweiterungen = Object.values(this.termineById).filter(
+        t => t.erweiterung_von_id === terminId && !t.ist_geloescht
+      );
+      const anzahlErweiterungen = erweiterungen.length;
+      
+      const erweiterungsInfo = erweiterungen
+        .map(e => `  🔗 ${e.termin_nr || e.id}: ${e.arbeit}`)
+        .join('\n');
+      
+      // Verwende prompt für drei Optionen
+      const eingabe = prompt(
+        `Dieser Termin hat ${anzahlErweiterungen} Erweiterung(en):\n${erweiterungsInfo}\n\n` +
+        `Was möchten Sie löschen?\n\n` +
+        `1 = Nur diesen Termin (Erweiterungen bleiben)\n` +
+        `2 = Alles löschen (Original + alle Erweiterungen)\n` +
+        `Leer/Abbrechen = Nichts löschen\n\n` +
+        `Bitte 1 oder 2 eingeben:`,
+        ''
+      );
+      
+      if (!eingabe || eingabe.trim() === '') {
+        return; // Abbrechen
+      }
+      
+      if (eingabe.trim() === '2') {
+        loeschAktion = 'alle';
+      } else if (eingabe.trim() === '1') {
+        loeschAktion = 'einzeln';
+      } else {
+        alert('Ungültige Eingabe. Löschen abgebrochen.');
+        return;
+      }
+      
+    } else {
+      // Normaler Termin ohne Erweiterungen
+      const confirmMsg = `Möchten Sie den Termin "${termin.termin_nr || termin.id}" wirklich in den Papierkorb verschieben?\n\nKunde: ${termin.kunde_name}\nKennzeichen: ${termin.kennzeichen}\nArbeit: ${termin.arbeit}`;
+      if (!confirm(confirmMsg)) {
+        return;
+      }
+    }
+
     try {
-      await TermineService.delete(terminId);
-      alert('Termin wurde in den Papierkorb verschoben.');
+      if (loeschAktion === 'alle') {
+        // Lösche alle Erweiterungen zuerst
+        const erweiterungen = Object.values(this.termineById).filter(
+          t => t.erweiterung_von_id === terminId && !t.ist_geloescht
+        );
+        for (const erw of erweiterungen) {
+          await TermineService.delete(erw.id);
+        }
+        // Dann den Original-Termin
+        await TermineService.delete(terminId);
+        alert(`Termin und ${erweiterungen.length} Erweiterung(en) wurden in den Papierkorb verschoben.`);
+      } else {
+        await TermineService.delete(terminId);
+        alert('Termin wurde in den Papierkorb verschoben.');
+      }
+      
       this.loadTermine();
       this.loadDashboard();
       this.loadAuslastung();
@@ -10324,9 +11353,11 @@ class App {
   }
 
   getWeekStart() {
-    const today = new Date();
+    const today = this.getToday();
     const dayOfWeek = today.getDay();
-    const diff = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+    // Sonntag (0): Zeige nächste Woche (morgen ist Montag, also +1)
+    // Montag-Samstag: Zeige aktuelle Woche (zurück zum Montag)
+    const diff = dayOfWeek === 0 ? 1 : 1 - dayOfWeek;
     const monday = new Date(today);
     monday.setDate(today.getDate() + diff);
     return this.formatDateLocal(monday);
@@ -12457,6 +13488,29 @@ class App {
             }
           }
 
+          // Zähle Erweiterungen zu diesem Termin
+          const erweiterungen = termine.filter(t => t.erweiterung_von_id === termin.id && !t.ist_geloescht);
+          const erweiterungAnzahl = erweiterungen.length;
+          
+          // Bestimme die endzeit_berechnet:
+          // - Wenn dieser Termin Erweiterungen hat: nicht verwenden (Endzeit wird auf Erweiterung angezeigt)
+          // - Wenn dies eine Erweiterung ist: endzeit_berechnet vom Haupttermin holen
+          // - Sonst: eigene endzeit_berechnet verwenden
+          let endzeitFuerAnzeige = null;
+          if (erweiterungAnzahl > 0) {
+            // Hat Erweiterungen - Endzeit wird auf der Erweiterung angezeigt
+            endzeitFuerAnzeige = null;
+          } else if (termin.erweiterung_von_id) {
+            // Ist eine Erweiterung - hole endzeit_berechnet vom Haupttermin
+            const hauptTermin = termine.find(t => t.id === termin.erweiterung_von_id);
+            if (hauptTermin && hauptTermin.endzeit_berechnet) {
+              endzeitFuerAnzeige = hauptTermin.endzeit_berechnet;
+            }
+          } else {
+            // Normaler Termin ohne Erweiterungen
+            endzeitFuerAnzeige = termin.endzeit_berechnet || null;
+          }
+          
           const terminEntry = {
             terminId: termin.id,
             terminNr: termin.termin_nr,
@@ -12468,10 +13522,14 @@ class App {
             arbeitenAnzahl: arbeitenListe.length,
             zeitMinuten: zeitMinuten,
             startzeit: arbeitStartzeit,
+            endzeitBerechnet: endzeitFuerAnzeige,
             status: termin.status || 'geplant',
             istIntern: !termin.kennzeichen || termin.abholung_details === 'Interner Termin',
             interneAuftragsnummer: termin.interne_auftragsnummer || '',
-            istSchwebend: istSchwebend
+            istSchwebend: istSchwebend,
+            istErweiterung: termin.ist_erweiterung === 1 || termin.ist_erweiterung === true,
+            erweiterungAnzahl: erweiterungAnzahl,
+            erweiterungVonId: termin.erweiterung_von_id || null
           };
           
           arbeitEntries.push(terminEntry);
@@ -12598,18 +13656,26 @@ class App {
       // Schwebend-Badge
       const schwebendBadge = arbeit.istSchwebend ? ' ⏸️' : '';
       
+      // Erweiterungs-Badge
+      const erweiterungBadge = arbeit.erweiterungAnzahl > 0 
+        ? ` <span class="zeitleiste-erweiterung-badge" onclick="event.stopPropagation(); app.showVerknuepfteTermine(${arbeit.terminId})" title="${arbeit.erweiterungAnzahl} Erweiterung(en)">🔗${arbeit.erweiterungAnzahl}</span>` 
+        : '';
+      
+      // Erweiterungs-Block-Klasse
+      const erweiterungClass = arbeit.istErweiterung ? 'erweiterung-block' : '';
+      
       // Tooltip
-      const tooltip = `${arbeit.terminNr || ''}${schwebendBadge}&#10;${arbeit.kunde || '-'}&#10;${arbeit.kennzeichen || '-'}&#10;${arbeit.arbeit}&#10;Dauer: ${zeitMinuten} Min. (${(zeitMinuten/60).toFixed(1)} h)`;
+      const tooltip = `${arbeit.terminNr || ''}${schwebendBadge}&#10;${arbeit.kunde || '-'}&#10;${arbeit.kennzeichen || '-'}&#10;${arbeit.arbeit}&#10;Dauer: ${zeitMinuten} Min. (${(zeitMinuten/60).toFixed(1)} h)${arbeit.erweiterungAnzahl > 0 ? '&#10;🔗 ' + arbeit.erweiterungAnzahl + ' Erweiterung(en)' : ''}${arbeit.istErweiterung ? '&#10;🔗 ERWEITERUNG' : ''}`;
       
       // Inhalt je nach Breite
       const content = `
-        <div class="zeitleiste-block-nummer">${arbeit.terminNr || '-'}${schwebendBadge}</div>
+        <div class="zeitleiste-block-nummer">${arbeit.terminNr || '-'}${schwebendBadge}${erweiterungBadge}</div>
         <div class="zeitleiste-block-text">${arbeit.arbeit}</div>
         <div class="zeitleiste-block-zeit">${(zeitMinuten/60).toFixed(1)}h</div>
       `;
       
       bloeckeHtml += `
-        <div class="zeitleiste-block-inline ${statusClass}" 
+        <div class="zeitleiste-block-inline ${statusClass} ${erweiterungClass}" 
              style="flex: 0 0 ${widthPercent}%; min-width: 80px;"
              title="${tooltip}"
              onclick="app.showTerminDetails(${arbeit.terminId})">
@@ -12727,6 +13793,20 @@ class App {
       const schwebendClass = arbeit.istSchwebend ? 'schwebend-block' : '';
       const schwebendBadge = arbeit.istSchwebend ? '<span class="zeitleiste-schwebend-badge">⏸️</span>' : '';
       const schwebendTitleText = arbeit.istSchwebend ? '&#10;⏸️ SCHWEBEND' : '';
+      const erweiterungClass = arbeit.istErweiterung ? 'erweiterung-block' : '';
+      const erweiterungTitleText = arbeit.istErweiterung ? '&#10;🔗 ERWEITERUNG' : '';
+      
+      // Verknüpfungs-Badge für Termine mit Erweiterungen (am Ende des Balkens)
+      const hatErweiterungen = arbeit.erweiterungAnzahl > 0;
+      const erweiterungBadge = hatErweiterungen 
+        ? `<span class="zeitleiste-erweiterung-badge-end" onclick="event.stopPropagation(); app.showVerknuepfteTermine(${arbeit.terminId})" title="${arbeit.erweiterungAnzahl} Erweiterung(en) - Klicken zum Anzeigen">🔗</span>` 
+        : '';
+      const erweiterungBadgeTitleText = hatErweiterungen ? `&#10;🔗 ${arbeit.erweiterungAnzahl} Erweiterung(en)` : '';
+      
+      // Icon am Ende für Erweiterungs-Termine (die selbst Erweiterungen sind)
+      const istErweiterungIcon = arbeit.istErweiterung 
+        ? '<span class="zeitleiste-ist-erweiterung-icon" title="Dies ist eine Erweiterung">🔗</span>' 
+        : '';
       
       // Mehrteiliger Termin
       const arbeitenAnzahl = arbeit.arbeitenAnzahl || 1;
@@ -12739,12 +13819,13 @@ class App {
       const blockArbeit = `<span class="zeitleiste-block-arbeit">${this.escapeHtml(arbeit.arbeit)}</span>`;
 
       return `
-        <div class="zeitleiste-block ${statusClass} ${internClass} ${schwebendClass}" 
+        <div class="zeitleiste-block ${statusClass} ${internClass} ${schwebendClass} ${erweiterungClass}" 
              style="left: ${leftPercent}%; width: ${Math.max(widthPercent, 3)}%;"
              onclick="app.openZeitleisteKontextmenu(event, ${arbeit.terminId}, '${this.escapeHtml(arbeit.kunde)}', '${this.escapeHtml(arbeit.arbeit)}', '${arbeit.terminNr}', '${auftragsnrEscaped}')"
-             title="${arbeit.kunde}${arbeit.kennzeichen ? ' - ' + arbeit.kennzeichen : ''}&#10;🔧 ${arbeitenTooltip}${fortsetzungText}&#10;${startZeitText} - ${endZeitText} (${dauerText})${auftragsnrText}${schwebendTitleText}">
+             title="${arbeit.kunde}${arbeit.kennzeichen ? ' - ' + arbeit.kennzeichen : ''}&#10;🔧 ${arbeitenTooltip}${fortsetzungText}&#10;${startZeitText} - ${endZeitText} (${dauerText})${auftragsnrText}${schwebendTitleText}${erweiterungTitleText}${erweiterungBadgeTitleText}">
           ${schwebendBadge}<span class="zeitleiste-block-haupt">${this.escapeHtml(blockHaupt)}</span>${blockArbeit}
           <span class="zeitleiste-block-zeit">${startZeitText} - ${endZeitText}</span>
+          ${erweiterungBadge}${istErweiterungIcon}
         </div>
       `;
     };
@@ -12756,12 +13837,25 @@ class App {
         // Mit Startzeit
         const [startH, startM] = arbeit.startzeit.split(':').map(Number);
         startMinutes = startH * 60 + startM;
-        endMinutes = startMinutes + arbeit.zeitMinuten;
+        
+        // Verwende gespeicherte endzeit_berechnet für den letzten Teil eines Termins
+        if (arbeit.endzeitBerechnet && arbeit.arbeitIndex === arbeit.arbeitenAnzahl - 1) {
+          // Letzte Arbeit des Termins - verwende gespeicherte Endzeit
+          const [endH, endM] = arbeit.endzeitBerechnet.split(':').map(Number);
+          endMinutes = endH * 60 + endM;
+        } else {
+          endMinutes = startMinutes + arbeit.zeitMinuten;
+        }
         
         // Wenn die Startzeit in der Pause liegt, nach der Pause verschieben
         if (pauseStartMinuten !== null && startMinutes >= pauseStartMinuten && startMinutes < pauseEndMinuten) {
           startMinutes = pauseEndMinuten;
-          endMinutes = startMinutes + arbeit.zeitMinuten;
+          if (arbeit.endzeitBerechnet && arbeit.arbeitIndex === arbeit.arbeitenAnzahl - 1) {
+            const [endH, endM] = arbeit.endzeitBerechnet.split(':').map(Number);
+            endMinutes = endH * 60 + endM;
+          } else {
+            endMinutes = startMinutes + arbeit.zeitMinuten;
+          }
         }
       } else {
         // Ohne Startzeit: Platziere nach letzter Arbeit (und nach Pause falls nötig)
@@ -12770,7 +13864,14 @@ class App {
         if (pauseStartMinuten !== null && startMinutes >= pauseStartMinuten && startMinutes < pauseEndMinuten) {
           startMinutes = pauseEndMinuten;
         }
-        endMinutes = startMinutes + arbeit.zeitMinuten;
+        
+        // Verwende gespeicherte endzeit_berechnet für Erweiterungs-Termine oder letzte Arbeit
+        if (arbeit.endzeitBerechnet && (arbeit.istErweiterung || arbeit.arbeitIndex === arbeit.arbeitenAnzahl - 1)) {
+          const [endH, endM] = arbeit.endzeitBerechnet.split(':').map(Number);
+          endMinutes = endH * 60 + endM;
+        } else {
+          endMinutes = startMinutes + arbeit.zeitMinuten;
+        }
       }
       
       // Prüfe ob der Termin über die Mittagspause geht
@@ -12907,6 +14008,13 @@ class App {
     this.closeZeitleisteKontextmenu();
     if (this.zeitleisteKontextTerminId) {
       this.showTerminDetails(this.zeitleisteKontextTerminId);
+    }
+  }
+
+  zeitleisteKontextLoeschen() {
+    this.closeZeitleisteKontextmenu();
+    if (this.zeitleisteKontextTerminId) {
+      this.deleteTermin(this.zeitleisteKontextTerminId);
     }
   }
 
