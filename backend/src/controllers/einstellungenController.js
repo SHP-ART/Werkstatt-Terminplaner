@@ -1,4 +1,5 @@
 const EinstellungenModel = require('../models/einstellungenModel');
+const TermineController = require('./termineController');
 
 class EinstellungenController {
   static async getWerkstatt(req, res) {
@@ -31,6 +32,10 @@ class EinstellungenController {
 
     try {
       const result = await EinstellungenModel.updateWerkstatt(payload);
+      
+      // Cache invalidieren, da Einstellungen (Nebenzeit, Pufferzeit, Servicezeit) die Auslastung beeinflussen
+      TermineController.invalidateAuslastungCache(null);
+      
       res.json({ message: 'Einstellungen aktualisiert', ...result });
     } catch (err) {
       res.status(500).json({ error: err.message });
