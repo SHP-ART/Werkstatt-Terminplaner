@@ -16,7 +16,7 @@ class KundenController {
       if (err) {
         res.status(500).json({ error: err.message });
       } else {
-        res.json({ id: this.lastID, message: 'Kunde erfolgreich angelegt' });
+        res.status(201).json({ id: this.lastID, message: 'Kunde erfolgreich angelegt' });
       }
     });
   }
