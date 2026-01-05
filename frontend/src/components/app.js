@@ -6176,34 +6176,47 @@ class App {
       
       for (const t of tagesTermine) {
         let startzeit = null;
+        let endzeit = null;
         let mitarbeiterId = t.mitarbeiter_id;
         let lehrlingId = null;
         let personTyp = 'mitarbeiter';
         let personId = mitarbeiterId;
         
-        // Startzeit kann direkt im Termin sein oder in arbeitszeiten_details
-        startzeit = t.startzeit || t.bring_zeit;
+        // NEUE SPALTEN: Primär startzeit und endzeit_berechnet aus dem Termin verwenden
+        if (t.startzeit) {
+          startzeit = t.startzeit;
+        }
+        if (t.endzeit_berechnet) {
+          endzeit = t.endzeit_berechnet;
+        }
         
+        // Fallback: bring_zeit als Startzeit
+        if (!startzeit && t.bring_zeit) {
+          startzeit = t.bring_zeit;
+        }
+        
+        // Fallback: arbeitszeiten_details für ältere Termine
         if (t.arbeitszeiten_details) {
           try {
             const details = JSON.parse(t.arbeitszeiten_details);
             
-            // Versuche _startzeit zu finden (hat Priorität)
-            if (details._startzeit) {
+            // Versuche _startzeit zu finden (falls nicht schon gesetzt)
+            if (!startzeit && details._startzeit) {
               startzeit = details._startzeit;
             }
             
-            // Falls keine _startzeit, suche in den einzelnen Arbeiten nach startzeit
+            // Falls keine startzeit, suche in den einzelnen Arbeiten
             if (!startzeit) {
               for (const [key, val] of Object.entries(details)) {
-                if (key.startsWith('_')) continue; // Überspringe Meta-Felder
+                if (key.startsWith('_')) continue;
                 if (typeof val === 'object' && val.startzeit) {
                   startzeit = val.startzeit;
-                  break; // Nimm die erste gefundene Startzeit
+                  break;
                 }
               }
             }
             
+            // Mitarbeiter/Lehrling aus details
             if (details._gesamt_mitarbeiter_id) {
               personTyp = details._gesamt_mitarbeiter_id.type;
               personId = details._gesamt_mitarbeiter_id.id;
@@ -6217,24 +6230,39 @@ class App {
         
         if (!startzeit || !personId) continue;
         
+        // Startzeit in Minuten umrechnen
         const [startH, startM] = startzeit.split(':').map(Number);
         const startMin = startH * 60 + startM;
-        const dauer = t.geschaetzte_zeit || 60;
-        const dauerMitNebenzeit = nebenzeitProzent > 0 
-          ? Math.round(dauer * (1 + nebenzeitProzent / 100))
-          : dauer;
-        const endeMin = startMin + dauerMitNebenzeit;
+        
+        // Endzeit berechnen
+        let endeMin;
+        if (endzeit) {
+          // NEUE SPALTE: endzeit_berechnet direkt verwenden
+          const [endeH, endeM] = endzeit.split(':').map(Number);
+          endeMin = endeH * 60 + endeM;
+        } else {
+          // Fallback: aus geschätzter Zeit berechnen
+          const dauer = t.geschaetzte_zeit || 60;
+          const dauerMitNebenzeit = nebenzeitProzent > 0 
+            ? Math.round(dauer * (1 + nebenzeitProzent / 100))
+            : dauer;
+          endeMin = startMin + dauerMitNebenzeit;
+        }
+        
+        const dauer = endeMin - startMin;
         
         termineMitZeit.push({
           termin: t,
           startzeit,
+          endzeit: endzeit || `${Math.floor(endeMin/60).toString().padStart(2,'0')}:${(endeMin%60).toString().padStart(2,'0')}`,
           startMin,
           endeMin,
-          dauer: dauerMitNebenzeit,
+          dauer,
           personTyp,
           personId,
           personKey: `${personTyp}_${personId}`
         });
+      }
       }
 
       // Finde Überschneidungen pro Person
