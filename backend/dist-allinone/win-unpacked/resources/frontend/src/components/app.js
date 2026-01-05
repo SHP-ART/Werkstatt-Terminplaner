@@ -5542,6 +5542,14 @@ class App {
       delete existingDetails._gesamt_mitarbeiter_id;
     }
 
+    // Wenn keine Startzeit vorhanden ist, aber eine Bringzeit existiert, diese als Startzeit verwenden
+    let bringzeitAlsStartzeit = false;
+    if (selectedValue && termin && !existingDetails._startzeit && termin.bring_zeit) {
+      existingDetails._startzeit = termin.bring_zeit;
+      bringzeitAlsStartzeit = true;
+      console.log('Bringzeit als Startzeit übernommen:', termin.bring_zeit);
+    }
+
     // Überschneidungsprüfung wenn Mitarbeiter/Lehrling zugeordnet wird und Termin eine Startzeit hat
     if (selectedValue && termin) {
       let terminStartzeit = null;
@@ -5598,8 +5606,27 @@ class App {
         updateData.status = neuerStatus;
       }
       
+      // Wenn Bringzeit als Startzeit übernommen wurde, auch in der Datenbank speichern
+      if (bringzeitAlsStartzeit && termin.bring_zeit) {
+        updateData.startzeit = termin.bring_zeit;
+        
+        // Endzeit berechnen basierend auf geschätzter Zeit
+        const geschaetzteZeit = termin.geschaetzte_zeit || 60;
+        const [stunden, minuten] = termin.bring_zeit.split(':').map(Number);
+        const startMinuten = stunden * 60 + minuten;
+        const endMinuten = startMinuten + geschaetzteZeit;
+        const endStunden = Math.floor(endMinuten / 60);
+        const endMin = endMinuten % 60;
+        updateData.endzeit_berechnet = `${String(endStunden).padStart(2, '0')}:${String(endMin).padStart(2, '0')}`;
+        console.log('Startzeit und Endzeit in Datenbank gespeichert:', updateData.startzeit, '-', updateData.endzeit_berechnet);
+      }
+      
       await TermineService.update(terminId, updateData);
-      alert('Zuordnung gespeichert!' + (neuerStatus ? ' Status auf "Geplant" gesetzt.' : ''));
+      let hinweis = neuerStatus ? ' Status auf "Geplant" gesetzt.' : '';
+      if (bringzeitAlsStartzeit) {
+        hinweis += ' Bringzeit wurde als Startzeit übernommen.';
+      }
+      alert('Zuordnung gespeichert!' + hinweis);
       this.closeTerminDetails();
       this.loadTermine();
       this.loadAuslastung();
@@ -6168,37 +6195,75 @@ class App {
 
       const tagesTermine = termine.filter(t => 
         t.datum === datum && 
+        !t.ist_schwebend &&
+        !t.geloescht_am  // Gelöschte Termine ausschließen
+      );
+
+      // Sammle alle Termin-IDs des Tages für Erweiterungssuche
+      const tagesTerminIds = new Set(tagesTermine.map(t => t.id));
+      
+      // Finde Erweiterungen die zu Terminen dieses Tages gehören (auch wenn an anderem Tag)
+      const erweiterungenVonHeute = termine.filter(t => 
+        t.erweiterung_von_id && 
+        tagesTerminIds.has(t.erweiterung_von_id) &&
+        !t.geloescht_am &&
         !t.ist_schwebend
       );
+      
+      // Kombiniere Tages-Termine mit relevanten Erweiterungen
+      const relevanteTermine = [...tagesTermine];
+      for (const erw of erweiterungenVonHeute) {
+        if (!tagesTerminIds.has(erw.id)) {
+          relevanteTermine.push(erw);
+        }
+      }
 
       // Gruppiere Termine nach Mitarbeiter/Lehrling
       const termineMitZeit = [];
       
-      for (const t of tagesTermine) {
+      for (const t of relevanteTermine) {
         let startzeit = null;
+        let endzeit = null;
         let mitarbeiterId = t.mitarbeiter_id;
         let lehrlingId = null;
         let personTyp = 'mitarbeiter';
         let personId = mitarbeiterId;
         
+        // NEUE SPALTEN: Primär startzeit und endzeit_berechnet aus dem Termin verwenden
+        if (t.startzeit) {
+          startzeit = t.startzeit;
+        }
+        if (t.endzeit_berechnet) {
+          endzeit = t.endzeit_berechnet;
+        }
+        
+        // Fallback: bring_zeit als Startzeit
+        if (!startzeit && t.bring_zeit) {
+          startzeit = t.bring_zeit;
+        }
+        
+        // Fallback: arbeitszeiten_details für ältere Termine
         if (t.arbeitszeiten_details) {
           try {
             const details = JSON.parse(t.arbeitszeiten_details);
             
-            // Versuche _startzeit zu finden
-            startzeit = details._startzeit;
+            // Versuche _startzeit zu finden (falls nicht schon gesetzt)
+            if (!startzeit && details._startzeit) {
+              startzeit = details._startzeit;
+            }
             
-            // Falls keine _startzeit, suche in den einzelnen Arbeiten nach startzeit
+            // Falls keine startzeit, suche in den einzelnen Arbeiten
             if (!startzeit) {
               for (const [key, val] of Object.entries(details)) {
-                if (key.startsWith('_')) continue; // Überspringe Meta-Felder
+                if (key.startsWith('_')) continue;
                 if (typeof val === 'object' && val.startzeit) {
                   startzeit = val.startzeit;
-                  break; // Nimm die erste gefundene Startzeit
+                  break;
                 }
               }
             }
             
+            // Mitarbeiter/Lehrling aus details
             if (details._gesamt_mitarbeiter_id) {
               personTyp = details._gesamt_mitarbeiter_id.type;
               personId = details._gesamt_mitarbeiter_id.id;
@@ -6212,23 +6277,42 @@ class App {
         
         if (!startzeit || !personId) continue;
         
+        // Startzeit in Minuten umrechnen
         const [startH, startM] = startzeit.split(':').map(Number);
         const startMin = startH * 60 + startM;
-        const dauer = t.geschaetzte_zeit || 60;
-        const dauerMitNebenzeit = nebenzeitProzent > 0 
-          ? Math.round(dauer * (1 + nebenzeitProzent / 100))
-          : dauer;
-        const endeMin = startMin + dauerMitNebenzeit;
+        
+        // Endzeit berechnen
+        let endeMin;
+        if (endzeit) {
+          // NEUE SPALTE: endzeit_berechnet direkt verwenden
+          const [endeH, endeM] = endzeit.split(':').map(Number);
+          endeMin = endeH * 60 + endeM;
+        } else {
+          // Fallback: aus geschätzter Zeit berechnen
+          const dauer = t.geschaetzte_zeit || 60;
+          const dauerMitNebenzeit = nebenzeitProzent > 0 
+            ? Math.round(dauer * (1 + nebenzeitProzent / 100))
+            : dauer;
+          endeMin = startMin + dauerMitNebenzeit;
+        }
+        
+        const dauer = endeMin - startMin;
+        
+        // Prüfe ob es eine Erweiterung ist
+        const istErweiterung = t.ist_erweiterung === 1 || t.ist_erweiterung === true || t.erweiterung_von_id;
         
         termineMitZeit.push({
           termin: t,
           startzeit,
+          endzeit: endzeit || `${Math.floor(endeMin/60).toString().padStart(2,'0')}:${(endeMin%60).toString().padStart(2,'0')}`,
           startMin,
           endeMin,
-          dauer: dauerMitNebenzeit,
+          dauer,
           personTyp,
           personId,
-          personKey: `${personTyp}_${personId}`
+          personKey: `${personTyp}_${personId}`,
+          istErweiterung,
+          erweiterungVonId: t.erweiterung_von_id
         });
       }
 
@@ -6253,6 +6337,15 @@ class App {
           
           for (let j = i + 1; j < personTermine.length; j++) {
             const next = personTermine[j];
+            
+            // Überspringe wenn next eine Erweiterung von current ist (das ist gewollt!)
+            if (next.erweiterungVonId === current.termin.id) {
+              continue;
+            }
+            // Überspringe auch wenn current eine Erweiterung von next ist
+            if (current.erweiterungVonId === next.termin.id) {
+              continue;
+            }
             
             // Überschneidung wenn current endet nach next startet
             if (current.endeMin > next.startMin) {
@@ -6315,6 +6408,14 @@ class App {
           const konfliktEnde1 = `${Math.floor(konflikt.termin1.endeMin/60).toString().padStart(2,'0')}:${(konflikt.termin1.endeMin%60).toString().padStart(2,'0')}`;
           const konfliktEnde2 = `${Math.floor(konflikt.termin2.endeMin/60).toString().padStart(2,'0')}:${(konflikt.termin2.endeMin%60).toString().padStart(2,'0')}`;
           
+          // Erweiterungs-Badge
+          const erw1Badge = konflikt.termin1.istErweiterung ? '<span style="background: #9c27b0; color: white; padding: 1px 5px; border-radius: 3px; font-size: 0.75em; margin-left: 5px;">Erw.</span>' : '';
+          const erw2Badge = konflikt.termin2.istErweiterung ? '<span style="background: #9c27b0; color: white; padding: 1px 5px; border-radius: 3px; font-size: 0.75em; margin-left: 5px;">Erw.</span>' : '';
+          
+          // Datum-Info falls anderer Tag
+          const datum1 = t1.datum !== datum ? `<div style="font-size: 0.8em; color: #9c27b0;">📅 ${new Date(t1.datum + 'T00:00:00').toLocaleDateString('de-DE')}</div>` : '';
+          const datum2 = t2.datum !== datum ? `<div style="font-size: 0.8em; color: #9c27b0;">📅 ${new Date(t2.datum + 'T00:00:00').toLocaleDateString('de-DE')}</div>` : '';
+          
           html += `
             <div class="konflikt-item" style="background: #f8f9fa; padding: 15px; border-radius: 8px; margin-bottom: 15px; border: 1px solid #ddd;">
               <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 10px;">
@@ -6328,8 +6429,9 @@ class App {
               
               <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 15px;">
                 <div style="background: white; padding: 10px; border-radius: 5px; border-left: 3px solid #2196f3;">
-                  <div style="font-weight: 600;">${t1.termin_nr}</div>
+                  <div style="font-weight: 600;">${t1.termin_nr}${erw1Badge}</div>
                   <div style="font-size: 0.9em; color: #666;">${t1.kunde_name || 'Unbekannt'}</div>
+                  ${datum1}
                   <div style="margin-top: 5px;">
                     <span style="background: #e3f2fd; padding: 2px 6px; border-radius: 4px; font-size: 0.85em;">
                       ${konflikt.termin1.startzeit} - ${konfliktEnde1}
@@ -6337,8 +6439,9 @@ class App {
                   </div>
                 </div>
                 <div style="background: white; padding: 10px; border-radius: 5px; border-left: 3px solid #ff9800;">
-                  <div style="font-weight: 600;">${t2.termin_nr}</div>
+                  <div style="font-weight: 600;">${t2.termin_nr}${erw2Badge}</div>
                   <div style="font-size: 0.9em; color: #666;">${t2.kunde_name || 'Unbekannt'}</div>
+                  ${datum2}
                   <div style="margin-top: 5px;">
                     <span style="background: #fff3e0; padding: 2px 6px; border-radius: 4px; font-size: 0.85em;">
                       ${konflikt.termin2.startzeit} - ${konfliktEnde2}

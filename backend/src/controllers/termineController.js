@@ -166,16 +166,23 @@ function berechneAuslastungErgebnis(params) {
     datum                     // Das Datum
   } = params;
 
-  // Basis-Werte aus DB-Ergebnis
-  const belegt = (row && row.gesamt_minuten) ? row.gesamt_minuten : 0;
-  const belegtMitPufferWert = mitPuffer ? ((row && row.gesamt_minuten_mit_puffer) ? row.gesamt_minuten_mit_puffer : belegt) : belegt;
-  const geplant = (row && row.geplant_minuten) ? row.geplant_minuten : 0;
-  const inArbeit = (row && row.in_arbeit_minuten) ? row.in_arbeit_minuten : 0;
-  const abgeschlossen = (row && row.abgeschlossen_minuten) ? row.abgeschlossen_minuten : 0;
-  const pufferMinuten = mitPuffer ? ((row && row.puffer_minuten) ? row.puffer_minuten : 0) : 0;
-
   // Nebenzeit-Faktor
   const nebenzeitFaktor = 1 + (globaleNebenzeit / 100);
+
+  // Basis-Werte aus DB-Ergebnis - MIT Nebenzeit-Aufschlag für Gesamtstatistiken
+  const belegtRoh = (row && row.gesamt_minuten) ? row.gesamt_minuten : 0;
+  const belegt = Math.round(belegtRoh * nebenzeitFaktor);
+  const belegtMitPufferRoh = mitPuffer ? ((row && row.gesamt_minuten_mit_puffer) ? row.gesamt_minuten_mit_puffer : belegtRoh) : belegtRoh;
+  const belegtMitPufferWert = Math.round(belegtMitPufferRoh * nebenzeitFaktor);
+  
+  // Status-Zeiten auch mit Nebenzeit multiplizieren
+  const geplantRoh = (row && row.geplant_minuten) ? row.geplant_minuten : 0;
+  const geplant = Math.round(geplantRoh * nebenzeitFaktor);
+  const inArbeitRoh = (row && row.in_arbeit_minuten) ? row.in_arbeit_minuten : 0;
+  const inArbeit = Math.round(inArbeitRoh * nebenzeitFaktor);
+  const abgeschlossenRoh = (row && row.abgeschlossen_minuten) ? row.abgeschlossen_minuten : 0;
+  const abgeschlossen = Math.round(abgeschlossenRoh * nebenzeitFaktor);
+  const pufferMinuten = mitPuffer ? ((row && row.puffer_minuten) ? row.puffer_minuten : 0) : 0;
 
   // Gesamtanzahl der AKTIVEN Termine für Servicezeit-Berechnung
   const gesamtTerminAnzahlFuerService = (row && row.aktive_termine) 
