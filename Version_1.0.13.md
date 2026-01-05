@@ -132,16 +132,18 @@ resetTerminForm(preserveDatum = false) {
 - **Lösung**: Such-Index aktualisieren nach Neuanlage, Cache invalidieren
 
 ### Bug 8: Mehrere Arbeiten - Mitarbeiter-Zuordnung fehlt in Auslastung
-- [ ] **Problem**: Bei Terminen mit mehreren Arbeiten können diese nicht einzelnen Mitarbeitern zugeordnet werden
-- [ ] **Problem**: Zugeordnete Arbeiten werden nicht bei der Auslastung angezeigt
+- [x] **Problem**: Bei Terminen mit mehreren Arbeiten können diese nicht einzelnen Mitarbeitern zugeordnet werden ✅ BEHOBEN
+- [x] **Problem**: Zugeordnete Arbeiten werden nicht bei der Auslastung angezeigt ✅ BEHOBEN
 - **Betroffene Dateien**:
-  - `backend/src/controllers/termineController.js` (Auslastungsberechnung)
-  - `frontend/src/components/app.js` (Arbeiten-Zuordnung UI)
-- **Priorität**: 🔴 KRITISCH
-- **Lösung**: 
-  - arbeitszeiten_details korrekt auswerten
-  - Jede Arbeit einzeln mit Mitarbeiter-ID speichern
-  - In Auslastung pro Mitarbeiter summieren
+  - `backend/src/models/termineModel.js` (Auslastungsberechnung)
+  - `frontend/src/components/app.js` (Zeitleiste-Darstellung)
+- **Priorität**: 🔴 KRITISCH ✅ BEHOBEN
+- **Lösung implementiert am**: 5. Januar 2026
+  - Backend: `getAuslastungProMitarbeiter()` verarbeitet jede Arbeit einzeln
+  - Jede Arbeit prüft auf eigene `mitarbeiter_id` in arbeitszeiten_details
+  - Fallback auf `_gesamt_mitarbeiter_id` wenn keine individuelle Zuordnung
+  - Frontend Zeitleiste: Gruppierung nach individuellem Mitarbeiter pro Arbeit
+  - Frontend Zeitleiste: Zeitberechnung nutzt `zeitMinuten` statt `endzeitBerechnet`
 
 ### Bug 11: All-in-One Version - Hohe CPU-Auslastung
 - [x] **Problem**: Die Server All-in-One Electron-Version hat sehr hohe CPU-Auslastung
@@ -228,7 +230,7 @@ resetTerminForm(preserveDatum = false) {
 | 3 | Mitarbeiter-Zuordnung | 2-3h | [x] ✅ |
 | 4 | Mittagspause Termine | 2h | [x] ✅ |
 | 7 | Kennzeichen-Suche | 1h | [ ] |
-| 8 | Mehrere Arbeiten Auslastung | 2-3h | [ ] |
+| 8 | Mehrere Arbeiten Auslastung | 2-3h | [x] ✅ |
 | 11 | All-in-One hohe CPU | 2-4h | [x] ✅ |
 
 **Gesamt Phase 1**: ~10-14 Stunden (1 + 11 erledigt)
@@ -299,7 +301,7 @@ dropZone.ondrop = (e) => {
   - [x] Termin in Mittagspause
   - [ ] Neues Fahrzeug anlegen
   - [ ] Kennzeichen-Suche
-  - [ ] Mehrere Arbeiten zuordnen
+  - [x] Mehrere Arbeiten zuordnen
 - [ ] Version in `backend/src/config/version.js` auf 1.0.13 setzen
 - [ ] Git Tag erstellen
 
