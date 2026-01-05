@@ -5542,6 +5542,14 @@ class App {
       delete existingDetails._gesamt_mitarbeiter_id;
     }
 
+    // Wenn keine Startzeit vorhanden ist, aber eine Bringzeit existiert, diese als Startzeit verwenden
+    let bringzeitAlsStartzeit = false;
+    if (selectedValue && termin && !existingDetails._startzeit && termin.bring_zeit) {
+      existingDetails._startzeit = termin.bring_zeit;
+      bringzeitAlsStartzeit = true;
+      console.log('Bringzeit als Startzeit übernommen:', termin.bring_zeit);
+    }
+
     // Überschneidungsprüfung wenn Mitarbeiter/Lehrling zugeordnet wird und Termin eine Startzeit hat
     if (selectedValue && termin) {
       let terminStartzeit = null;
@@ -5598,8 +5606,27 @@ class App {
         updateData.status = neuerStatus;
       }
       
+      // Wenn Bringzeit als Startzeit übernommen wurde, auch in der Datenbank speichern
+      if (bringzeitAlsStartzeit && termin.bring_zeit) {
+        updateData.startzeit = termin.bring_zeit;
+        
+        // Endzeit berechnen basierend auf geschätzter Zeit
+        const geschaetzteZeit = termin.geschaetzte_zeit || 60;
+        const [stunden, minuten] = termin.bring_zeit.split(':').map(Number);
+        const startMinuten = stunden * 60 + minuten;
+        const endMinuten = startMinuten + geschaetzteZeit;
+        const endStunden = Math.floor(endMinuten / 60);
+        const endMin = endMinuten % 60;
+        updateData.endzeit_berechnet = `${String(endStunden).padStart(2, '0')}:${String(endMin).padStart(2, '0')}`;
+        console.log('Startzeit und Endzeit in Datenbank gespeichert:', updateData.startzeit, '-', updateData.endzeit_berechnet);
+      }
+      
       await TermineService.update(terminId, updateData);
-      alert('Zuordnung gespeichert!' + (neuerStatus ? ' Status auf "Geplant" gesetzt.' : ''));
+      let hinweis = neuerStatus ? ' Status auf "Geplant" gesetzt.' : '';
+      if (bringzeitAlsStartzeit) {
+        hinweis += ' Bringzeit wurde als Startzeit übernommen.';
+      }
+      alert('Zuordnung gespeichert!' + hinweis);
       this.closeTerminDetails();
       this.loadTermine();
       this.loadAuslastung();
