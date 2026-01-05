@@ -148,7 +148,7 @@ async function berechneEndzeitFuerTermin(termin, arbeitszeitenDetails) {
 
 // Einfacher In-Memory-Cache für Auslastungsdaten
 const auslastungCache = new Map();
-const CACHE_TTL = 5 * 60 * 1000; // 5 Minuten
+// CACHE_TTL wird oben bereits definiert (Zeile 13)
 
 function getCacheKey(datum, mitPuffer) {
   return `${datum}_${mitPuffer || 'false'}`;
