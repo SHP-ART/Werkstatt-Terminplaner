@@ -5,6 +5,7 @@ const cors = require('cors');
 const path = require('path');
 const fs = require('fs');
 const { initializeDatabase } = require('./config/database');
+const { VERSION, APP_NAME } = require('./config/version');
 const routes = require('./routes');
 const { WebSocketServer } = require('ws');
 const http = require('http');
@@ -196,7 +197,7 @@ function startServer(clientCountCallback, requestLogCallback) {
     });
 
     server.listen(PORT, '0.0.0.0', () => {
-        console.log('\n✅ Server erfolgreich gestartet!');
+        console.log(`\n✅ ${APP_NAME} v${VERSION} gestartet!`);
         console.log(`📡 Backend-Server: http://0.0.0.0:${PORT}`);
         console.log(`🔌 API-Endpoint:   http://0.0.0.0:${PORT}/api`);
         if (frontendPath) {

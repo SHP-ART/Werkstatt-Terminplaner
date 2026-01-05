@@ -1,6 +1,6 @@
 # Werkstatt Terminplaner
 
-[![Version](https://img.shields.io/badge/version-1.0.8-blue.svg)](https://github.com/SHP-ART/Werkstatt-Terminplaner/releases)
+[![Version](https://img.shields.io/badge/version-1.0.10-blue.svg)](https://github.com/SHP-ART/Werkstatt-Terminplaner/releases)
 [![Node.js](https://img.shields.io/badge/node-%3E%3D14.0.0-brightgreen.svg)](https://nodejs.org)
 [![License](https://img.shields.io/badge/license-Proprietary-red.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey.svg)](README.md)
@@ -28,7 +28,9 @@ Ein vollständiger Werkstatt-Terminplaner mit intelligenter Auslastungsanzeige, 
 Werkstatt-Terminplaner/
 ├── backend/                    # Backend-Server (Node.js/Express)
 │   ├── src/
-│   │   ├── config/            # Datenbank-Konfiguration
+│   │   ├── config/            # Konfiguration
+│   │   │   ├── database.js    # Datenbank-Verbindung
+│   │   │   └── version.js     # 🔖 Zentrale Versionsverwaltung
 │   │   ├── controllers/       # Business-Logik
 │   │   ├── models/            # Datenbank-Modelle
 │   │   ├── routes/            # API-Routen
@@ -45,6 +47,25 @@ Werkstatt-Terminplaner/
     ├── index.html             # Haupt-HTML-Datei
     └── config.js              # Frontend-Konfiguration
 ```
+
+### 🔖 Versionsverwaltung
+
+Die Programmversion wird zentral in einer Datei verwaltet:
+
+```
+backend/src/config/version.js
+```
+
+```javascript
+const VERSION = '1.0.10';        // ← Hier Version ändern
+const APP_NAME = 'Werkstatt Terminplaner';
+const RELEASE_DATE = '2026-01-05';
+```
+
+Diese Version wird automatisch verwendet in:
+- **Server-Banner** beim Start: `"✅ Werkstatt Terminplaner v1.0.10 gestartet!"`
+- **API-Endpunkt** `/api/server-info`: Liefert Version, App-Name und Server-Infos
+- **Status-Fenster** der Electron-App
 
 ## 📦 Verfügbare Pakete
 
@@ -905,5 +926,5 @@ Proprietäre Software für interne Nutzung.
 
 ---
 
-**Version**: 1.0.8  
+**Version**: 1.0.10  
 **Letztes Update**: Januar 2026
