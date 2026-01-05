@@ -91,11 +91,13 @@ resetTerminForm(preserveDatum = false) {
 **Geschätzter Gesamtaufwand:** 1-1.5 Stunden (inkl. Tests)
 
 ### Bug 2: Teilverwaltung - Klick auf Termine funktioniert nicht
-- [ ] **Problem**: Bei Sortierung nach Teilestatus und anderen Filteroptionen kann man nicht in die Termine klicken
+- [x] **Problem**: Bei Sortierung nach Teilestatus und anderen Filteroptionen kann man nicht in die Termine klicken ✅ BEHOBEN
 - **Betroffene Dateien**: `frontend/src/components/app.js` (Teilverwaltung-Komponente)
-- **Priorität**: 🔴 KRITISCH
-- **Vermutete Ursache**: Event-Handler werden bei Sortierung nicht korrekt gebunden
-- **Lösung**: Event-Delegation prüfen, onClick-Handler nach Re-Render sicherstellen
+- **Priorität**: 🔴 KRITISCH ✅ BEHOBEN
+- **Ursache**: `termineById`-Cache wurde in `loadTeileStatusUebersicht()` nicht befüllt
+- **Lösung implementiert am**: 5. Januar 2026
+  - `loadTeileStatusUebersicht()` befüllt jetzt `termineById`-Cache
+  - `openArbeitszeitenModal()` lädt Termin nach wenn nicht im Cache (Fallback)
 
 ### Bug 3: Mitarbeiter-Zuordnung funktioniert nicht
 - [ ] **Problem**: "Gesamter Auftrag" Zuordnung funktioniert nicht
@@ -221,7 +223,7 @@ resetTerminForm(preserveDatum = false) {
 | # | Bug | Geschätzte Zeit | Status |
 |---|-----|-----------------|--------|
 | 1 | Datum verschwindet | 1-2h | [x] ✅ |
-| 2 | Teilverwaltung Klick | 1h | [ ] |
+| 2 | Teilverwaltung Klick | 1h | [x] ✅ |
 | 3 | Mitarbeiter-Zuordnung | 2-3h | [ ] |
 | 4 | Mittagspause Termine | 2h | [ ] |
 | 7 | Kennzeichen-Suche | 1h | [ ] |
@@ -291,7 +293,7 @@ dropZone.ondrop = (e) => {
 - [ ] Frontend funktioniert
 - [ ] Manuelle Tests durchgeführt:
   - [x] Neuer Termin mit Datum
-  - [ ] Teilverwaltung Klick
+  - [x] Teilverwaltung Klick
   - [ ] Mitarbeiter zuordnen
   - [ ] Termin in Mittagspause
   - [ ] Neues Fahrzeug anlegen
