@@ -7589,7 +7589,9 @@ class App {
         document.getElementById('verfuegbar').textContent = verfuegbarText;
       }
       if (data.einstellungen) {
-        this.prefillWerkstattSettings(data.einstellungen);
+        // NICHT mehr hier die Einstellungen überschreiben - das führt zu Race-Conditions
+        // Die Einstellungen werden in loadWerkstattSettings() geladen
+        // this.prefillWerkstattSettings(data.einstellungen);
       }
       if (data.abwesenheit) {
         this.prefillAbwesenheit(datum, data.abwesenheit);
@@ -11211,10 +11213,10 @@ class App {
         mittagspause_minuten: mittagspause
       });
       alert('Einstellungen gespeichert.');
+      // WICHTIG: Erst Einstellungen laden, dann Auslastung (sonst überschreibt Auslastung mit alten Daten)
+      await this.loadWerkstattSettings();
       this.loadAuslastung();
       this.loadDashboard();
-      // Lade Einstellungen neu, um sicherzustellen, dass die Werte korrekt sind
-      this.loadWerkstattSettings();
     } catch (error) {
       console.error('Fehler beim Speichern der Einstellungen:', error);
       alert('Einstellungen konnten nicht gespeichert werden.');
