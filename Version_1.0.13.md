@@ -123,13 +123,16 @@ resetTerminForm(preserveDatum = false) {
   - Endzeit wird nach Verschiebung korrekt neu berechnet (nicht mehr alte `endzeitBerechnet` verwenden)
 
 ### Bug 7: Kennzeichen-Suche bei neuen Autos
-- [ ] **Problem**: Bei neu angelegten Fahrzeugen funktioniert die Kennzeichen-Suche nicht
+- [x] **Problem**: Bei neu angelegten Fahrzeugen funktioniert die Kennzeichen-Suche nicht ✅ BEHOBEN
 - **Betroffene Dateien**:
-  - `frontend/src/components/app.js` (Suche)
-  - `backend/src/controllers/kundenController.js` (Search-Endpoint)
-- **Priorität**: 🔴 KRITISCH
-- **Vermutete Ursache**: Cache wird nicht aktualisiert oder Suche findet nur alte Datensätze
-- **Lösung**: Such-Index aktualisieren nach Neuanlage, Cache invalidieren
+  - `frontend/src/components/app.js` (Cache-Aktualisierung)
+- **Priorität**: 🔴 KRITISCH ✅ BEHOBEN
+- **Ursache**: `termineCache` und `kundenCache` wurden nach Termin-Erstellen nicht aktualisiert
+- **Lösung implementiert am**: 5. Januar 2026
+  - `loadTermineCache()` wird nach jedem Termin-Erstellen aufgerufen
+  - `loadTermineCache()` wird nach Termin-Bearbeiten aufgerufen
+  - `loadKunden()` wird nach Fahrzeug-Hinzufügen aufgerufen
+  - Betrifft: Normaler Termin, Interner Termin, Wartende Aktion
 
 ### Bug 8: Mehrere Arbeiten - Mitarbeiter-Zuordnung fehlt in Auslastung
 - [x] **Problem**: Bei Terminen mit mehreren Arbeiten können diese nicht einzelnen Mitarbeitern zugeordnet werden ✅ BEHOBEN
@@ -229,7 +232,7 @@ resetTerminForm(preserveDatum = false) {
 | 2 | Teilverwaltung Klick | 1h | [x] ✅ |
 | 3 | Mitarbeiter-Zuordnung | 2-3h | [x] ✅ |
 | 4 | Mittagspause Termine | 2h | [x] ✅ |
-| 7 | Kennzeichen-Suche | 1h | [ ] |
+| 7 | Kennzeichen-Suche | 1h | [x] ✅ |
 | 8 | Mehrere Arbeiten Auslastung | 2-3h | [x] ✅ |
 | 11 | All-in-One hohe CPU | 2-4h | [x] ✅ |
 
@@ -300,7 +303,7 @@ dropZone.ondrop = (e) => {
   - [x] Mitarbeiter zuordnen
   - [x] Termin in Mittagspause
   - [ ] Neues Fahrzeug anlegen
-  - [ ] Kennzeichen-Suche
+  - [x] Kennzeichen-Suche
   - [x] Mehrere Arbeiten zuordnen
 - [ ] Version in `backend/src/config/version.js` auf 1.0.13 setzen
 - [ ] Git Tag erstellen
