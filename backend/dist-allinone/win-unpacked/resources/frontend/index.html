@@ -556,11 +556,11 @@
                     <div class="form-row" id="abholungZeitRow" style="display: none;">
                         <div class="form-group" id="bringzeitGroup">
                             <label>Bringzeit:</label>
-                            <input type="time" id="bring_zeit">
+                            <input type="text" id="bring_zeit" placeholder="HH:MM" pattern="[0-2][0-9]:[0-5][0-9]" maxlength="5" title="24h-Format (z.B. 08:00, 14:30)" oninput="this.value = this.value.replace(/[^0-9:]/g, ''); if(this.value.length === 2 && !this.value.includes(':')) this.value += ':';" style="text-align: center;">
                         </div>
                         <div class="form-group" id="abholzeitGroup">
                             <label>Abholzeit:</label>
-                            <input type="time" id="abholung_zeit">
+                            <input type="text" id="abholung_zeit" placeholder="HH:MM" pattern="[0-2][0-9]:[0-5][0-9]" maxlength="5" title="24h-Format (z.B. 16:00, 17:30)" oninput="this.value = this.value.replace(/[^0-9:]/g, ''); if(this.value.length === 2 && !this.value.includes(':')) this.value += ':';" style="text-align: center;">
                         </div>
                         <div class="form-group" id="abholDatumGroup">
                             <label>Abhol-Datum:</label>
@@ -763,11 +763,11 @@
                             <div class="form-row" id="editAbholungZeitRow" style="display: none;">
                                 <div class="form-group" id="editBringzeitGroup">
                                     <label>Bringzeit:</label>
-                                    <input type="time" id="edit_bring_zeit">
+                                    <input type="text" id="edit_bring_zeit" placeholder="HH:MM" pattern="[0-2][0-9]:[0-5][0-9]" maxlength="5" title="24h-Format (z.B. 08:00, 14:30)" oninput="this.value = this.value.replace(/[^0-9:]/g, ''); if(this.value.length === 2 && !this.value.includes(':')) this.value += ':';" style="text-align: center;">
                                 </div>
                                 <div class="form-group" id="editAbholzeitGroup">
                                     <label>Abholzeit:</label>
-                                    <input type="time" id="edit_abholung_zeit">
+                                    <input type="text" id="edit_abholung_zeit" placeholder="HH:MM" pattern="[0-2][0-9]:[0-5][0-9]" maxlength="5" title="24h-Format (z.B. 16:00, 17:30)" oninput="this.value = this.value.replace(/[^0-9:]/g, ''); if(this.value.length === 2 && !this.value.includes(':')) this.value += ':';" style="text-align: center;">
                                 </div>
                                 <div class="form-group" id="editAbholDatumGroup">
                                     <label>Abhol-Datum:</label>
@@ -825,11 +825,11 @@
                         <div class="form-row">
                             <div class="form-group">
                                 <label>Startzeit (optional):</label>
-                                <input type="time" id="intern_zeit_von" placeholder="z.B. 08:00">
+                                <input type="text" id="intern_zeit_von" placeholder="HH:MM" pattern="[0-2][0-9]:[0-5][0-9]" maxlength="5" title="24h-Format (z.B. 08:00)" oninput="this.value = this.value.replace(/[^0-9:]/g, ''); if(this.value.length === 2 && !this.value.includes(':')) this.value += ':';" style="text-align: center;">
                             </div>
                             <div class="form-group">
                                 <label>Fertig bis (optional):</label>
-                                <input type="time" id="intern_zeit_bis" placeholder="z.B. 12:00">
+                                <input type="text" id="intern_zeit_bis" placeholder="HH:MM" pattern="[0-2][0-9]:[0-5][0-9]" maxlength="5" title="24h-Format (z.B. 12:00)" oninput="this.value = this.value.replace(/[^0-9:]/g, ''); if(this.value.length === 2 && !this.value.includes(':')) this.value += ':';" style="text-align: center;">
                             </div>
                         </div>
 
@@ -2220,7 +2220,7 @@
                             </div>
                             <div class="form-group">
                                 <label for="erweiterungUhrzeit">Uhrzeit (optional)</label>
-                                <input type="time" id="erweiterungUhrzeit" placeholder="Erste freie Zeit">
+                                <input type="text" id="erweiterungUhrzeit" placeholder="HH:MM" pattern="[0-2][0-9]:[0-5][0-9]" maxlength="5" title="24h-Format oder leer für erste freie Zeit" oninput="this.value = this.value.replace(/[^0-9:]/g, ''); if(this.value.length === 2 && !this.value.includes(':')) this.value += ':';" style="text-align: center;">
                             </div>
                         </div>
                     </div>
