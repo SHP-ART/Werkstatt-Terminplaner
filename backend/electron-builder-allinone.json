@@ -26,6 +26,10 @@
     {
       "from": "datenbank-reparatur.bat",
       "to": "datenbank-reparatur.bat"
+    },
+    {
+      "from": "../tools/dist/Datenbank-Reparatur.exe",
+      "to": "Datenbank-Reparatur.exe"
     }
   ],
   "publish": {
