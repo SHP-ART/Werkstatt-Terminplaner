@@ -1,0 +1,36 @@
+# Version 1.0.13 - Bugfixes und Performance-Optimierung
+
+**Release-Datum:** 5. Januar 2026
+
+## 🐛 Behobene kritische Bugs
+
+### Termin-Verwaltung
+- **Datum verschwindet bei neuem Termin**: Das eingetragene Datum in der Zusammenfassung wird jetzt korrekt angezeigt und bleibt erhalten
+- **Termine in Mittagspause**: Termine mit Startzeit in der Mittagspause werden automatisch nach der Pause verschoben, Endzeit wird korrekt berechnet
+- **Kennzeichen-Suche bei neuen Autos**: Cache wird nach Termin-Erstellen aktualisiert, Suche funktioniert sofort
+
+### Teilverwaltung & Mitarbeiter
+- **Klick auf Termine in Teilverwaltung**: Termine sind jetzt klickbar bei allen Sortierungen und Filteroptionen
+- **Mitarbeiter-Zuordnung**: "Gesamter Auftrag" und "Einzelne Positionen" Zuordnung funktioniert korrekt
+- **Mehrere Arbeiten**: Mitarbeiter können einzelnen Arbeiten zugeordnet werden, werden korrekt in Auslastung angezeigt
+
+### Performance
+- **All-in-One Version CPU-Auslastung**: 
+  - CPU-Berechnung korrigiert (Differenz-Methode)
+  - Stats-Intervall von 2s auf 5s erhöht
+  - Array-Operationen optimiert
+
+## 🎨 Neue Features & UI-Verbesserungen
+
+- **Schwebende Termine**: Farbliche Hervorhebung (orange) mit Animation und "⏸️ Schwebend" Badge
+- **Neues Fahrzeug anlegen**: Button im Fahrzeugauswahl-Modal zum schnellen Anlegen neuer Fahrzeuge
+
+## 🔧 Technische Verbesserungen
+
+- Verbesserte Cache-Aktualisierung nach Änderungen
+- Optimierte Auslastungsberechnung pro Mitarbeiter
+- Stabilere Zeitberechnung für Termine
+
+## 📦 Installation
+
+Download der Setup-Datei und Installation wie gewohnt. Die Datenbank wird automatisch aktualisiert.
