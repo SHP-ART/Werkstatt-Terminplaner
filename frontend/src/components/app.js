@@ -6168,13 +6168,33 @@ class App {
 
       const tagesTermine = termine.filter(t => 
         t.datum === datum && 
+        !t.ist_schwebend &&
+        !t.geloescht_am  // Gelöschte Termine ausschließen
+      );
+
+      // Sammle alle Termin-IDs des Tages für Erweiterungssuche
+      const tagesTerminIds = new Set(tagesTermine.map(t => t.id));
+      
+      // Finde Erweiterungen die zu Terminen dieses Tages gehören (auch wenn an anderem Tag)
+      const erweiterungenVonHeute = termine.filter(t => 
+        t.erweiterung_von_id && 
+        tagesTerminIds.has(t.erweiterung_von_id) &&
+        !t.geloescht_am &&
         !t.ist_schwebend
       );
+      
+      // Kombiniere Tages-Termine mit relevanten Erweiterungen
+      const relevanteTermine = [...tagesTermine];
+      for (const erw of erweiterungenVonHeute) {
+        if (!tagesTerminIds.has(erw.id)) {
+          relevanteTermine.push(erw);
+        }
+      }
 
       // Gruppiere Termine nach Mitarbeiter/Lehrling
       const termineMitZeit = [];
       
-      for (const t of tagesTermine) {
+      for (const t of relevanteTermine) {
         let startzeit = null;
         let endzeit = null;
         let mitarbeiterId = t.mitarbeiter_id;
@@ -6251,6 +6271,9 @@ class App {
         
         const dauer = endeMin - startMin;
         
+        // Prüfe ob es eine Erweiterung ist
+        const istErweiterung = t.ist_erweiterung === 1 || t.ist_erweiterung === true || t.erweiterung_von_id;
+        
         termineMitZeit.push({
           termin: t,
           startzeit,
@@ -6260,9 +6283,10 @@ class App {
           dauer,
           personTyp,
           personId,
-          personKey: `${personTyp}_${personId}`
+          personKey: `${personTyp}_${personId}`,
+          istErweiterung,
+          erweiterungVonId: t.erweiterung_von_id
         });
-      }
       }
 
       // Finde Überschneidungen pro Person
@@ -6286,6 +6310,15 @@ class App {
           
           for (let j = i + 1; j < personTermine.length; j++) {
             const next = personTermine[j];
+            
+            // Überspringe wenn next eine Erweiterung von current ist (das ist gewollt!)
+            if (next.erweiterungVonId === current.termin.id) {
+              continue;
+            }
+            // Überspringe auch wenn current eine Erweiterung von next ist
+            if (current.erweiterungVonId === next.termin.id) {
+              continue;
+            }
             
             // Überschneidung wenn current endet nach next startet
             if (current.endeMin > next.startMin) {
@@ -6348,6 +6381,14 @@ class App {
           const konfliktEnde1 = `${Math.floor(konflikt.termin1.endeMin/60).toString().padStart(2,'0')}:${(konflikt.termin1.endeMin%60).toString().padStart(2,'0')}`;
           const konfliktEnde2 = `${Math.floor(konflikt.termin2.endeMin/60).toString().padStart(2,'0')}:${(konflikt.termin2.endeMin%60).toString().padStart(2,'0')}`;
           
+          // Erweiterungs-Badge
+          const erw1Badge = konflikt.termin1.istErweiterung ? '<span style="background: #9c27b0; color: white; padding: 1px 5px; border-radius: 3px; font-size: 0.75em; margin-left: 5px;">Erw.</span>' : '';
+          const erw2Badge = konflikt.termin2.istErweiterung ? '<span style="background: #9c27b0; color: white; padding: 1px 5px; border-radius: 3px; font-size: 0.75em; margin-left: 5px;">Erw.</span>' : '';
+          
+          // Datum-Info falls anderer Tag
+          const datum1 = t1.datum !== datum ? `<div style="font-size: 0.8em; color: #9c27b0;">📅 ${new Date(t1.datum + 'T00:00:00').toLocaleDateString('de-DE')}</div>` : '';
+          const datum2 = t2.datum !== datum ? `<div style="font-size: 0.8em; color: #9c27b0;">📅 ${new Date(t2.datum + 'T00:00:00').toLocaleDateString('de-DE')}</div>` : '';
+          
           html += `
             <div class="konflikt-item" style="background: #f8f9fa; padding: 15px; border-radius: 8px; margin-bottom: 15px; border: 1px solid #ddd;">
               <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 10px;">
@@ -6361,8 +6402,9 @@ class App {
               
               <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 15px;">
                 <div style="background: white; padding: 10px; border-radius: 5px; border-left: 3px solid #2196f3;">
-                  <div style="font-weight: 600;">${t1.termin_nr}</div>
+                  <div style="font-weight: 600;">${t1.termin_nr}${erw1Badge}</div>
                   <div style="font-size: 0.9em; color: #666;">${t1.kunde_name || 'Unbekannt'}</div>
+                  ${datum1}
                   <div style="margin-top: 5px;">
                     <span style="background: #e3f2fd; padding: 2px 6px; border-radius: 4px; font-size: 0.85em;">
                       ${konflikt.termin1.startzeit} - ${konfliktEnde1}
@@ -6370,8 +6412,9 @@ class App {
                   </div>
                 </div>
                 <div style="background: white; padding: 10px; border-radius: 5px; border-left: 3px solid #ff9800;">
-                  <div style="font-weight: 600;">${t2.termin_nr}</div>
+                  <div style="font-weight: 600;">${t2.termin_nr}${erw2Badge}</div>
                   <div style="font-size: 0.9em; color: #666;">${t2.kunde_name || 'Unbekannt'}</div>
+                  ${datum2}
                   <div style="margin-top: 5px;">
                     <span style="background: #fff3e0; padding: 2px 6px; border-radius: 4px; font-size: 0.85em;">
                       ${konflikt.termin2.startzeit} - ${konfliktEnde2}
