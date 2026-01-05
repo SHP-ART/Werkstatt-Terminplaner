@@ -5894,14 +5894,14 @@ class App {
         
         <div class="form-group" style="margin-top: 15px;">
           <label for="einplanenUhrzeit"><strong>Startzeit (optional):</strong></label>
-          <input type="time" id="einplanenUhrzeit" class="form-control" style="font-size: 16px; padding: 10px;" placeholder="z.B. 08:00">
-          <small style="color: #666; display: block; margin-top: 5px;">Wenn leer, wird der Termin automatisch eingeplant.</small>
+          <input type="text" id="einplanenUhrzeit" class="form-control" style="font-size: 16px; padding: 10px; text-align: center;" placeholder="HH:MM" pattern="[0-2][0-9]:[0-5][0-9]" maxlength="5" oninput="this.value = this.value.replace(/[^0-9:]/g, ''); if(this.value.length === 2 && !this.value.includes(':')) this.value += ':';">
+          <small style="color: #666; display: block; margin-top: 5px;">24h-Format (z.B. 08:00, 14:30). Wenn leer, wird der Termin automatisch eingeplant.</small>
         </div>
         
         <div class="form-group" style="margin-top: 15px;">
           <label for="einplanenBringzeit"><strong>Bringzeit (optional):</strong></label>
-          <input type="time" id="einplanenBringzeit" class="form-control" style="font-size: 16px; padding: 10px;" placeholder="z.B. 08:00">
-          <small style="color: #666; display: block; margin-top: 5px;">Zeit, zu der das Fahrzeug gebracht werden soll</small>
+          <input type="text" id="einplanenBringzeit" class="form-control" style="font-size: 16px; padding: 10px; text-align: center;" placeholder="HH:MM" pattern="[0-2][0-9]:[0-5][0-9]" maxlength="5" oninput="this.value = this.value.replace(/[^0-9:]/g, ''); if(this.value.length === 2 && !this.value.includes(':')) this.value += ':';">
+          <small style="color: #666; display: block; margin-top: 5px;">24h-Format (z.B. 08:00, 14:30)</small>
         </div>
         
         <div class="form-group" style="margin-top: 15px;">
@@ -11191,7 +11191,7 @@ class App {
         row.innerHTML = `
           <td><input type="text" id="mitarbeiter_name_${ma.id}" value="${ma.name || ''}" style="width: 100%; padding: 5px;"></td>
           <td><input type="number" id="mitarbeiter_stunden_${ma.id}" value="${ma.arbeitsstunden_pro_tag || 8}" min="1" max="24" style="width: 100%; padding: 5px;"></td>
-          <td><input type="time" id="mitarbeiter_mittagspause_${ma.id}" value="${ma.mittagspause_start || '12:00'}" style="width: 100%; padding: 5px;" title="Startzeit der Mittagspause"></td>
+          <td><input type="text" id="mitarbeiter_mittagspause_${ma.id}" value="${ma.mittagspause_start || '12:00'}" style="width: 100%; padding: 5px; text-align: center;" placeholder="HH:MM" pattern="[0-2][0-9]:[0-5][0-9]" maxlength="5" title="24h-Format (z.B. 12:00)" oninput="this.value = this.value.replace(/[^0-9:]/g, ''); if(this.value.length === 2 && !this.value.includes(':')) this.value += ':';"></td>
           <td><input type="checkbox" id="mitarbeiter_nur_service_${ma.id}" ${ma.nur_service === 1 || ma.nur_service === true ? 'checked' : ''} title="Nur Service (Annahme/Rechnung)"></td>
           <td><input type="checkbox" id="mitarbeiter_aktiv_${ma.id}" ${ma.aktiv !== 0 ? 'checked' : ''}></td>
           <td>
@@ -11221,7 +11221,7 @@ class App {
         row.innerHTML = `
           <td><input type="text" id="lehrling_name_${l.id}" value="${l.name || ''}" style="width: 100%; padding: 5px;"></td>
           <td><input type="number" id="lehrling_aufgabe_${l.id}" value="${l.aufgabenbewaeltigung_prozent || 100}" min="0" max="500" step="1" style="width: 100%; padding: 5px;"></td>
-          <td><input type="time" id="lehrling_mittagspause_${l.id}" value="${l.mittagspause_start || '12:00'}" style="width: 100%; padding: 5px;" title="Startzeit der Mittagspause"></td>
+          <td><input type="text" id="lehrling_mittagspause_${l.id}" value="${l.mittagspause_start || '12:00'}" style="width: 100%; padding: 5px; text-align: center;" placeholder="HH:MM" pattern="[0-2][0-9]:[0-5][0-9]" maxlength="5" title="24h-Format (z.B. 12:00)" oninput="this.value = this.value.replace(/[^0-9:]/g, ''); if(this.value.length === 2 && !this.value.includes(':')) this.value += ':';"></td>
           <td><input type="checkbox" id="lehrling_aktiv_${l.id}" ${l.aktiv !== 0 ? 'checked' : ''}></td>
           <td>
             <button class="btn btn-primary" onclick="app.saveLehrling(${l.id})">💾</button>
@@ -11241,7 +11241,7 @@ class App {
     row.innerHTML = `
       <td><input type="text" id="new_mitarbeiter_name" placeholder="Name" style="width: 100%; padding: 5px;"></td>
       <td><input type="number" id="new_mitarbeiter_stunden" value="8" min="1" max="24" style="width: 100%; padding: 5px;"></td>
-      <td><input type="time" id="new_mitarbeiter_mittagspause" value="12:00" style="width: 100%; padding: 5px;" title="Startzeit der Mittagspause"></td>
+      <td><input type="text" id="new_mitarbeiter_mittagspause" value="12:00" style="width: 100%; padding: 5px; text-align: center;" placeholder="HH:MM" pattern="[0-2][0-9]:[0-5][0-9]" maxlength="5" title="24h-Format (z.B. 12:00)" oninput="this.value = this.value.replace(/[^0-9:]/g, ''); if(this.value.length === 2 && !this.value.includes(':')) this.value += ':';"></td>
       <td><input type="checkbox" id="new_mitarbeiter_nur_service" title="Nur Service (Annahme/Rechnung)"></td>
       <td><input type="checkbox" id="new_mitarbeiter_aktiv" checked></td>
       <td>
@@ -11339,7 +11339,7 @@ class App {
     row.innerHTML = `
       <td><input type="text" id="new_lehrling_name" placeholder="Name" style="width: 100%; padding: 5px;"></td>
       <td><input type="number" id="new_lehrling_aufgabe" value="100" min="0" max="500" step="1" style="width: 100%; padding: 5px;"></td>
-      <td><input type="time" id="new_lehrling_mittagspause" value="12:00" style="width: 100%; padding: 5px;" title="Startzeit der Mittagspause"></td>
+      <td><input type="text" id="new_lehrling_mittagspause" value="12:00" style="width: 100%; padding: 5px; text-align: center;" placeholder="HH:MM" pattern="[0-2][0-9]:[0-5][0-9]" maxlength="5" title="24h-Format (z.B. 12:00)" oninput="this.value = this.value.replace(/[^0-9:]/g, ''); if(this.value.length === 2 && !this.value.includes(':')) this.value += ':';"></td>
       <td><input type="checkbox" id="new_lehrling_aktiv" checked></td>
       <td>
         <button class="btn btn-primary" onclick="app.saveNewLehrling()">💾</button>
@@ -11756,11 +11756,15 @@ class App {
           <label style="font-weight: 600;">📋 ${arbeit}:</label>
         </div>
         <div style="display: grid; grid-template-columns: 80px 1fr 1fr; gap: 10px; margin-bottom: 5px;">
-          <input type="time"
+          <input type="text"
                  id="modal_startzeit_${index}"
                  value="${startzeit}"
-                 title="Startzeit (Arbeitsbeginn)"
-                 style="padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+                 placeholder="HH:MM"
+                 pattern="[0-2][0-9]:[0-5][0-9]"
+                 maxlength="5"
+                 title="Startzeit im 24h-Format (z.B. 08:00, 14:30)"
+                 oninput="this.value = this.value.replace(/[^0-9:]/g, ''); if(this.value.length === 2 && !this.value.includes(':')) this.value += ':';"
+                 style="padding: 8px; border: 1px solid #ddd; border-radius: 4px; text-align: center;">
           <input type="number"
                  id="modal_zeit_${index}"
                  value="${zeitStunden}"
