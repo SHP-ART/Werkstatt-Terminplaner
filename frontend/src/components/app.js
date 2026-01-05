@@ -6181,12 +6181,17 @@ class App {
         let personTyp = 'mitarbeiter';
         let personId = mitarbeiterId;
         
+        // Startzeit kann direkt im Termin sein oder in arbeitszeiten_details
+        startzeit = t.startzeit || t.bring_zeit;
+        
         if (t.arbeitszeiten_details) {
           try {
             const details = JSON.parse(t.arbeitszeiten_details);
             
-            // Versuche _startzeit zu finden
-            startzeit = details._startzeit;
+            // Versuche _startzeit zu finden (hat Priorität)
+            if (details._startzeit) {
+              startzeit = details._startzeit;
+            }
             
             // Falls keine _startzeit, suche in den einzelnen Arbeiten nach startzeit
             if (!startzeit) {
