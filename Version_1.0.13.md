@@ -100,17 +100,16 @@ resetTerminForm(preserveDatum = false) {
   - `openArbeitszeitenModal()` lädt Termin nach wenn nicht im Cache (Fallback)
 
 ### Bug 3: Mitarbeiter-Zuordnung funktioniert nicht
-- [ ] **Problem**: "Gesamter Auftrag" Zuordnung funktioniert nicht
-- [ ] **Problem**: "Einzelne Positionen" Zuordnung funktioniert nicht
+- [x] **Problem**: "Gesamter Auftrag" Zuordnung funktioniert nicht ✅ BEHOBEN
+- [x] **Problem**: "Einzelne Positionen" Zuordnung funktioniert nicht ✅ BEHOBEN
 - **Betroffene Dateien**: 
   - `frontend/src/components/app.js` (Zuordnungs-Modal)
   - `backend/src/controllers/termineController.js`
-- **Priorität**: 🔴 KRITISCH
-- **Schritte zur Reproduktion**:
-  1. Termin öffnen
-  2. Mitarbeiter zuordnen versuchen
-  3. → Zuordnung wird nicht gespeichert / nicht korrekt angezeigt
-- **Lösung**: API-Call und State-Update debuggen
+- **Priorität**: 🔴 KRITISCH ✅ BEHOBEN
+- **Lösung implementiert am**: 5. Januar 2026
+  - Mitarbeiter aus `arbeitszeiten_details._gesamt_mitarbeiter_id` wird korrekt vorausgewählt
+  - Neuer Button "Auf alle anwenden" synchronisiert Gesamt-Mitarbeiter auf alle Arbeiten
+  - Dropdown-Logik für Mitarbeiter und Lehrlinge verbessert
 
 ### Bug 4: Termine in Mittagspause verschwinden
 - [ ] **Problem**: Termine die in einer Zeit erstellt werden wo Mittagspause ist, werden nicht angezeigt
@@ -224,7 +223,7 @@ resetTerminForm(preserveDatum = false) {
 |---|-----|-----------------|--------|
 | 1 | Datum verschwindet | 1-2h | [x] ✅ |
 | 2 | Teilverwaltung Klick | 1h | [x] ✅ |
-| 3 | Mitarbeiter-Zuordnung | 2-3h | [ ] |
+| 3 | Mitarbeiter-Zuordnung | 2-3h | [x] ✅ |
 | 4 | Mittagspause Termine | 2h | [ ] |
 | 7 | Kennzeichen-Suche | 1h | [ ] |
 | 8 | Mehrere Arbeiten Auslastung | 2-3h | [ ] |
@@ -294,7 +293,7 @@ dropZone.ondrop = (e) => {
 - [ ] Manuelle Tests durchgeführt:
   - [x] Neuer Termin mit Datum
   - [x] Teilverwaltung Klick
-  - [ ] Mitarbeiter zuordnen
+  - [x] Mitarbeiter zuordnen
   - [ ] Termin in Mittagspause
   - [ ] Neues Fahrzeug anlegen
   - [ ] Kennzeichen-Suche

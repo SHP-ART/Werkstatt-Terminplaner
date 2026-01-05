@@ -14060,12 +14060,8 @@ class App {
         // Wenn die Startzeit in der Pause liegt, nach der Pause verschieben
         if (pauseStartMinuten !== null && startMinutes >= pauseStartMinuten && startMinutes < pauseEndMinuten) {
           startMinutes = pauseEndMinuten;
-          if (arbeit.endzeitBerechnet && arbeit.arbeitIndex === arbeit.arbeitenAnzahl - 1) {
-            const [endH, endM] = arbeit.endzeitBerechnet.split(':').map(Number);
-            endMinutes = endH * 60 + endM;
-          } else {
-            endMinutes = startMinutes + arbeit.zeitMinuten;
-          }
+          // Nach Verschiebung immer Endzeit neu berechnen (endzeitBerechnet basiert auf alter Startzeit)
+          endMinutes = startMinutes + arbeit.zeitMinuten;
         }
       } else {
         // Ohne Startzeit: Platziere nach letzter Arbeit (und nach Pause falls nötig)
