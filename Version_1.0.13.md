@@ -405,19 +405,25 @@ async addFahrzeugFromAuswahl() {
   5. Visuelles Feedback beim Ziehen
 - **Geschätzter Aufwand**: 4-6 Stunden
 
-### Feature 10: Automatisches Nachrücken bei früher fertigen Terminen
-- [ ] **Anforderung**: Wenn ein Termin früher fertig ist als vorausgesehen, sollen folgende Termine nach vorne rücken
+### Feature 10: Automatische Zeitberechnung bei Termin-Abschluss
+- [x] **Anforderung**: Wenn ein Termin auf "abgeschlossen" gesetzt wird, soll die tatsächliche Zeit automatisch berechnet werden ✅ UMGESETZT
+- [x] **Anforderung**: Abgeschlossene Termine zeigen in der Zeitleiste die tatsächliche Zeit (verkürzte Balken) ✅ UMGESETZT
 - **Betroffene Dateien**:
   - `backend/src/controllers/termineController.js`
-  - `backend/src/models/termineModel.js`
-- **Priorität**: 📊 MITTEL (komplexe Logik)
+  - `frontend/src/components/app.js`
+- **Priorität**: 📊 MITTEL ✅ ERLEDIGT
 - **Umsetzung**:
-  1. Bei Status "abgeschlossen" prüfen ob tatsächliche_zeit < geschaetzte_zeit
-  2. Zeitersparnis berechnen
-  3. Nachfolgende Termine des gleichen Mitarbeiters finden
-  4. Startzeiten anpassen
-  5. Optional: Benutzer fragen ob nachrücken gewünscht
-- **Geschätzter Aufwand**: 3-4 Stunden
+  1. Bei Status "abgeschlossen" automatisch Zeit berechnen: aktuelle Uhrzeit - Startzeit ✅
+  2. Sicherheitsprüfungen: mind. 1 Minute, max. 2x geschätzte Zeit ✅
+  3. Toast-Benachrichtigung zeigt berechnete Arbeitszeit ✅
+  4. Zeitleiste zeigt verkürzte Balken bei abgeschlossenen Terminen (tatsächliche Zeit) ✅
+  5. Auslastungsberechnung bleibt bei geschätzter Zeit (Kundenabrechnung) ✅
+- **Implementierung**: 
+  - Automatische Zeitberechnung in `update()` Controller
+  - Frontend zeigt Toast mit berechneter Zeit
+  - `anzeigeZeitMinuten` für visuelle Darstellung in Zeitleiste
+  - `zeitMinuten` (geschätzt) weiterhin für Auslastungsberechnung
+- **Geschätzter Aufwand**: 1-2 Stunden ✅ FERTIG
 
 ---
 

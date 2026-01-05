@@ -995,6 +995,57 @@ class TermineModel {
   }
 
   /**
+   * Rückt alle Folgetermine eines Mitarbeiters nach vorne (wenn ein Termin früher fertig ist)
+   * @param {string} datum - Das Datum
+   * @param {number} mitarbeiterId - Der Mitarbeiter
+   * @param {string} abStartzeit - Ab welcher Uhrzeit nachgerückt werden soll (Endzeit des fertigen Termins)
+   * @param {number} zeitersparnisMinuten - Um wie viele Minuten nach vorne gerückt werden soll
+   * @returns {Array} Liste der nachgerückten Termine
+   */
+  static async rueckeNachfolgendeTermineVor(datum, mitarbeiterId, abStartzeit, zeitersparnisMinuten) {
+    // Alle nicht-abgeschlossenen Termine des Mitarbeiters an dem Tag ab der Startzeit laden
+    const folgetermine = await allAsync(
+      `SELECT id, bring_zeit, geschaetzte_zeit, termin_nr, kunde_name
+       FROM termine 
+       WHERE datum = ? 
+         AND mitarbeiter_id = ? 
+         AND bring_zeit >= ?
+         AND status != 'abgeschlossen'
+         AND geloescht_am IS NULL
+       ORDER BY bring_zeit ASC`,
+      [datum, mitarbeiterId, abStartzeit]
+    );
+
+    if (folgetermine.length === 0) {
+      return [];
+    }
+
+    const nachgerueckt = [];
+
+    for (const termin of folgetermine) {
+      const alteBringzeit = termin.bring_zeit;
+      // Negative Minuten = nach vorne verschieben
+      const neueBringzeit = this.addMinutesToTime(alteBringzeit, -zeitersparnisMinuten);
+
+      await runAsync(
+        `UPDATE termine SET bring_zeit = ? WHERE id = ?`,
+        [neueBringzeit, termin.id]
+      );
+
+      nachgerueckt.push({
+        id: termin.id,
+        termin_nr: termin.termin_nr,
+        kunde_name: termin.kunde_name,
+        alte_zeit: alteBringzeit,
+        neue_zeit: neueBringzeit,
+        ersparnis_minuten: zeitersparnisMinuten
+      });
+    }
+
+    return nachgerueckt;
+  }
+
+  /**
    * Prüft auf Konflikte wenn ein Termin verlängert wird
    * @param {number} terminId - Der zu verlängernde Termin
    * @param {number} zusaetzlicheMinuten - Zusätzliche Zeit

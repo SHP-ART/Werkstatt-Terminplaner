@@ -544,7 +544,7 @@ class TermineController {
 
   static async update(req, res) {
     try {
-      const { tatsaechliche_zeit, mitarbeiter_id } = req.body;
+      const { tatsaechliche_zeit, mitarbeiter_id, status } = req.body;
       const sollteLernen = tatsaechliche_zeit && tatsaechliche_zeit > 0;
 
       // Parse mitarbeiter_id
@@ -562,6 +562,45 @@ class TermineController {
       
       if (!termin) {
         return res.status(404).json({ error: 'Termin nicht gefunden' });
+      }
+
+      // Feature 10: Automatische Zeitberechnung bei Abschluss
+      // Wenn Status auf "abgeschlossen" gesetzt wird und keine tatsächliche Zeit angegeben,
+      // berechne automatisch aus aktueller Uhrzeit - Startzeit
+      // ABER nur wenn: Termin heute ist UND aktuelle Zeit nach Startzeit liegt
+      const neuerStatus = status || updateData.status;
+      if (neuerStatus === 'abgeschlossen' && 
+          termin.status !== 'abgeschlossen' && // War vorher nicht abgeschlossen
+          !tatsaechliche_zeit && // Keine tatsächliche Zeit übergeben
+          termin.bring_zeit) {
+        
+        const jetzt = new Date();
+        const heute = jetzt.toISOString().split('T')[0]; // YYYY-MM-DD
+        
+        // Nur automatisch berechnen wenn der Termin HEUTE ist
+        if (termin.datum === heute) {
+          const [startH, startM] = termin.bring_zeit.split(':').map(Number);
+          const startMinuten = startH * 60 + startM;
+          const jetztMinuten = jetzt.getHours() * 60 + jetzt.getMinutes();
+          
+          // Nur berechnen wenn aktuelle Zeit NACH der Startzeit liegt
+          if (jetztMinuten > startMinuten) {
+            // Berechne tatsächliche Arbeitszeit in Minuten
+            let berechneteZeit = jetztMinuten - startMinuten;
+            
+            // Sicherheit: maximal geschätzte Zeit * 2 (sonst unrealistisch)
+            if (termin.geschaetzte_zeit && berechneteZeit > termin.geschaetzte_zeit * 2) {
+              console.log(`[Auto-Zeit] Termin ${termin.id}: Berechnete Zeit (${berechneteZeit} Min) zu hoch, keine automatische Berechnung`);
+            } else {
+              updateData.tatsaechliche_zeit = berechneteZeit;
+              console.log(`[Auto-Zeit] Termin ${termin.id}: Automatisch berechnete Zeit = ${berechneteZeit} Min (Start: ${termin.bring_zeit}, Jetzt: ${jetzt.getHours()}:${String(jetzt.getMinutes()).padStart(2, '0')})`);
+            }
+          } else {
+            console.log(`[Auto-Zeit] Termin ${termin.id}: Keine automatische Berechnung - aktuelle Zeit (${jetztMinuten} Min) liegt vor Startzeit (${startMinuten} Min)`);
+          }
+        } else {
+          console.log(`[Auto-Zeit] Termin ${termin.id}: Keine automatische Berechnung - Termin ist nicht heute (${termin.datum} != ${heute})`);
+        }
       }
 
       // Wenn arbeitszeiten_details geändert wird, berechne Endzeit neu
@@ -597,7 +636,18 @@ class TermineController {
         });
       }
 
-      res.json({ changes, message: 'Termin aktualisiert' });
+      // Antwort mit automatisch berechneter Zeit
+      const response = { 
+        changes, 
+        message: 'Termin aktualisiert'
+      };
+      
+      if (updateData.tatsaechliche_zeit && !tatsaechliche_zeit) {
+        response.berechneteZeit = updateData.tatsaechliche_zeit;
+        response.message = `Termin abgeschlossen. Arbeitszeit: ${updateData.tatsaechliche_zeit} Minuten.`;
+      }
+
+      res.json(response);
     } catch (err) {
       res.status(500).json({ error: err.message });
     }

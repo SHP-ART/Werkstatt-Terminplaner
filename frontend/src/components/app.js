@@ -8676,11 +8676,20 @@ class App {
 
   async updateTerminStatus(terminId, status) {
     try {
-      await TermineService.update(terminId, { status: status });
+      const result = await TermineService.update(terminId, { status: status });
 
       // Aktualisiere den Termin im Cache
       if (this.termineById[terminId]) {
         this.termineById[terminId].status = status;
+        // Feature 10: Aktualisiere auch die berechnete Zeit im Cache
+        if (result && result.berechneteZeit) {
+          this.termineById[terminId].tatsaechliche_zeit = result.berechneteZeit;
+        }
+      }
+
+      // Feature 10: Zeige automatisch berechnete Zeit an
+      if (status === 'abgeschlossen' && result && result.berechneteZeit) {
+        this.showToast(`✅ Termin abgeschlossen - Arbeitszeit: ${result.berechneteZeit} Min`, 'success');
       }
 
       // Aktualisiere Dashboard, Auslastung und Heute-Ansicht
@@ -14126,6 +14135,19 @@ class App {
             zeitMinuten = Math.round(zeitMinuten * (1 + nebenzeitProzent / 100));
           }
           
+          // Feature 10: Bei abgeschlossenen Terminen die ANGEZEIGTE Zeit auf tatsächliche Zeit kürzen
+          // (Die Auslastungsberechnung bleibt bei geschätzter Zeit, da dem Kunden diese berechnet wird)
+          let anzeigeZeitMinuten = zeitMinuten;
+          if (termin.status === 'abgeschlossen' && termin.tatsaechliche_zeit && termin.tatsaechliche_zeit > 0) {
+            // Bei mehreren Arbeiten: proportional aufteilen
+            if (arbeitenListe.length > 1) {
+              const anteil = zeitMinuten / (termin.geschaetzte_zeit || zeitMinuten * arbeitenListe.length);
+              anzeigeZeitMinuten = Math.round(termin.tatsaechliche_zeit * anteil);
+            } else {
+              anzeigeZeitMinuten = termin.tatsaechliche_zeit;
+            }
+          }
+          
           // BUG 8 FIX: Bestimme Mitarbeiter/Lehrling für DIESE Arbeit (individuelle Zuordnung hat Vorrang)
           let arbeitZuordnungsTyp = defaultZuordnungsTyp;
           let arbeitMitarbeiterId = defaultMitarbeiterId;
@@ -14192,6 +14214,7 @@ class App {
             arbeitIndex: i,
             arbeitenAnzahl: arbeitenListe.length,
             zeitMinuten: zeitMinuten,
+            anzeigeZeitMinuten: anzeigeZeitMinuten, // Feature 10: Für Zeitleisten-Darstellung
             startzeit: arbeitStartzeit,
             endzeitBerechnet: endzeitFuerAnzeige,
             status: termin.status || 'geplant',
@@ -14511,6 +14534,9 @@ class App {
     for (const arbeit of sortedArbeiten) {
       let startMinutes, endMinutes;
       
+      // Feature 10: Für Anzeige die anzeigeZeitMinuten verwenden (bei abgeschlossenen Terminen = tatsächliche Zeit)
+      const anzeigeZeit = arbeit.anzeigeZeitMinuten || arbeit.zeitMinuten;
+      
       if (arbeit.startzeit) {
         // Mit Startzeit
         const [startH, startM] = arbeit.startzeit.split(':').map(Number);
@@ -14519,13 +14545,13 @@ class App {
         // BUG 8 FIX: Endzeit basierend auf individueller Arbeitszeit berechnen
         // endzeitBerechnet nur verwenden wenn ALLE Arbeiten dem gleichen Mitarbeiter zugeordnet sind
         // und dies die letzte Arbeit des Termins ist
-        endMinutes = startMinutes + arbeit.zeitMinuten;
+        endMinutes = startMinutes + anzeigeZeit;
         
         // Wenn die Startzeit in der Pause liegt, nach der Pause verschieben
         if (pauseStartMinuten !== null && startMinutes >= pauseStartMinuten && startMinutes < pauseEndMinuten) {
           startMinutes = pauseEndMinuten;
           // Nach Verschiebung immer Endzeit neu berechnen (endzeitBerechnet basiert auf alter Startzeit)
-          endMinutes = startMinutes + arbeit.zeitMinuten;
+          endMinutes = startMinutes + anzeigeZeit;
         }
       } else {
         // Ohne Startzeit: Platziere nach letzter Arbeit (und nach Pause falls nötig)
@@ -14536,7 +14562,7 @@ class App {
         }
         
         // BUG 8 FIX: Immer individuelle Arbeitszeit verwenden
-        endMinutes = startMinutes + arbeit.zeitMinuten;
+        endMinutes = startMinutes + anzeigeZeit;
       }
       
       // Prüfe ob der Termin über die Mittagspause geht
@@ -14549,7 +14575,7 @@ class App {
         
         // Teil 2: Nach der Pause (mit der verbleibenden Zeit)
         const verbrauchteZeit = teil1End - startMinutes;
-        const verbleibendeZeit = arbeit.zeitMinuten - verbrauchteZeit;
+        const verbleibendeZeit = anzeigeZeit - verbrauchteZeit;
         if (verbleibendeZeit > 0) {
           const teil2Start = pauseEndMinuten;
           const teil2End = teil2Start + verbleibendeZeit;
