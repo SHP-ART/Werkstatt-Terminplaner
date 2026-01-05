@@ -11556,7 +11556,21 @@ class App {
   }
 
   async openArbeitszeitenModal(terminId) {
-    const termin = this.termineById[terminId];
+    let termin = this.termineById[terminId];
+    
+    // Bug 2 Fix: Fallback - Lade Termin direkt wenn nicht im Cache
+    if (!termin) {
+      try {
+        console.log('[DEBUG] Termin nicht im Cache, lade nach:', terminId);
+        termin = await TermineService.getById(terminId);
+        if (termin) {
+          this.termineById[terminId] = termin;
+        }
+      } catch (e) {
+        console.error('Fehler beim Nachladen des Termins:', e);
+      }
+    }
+    
     if (!termin) {
       alert('Termin nicht gefunden');
       return;
@@ -13367,6 +13381,11 @@ class App {
 
       // Speichern für Filter
       this.teileStatusData = termineWithTeile;
+
+      // Bug 2 Fix: Befülle termineById-Cache für Modal-Zugriff
+      for (const termin of termine) {
+        this.termineById[termin.id] = termin;
+      }
 
       // Tabelle rendern
       this.renderTeileStatusTable(termineWithTeile);
