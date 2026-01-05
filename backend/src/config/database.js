@@ -381,6 +381,20 @@ function initializeDatabase() {
       }
     });
 
+    // Startzeit (berechnete/tatsächliche Startzeit des Termins)
+    dbWrapper.connection.run(`ALTER TABLE termine ADD COLUMN startzeit TEXT`, (err) => {
+      if (err && !err.message.includes('duplicate column')) {
+        console.error('Fehler beim Hinzufügen von startzeit:', err);
+      }
+    });
+
+    // Berechnete Endzeit des Termins
+    dbWrapper.connection.run(`ALTER TABLE termine ADD COLUMN endzeit_berechnet TEXT`, (err) => {
+      if (err && !err.message.includes('duplicate column')) {
+        console.error('Fehler beim Hinzufügen von endzeit_berechnet:', err);
+      }
+    });
+
     // Mitarbeiter-Tabelle
     dbWrapper.connection.run(`CREATE TABLE IF NOT EXISTS mitarbeiter (
       id INTEGER PRIMARY KEY AUTOINCREMENT,

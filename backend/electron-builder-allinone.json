@@ -22,6 +22,10 @@
         "!node_modules/**",
         "!*.md"
       ]
+    },
+    {
+      "from": "datenbank-reparatur.bat",
+      "to": "datenbank-reparatur.bat"
     }
   ],
   "publish": {
