@@ -705,10 +705,23 @@ class App {
     // Keine speziellen Handler mehr nötig - nur noch Tage-Feld
   }
 
-  setTodayDate() {
+  // Bug 1 Fix: forceOverwrite Parameter hinzugefügt
+  // Bei forceOverwrite=false wird das Termin-Datum nur gesetzt wenn es leer ist
+  setTodayDate(forceOverwrite = true) {
     const today = this.formatDateLocal(new Date());
-    document.getElementById('datum').value = today;
-    document.getElementById('auslastungDatum').value = today;
+    
+    // Termin-Datum nur setzen wenn leer oder explizit gewollt
+    const datumInput = document.getElementById('datum');
+    if (datumInput && (forceOverwrite || !datumInput.value)) {
+      datumInput.value = today;
+    }
+    
+    // Auslastung-Datum immer auf heute setzen (separate Ansicht)
+    const auslastungDatum = document.getElementById('auslastungDatum');
+    if (auslastungDatum) {
+      auslastungDatum.value = today;
+    }
+    
     const abwesenheitDatum = document.getElementById('abwesenheitDatum');
     if (abwesenheitDatum) {
       abwesenheitDatum.value = today;
@@ -825,15 +838,26 @@ class App {
     }
   }
 
-  resetTerminForm() {
+  // Bug 1 Fix: preserveDatum Parameter hinzugefügt
+  // Bei preserveDatum=true bleibt das aktuelle Datum erhalten
+  resetTerminForm(preserveDatum = false) {
+    // Datum VOR dem Reset sichern wenn gewünscht
+    const savedDatum = preserveDatum ? document.getElementById('datum')?.value : null;
+    
     // Formular komplett zurücksetzen
     const form = document.getElementById('terminForm');
     if (form) {
       form.reset();
     }
 
-    // Datum auf heute setzen
-    this.setTodayDate();
+    // Datum wiederherstellen oder auf heute setzen
+    if (savedDatum) {
+      document.getElementById('datum').value = savedDatum;
+      // Auslastungsanzeige für das gespeicherte Datum laden
+      this.loadTerminAuslastungAnzeige();
+    } else {
+      this.setTodayDate(true); // forceOverwrite=true für expliziten Reset
+    }
 
     // KM-Stand Placeholder und Styling zurücksetzen
     const kmStandInput = document.getElementById('kilometerstand');
@@ -3187,12 +3211,16 @@ class App {
     // Berechne die geschätzte Zeit aus den Standardzeiten
     const geschaetzteZeit = this.getGeschaetzteZeit(arbeitenListe);
 
+    // Bug 1 Debug: Datum aus Formular lesen
+    const datumValue = document.getElementById('datum').value;
+    console.log('[DEBUG] handleTerminSubmit - Datum aus Formular:', datumValue);
+
     const termin = {
       kennzeichen: document.getElementById('kennzeichen').value.trim(),
       arbeit: arbeitenListe.join(', '),
       umfang: document.getElementById('umfang').value.trim(),
       geschaetzte_zeit: geschaetzteZeit,
-      datum: document.getElementById('datum').value,
+      datum: datumValue,
       abholung_typ: abholungTyp,
       abholung_details: document.getElementById('abholung_details').value,
       abholung_zeit: kontaktAktiv ? abholungZeit : null,
@@ -3269,14 +3297,22 @@ class App {
     document.getElementById('vorschauKunde').textContent = kundeName || 'Unbekannt';
     document.getElementById('vorschauTelefon').textContent = telefon || '-';
     
-    // Datum formatieren
-    const datumObj = new Date(termin.datum);
-    const formatiertesDatum = datumObj.toLocaleDateString('de-DE', { 
-      weekday: 'long', 
-      day: '2-digit', 
-      month: '2-digit', 
-      year: 'numeric' 
-    });
+    // Bug 1 Fix: Datum robuster formatieren
+    console.log('[DEBUG] showTerminVorschau - termin.datum:', termin.datum);
+    let formatiertesDatum = '-';
+    if (termin.datum && termin.datum.trim() !== '') {
+      // Datum mit Zeitzone-sicherem Parsing
+      const datumObj = new Date(termin.datum + 'T12:00:00');
+      if (!isNaN(datumObj.getTime())) {
+        formatiertesDatum = datumObj.toLocaleDateString('de-DE', { 
+          weekday: 'long', 
+          day: '2-digit', 
+          month: '2-digit', 
+          year: 'numeric' 
+        });
+      }
+    }
+    console.log('[DEBUG] formatiertesDatum:', formatiertesDatum);
     document.getElementById('vorschauDatum').textContent = formatiertesDatum;
     
     document.getElementById('vorschauKennzeichen').textContent = termin.kennzeichen || '-';
@@ -7204,7 +7240,8 @@ class App {
     const arbeitszeitStunden = parseFloat(document.getElementById('erweiterungArbeitszeit').value) || 0;
     const typ = document.querySelector('input[name="erweiterungTyp"]:checked')?.value || 'anschluss';
     
-    document.getElementById('vorschauArbeitszeit').textContent = `${arbeitszeitStunden} h`;
+    // Bug 1 Fix: Eindeutige IDs für Erweiterungs-Vorschau verwenden
+    document.getElementById('erweiterungVorschauArbeitszeit').textContent = `${arbeitszeitStunden} h`;
     
     let datumText = '--';
     let mitarbeiterText = '--';
@@ -7232,8 +7269,9 @@ class App {
       }
     }
     
-    document.getElementById('vorschauDatum').textContent = datumText;
-    document.getElementById('vorschauMitarbeiter').textContent = mitarbeiterText;
+    // Bug 1 Fix: Eindeutige IDs für Erweiterungs-Vorschau verwenden
+    document.getElementById('erweiterungVorschauDatum').textContent = datumText;
+    document.getElementById('erweiterungVorschauMitarbeiter').textContent = mitarbeiterText;
   }
 
   /**
