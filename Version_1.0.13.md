@@ -16,16 +16,15 @@ Status: `[ ]` offen, `[~]` in Arbeit, `[x]` erledigt, `[-]` verschoben
 ## 🐛 BUGS - Kritisch
 
 ### Bug 1: Datum verschwindet bei neuem Termin
-- [ ] **Problem**: Bei neuem Termin wird das eingetragene Datum in der Zusammenfassung nicht angezeigt
-- [ ] **Problem**: Das ausgewählte Datum verschwindet während der Bearbeitung und wird auf den aktuellen Tag zurückgesetzt
+- [x] **Problem**: Bei neuem Termin wird das eingetragene Datum in der Zusammenfassung nicht angezeigt ✅ BEHOBEN
+- [x] **Problem**: Das ausgewählte Datum verschwindet während der Bearbeitung und wird auf den aktuellen Tag zurückgesetzt ✅ BEHOBEN
 - **Betroffene Dateien**: `frontend/src/components/app.js` (Termin-Modal)
-- **Priorität**: 🔴 KRITISCH
-- **Schritte zur Reproduktion**:
-  1. Neuen Termin erstellen
-  2. Datum auswählen (z.B. in 3 Tagen)
-  3. Weitere Felder ausfüllen
-  4. → Datum springt zurück auf heute
-- **Lösung**: Datum-State korrekt verwalten, nicht überschreiben bei anderen Änderungen
+- **Priorität**: 🔴 KRITISCH ✅ BEHOBEN
+- **Lösung implementiert am**: 5. Januar 2026
+  - `setTodayDate(forceOverwrite)` Parameter: Datum nur bei leerem Feld setzen
+  - `resetTerminForm(preserveDatum)` Parameter: Datum optional erhalten
+  - Doppelte ID `vorschauDatum` im HTML behoben (umbenannt zu `erweiterungVorschauDatum`)
+  - Datum wird jetzt korrekt in der Termin-Zusammenfassung angezeigt
 
 #### 📋 KORREKTURPLAN Bug 1
 
@@ -221,7 +220,7 @@ resetTerminForm(preserveDatum = false) {
 ### Phase 1: Kritische Bugs (Priorität 🔴)
 | # | Bug | Geschätzte Zeit | Status |
 |---|-----|-----------------|--------|
-| 1 | Datum verschwindet | 1-2h | [ ] |
+| 1 | Datum verschwindet | 1-2h | [x] ✅ |
 | 2 | Teilverwaltung Klick | 1h | [ ] |
 | 3 | Mitarbeiter-Zuordnung | 2-3h | [ ] |
 | 4 | Mittagspause Termine | 2h | [ ] |
@@ -229,7 +228,7 @@ resetTerminForm(preserveDatum = false) {
 | 8 | Mehrere Arbeiten Auslastung | 2-3h | [ ] |
 | 11 | All-in-One hohe CPU | 2-4h | [x] ✅ |
 
-**Gesamt Phase 1**: ~10-14 Stunden (11 erledigt)
+**Gesamt Phase 1**: ~10-14 Stunden (1 + 11 erledigt)
 
 ### Phase 2: UI/UX Features (Priorität ⚠️)
 | # | Feature | Geschätzte Zeit | Status |
@@ -291,7 +290,7 @@ dropZone.ondrop = (e) => {
 - [ ] Server startet fehlerfrei
 - [ ] Frontend funktioniert
 - [ ] Manuelle Tests durchgeführt:
-  - [ ] Neuer Termin mit Datum
+  - [x] Neuer Termin mit Datum
   - [ ] Teilverwaltung Klick
   - [ ] Mitarbeiter zuordnen
   - [ ] Termin in Mittagspause
