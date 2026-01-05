@@ -374,6 +374,7 @@ class App {
       editDatum.addEventListener('change', () => {
         this.checkEditErsatzautoVerfuegbarkeit();
         this.loadEditTerminAuslastungAnzeige();
+        this.updateEditSelectedDatumDisplay();
       });
     }
     const editArbeitEingabe = document.getElementById('edit_arbeitEingabe');
@@ -411,6 +412,8 @@ class App {
 
     // Kalender-Picker Event-Listener
     this.setupAuslastungKalender();
+    this.setupEditAuslastungKalender();
+    this.setupEditSuchKalender();
 
     // Entferne Placeholder-Styling wenn Benutzer KM-Stand eingibt
     const kmStandInput = document.getElementById('kilometerstand');
@@ -1182,6 +1185,17 @@ class App {
       this.checkEditErsatzautoVerfuegbarkeit();
       this.updateEditZeitschaetzung();
       this.loadEditTerminAuslastungAnzeige();
+      
+      // Edit-Kalender aktualisieren: Zeige den Monat des Termins
+      if (termin.datum) {
+        const terminDatum = new Date(termin.datum + 'T00:00:00');
+        if (!this.editKalenderAktuellMonat) {
+          this.editKalenderAktuellMonat = new Date();
+        }
+        this.editKalenderAktuellMonat = new Date(terminDatum.getFullYear(), terminDatum.getMonth(), 1);
+        await this.renderEditAuslastungKalender();
+        this.updateEditSelectedDatumDisplay();
+      }
       
     } catch (error) {
       console.error('Fehler beim Laden des Termins:', error);
@@ -13411,6 +13425,348 @@ class App {
     // Aktualisiere Anzeige und re-rendere Kalender für Markierung
     this.updateSelectedDatumDisplay();
     await this.renderAuslastungKalender();
+  }
+
+  // ==========================================
+  // Edit-Kalender Funktionen (Termin bearbeiten)
+  // ==========================================
+
+  setupEditAuslastungKalender() {
+    this.editKalenderAktuellMonat = new Date();
+
+    // Navigation Buttons für Edit-Kalender
+    const editKalenderPrevMonth = document.getElementById('editKalenderPrevMonth');
+    if (editKalenderPrevMonth) {
+      editKalenderPrevMonth.addEventListener('click', () => this.navigateEditKalenderMonat(-1));
+    }
+
+    const editKalenderNextMonth = document.getElementById('editKalenderNextMonth');
+    if (editKalenderNextMonth) {
+      editKalenderNextMonth.addEventListener('click', () => this.navigateEditKalenderMonat(1));
+    }
+
+    const editKalenderHeuteBtn = document.getElementById('editKalenderHeuteBtn');
+    if (editKalenderHeuteBtn) {
+      editKalenderHeuteBtn.addEventListener('click', () => this.selectEditKalenderHeute());
+    }
+
+    // Kalender initial NICHT rendern - wird erst beim Laden eines Termins gerendert
+  }
+
+  // Aktualisiert die Datum-Anzeige über dem Edit-Kalender
+  updateEditSelectedDatumDisplay() {
+    const datumInput = document.getElementById('edit_datum');
+    const display = document.getElementById('editSelectedDatumDisplay');
+    if (!display) return;
+    
+    if (datumInput && datumInput.value) {
+      const datum = new Date(datumInput.value + 'T00:00:00');
+      const optionen = { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' };
+      display.textContent = datum.toLocaleDateString('de-DE', optionen);
+      display.style.color = '#1565c0';
+    } else {
+      display.textContent = 'Bitte Datum wählen...';
+      display.style.color = '#94a3b8';
+    }
+  }
+
+  async navigateEditKalenderMonat(offset) {
+    if (!this.editKalenderAktuellMonat) {
+      this.editKalenderAktuellMonat = new Date();
+    }
+    this.editKalenderAktuellMonat.setMonth(this.editKalenderAktuellMonat.getMonth() + offset);
+    await this.renderEditAuslastungKalender();
+  }
+
+  async selectEditKalenderHeute() {
+    const heute = new Date();
+    const datumInput = document.getElementById('edit_datum');
+    if (datumInput) {
+      datumInput.value = this.formatDateLocal(heute);
+      datumInput.dispatchEvent(new Event('change'));
+    }
+    // Aktualisiere Anzeige und navigiere zum aktuellen Monat
+    this.updateEditSelectedDatumDisplay();
+    this.editKalenderAktuellMonat = new Date(heute.getFullYear(), heute.getMonth(), 1);
+    await this.renderEditAuslastungKalender();
+  }
+
+  async selectEditKalenderDatum(datumStr) {
+    const datumInput = document.getElementById('edit_datum');
+    if (datumInput) {
+      datumInput.value = datumStr;
+      datumInput.dispatchEvent(new Event('change'));
+    }
+    // Aktualisiere Anzeige und re-rendere Kalender für Markierung
+    this.updateEditSelectedDatumDisplay();
+    await this.renderEditAuslastungKalender();
+  }
+
+  async renderEditAuslastungKalender() {
+    const kalenderTage = document.getElementById('editKalenderTage');
+    const kalenderMonatJahr = document.getElementById('editKalenderMonatJahr');
+    
+    if (!kalenderTage || !kalenderMonatJahr) return;
+
+    // Fallback für editKalenderAktuellMonat
+    if (!this.editKalenderAktuellMonat) {
+      this.editKalenderAktuellMonat = new Date();
+    }
+
+    // Zeige Ladeanimation
+    kalenderTage.innerHTML = '<div class="kalender-loading">Lade Auslastung...</div>';
+
+    const jahr = this.editKalenderAktuellMonat.getFullYear();
+    const monat = this.editKalenderAktuellMonat.getMonth();
+
+    // Monatsname anzeigen
+    const monatNamen = ['Januar', 'Februar', 'März', 'April', 'Mai', 'Juni', 
+                        'Juli', 'August', 'September', 'Oktober', 'November', 'Dezember'];
+    kalenderMonatJahr.textContent = `${monatNamen[monat]} ${jahr}`;
+
+    // Lade Auslastungsdaten für den gesamten Monat (nutzt gleichen Cache)
+    const auslastungDaten = await this.loadMonatAuslastung(jahr, monat);
+
+    // Berechne ersten und letzten Tag
+    const ersterTag = new Date(jahr, monat, 1);
+    const letzterTag = new Date(jahr, monat + 1, 0);
+    const heute = new Date();
+    heute.setHours(0, 0, 0, 0);
+
+    // Wochentag des ersten Tags (0 = Sonntag, anpassen für Montag-Start)
+    let startWochentag = ersterTag.getDay();
+    startWochentag = startWochentag === 0 ? 6 : startWochentag - 1; // Montag = 0
+
+    // Aktuell ausgewähltes Datum (aus Edit-Feld)
+    const datumInput = document.getElementById('edit_datum');
+    const selectedDate = datumInput && datumInput.value ? datumInput.value : null;
+
+    let html = '';
+
+    // Leere Zellen vor dem ersten Tag
+    for (let i = 0; i < startWochentag; i++) {
+      html += '<div class="kalender-tag kalender-tag-leer"></div>';
+    }
+
+    // Tage des Monats
+    for (let tag = 1; tag <= letzterTag.getDate(); tag++) {
+      const datum = new Date(jahr, monat, tag);
+      const datumStr = this.formatDateLocal(datum);
+      const istHeute = datum.getTime() === heute.getTime();
+      const istVergangen = datum < heute;
+      const istWochenende = datum.getDay() === 0 || datum.getDay() === 6;
+      const istAusgewaehlt = datumStr === selectedDate;
+
+      // Auslastung für diesen Tag
+      const auslastung = auslastungDaten[datumStr];
+      let auslastungProzent = auslastung ? auslastung.auslastung_prozent : 0;
+      let auslastungKlasse = '';
+
+      if (!istWochenende && !istVergangen) {
+        if (auslastungProzent > 100) {
+          auslastungKlasse = 'kalender-tag-auslastung-over-100';
+        } else if (auslastungProzent > 80) {
+          auslastungKlasse = 'kalender-tag-auslastung-81-100';
+        } else if (auslastungProzent > 50) {
+          auslastungKlasse = 'kalender-tag-auslastung-51-80';
+        } else {
+          auslastungKlasse = 'kalender-tag-auslastung-0-50';
+        }
+      }
+
+      const klassen = [
+        'kalender-tag',
+        istHeute ? 'kalender-tag-heute' : '',
+        istVergangen ? 'kalender-tag-vergangen' : '',
+        istWochenende ? 'kalender-tag-wochenende' : '',
+        istAusgewaehlt ? 'kalender-tag-selected' : '',
+        auslastungKlasse
+      ].filter(k => k).join(' ');
+
+      // Für Edit-Kalender: selectEditKalenderDatum statt selectKalenderDatum
+      html += `
+        <div class="${klassen}" data-datum="${datumStr}" ${istVergangen && !istHeute ? '' : 'onclick="app.selectEditKalenderDatum(\'' + datumStr + '\')"'}>
+          <span class="kalender-tag-nummer">${tag}</span>
+          ${!istWochenende && auslastung ? `<span class="kalender-tag-prozent">${Math.round(auslastungProzent)}%</span>` : ''}
+        </div>
+      `;
+    }
+
+    kalenderTage.innerHTML = html;
+  }
+
+  // ==========================================
+  // Edit-Such-Kalender Funktionen (Termin zum Bearbeiten suchen)
+  // ==========================================
+
+  setupEditSuchKalender() {
+    this.editSuchKalenderAktuellMonat = new Date();
+
+    // Navigation Buttons für Such-Kalender
+    const editSuchKalenderPrevMonth = document.getElementById('editSuchKalenderPrevMonth');
+    if (editSuchKalenderPrevMonth) {
+      editSuchKalenderPrevMonth.addEventListener('click', () => this.navigateEditSuchKalenderMonat(-1));
+    }
+
+    const editSuchKalenderNextMonth = document.getElementById('editSuchKalenderNextMonth');
+    if (editSuchKalenderNextMonth) {
+      editSuchKalenderNextMonth.addEventListener('click', () => this.navigateEditSuchKalenderMonat(1));
+    }
+
+    const editSuchKalenderHeuteBtn = document.getElementById('editSuchKalenderHeuteBtn');
+    if (editSuchKalenderHeuteBtn) {
+      editSuchKalenderHeuteBtn.addEventListener('click', () => this.selectEditSuchKalenderHeute());
+    }
+
+    // Kalender sofort rendern
+    this.renderEditSuchKalender();
+    this.updateEditSuchDatumDisplay();
+  }
+
+  // Aktualisiert die Datum-Anzeige über dem Such-Kalender
+  updateEditSuchDatumDisplay() {
+    const datumInput = document.getElementById('editTerminDatum');
+    const display = document.getElementById('editSuchDatumDisplay');
+    if (!display) return;
+    
+    if (datumInput && datumInput.value) {
+      const datum = new Date(datumInput.value + 'T00:00:00');
+      const optionen = { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' };
+      display.textContent = datum.toLocaleDateString('de-DE', optionen);
+      display.style.color = '#1565c0';
+    } else {
+      display.textContent = 'Bitte Datum wählen...';
+      display.style.color = '#94a3b8';
+    }
+  }
+
+  async navigateEditSuchKalenderMonat(offset) {
+    if (!this.editSuchKalenderAktuellMonat) {
+      this.editSuchKalenderAktuellMonat = new Date();
+    }
+    this.editSuchKalenderAktuellMonat.setMonth(this.editSuchKalenderAktuellMonat.getMonth() + offset);
+    await this.renderEditSuchKalender();
+  }
+
+  async selectEditSuchKalenderHeute() {
+    const heute = new Date();
+    const datumInput = document.getElementById('editTerminDatum');
+    if (datumInput) {
+      datumInput.value = this.formatDateLocal(heute);
+      datumInput.dispatchEvent(new Event('change'));
+    }
+    // Aktualisiere Anzeige und navigiere zum aktuellen Monat
+    this.updateEditSuchDatumDisplay();
+    this.editSuchKalenderAktuellMonat = new Date(heute.getFullYear(), heute.getMonth(), 1);
+    await this.renderEditSuchKalender();
+    // Termine für dieses Datum laden
+    await this.loadEditTermine();
+  }
+
+  async selectEditSuchKalenderDatum(datumStr) {
+    const datumInput = document.getElementById('editTerminDatum');
+    if (datumInput) {
+      datumInput.value = datumStr;
+      datumInput.dispatchEvent(new Event('change'));
+    }
+    // Aktualisiere Anzeige und re-rendere Kalender für Markierung
+    this.updateEditSuchDatumDisplay();
+    await this.renderEditSuchKalender();
+    // Termine für dieses Datum laden
+    await this.loadEditTermine();
+  }
+
+  async renderEditSuchKalender() {
+    const kalenderTage = document.getElementById('editSuchKalenderTage');
+    const kalenderMonatJahr = document.getElementById('editSuchKalenderMonatJahr');
+    
+    if (!kalenderTage || !kalenderMonatJahr) return;
+
+    // Fallback für editSuchKalenderAktuellMonat
+    if (!this.editSuchKalenderAktuellMonat) {
+      this.editSuchKalenderAktuellMonat = new Date();
+    }
+
+    // Zeige Ladeanimation
+    kalenderTage.innerHTML = '<div class="kalender-loading">Lade Auslastung...</div>';
+
+    const jahr = this.editSuchKalenderAktuellMonat.getFullYear();
+    const monat = this.editSuchKalenderAktuellMonat.getMonth();
+
+    // Monatsname anzeigen
+    const monatNamen = ['Januar', 'Februar', 'März', 'April', 'Mai', 'Juni', 
+                        'Juli', 'August', 'September', 'Oktober', 'November', 'Dezember'];
+    kalenderMonatJahr.textContent = `${monatNamen[monat]} ${jahr}`;
+
+    // Lade Auslastungsdaten für den gesamten Monat (nutzt gleichen Cache)
+    const auslastungDaten = await this.loadMonatAuslastung(jahr, monat);
+
+    // Berechne ersten und letzten Tag
+    const ersterTag = new Date(jahr, monat, 1);
+    const letzterTag = new Date(jahr, monat + 1, 0);
+    const heute = new Date();
+    heute.setHours(0, 0, 0, 0);
+
+    // Wochentag des ersten Tags (0 = Sonntag, anpassen für Montag-Start)
+    let startWochentag = ersterTag.getDay();
+    startWochentag = startWochentag === 0 ? 6 : startWochentag - 1; // Montag = 0
+
+    // Aktuell ausgewähltes Datum (aus Such-Feld)
+    const datumInput = document.getElementById('editTerminDatum');
+    const selectedDate = datumInput && datumInput.value ? datumInput.value : null;
+
+    let html = '';
+
+    // Leere Zellen vor dem ersten Tag
+    for (let i = 0; i < startWochentag; i++) {
+      html += '<div class="kalender-tag kalender-tag-leer"></div>';
+    }
+
+    // Tage des Monats - ALLE Tage klickbar (auch vergangene, da man alte Termine bearbeiten will)
+    for (let tag = 1; tag <= letzterTag.getDate(); tag++) {
+      const datum = new Date(jahr, monat, tag);
+      const datumStr = this.formatDateLocal(datum);
+      const istHeute = datum.getTime() === heute.getTime();
+      const istVergangen = datum < heute;
+      const istWochenende = datum.getDay() === 0 || datum.getDay() === 6;
+      const istAusgewaehlt = datumStr === selectedDate;
+
+      // Auslastung für diesen Tag
+      const auslastung = auslastungDaten[datumStr];
+      let auslastungProzent = auslastung ? auslastung.auslastung_prozent : 0;
+      let auslastungKlasse = '';
+
+      if (!istWochenende) {
+        if (auslastungProzent > 100) {
+          auslastungKlasse = 'kalender-tag-auslastung-over-100';
+        } else if (auslastungProzent > 80) {
+          auslastungKlasse = 'kalender-tag-auslastung-81-100';
+        } else if (auslastungProzent > 50) {
+          auslastungKlasse = 'kalender-tag-auslastung-51-80';
+        } else {
+          auslastungKlasse = 'kalender-tag-auslastung-0-50';
+        }
+      }
+
+      const klassen = [
+        'kalender-tag',
+        istHeute ? 'kalender-tag-heute' : '',
+        istVergangen ? 'kalender-tag-vergangen' : '',
+        istWochenende ? 'kalender-tag-wochenende' : '',
+        istAusgewaehlt ? 'kalender-tag-selected' : '',
+        auslastungKlasse
+      ].filter(k => k).join(' ');
+
+      // Für Such-Kalender: ALLE Tage klickbar (auch vergangene)
+      html += `
+        <div class="${klassen}" data-datum="${datumStr}" onclick="app.selectEditSuchKalenderDatum('${datumStr}')" style="cursor: pointer;">
+          <span class="kalender-tag-nummer">${tag}</span>
+          ${!istWochenende && auslastung ? `<span class="kalender-tag-prozent">${Math.round(auslastungProzent)}%</span>` : ''}
+        </div>
+      `;
+    }
+
+    kalenderTage.innerHTML = html;
   }
 
   // Hilfsmethode zum Escapen von HTML

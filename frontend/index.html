@@ -623,15 +623,51 @@
                     <h3>Termin bearbeiten</h3>
                     <p style="color: #666; margin-bottom: 20px;">Wählen Sie einen Termin aus, um ihn zu bearbeiten.</p>
                     
-                    <!-- Termin-Auswahl -->
+                    <!-- Datum-Auswahl mit Kalender für Terminsuche -->
+                    <div class="form-section datum-kalender-section" style="margin-bottom: 20px; padding: 20px; background: linear-gradient(135deg, #e3f2fd 0%, #f0f7ff 100%); border-radius: 12px; border: 3px solid #2196f3; box-shadow: 0 4px 12px rgba(33, 150, 243, 0.15);">
+                        <label style="font-size: 1.2em; font-weight: 700; color: #1565c0; display: block; margin-bottom: 15px;">
+                            📅 Datum für Terminsuche wählen:
+                        </label>
+                        <!-- Verstecktes Datum-Input für Formular-Logik -->
+                        <input type="date" id="editTerminDatum" style="position: absolute; opacity: 0; pointer-events: none;">
+                        
+                        <!-- Ausgewähltes Datum Anzeige -->
+                        <div id="editSuchDatumDisplay" style="text-align: center; font-size: 1.3em; font-weight: 700; color: #1565c0; margin-bottom: 15px; padding: 10px; background: white; border-radius: 8px; border: 2px solid #2196f3;">
+                            Bitte Datum wählen...
+                        </div>
+                        
+                        <!-- Inline Kalender mit Auslastung für Suche -->
+                        <div id="editSuchKalenderInline" class="auslastung-kalender-inline">
+                            <div class="kalender-header">
+                                <button type="button" class="kalender-nav-btn" id="editSuchKalenderPrevMonth">◀</button>
+                                <span id="editSuchKalenderMonatJahr">Januar 2025</span>
+                                <button type="button" class="kalender-nav-btn" id="editSuchKalenderNextMonth">▶</button>
+                            </div>
+                            <div class="kalender-legende">
+                                <span class="legende-item"><span class="legende-farbe legende-gruen"></span>0-50%</span>
+                                <span class="legende-item"><span class="legende-farbe legende-gelb"></span>51-80%</span>
+                                <span class="legende-item"><span class="legende-farbe legende-orange"></span>81-100%</span>
+                                <span class="legende-item"><span class="legende-farbe legende-rot"></span>&gt;100%</span>
+                            </div>
+                            <div class="kalender-wochentage">
+                                <span>Mo</span><span>Di</span><span>Mi</span><span>Do</span><span>Fr</span><span>Sa</span><span>So</span>
+                            </div>
+                            <div id="editSuchKalenderTage" class="kalender-tage">
+                                <!-- Tage werden dynamisch gefüllt -->
+                            </div>
+                            <div class="kalender-footer" style="margin-top: 10px; display: flex; justify-content: center;">
+                                <button type="button" class="btn btn-primary" id="editSuchKalenderHeuteBtn" style="padding: 8px 20px;">📅 Heute</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Termin-Auswahl Dropdown -->
                     <div class="form-group" style="margin-bottom: 20px;">
                         <label>Termin auswählen:</label>
                         <div style="display: flex; gap: 10px; flex-wrap: wrap; align-items: center;">
-                            <input type="date" id="editTerminDatum" style="flex: 0 0 auto;">
                             <select id="editTerminAuswahl" style="flex: 1; min-width: 300px;">
-                                <option value="">-- Termin wählen --</option>
+                                <option value="">-- Erst Datum wählen, dann Termin auswählen --</option>
                             </select>
-                            <button type="button" class="btn btn-secondary" id="editTerminLadenBtn">Termine laden</button>
                         </div>
                     </div>
 
@@ -652,9 +688,42 @@
                                 </div>
                             </div>
 
-                            <div class="form-group">
-                                <label>Datum: *</label>
-                                <input type="date" id="edit_datum" required>
+                            <!-- Datum-Auswahl - MIT INTEGRIERTEM KALENDER (Edit) -->
+                            <div class="form-section datum-kalender-section" style="margin-top: 10px; margin-bottom: 20px; padding: 20px; background: linear-gradient(135deg, #e3f2fd 0%, #f0f7ff 100%); border-radius: 12px; border: 3px solid #2196f3; box-shadow: 0 4px 12px rgba(33, 150, 243, 0.15);">
+                                <label style="font-size: 1.2em; font-weight: 700; color: #1565c0; display: block; margin-bottom: 15px;">
+                                    📅 Termin-Datum wählen: *
+                                </label>
+                                <!-- Verstecktes Datum-Input für Formular-Validierung -->
+                                <input type="date" id="edit_datum" required style="position: absolute; opacity: 0; pointer-events: none;">
+                                
+                                <!-- Ausgewähltes Datum Anzeige -->
+                                <div id="editSelectedDatumDisplay" style="text-align: center; font-size: 1.3em; font-weight: 700; color: #1565c0; margin-bottom: 15px; padding: 10px; background: white; border-radius: 8px; border: 2px solid #2196f3;">
+                                    Bitte Datum wählen...
+                                </div>
+                                
+                                <!-- Inline Kalender mit Auslastung (immer sichtbar) -->
+                                <div id="editAuslastungKalenderInline" class="auslastung-kalender-inline">
+                                    <div class="kalender-header">
+                                        <button type="button" class="kalender-nav-btn" id="editKalenderPrevMonth">◀</button>
+                                        <span id="editKalenderMonatJahr">Januar 2025</span>
+                                        <button type="button" class="kalender-nav-btn" id="editKalenderNextMonth">▶</button>
+                                    </div>
+                                    <div class="kalender-legende">
+                                        <span class="legende-item"><span class="legende-farbe legende-gruen"></span>0-50%</span>
+                                        <span class="legende-item"><span class="legende-farbe legende-gelb"></span>51-80%</span>
+                                        <span class="legende-item"><span class="legende-farbe legende-orange"></span>81-100%</span>
+                                        <span class="legende-item"><span class="legende-farbe legende-rot"></span>&gt;100%</span>
+                                    </div>
+                                    <div class="kalender-wochentage">
+                                        <span>Mo</span><span>Di</span><span>Mi</span><span>Do</span><span>Fr</span><span>Sa</span><span>So</span>
+                                    </div>
+                                    <div id="editKalenderTage" class="kalender-tage">
+                                        <!-- Tage werden dynamisch gefüllt -->
+                                    </div>
+                                    <div class="kalender-footer" style="margin-top: 10px; display: flex; justify-content: center;">
+                                        <button type="button" class="btn btn-primary" id="editKalenderHeuteBtn" style="padding: 8px 20px;">📅 Heute</button>
+                                    </div>
+                                </div>
                             </div>
 
                             <div id="editTerminAuslastungAnzeige" style="margin-bottom: 20px; padding: 15px; background: #f8f9fa; border-radius: 8px; border-left: 4px solid #4a90e2; display: none;">
