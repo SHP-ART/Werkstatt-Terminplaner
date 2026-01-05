@@ -5061,14 +5061,17 @@ class App {
     // Speichere aktuelle Termin-ID für Split/Schwebend-Funktionen
     this.currentDetailTerminId = terminId;
 
-    // Prüfe ob ein Lehrling zugeordnet ist (aus arbeitszeiten_details)
+    // Prüfe ob Mitarbeiter/Lehrling zugeordnet ist (aus arbeitszeiten_details)
     let zugeordneteLehrlingId = null;
+    let zugeordneteMitarbeiterId = null;
     if (termin.arbeitszeiten_details) {
       try {
         const details = JSON.parse(termin.arbeitszeiten_details);
         if (details._gesamt_mitarbeiter_id && typeof details._gesamt_mitarbeiter_id === 'object') {
           if (details._gesamt_mitarbeiter_id.type === 'lehrling') {
             zugeordneteLehrlingId = details._gesamt_mitarbeiter_id.id;
+          } else if (details._gesamt_mitarbeiter_id.type === 'mitarbeiter') {
+            zugeordneteMitarbeiterId = details._gesamt_mitarbeiter_id.id;
           }
         }
       } catch (e) {
@@ -5112,7 +5115,7 @@ class App {
       if (verfuegbareMitarbeiter.length > 0) {
         mitarbeiterOptions += '<optgroup label="Mitarbeiter">';
         mitarbeiterOptions += verfuegbareMitarbeiter.map(m =>
-          `<option value="ma_${m.id}" ${termin.mitarbeiter_id === m.id ? 'selected' : ''}>${m.name}</option>`
+          `<option value="ma_${m.id}" ${(zugeordneteMitarbeiterId === m.id || termin.mitarbeiter_id === m.id) ? 'selected' : ''}>${m.name}</option>`
         ).join('');
         mitarbeiterOptions += '</optgroup>';
       }
@@ -11845,7 +11848,27 @@ class App {
     // Lade Phasen für diesen Termin
     await this.loadModalPhasen(terminId, termin.datum);
     
+    // Event-Handler: Wenn Gesamt-Mitarbeiter geändert wird, alle einzelnen Dropdowns synchronisieren
+    const gesamtSelect = document.getElementById('modalGesamtMitarbeiter');
+    gesamtSelect.onchange = () => this.syncGesamtMitarbeiterToEinzelne();
+    
     document.getElementById('arbeitszeitenModal').style.display = 'block';
+  }
+
+  // Synchronisiert den Gesamt-Mitarbeiter auf alle einzelnen Arbeits-Dropdowns
+  syncGesamtMitarbeiterToEinzelne(forceAll = false) {
+    const gesamtValue = document.getElementById('modalGesamtMitarbeiter').value;
+    
+    // Finde alle einzelnen Mitarbeiter-Selects
+    const liste = document.getElementById('modalArbeitszeitenListe');
+    const selects = liste.querySelectorAll('select[id^="modal_mitarbeiter_"]');
+    
+    selects.forEach(select => {
+      // Bei forceAll: Alle setzen, sonst nur wenn keine individuelle Zuordnung
+      if (forceAll || !select.value || select.value === '') {
+        select.value = gesamtValue;
+      }
+    });
   }
 
   async loadModalPhasen(terminId, terminDatum) {
@@ -11983,6 +12006,9 @@ class App {
 
   closeArbeitszeitenModal() {
     document.getElementById('arbeitszeitenModal').style.display = 'none';
+    // Event-Handler entfernen
+    const gesamtSelect = document.getElementById('modalGesamtMitarbeiter');
+    if (gesamtSelect) gesamtSelect.onchange = null;
     this.currentTerminId = null;
     // Reset Phasen
     this.modalPhasenCounter = 0;

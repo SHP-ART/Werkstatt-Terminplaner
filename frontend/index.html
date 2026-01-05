@@ -2450,10 +2450,15 @@
                 </div>
                 <div style="margin-top: 20px; padding: 15px; background: #f8f9fa; border-radius: 5px;">
                     <label style="display: block; font-weight: 600; margin-bottom: 10px;">Mitarbeiter/Lehrling für gesamten Auftrag (optional):</label>
-                    <select id="modalGesamtMitarbeiter" style="width: 100%; padding: 10px; font-size: 14px; border: 2px solid #ddd; border-radius: 5px;">
-                        <option value="">-- Keine Zuordnung --</option>
-                    </select>
-                    <small style="display: block; color: #666; margin-top: 5px;">Wenn gesetzt, wird dieser Mitarbeiter/Lehrling für alle Aufgaben verwendet. Einzelne Zuordnungen haben Vorrang.</small>
+                    <div style="display: flex; gap: 10px; align-items: center;">
+                        <select id="modalGesamtMitarbeiter" style="flex: 1; padding: 10px; font-size: 14px; border: 2px solid #ddd; border-radius: 5px;">
+                            <option value="">-- Keine Zuordnung --</option>
+                        </select>
+                        <button type="button" class="btn btn-secondary" onclick="app.syncGesamtMitarbeiterToEinzelne(true)" style="white-space: nowrap; padding: 10px 15px;" title="Übernimmt den ausgewählten Mitarbeiter für alle Arbeiten">
+                            📋 Auf alle anwenden
+                        </button>
+                    </div>
+                    <small style="display: block; color: #666; margin-top: 5px;">Klicke "Auf alle anwenden" um den Mitarbeiter bei allen Arbeiten einzutragen.</small>
                 </div>
                 <div style="margin-top: 20px; padding: 15px; background: #f8f9fa; border-radius: 5px;">
                     <label style="display: block; font-weight: 600; margin-bottom: 10px;">Termin-Status:</label>
