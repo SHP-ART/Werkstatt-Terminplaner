@@ -387,22 +387,21 @@
                     <input type="hidden" id="kundeNameInput">
                     <input type="hidden" id="kundenListe">
 
-                    <!-- Datum-Auswahl - HERVORGEHOBEN -->
-                    <div class="form-section" style="margin-top: 20px; margin-bottom: 20px; padding: 20px; background: linear-gradient(135deg, #e3f2fd 0%, #f0f7ff 100%); border-radius: 12px; border: 3px solid #2196f3; box-shadow: 0 4px 12px rgba(33, 150, 243, 0.15);">
+                    <!-- Datum-Auswahl - MIT INTEGRIERTEM KALENDER -->
+                    <div class="form-section datum-kalender-section" style="margin-top: 20px; margin-bottom: 20px; padding: 20px; background: linear-gradient(135deg, #e3f2fd 0%, #f0f7ff 100%); border-radius: 12px; border: 3px solid #2196f3; box-shadow: 0 4px 12px rgba(33, 150, 243, 0.15);">
                         <label style="font-size: 1.2em; font-weight: 700; color: #1565c0; display: block; margin-bottom: 15px;">
                             📅 Termin-Datum wählen: *
                         </label>
-                        <div class="datum-picker-wrapper" style="display: flex; gap: 10px; align-items: stretch;">
-                            <input type="date" id="datum" required class="datum-input-clickable" style="flex: 1; font-size: 1.1em; padding: 14px; border: 2px solid #2196f3; border-radius: 8px; font-weight: 600;">
-                            <button type="button" id="datumPickerBtn" class="datum-picker-btn" title="Kalender mit Auslastung öffnen" style="flex: 0 0 auto; min-width: 120px; font-size: 1.1em; padding: 14px 20px; background: linear-gradient(135deg, #2196f3 0%, #1976d2 100%); color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: 600; box-shadow: 0 2px 8px rgba(33, 150, 243, 0.3); transition: all 0.2s;">
-                                📅 Kalender
-                            </button>
+                        <!-- Verstecktes Datum-Input für Formular-Validierung -->
+                        <input type="date" id="datum" required style="position: absolute; opacity: 0; pointer-events: none;">
+                        
+                        <!-- Ausgewähltes Datum Anzeige -->
+                        <div id="selectedDatumDisplay" style="text-align: center; font-size: 1.3em; font-weight: 700; color: #1565c0; margin-bottom: 15px; padding: 10px; background: white; border-radius: 8px; border: 2px solid #2196f3;">
+                            Bitte Datum wählen...
                         </div>
-                        <small style="display: block; color: #1565c0; margin-top: 10px; font-size: 0.95em;">
-                            💡 Klicken Sie auf "Kalender" um freie Termine mit Auslastungsanzeige zu sehen
-                        </small>
-                        <!-- Kalender-Picker mit Auslastung -->
-                        <div id="auslastungKalenderPopup" class="auslastung-kalender-popup" style="display: none;">
+                        
+                        <!-- Inline Kalender mit Auslastung (immer sichtbar) -->
+                        <div id="auslastungKalenderInline" class="auslastung-kalender-inline">
                             <div class="kalender-header">
                                 <button type="button" class="kalender-nav-btn" id="kalenderPrevMonth">◀</button>
                                 <span id="kalenderMonatJahr">Januar 2025</span>
@@ -420,9 +419,8 @@
                             <div id="kalenderTage" class="kalender-tage">
                                 <!-- Tage werden dynamisch gefüllt -->
                             </div>
-                            <div class="kalender-footer">
-                                <button type="button" class="btn btn-secondary" id="kalenderHeuteBtn">Heute</button>
-                                <button type="button" class="btn btn-secondary" id="kalenderSchliessenBtn">Schließen</button>
+                            <div class="kalender-footer" style="margin-top: 10px; display: flex; justify-content: center;">
+                                <button type="button" class="btn btn-primary" id="kalenderHeuteBtn" style="padding: 8px 20px;">📅 Heute</button>
                             </div>
                         </div>
                     </div>

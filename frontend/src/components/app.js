@@ -3979,18 +3979,18 @@ class App {
     try {
       const fahrzeuge = await KundenService.getFahrzeuge(kundeId);
       
-      // Wenn mehr als ein Fahrzeug vorhanden ist, Auswahl-Popup zeigen
-      if (fahrzeuge.length > 1) {
+      // Modal immer anzeigen (auch bei nur 1 Fahrzeug), damit neue angelegt werden können
+      if (fahrzeuge.length >= 1) {
         this.showWartendeFahrzeugAuswahlModal(kunde, fahrzeuge);
         this.hideWartendVorschlaege('name');
         return;
       }
       
-      // Nur ein oder kein Fahrzeug - direkt auswählen
-      const fahrzeug = fahrzeuge.length > 0 ? fahrzeuge[0] : null;
+      // Kein Fahrzeug vorhanden - direkt auswählen (Kennzeichen muss manuell eingegeben werden)
+      const fahrzeug = null;
       this.selectWartendeKunde(kundeId, kunde.name, kunde.telefon, 
-        fahrzeug ? fahrzeug.kennzeichen : kunde.kennzeichen, 
-        fahrzeug ? fahrzeug.fahrzeugtyp : kunde.fahrzeugtyp);
+        kunde.kennzeichen, 
+        kunde.fahrzeugtyp);
       this.hideWartendVorschlaege('name');
     } catch (error) {
       console.error('Fehler beim Laden der Fahrzeuge:', error);
@@ -7883,15 +7883,16 @@ class App {
           
           const kundenName = termin.kunde_name || 'Unbekannt';
           const uhrzeitAnzeige = termin.bring_zeit || termin.abholung_zeit || '';
+          const istSchwebend = termin.ist_schwebend === 1 || termin.ist_schwebend === true;
           
           html += `
-            <div class="nicht-zugeordnet-item" data-termin-id="${termin.id}" style="cursor: pointer;" title="Klicken zum Bearbeiten">
+            <div class="nicht-zugeordnet-item${istSchwebend ? ' schwebend' : ''}" data-termin-id="${termin.id}" style="cursor: pointer;" title="Klicken zum Bearbeiten">
               <div class="nz-info">
                 <span class="nz-zeit">${uhrzeitAnzeige || '--:--'}</span>
                 <span class="nz-kunde">${this.escapeHtml(kundenName)}</span>
                 <span class="nz-kennzeichen">${this.escapeHtml(termin.kennzeichen || '-')}</span>
               </div>
-              <div class="nz-arbeit">${this.escapeHtml(termin.arbeit || '-')}</div>
+              <div class="nz-arbeit">${this.escapeHtml(termin.arbeit || '-')}${istSchwebend ? '<span class="schwebend-indicator">⏸️ Schwebend</span>' : ''}</div>
               <div class="nz-dauer">${this.formatMinutesToHours(zeit)}</div>
             </div>
           `;
@@ -9350,16 +9351,16 @@ class App {
         fahrzeuge: fahrzeuge.map(f => f.kennzeichen)
       });
       
-      // Wenn mehr als ein Fahrzeug vorhanden ist, Auswahl-Popup zeigen
-      if (fahrzeuge.length > 1) {
+      // Modal immer anzeigen (auch bei nur 1 Fahrzeug), damit neue angelegt werden können
+      if (fahrzeuge.length >= 1) {
         console.log('Zeige Fahrzeugauswahl-Modal...');
         this.showFahrzeugAuswahlModal(kunde, fahrzeuge);
         this.hideVorschlaege('name');
         return;
       }
       
-      // Nur ein oder kein Fahrzeug - direkt auswählen
-      this.applyKundeAuswahl(kunde, fahrzeuge.length > 0 ? fahrzeuge[0] : null);
+      // Kein Fahrzeug vorhanden - direkt Kunde auswählen (Kennzeichen muss manuell eingegeben werden)
+      this.applyKundeAuswahl(kunde, null);
       this.hideVorschlaege('name');
     } catch (error) {
       console.error('Fehler beim Laden der Fahrzeuge:', error);
@@ -9407,7 +9408,33 @@ class App {
           ${letzterKmStand ? ` · ${Number(letzterKmStand).toLocaleString('de-DE')} km` : ''}
         </div>
       </div>
-    `}).join('');
+    `}).join('') + `
+      <div id="neuesFahrzeugSection" style="margin-top: 15px; padding-top: 15px; border-top: 2px dashed #dee2e6;">
+        <button type="button" id="toggleNeuesFahrzeugBtn" class="btn btn-outline" onclick="app.toggleNeuesFahrzeugFormular()" style="width: 100%; padding: 12px; font-size: 1em;">
+          ➕ Neues Fahrzeug anlegen
+        </button>
+        <div id="neuesFahrzeugFormular" style="display: none; margin-top: 15px; padding: 15px; background: #f8f9fa; border-radius: 8px;">
+          <div class="form-row" style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+            <div class="form-group" style="margin: 0;">
+              <label style="font-size: 0.85em;">Kennzeichen: *</label>
+              <input type="text" id="auswahlNeuesKennzeichen" placeholder="z.B. K-AB 1234" style="text-transform: uppercase;">
+            </div>
+            <div class="form-group" style="margin: 0;">
+              <label style="font-size: 0.85em;">Fahrzeugtyp:</label>
+              <input type="text" id="auswahlNeuesFahrzeugtyp" placeholder="z.B. VW Golf">
+            </div>
+          </div>
+          <div class="form-group" style="margin: 10px 0;">
+            <label style="font-size: 0.85em;">VIN (optional):</label>
+            <input type="text" id="auswahlNeueVin" placeholder="z.B. WVWZZZ..." maxlength="17" style="text-transform: uppercase;">
+          </div>
+          <div style="display: flex; gap: 10px;">
+            <button type="button" class="btn btn-success" onclick="app.addFahrzeugFromAuswahl()">✓ Anlegen & Auswählen</button>
+            <button type="button" class="btn btn-secondary" onclick="app.toggleNeuesFahrzeugFormular()">Abbrechen</button>
+          </div>
+        </div>
+      </div>
+    `;
     
     // Speichere die Daten für späteren Zugriff
     this.fahrzeugAuswahlData = { kunde, fahrzeuge };
@@ -9431,6 +9458,69 @@ class App {
     const modal = document.getElementById('fahrzeugAuswahlModal');
     modal.style.display = 'none';
     this.fahrzeugAuswahlData = null;
+  }
+
+  // Feature 6: Toggle für Neues-Fahrzeug-Formular im Auswahl-Modal
+  toggleNeuesFahrzeugFormular() {
+    const formular = document.getElementById('neuesFahrzeugFormular');
+    const btn = document.getElementById('toggleNeuesFahrzeugBtn');
+    if (!formular || !btn) return;
+    
+    if (formular.style.display === 'none') {
+      formular.style.display = 'block';
+      btn.style.display = 'none';
+      document.getElementById('auswahlNeuesKennzeichen')?.focus();
+    } else {
+      formular.style.display = 'none';
+      btn.style.display = 'block';
+      // Felder leeren
+      const kennzeichenEl = document.getElementById('auswahlNeuesKennzeichen');
+      const fahrzeugtypEl = document.getElementById('auswahlNeuesFahrzeugtyp');
+      const vinEl = document.getElementById('auswahlNeueVin');
+      if (kennzeichenEl) kennzeichenEl.value = '';
+      if (fahrzeugtypEl) fahrzeugtypEl.value = '';
+      if (vinEl) vinEl.value = '';
+    }
+  }
+
+  // Feature 6: Neues Fahrzeug aus Auswahl-Modal anlegen und direkt auswählen
+  async addFahrzeugFromAuswahl() {
+    const kennzeichen = document.getElementById('auswahlNeuesKennzeichen')?.value.trim().toUpperCase();
+    const fahrzeugtyp = document.getElementById('auswahlNeuesFahrzeugtyp')?.value.trim() || null;
+    const vin = document.getElementById('auswahlNeueVin')?.value.trim().toUpperCase() || null;
+    
+    if (!kennzeichen) {
+      alert('Bitte Kennzeichen eingeben');
+      document.getElementById('auswahlNeuesKennzeichen')?.focus();
+      return;
+    }
+    
+    if (!this.fahrzeugAuswahlData) {
+      alert('Fehler: Keine Kundendaten verfügbar');
+      return;
+    }
+    
+    const { kunde } = this.fahrzeugAuswahlData;
+    
+    try {
+      // Fahrzeug zum Kunden hinzufügen
+      await api.addFahrzeugToKunde(kunde.id, { kennzeichen, fahrzeugtyp, vin });
+      
+      // Neues Fahrzeug-Objekt erstellen
+      const neuesFahrzeug = { kennzeichen, fahrzeugtyp, vin };
+      
+      // Direkt auswählen und Modal schließen
+      this.applyKundeAuswahl(kunde, neuesFahrzeug);
+      this.closeFahrzeugAuswahlModal();
+      
+      // Cache aktualisieren
+      await this.loadKunden();
+      
+      this.showToast(`Fahrzeug ${kennzeichen} angelegt und ausgewählt`, 'success');
+    } catch (error) {
+      console.error('Fehler beim Anlegen des Fahrzeugs:', error);
+      alert('Fehler beim Anlegen des Fahrzeugs: ' + (error.message || 'Unbekannter Fehler'));
+    }
   }
 
   // Kunde und Fahrzeug auf das Formular anwenden
@@ -13112,14 +13202,7 @@ class App {
     this.kalenderAktuellMonat = new Date();
     this.kalenderAuslastungCache = {};
 
-    const datumPickerBtn = document.getElementById('datumPickerBtn');
-    if (datumPickerBtn) {
-      datumPickerBtn.addEventListener('click', (e) => {
-        e.preventDefault();
-        this.openAuslastungKalender();
-      });
-    }
-
+    // Navigation Buttons
     const kalenderPrevMonth = document.getElementById('kalenderPrevMonth');
     if (kalenderPrevMonth) {
       kalenderPrevMonth.addEventListener('click', () => this.navigateKalenderMonat(-1));
@@ -13135,46 +13218,38 @@ class App {
       kalenderHeuteBtn.addEventListener('click', () => this.selectKalenderHeute());
     }
 
-    const kalenderSchliessenBtn = document.getElementById('kalenderSchliessenBtn');
-    if (kalenderSchliessenBtn) {
-      kalenderSchliessenBtn.addEventListener('click', () => this.closeAuslastungKalender());
-    }
+    // Kalender sofort rendern (inline, immer sichtbar)
+    this.renderAuslastungKalender();
+    
+    // Datum-Anzeige initial aktualisieren
+    this.updateSelectedDatumDisplay();
+  }
 
-    // Schließen bei Klick außerhalb
-    document.addEventListener('click', (e) => {
-      const popup = document.getElementById('auslastungKalenderPopup');
-      const datumWrapper = e.target.closest('.datum-picker-wrapper');
-      const datumFormGroup = e.target.closest('.form-group');
-      if (popup && popup.style.display !== 'none' && !popup.contains(e.target) && !datumWrapper) {
-        this.closeAuslastungKalender();
-      }
-    });
+  // Aktualisiert die Datum-Anzeige über dem Kalender
+  updateSelectedDatumDisplay() {
+    const datumInput = document.getElementById('datum');
+    const display = document.getElementById('selectedDatumDisplay');
+    if (!display) return;
+    
+    if (datumInput && datumInput.value) {
+      const datum = new Date(datumInput.value + 'T00:00:00');
+      const optionen = { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' };
+      display.textContent = datum.toLocaleDateString('de-DE', optionen);
+      display.style.color = '#1565c0';
+    } else {
+      display.textContent = 'Bitte Datum wählen...';
+      display.style.color = '#94a3b8';
+    }
   }
 
   async openAuslastungKalender() {
-    const popup = document.getElementById('auslastungKalenderPopup');
-    if (!popup) return;
-
-    // Cache leeren, damit immer aktuelle Daten geladen werden
-    this.kalenderAuslastungCache = {};
-
-    // Setze den aktuellen Monat basierend auf ausgewähltem Datum oder heute
-    const datumInput = document.getElementById('datum');
-    if (datumInput && datumInput.value) {
-      this.kalenderAktuellMonat = new Date(datumInput.value + 'T00:00:00');
-    } else {
-      this.kalenderAktuellMonat = new Date();
-    }
-
-    popup.style.display = 'block';
+    // Nicht mehr benötigt - Kalender ist immer sichtbar
+    // Aber wir lassen die Funktion für Kompatibilität
     await this.renderAuslastungKalender();
   }
 
   closeAuslastungKalender() {
-    const popup = document.getElementById('auslastungKalenderPopup');
-    if (popup) {
-      popup.style.display = 'none';
-    }
+    // Nicht mehr benötigt - Kalender ist immer sichtbar
   }
 
   async navigateKalenderMonat(offset) {
@@ -13189,7 +13264,10 @@ class App {
       datumInput.value = this.formatDateLocal(heute);
       datumInput.dispatchEvent(new Event('change'));
     }
-    this.closeAuslastungKalender();
+    // Aktualisiere Anzeige und navigiere zum aktuellen Monat
+    this.updateSelectedDatumDisplay();
+    this.kalenderAktuellMonat = new Date(heute.getFullYear(), heute.getMonth(), 1);
+    await this.renderAuslastungKalender();
   }
 
   async renderAuslastungKalender() {
@@ -13324,13 +13402,15 @@ class App {
     return auslastungDaten;
   }
 
-  selectKalenderDatum(datumStr) {
+  async selectKalenderDatum(datumStr) {
     const datumInput = document.getElementById('datum');
     if (datumInput) {
       datumInput.value = datumStr;
       datumInput.dispatchEvent(new Event('change'));
     }
-    this.closeAuslastungKalender();
+    // Aktualisiere Anzeige und re-rendere Kalender für Markierung
+    this.updateSelectedDatumDisplay();
+    await this.renderAuslastungKalender();
   }
 
   // Hilfsmethode zum Escapen von HTML
@@ -13892,6 +13972,9 @@ class App {
       else if (arbeit.status === 'abgeschlossen') statusClass = 'status-abgeschlossen';
       else if (arbeit.status === 'wartend') statusClass = 'status-wartend';
       
+      // Schwebend-Klasse
+      const schwebendClass = arbeit.istSchwebend ? 'schwebend' : '';
+      
       // Schwebend-Badge
       const schwebendBadge = arbeit.istSchwebend ? ' ⏸️' : '';
       
@@ -13914,7 +13997,7 @@ class App {
       `;
       
       bloeckeHtml += `
-        <div class="zeitleiste-block-inline ${statusClass} ${erweiterungClass}" 
+        <div class="zeitleiste-block-inline ${statusClass} ${schwebendClass} ${erweiterungClass}" 
              style="flex: 0 0 ${widthPercent}%; min-width: 80px;"
              title="${tooltip}"
              onclick="app.showTerminDetails(${arbeit.terminId})">

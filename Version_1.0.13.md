@@ -169,23 +169,221 @@ resetTerminForm(preserveDatum = false) {
 ## 🎨 FEATURES - UI/UX Verbesserungen
 
 ### Feature 5: Schwebende Termine farblich hervorheben
-- [ ] **Anforderung**: Schwebende Termine in der Liste der nicht zugeordneten Termine sollen eine andere Farbe bekommen
+- [x] **Anforderung**: Schwebende Termine in der Liste der nicht zugeordneten Termine sollen eine andere Farbe bekommen ✅ IMPLEMENTIERT
 - **Betroffene Dateien**: 
   - `frontend/src/styles/style.css`
   - `frontend/src/components/app.js`
-- **Priorität**: ⚠️ WICHTIG
-- **Umsetzung**: 
-  - CSS-Klasse `.termin-schwebend` mit auffälliger Farbe (z.B. orange/gelb)
-  - Beim Rendern der Liste prüfen ob `status === 'schwebend'`
+- **Priorität**: ⚠️ WICHTIG ✅ ERLEDIGT
+- **Lösung implementiert am**: 5. Januar 2026
+  - CSS-Klasse `.nicht-zugeordnet-item.schwebend` mit orangener Hintergrundfarbe und Animation
+  - Badge "⏸️ Schwebend" wird bei schwebenden Terminen angezeigt
+  - Prüfung auf `termin.ist_schwebend === 1 || termin.ist_schwebend === true`
+
+#### 📋 KORREKTURPLAN Feature 5
+
+**Analyse (nach Code-Review):**
+
+1. **Wo werden nicht zugeordnete Termine angezeigt?**
+   - Funktion `loadNichtZugeordneteTermine()` (Zeile 7837-7925)
+   - Container: `#nichtZugeordnetContainer`
+   - HTML-Klasse: `.nicht-zugeordnet-item`
+
+2. **Wie erkennt man schwebende Termine?**
+   - Property: `termin.ist_schwebend === 1 || termin.ist_schwebend === true`
+   - Bereits verwendet in `loadWartendeAktionen()` (Zeile 4271)
+
+3. **Existierende CSS-Klassen für schwebende Termine:**
+   - `.schwebend-badge` (Zeile 3084 in style.css)
+   - `.tages-termin-card.schwebend` (Zeile 3077)
+   - Animation `pulse-schwebend` bereits vorhanden
+
+**Korrektur-Schritte:**
+
+| # | Schritt | Datei | Zeilen | Aufwand |
+|---|---------|-------|--------|---------|
+| 1 | **CSS-Klasse erstellen** | `style.css` | nach 4867 | 5 min |
+| | Neue Klasse `.nicht-zugeordnet-item.schwebend` mit orangener Hintergrundfarbe | | | |
+| 2 | **Klasse beim Rendern hinzufügen** | `app.js` | 7888 | 5 min |
+| | Prüfen ob `termin.ist_schwebend` und CSS-Klasse `schwebend` ergänzen | | | |
+| 3 | **Badge hinzufügen** | `app.js` | 7895 | 5 min |
+| | Schwebend-Badge "⏸️" neben Arbeit anzeigen | | | |
+| 4 | **Testen** | - | - | 5 min |
+
+**Code-Änderungen:**
+
+```css
+/* style.css - nach Zeile 4867 hinzufügen */
+.nicht-zugeordnet-item.schwebend {
+    background: #fff8e1;
+    border-left-color: #ff6f00;
+    animation: pulse-schwebend 2s infinite;
+}
+
+.nicht-zugeordnet-item.schwebend:hover {
+    background: #ffecb3;
+}
+
+.nicht-zugeordnet-item .schwebend-indicator {
+    background: #ff6f00;
+    color: white;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 0.75em;
+    margin-left: 8px;
+}
+```
+
+```javascript
+// app.js - Zeile 7888 ändern von:
+<div class="nicht-zugeordnet-item" data-termin-id="${termin.id}" ...>
+
+// zu:
+<div class="nicht-zugeordnet-item${termin.ist_schwebend ? ' schwebend' : ''}" data-termin-id="${termin.id}" ...>
+
+// Zeile 7895 - Badge ergänzen:
+<div class="nz-arbeit">
+  ${this.escapeHtml(termin.arbeit || '-')}
+  ${termin.ist_schwebend ? '<span class="schwebend-indicator">⏸️ Schwebend</span>' : ''}
+</div>
+```
+
+**Geschätzter Gesamtaufwand:** 20-30 Minuten
+
+---
 
 ### Feature 6: Button "Neues Fahrzeug anlegen" bei Fahrzeugauswahl
-- [ ] **Anforderung**: Bei neuem Termin mit existierendem Kunden fehlt bei der Fahrzeugauswahl ein Button zum Anlegen eines neuen Fahrzeugs
-- **Betroffene Dateien**: `frontend/src/components/app.js` (Termin-Modal, Fahrzeugauswahl)
-- **Priorität**: ⚠️ WICHTIG
-- **Umsetzung**:
-  - Button "➕ Neues Fahrzeug" unter Fahrzeug-Dropdown
-  - Öffnet Mini-Modal für Kennzeichen, Fahrzeugtyp, VIN
-  - Nach Speichern: Dropdown aktualisieren, neues Fahrzeug auswählen
+- [x] **Anforderung**: Bei neuem Termin mit existierendem Kunden fehlt bei der Fahrzeugauswahl ein Button zum Anlegen eines neuen Fahrzeugs ✅ IMPLEMENTIERT
+- **Betroffene Dateien**: 
+  - `frontend/src/components/app.js` (Fahrzeugauswahl-Modal)
+  - `frontend/index.html` (Modal erweitern)
+- **Priorität**: ⚠️ WICHTIG ✅ ERLEDIGT
+- **Lösung implementiert am**: 5. Januar 2026
+  - Button "➕ Neues Fahrzeug anlegen" im Fahrzeugauswahl-Modal
+  - Inline-Formular mit Kennzeichen, Fahrzeugtyp, VIN
+  - Neue Funktionen: `toggleNeuesFahrzeugFormular()`, `addFahrzeugFromAuswahl()`
+  - Nach Anlegen: Fahrzeug wird direkt ausgewählt, Kunden-Cache aktualisiert
+
+#### 📋 KORREKTURPLAN Feature 6
+
+**Analyse (nach Code-Review):**
+
+1. **Fahrzeugauswahl-Modal:**
+   - HTML: `#fahrzeugAuswahlModal` (index.html Zeile 2042)
+   - JS-Funktion: `showFahrzeugAuswahlModal()` (app.js Zeile 9373)
+   - Liste wird dynamisch in `#fahrzeugAuswahlListe` gerendert
+
+2. **Bereits existierend:**
+   - Fahrzeugverwaltung-Modal mit Formular zum Hinzufügen (index.html Zeile 2054)
+   - Funktion `addFahrzeugFromModal()` (app.js) für Fahrzeugverwaltung
+   - API-Endpoint zum Fahrzeug-Anlegen funktioniert bereits
+
+3. **Zwei Ansätze möglich:**
+   - **A)** Button zum Öffnen des separaten Fahrzeugverwaltung-Modals
+   - **B)** Inline-Formular direkt im Fahrzeugauswahl-Modal (empfohlen - weniger Klicks)
+
+**Korrektur-Schritte (Ansatz B - Inline):**
+
+| # | Schritt | Datei | Zeilen | Aufwand |
+|---|---------|-------|--------|---------|
+| 1 | **Toggle-Button hinzufügen** | `app.js` | 9410 | 10 min |
+| | Button "➕ Neues Fahrzeug" der ein Inline-Formular ein-/ausblendet | | | |
+| 2 | **Inline-Formular erstellen** | `app.js` | 9410 | 15 min |
+| | Felder: Kennzeichen*, Fahrzeugtyp, VIN | | | |
+| 3 | **Speicher-Funktion** | `app.js` | neue | 15 min |
+| | `addFahrzeugFromAuswahl()` - Fahrzeug anlegen + auswählen | | | |
+| 4 | **Cache aktualisieren** | `app.js` | | 5 min |
+| | Nach Anlegen: `fahrzeugAuswahlData` updaten, neues Fahrzeug vorauswählen | | | |
+| 5 | **Testen** | - | - | 10 min |
+
+**Code-Änderungen:**
+
+```javascript
+// app.js - showFahrzeugAuswahlModal() erweitern (nach Zeile 9410)
+
+// Am Ende der liste.innerHTML Zuweisung, vor dem schließenden Backtick:
+liste.innerHTML = fahrzeuge.map((fz, idx) => { ... }).join('') + `
+  <div id="neuesFahrzeugSection" style="margin-top: 15px; padding-top: 15px; border-top: 2px dashed #dee2e6;">
+    <button type="button" id="toggleNeuesFahrzeugBtn" class="btn btn-outline" onclick="app.toggleNeuesFahrzeugFormular()" style="width: 100%;">
+      ➕ Neues Fahrzeug anlegen
+    </button>
+    <div id="neuesFahrzeugFormular" style="display: none; margin-top: 15px; padding: 15px; background: #f8f9fa; border-radius: 8px;">
+      <div class="form-row" style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+        <div class="form-group" style="margin: 0;">
+          <label style="font-size: 0.85em;">Kennzeichen: *</label>
+          <input type="text" id="auswahlNeuesKennzeichen" placeholder="z.B. K-AB 1234" style="text-transform: uppercase;">
+        </div>
+        <div class="form-group" style="margin: 0;">
+          <label style="font-size: 0.85em;">Fahrzeugtyp:</label>
+          <input type="text" id="auswahlNeuesFahrzeugtyp" placeholder="z.B. VW Golf">
+        </div>
+      </div>
+      <div class="form-group" style="margin: 10px 0;">
+        <label style="font-size: 0.85em;">VIN (optional):</label>
+        <input type="text" id="auswahlNeueVin" placeholder="z.B. WVWZZZ..." maxlength="17" style="text-transform: uppercase;">
+      </div>
+      <div style="display: flex; gap: 10px;">
+        <button type="button" class="btn btn-success" onclick="app.addFahrzeugFromAuswahl()">✓ Anlegen & Auswählen</button>
+        <button type="button" class="btn btn-secondary" onclick="app.toggleNeuesFahrzeugFormular()">Abbrechen</button>
+      </div>
+    </div>
+  </div>
+`;
+
+// Neue Funktionen hinzufügen:
+
+toggleNeuesFahrzeugFormular() {
+  const formular = document.getElementById('neuesFahrzeugFormular');
+  const btn = document.getElementById('toggleNeuesFahrzeugBtn');
+  if (formular.style.display === 'none') {
+    formular.style.display = 'block';
+    btn.style.display = 'none';
+    document.getElementById('auswahlNeuesKennzeichen').focus();
+  } else {
+    formular.style.display = 'none';
+    btn.style.display = 'block';
+    // Felder leeren
+    document.getElementById('auswahlNeuesKennzeichen').value = '';
+    document.getElementById('auswahlNeuesFahrzeugtyp').value = '';
+    document.getElementById('auswahlNeueVin').value = '';
+  }
+}
+
+async addFahrzeugFromAuswahl() {
+  const kennzeichen = document.getElementById('auswahlNeuesKennzeichen').value.trim().toUpperCase();
+  const fahrzeugtyp = document.getElementById('auswahlNeuesFahrzeugtyp').value.trim();
+  const vin = document.getElementById('auswahlNeueVin').value.trim().toUpperCase();
+  
+  if (!kennzeichen) {
+    alert('Bitte Kennzeichen eingeben');
+    return;
+  }
+  
+  if (!this.fahrzeugAuswahlData) return;
+  const { kunde } = this.fahrzeugAuswahlData;
+  
+  try {
+    // Fahrzeug zum Kunden hinzufügen
+    await api.addFahrzeugToKunde(kunde.id, { kennzeichen, fahrzeugtyp, vin });
+    
+    // Neues Fahrzeug-Objekt erstellen
+    const neuesFahrzeug = { kennzeichen, fahrzeugtyp, vin };
+    
+    // Direkt auswählen und Modal schließen
+    this.applyKundeAuswahl(kunde, neuesFahrzeug);
+    this.closeFahrzeugAuswahlModal();
+    
+    // Cache aktualisieren
+    await this.loadKunden();
+    
+    this.showToast(`Fahrzeug ${kennzeichen} angelegt und ausgewählt`, 'success');
+  } catch (error) {
+    console.error('Fehler beim Anlegen des Fahrzeugs:', error);
+    alert('Fehler beim Anlegen des Fahrzeugs: ' + error.message);
+  }
+}
+```
+
+**Geschätzter Gesamtaufwand:** 45-60 Minuten
 
 ---
 
@@ -241,8 +439,8 @@ resetTerminForm(preserveDatum = false) {
 ### Phase 2: UI/UX Features (Priorität ⚠️)
 | # | Feature | Geschätzte Zeit | Status |
 |---|---------|-----------------|--------|
-| 5 | Schwebende Termine Farbe | 30min | [ ] |
-| 6 | Neues Fahrzeug Button | 1-2h | [ ] |
+| 5 | Schwebende Termine Farbe | 30min | [x] ✅ |
+| 6 | Neues Fahrzeug Button | 1-2h | [x] ✅ |
 
 **Gesamt Phase 2**: ~2-3 Stunden
 
@@ -302,9 +500,10 @@ dropZone.ondrop = (e) => {
   - [x] Teilverwaltung Klick
   - [x] Mitarbeiter zuordnen
   - [x] Termin in Mittagspause
-  - [ ] Neues Fahrzeug anlegen
+  - [x] Neues Fahrzeug anlegen
   - [x] Kennzeichen-Suche
   - [x] Mehrere Arbeiten zuordnen
+  - [x] Schwebende Termine farblich
 - [ ] Version in `backend/src/config/version.js` auf 1.0.13 setzen
 - [ ] Git Tag erstellen
 

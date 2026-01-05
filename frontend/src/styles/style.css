@@ -3644,6 +3644,14 @@ tr.schwebend {
     box-shadow: 0 2px 8px rgba(74, 144, 226, 0.4);
 }
 
+/* Inline Kalender (immer sichtbar im Formular) */
+.auslastung-kalender-inline {
+    background: white;
+    border-radius: 12px;
+    padding: 15px;
+    border: 1px solid #e2e8f0;
+}
+
 .auslastung-kalender-popup {
     position: fixed;
     top: 50%;
@@ -4870,6 +4878,27 @@ mark.highlight {
     box-shadow: 0 2px 8px rgba(0,0,0,0.1);
 }
 
+/* Schwebende Termine in nicht-zugeordnet Liste */
+.nicht-zugeordnet-item.schwebend {
+    background: #fff8e1;
+    border-left-color: #ff6f00;
+    animation: pulse-schwebend 2s infinite;
+}
+
+.nicht-zugeordnet-item.schwebend:hover {
+    background: #ffecb3;
+}
+
+.nicht-zugeordnet-item .schwebend-indicator {
+    background: #ff6f00;
+    color: white;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 0.75em;
+    margin-left: 8px;
+    white-space: nowrap;
+}
+
 .nz-info {
     display: flex;
     gap: 15px;
@@ -5821,6 +5850,14 @@ mark.highlight {
 .zeitleiste-block-inline.status-geplant {
     background: linear-gradient(135deg, #42a5f5, #1e88e5);
     color: white;
+}
+
+/* Schwebende Termine in Zeitleiste - orangene Hervorhebung */
+.zeitleiste-block-inline.schwebend {
+    background: linear-gradient(135deg, #ff9800, #e65100) !important;
+    color: white;
+    border: 2px dashed #fff3e0;
+    animation: pulse-schwebend 2s infinite;
 }
 
 .zeitleiste-block-inline.status-wartend {
