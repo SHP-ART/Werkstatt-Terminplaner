@@ -5,6 +5,49 @@ const ArbeitszeitenModel = require('../models/arbeitszeitenModel');
 const MitarbeiterModel = require('../models/mitarbeiterModel');
 const LehrlingeModel = require('../models/lehrlingeModel');
 
+// Cache für Mitarbeiter und Lehrlinge (Performance-Optimierung)
+let mitarbeiterCache = { data: null, timestamp: 0 };
+let lehrlingeCache = { data: null, timestamp: 0 };
+let aktiveMitarbeiterCache = { data: null, timestamp: 0 };
+let aktiveLehrlingeCache = { data: null, timestamp: 0 };
+const CACHE_TTL = 60000; // 1 Minute
+
+async function getCachedMitarbeiter() {
+  const now = Date.now();
+  if (!mitarbeiterCache.data || (now - mitarbeiterCache.timestamp > CACHE_TTL)) {
+    mitarbeiterCache.data = await MitarbeiterModel.getAll();
+    mitarbeiterCache.timestamp = now;
+  }
+  return mitarbeiterCache.data;
+}
+
+async function getCachedLehrlinge() {
+  const now = Date.now();
+  if (!lehrlingeCache.data || (now - lehrlingeCache.timestamp > CACHE_TTL)) {
+    lehrlingeCache.data = await LehrlingeModel.getAll();
+    lehrlingeCache.timestamp = now;
+  }
+  return lehrlingeCache.data;
+}
+
+async function getCachedAktiveMitarbeiter() {
+  const now = Date.now();
+  if (!aktiveMitarbeiterCache.data || (now - aktiveMitarbeiterCache.timestamp > CACHE_TTL)) {
+    aktiveMitarbeiterCache.data = await MitarbeiterModel.getAktive();
+    aktiveMitarbeiterCache.timestamp = now;
+  }
+  return aktiveMitarbeiterCache.data;
+}
+
+async function getCachedAktiveLehrlinge() {
+  const now = Date.now();
+  if (!aktiveLehrlingeCache.data || (now - aktiveLehrlingeCache.timestamp > CACHE_TTL)) {
+    aktiveLehrlingeCache.data = await LehrlingeModel.getAktive();
+    aktiveLehrlingeCache.timestamp = now;
+  }
+  return aktiveLehrlingeCache.data;
+}
+
 // =====================================================
 // HILFSFUNKTION: Berechnet Endzeit für einen Termin
 // =====================================================
@@ -14,9 +57,9 @@ async function berechneEndzeitFuerTermin(termin, arbeitszeitenDetails) {
     const einstellungen = await EinstellungenModel.getWerkstatt();
     const nebenzeitProzent = einstellungen.nebenzeit_prozent || 0;
     
-    // Lade Mitarbeiter und Lehrlinge für Aufgabenbewältigung
-    const mitarbeiter = await MitarbeiterModel.getAll();
-    const lehrlinge = await LehrlingeModel.getAll();
+    // Lade Mitarbeiter und Lehrlinge für Aufgabenbewältigung (Cached)
+    const mitarbeiter = await getCachedMitarbeiter();
+    const lehrlinge = await getCachedLehrlinge();
     const mitarbeiterMap = {};
     const lehrlingeMap = {};
     mitarbeiter.forEach(m => mitarbeiterMap[m.id] = m);
@@ -729,13 +772,13 @@ class TermineController {
       const globaleNebenzeit = einstellungen?.nebenzeit_prozent || 0; // Globale Nebenzeit
 
       // Lade alle aktiven Mitarbeiter
-      console.log('👥 Lade aktive Mitarbeiter...');
-      const mitarbeiter = await MitarbeiterModel.getAktive();
+      console.log('👥 Lade aktive Mitarbeiter (Cached)...');
+      const mitarbeiter = await getCachedAktiveMitarbeiter();
       console.log(`✅ ${(mitarbeiter || []).length} Mitarbeiter geladen:`, (mitarbeiter || []).map(m => `${m.name} (ID: ${m.id})`).join(', '));
 
       // Lade alle aktiven Lehrlinge
-      console.log('👥 Lade aktive Lehrlinge...');
-      const lehrlinge = await LehrlingeModel.getAktive();
+      console.log('👥 Lade aktive Lehrlinge (Cached)...');
+      const lehrlinge = await getCachedAktiveLehrlinge();
       console.log(`✅ ${(lehrlinge || []).length} Lehrlinge geladen`);
 
       const abwesenheit = await AbwesenheitenModel.getByDatum(datum);

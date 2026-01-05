@@ -2,6 +2,7 @@ require('dotenv').config();
 const express = require('express');
 const bodyParser = require('body-parser');
 const cors = require('cors');
+const compression = require('compression');
 const path = require('path');
 const fs = require('fs');
 const { initializeDatabase } = require('./config/database');
@@ -120,8 +121,9 @@ function startServer(clientCountCallback, requestLogCallback) {
     };
 
     app.use(cors(corsOptions));
-    app.use(bodyParser.json({ limit: '50mb' }));
-    app.use(bodyParser.urlencoded({ extended: true, limit: '50mb' }));
+    app.use(compression()); // GZIP Komprimierung aktivieren
+    app.use(bodyParser.json({ limit: '10mb' }));
+    app.use(bodyParser.urlencoded({ extended: true, limit: '10mb' }));
 
     // Request-Logging Middleware für Electron
     if (requestLogCallback) {

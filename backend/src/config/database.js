@@ -83,6 +83,9 @@ dbWrapper.connection = new sqlite3.Database(dbPath, (err) => {
     console.error('Fehler beim Öffnen der Datenbank:', err);
   } else {
     console.log('Datenbank verbunden:', dbPath);
+    // Performance-Optimierungen
+    dbWrapper.connection.run('PRAGMA journal_mode = WAL;');
+    dbWrapper.connection.run('PRAGMA synchronous = NORMAL;');
   }
 });
 
@@ -119,6 +122,9 @@ function reconnectDatabase() {
           reject(err);
         } else {
           console.log('✅ Datenbank neu verbunden:', dbPath);
+          // Performance-Optimierungen
+          dbWrapper.connection.run('PRAGMA journal_mode = WAL;');
+          dbWrapper.connection.run('PRAGMA synchronous = NORMAL;');
           resolve(dbWrapper.connection);
         }
       });
@@ -677,6 +683,19 @@ function initializeDatabase() {
 
     dbWrapper.connection.run(`CREATE INDEX IF NOT EXISTS idx_phasen_datum ON termin_phasen(datum)`, (err) => {
       if (err) console.error('Fehler beim Erstellen des Index idx_phasen_datum:', err);
+    });
+
+    // Weitere Performance-Indizes
+    dbWrapper.connection.run(`CREATE INDEX IF NOT EXISTS idx_kunden_name ON kunden(name)`, (err) => {
+      if (err) console.error('Fehler beim Erstellen des Index idx_kunden_name:', err);
+    });
+
+    dbWrapper.connection.run(`CREATE INDEX IF NOT EXISTS idx_kunden_kennzeichen ON kunden(kennzeichen)`, (err) => {
+      if (err) console.error('Fehler beim Erstellen des Index idx_kunden_kennzeichen:', err);
+    });
+
+    dbWrapper.connection.run(`CREATE INDEX IF NOT EXISTS idx_termine_geloescht_am ON termine(geloescht_am)`, (err) => {
+      if (err) console.error('Fehler beim Erstellen des Index idx_termine_geloescht_am:', err);
     });
   });
 }
