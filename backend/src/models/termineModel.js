@@ -423,74 +423,99 @@ class TermineModel {
     const termine = await allAsync(termineQuery, [datum]);
     
     // Analysiere Termine und sammle Auslastung pro Mitarbeiter
+    // BUG 8 FIX: Neue Logik - erst einzelne Arbeiten auswerten, dann Fallback für nicht zugeordnete
     (termine || []).forEach(termin => {
       const status = termin.status || 'geplant';
       const gesamtZeit = termin.tatsaechliche_zeit || termin.geschaetzte_zeit || 0;
       
-      // Set um zu tracken, welchen Mitarbeitern dieser Termin bereits zugeordnet wurde
-      const zugeordneteMitarbeiter = new Set();
+      // Track welche Mitarbeiter Zeit von diesem Termin bekommen haben (für termin_anzahl)
+      const mitarbeiterMitZeit = new Set();
+      // Track wie viel Zeit bereits zugeordnet wurde
+      let zugeordneteZeit = 0;
       
       // Prüfe arbeitszeiten_details für Detail-Zuordnungen
       if (termin.arbeitszeiten_details) {
         try {
           const details = JSON.parse(termin.arbeitszeiten_details);
           
-          // Prüfe Gesamt-Zuordnung (_gesamt_mitarbeiter_id)
+          // Ermittle Fallback-Mitarbeiter (für Arbeiten ohne eigene Zuordnung)
+          let fallbackMitarbeiterId = null;
           if (details._gesamt_mitarbeiter_id) {
             const gesamt = details._gesamt_mitarbeiter_id;
             if (typeof gesamt === 'object' && gesamt.type === 'mitarbeiter' && gesamt.id) {
-              const mitarbeiterId = gesamt.id;
-              if (auslastungMap[mitarbeiterId]) {
-                auslastungMap[mitarbeiterId].belegt_minuten += gesamtZeit;
-                auslastungMap[mitarbeiterId].termin_anzahl += 1;
-                zugeordneteMitarbeiter.add(mitarbeiterId);
-                if (status === 'geplant') {
-                  auslastungMap[mitarbeiterId].geplant_minuten += gesamtZeit;
-                } else if (status === 'in_arbeit') {
-                  auslastungMap[mitarbeiterId].in_arbeit_minuten += gesamtZeit;
-                } else if (status === 'abgeschlossen') {
-                  auslastungMap[mitarbeiterId].abgeschlossen_minuten += gesamtZeit;
-                }
+              fallbackMitarbeiterId = gesamt.id;
+            }
+          }
+          if (!fallbackMitarbeiterId && termin.mitarbeiter_id) {
+            fallbackMitarbeiterId = termin.mitarbeiter_id;
+          }
+          
+          // SCHRITT 1: Alle Arbeiten durchgehen und Zeit zuordnen
+          for (const [arbeitName, arbeitDetails] of Object.entries(details)) {
+            if (arbeitName.startsWith('_')) continue; // Überspringe Meta-Felder
+            
+            // Zeit dieser Arbeit ermitteln
+            let arbeitZeit = 0;
+            let mitarbeiterId = null;
+            
+            if (typeof arbeitDetails === 'object') {
+              arbeitZeit = arbeitDetails.zeit || 0;
+              
+              // Hat diese Arbeit eine eigene Mitarbeiter-Zuordnung?
+              if (arbeitDetails.type === 'mitarbeiter' && arbeitDetails.mitarbeiter_id) {
+                mitarbeiterId = arbeitDetails.mitarbeiter_id;
+              } else {
+                // Keine eigene Zuordnung → Fallback verwenden
+                mitarbeiterId = fallbackMitarbeiterId;
+              }
+            } else if (typeof arbeitDetails === 'number') {
+              // Alte Format: nur Zeit als Zahl
+              arbeitZeit = arbeitDetails;
+              mitarbeiterId = fallbackMitarbeiterId;
+            }
+            
+            // Zeit dem Mitarbeiter zuweisen
+            if (mitarbeiterId && arbeitZeit > 0 && auslastungMap[mitarbeiterId]) {
+              auslastungMap[mitarbeiterId].belegt_minuten += arbeitZeit;
+              mitarbeiterMitZeit.add(mitarbeiterId);
+              zugeordneteZeit += arbeitZeit;
+              
+              // Status-basierte Zeiten
+              if (status === 'geplant') {
+                auslastungMap[mitarbeiterId].geplant_minuten += arbeitZeit;
+              } else if (status === 'in_arbeit') {
+                auslastungMap[mitarbeiterId].in_arbeit_minuten += arbeitZeit;
+              } else if (status === 'abgeschlossen') {
+                auslastungMap[mitarbeiterId].abgeschlossen_minuten += arbeitZeit;
               }
             }
           }
           
-          // Prüfe einzelne Arbeitszuordnungen
-          for (const [arbeitName, arbeitDetails] of Object.entries(details)) {
-            if (arbeitName.startsWith('_')) continue; // Überspringe Meta-Felder
+          // SCHRITT 2: Falls keine Zeit zugeordnet wurde, verwende gesamtZeit mit Fallback
+          if (zugeordneteZeit === 0 && fallbackMitarbeiterId && auslastungMap[fallbackMitarbeiterId]) {
+            auslastungMap[fallbackMitarbeiterId].belegt_minuten += gesamtZeit;
+            mitarbeiterMitZeit.add(fallbackMitarbeiterId);
             
-            if (typeof arbeitDetails === 'object' && arbeitDetails.type === 'mitarbeiter' && arbeitDetails.mitarbeiter_id) {
-              const mitarbeiterId = arbeitDetails.mitarbeiter_id;
-              const arbeitZeit = arbeitDetails.zeit || 0;
-              
-              if (auslastungMap[mitarbeiterId] && !zugeordneteMitarbeiter.has(mitarbeiterId)) {
-                auslastungMap[mitarbeiterId].belegt_minuten += arbeitZeit;
-                auslastungMap[mitarbeiterId].termin_anzahl += 1;
-                zugeordneteMitarbeiter.add(mitarbeiterId);
-                if (status === 'geplant') {
-                  auslastungMap[mitarbeiterId].geplant_minuten += arbeitZeit;
-                } else if (status === 'in_arbeit') {
-                  auslastungMap[mitarbeiterId].in_arbeit_minuten += arbeitZeit;
-                } else if (status === 'abgeschlossen') {
-                  auslastungMap[mitarbeiterId].abgeschlossen_minuten += arbeitZeit;
-                }
-              } else if (auslastungMap[mitarbeiterId] && zugeordneteMitarbeiter.has(mitarbeiterId)) {
-                // Mitarbeiter war schon zugeordnet durch Gesamt - nur Zeit addieren, nicht Termin-Anzahl
-                // NICHT hinzufügen, da Gesamt-Zeit schon die volle Zeit enthält
-              }
+            if (status === 'geplant') {
+              auslastungMap[fallbackMitarbeiterId].geplant_minuten += gesamtZeit;
+            } else if (status === 'in_arbeit') {
+              auslastungMap[fallbackMitarbeiterId].in_arbeit_minuten += gesamtZeit;
+            } else if (status === 'abgeschlossen') {
+              auslastungMap[fallbackMitarbeiterId].abgeschlossen_minuten += gesamtZeit;
             }
           }
+          
         } catch (e) {
           console.error('Fehler beim Parsen von arbeitszeiten_details:', e);
         }
       }
       
-      // Falls kein Detail-Zuordnung, nutze mitarbeiter_id aus Termin-Hauptfeld
-      if (zugeordneteMitarbeiter.size === 0 && termin.mitarbeiter_id) {
+      // Falls keine arbeitszeiten_details vorhanden, nutze mitarbeiter_id aus Termin-Hauptfeld
+      if (mitarbeiterMitZeit.size === 0 && termin.mitarbeiter_id) {
         const mitarbeiterId = termin.mitarbeiter_id;
         if (auslastungMap[mitarbeiterId]) {
           auslastungMap[mitarbeiterId].belegt_minuten += gesamtZeit;
-          auslastungMap[mitarbeiterId].termin_anzahl += 1;
+          mitarbeiterMitZeit.add(mitarbeiterId);
           if (status === 'geplant') {
             auslastungMap[mitarbeiterId].geplant_minuten += gesamtZeit;
           } else if (status === 'in_arbeit') {
@@ -500,6 +525,13 @@ class TermineModel {
           }
         }
       }
+      
+      // Termin-Anzahl für alle beteiligten Mitarbeiter erhöhen (max 1 pro Termin)
+      mitarbeiterMitZeit.forEach(mid => {
+        if (auslastungMap[mid]) {
+          auslastungMap[mid].termin_anzahl += 1;
+        }
+      });
     });
     
     // Konvertiere Map zu Array

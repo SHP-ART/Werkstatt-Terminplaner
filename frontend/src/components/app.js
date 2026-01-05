@@ -13635,26 +13635,26 @@ class App {
           arbeitenListe = [termin.kennzeichen || 'Ohne Beschreibung'];
         }
 
-        // Bestimme Mitarbeiter/Lehrling Zuordnung (aus _gesamt_mitarbeiter_id)
-        let zuordnungsTyp = null;
-        let mitarbeiterId = termin.mitarbeiter_id;
-        let lehrlingId = null;
+        // Bestimme Mitarbeiter/Lehrling Zuordnung (aus _gesamt_mitarbeiter_id) - als Fallback
+        let defaultZuordnungsTyp = null;
+        let defaultMitarbeiterId = termin.mitarbeiter_id;
+        let defaultLehrlingId = null;
         
         if (details._gesamt_mitarbeiter_id) {
-          zuordnungsTyp = details._gesamt_mitarbeiter_id.type;
-          if (zuordnungsTyp === 'lehrling') {
-            lehrlingId = details._gesamt_mitarbeiter_id.id;
-            mitarbeiterId = null;
+          defaultZuordnungsTyp = details._gesamt_mitarbeiter_id.type;
+          if (defaultZuordnungsTyp === 'lehrling') {
+            defaultLehrlingId = details._gesamt_mitarbeiter_id.id;
+            defaultMitarbeiterId = null;
           } else {
-            mitarbeiterId = details._gesamt_mitarbeiter_id.id;
+            defaultMitarbeiterId = details._gesamt_mitarbeiter_id.id;
           }
         }
         
         // Bei schwebenden Terminen keine Zuordnung
         if (istSchwebend) {
-          zuordnungsTyp = null;
-          mitarbeiterId = null;
-          lehrlingId = null;
+          defaultZuordnungsTyp = null;
+          defaultMitarbeiterId = null;
+          defaultLehrlingId = null;
         }
 
         // Startzeit des Termins (aus _startzeit oder erster Arbeit mit Startzeit)
@@ -13681,6 +13681,24 @@ class App {
           // Nebenzeit-Aufschlag hinzufügen (z.B. 20% = zeitMinuten * 1.2)
           if (nebenzeitProzent > 0) {
             zeitMinuten = Math.round(zeitMinuten * (1 + nebenzeitProzent / 100));
+          }
+          
+          // BUG 8 FIX: Bestimme Mitarbeiter/Lehrling für DIESE Arbeit (individuelle Zuordnung hat Vorrang)
+          let arbeitZuordnungsTyp = defaultZuordnungsTyp;
+          let arbeitMitarbeiterId = defaultMitarbeiterId;
+          let arbeitLehrlingId = defaultLehrlingId;
+          
+          // Prüfe ob diese Arbeit eine eigene Zuordnung hat
+          if (!istSchwebend && typeof arbeitDetails === 'object') {
+            if (arbeitDetails.type === 'lehrling' && (arbeitDetails.lehrling_id || arbeitDetails.mitarbeiter_id)) {
+              arbeitZuordnungsTyp = 'lehrling';
+              arbeitLehrlingId = arbeitDetails.lehrling_id || arbeitDetails.mitarbeiter_id;
+              arbeitMitarbeiterId = null;
+            } else if (arbeitDetails.mitarbeiter_id) {
+              arbeitZuordnungsTyp = arbeitDetails.type || 'mitarbeiter';
+              arbeitMitarbeiterId = arbeitDetails.mitarbeiter_id;
+              arbeitLehrlingId = null;
+            }
           }
           
           // Startzeit für diese Arbeit bestimmen
@@ -13739,7 +13757,11 @@ class App {
             istSchwebend: istSchwebend,
             istErweiterung: termin.ist_erweiterung === 1 || termin.ist_erweiterung === true,
             erweiterungAnzahl: erweiterungAnzahl,
-            erweiterungVonId: termin.erweiterung_von_id || null
+            erweiterungVonId: termin.erweiterung_von_id || null,
+            // BUG 8 FIX: Individuelle Zuordnung pro Arbeit speichern
+            zuordnungsTyp: arbeitZuordnungsTyp,
+            mitarbeiterId: arbeitMitarbeiterId,
+            lehrlingId: arbeitLehrlingId
           };
           
           arbeitEntries.push(terminEntry);
@@ -13754,18 +13776,18 @@ class App {
           }
         }
 
-        // Zuordnung zu Mitarbeiter oder Lehrling
+        // BUG 8 FIX: Zuordnung zu Mitarbeiter oder Lehrling - jetzt pro Arbeit individuell
         for (const entry of arbeitEntries) {
-          if (zuordnungsTyp === 'lehrling' && lehrlingId) {
-            const key = `l_${lehrlingId}`;
+          if (entry.zuordnungsTyp === 'lehrling' && entry.lehrlingId) {
+            const key = `l_${entry.lehrlingId}`;
             if (!arbeitenMap.has(key)) {
-              arbeitenMap.set(key, { typ: 'lehrling', id: lehrlingId, arbeiten: [] });
+              arbeitenMap.set(key, { typ: 'lehrling', id: entry.lehrlingId, arbeiten: [] });
             }
             arbeitenMap.get(key).arbeiten.push(entry);
-          } else if (mitarbeiterId) {
-            const key = `m_${mitarbeiterId}`;
+          } else if (entry.mitarbeiterId) {
+            const key = `m_${entry.mitarbeiterId}`;
             if (!arbeitenMap.has(key)) {
-              arbeitenMap.set(key, { typ: 'mitarbeiter', id: mitarbeiterId, arbeiten: [] });
+              arbeitenMap.set(key, { typ: 'mitarbeiter', id: entry.mitarbeiterId, arbeiten: [] });
             }
             arbeitenMap.get(key).arbeiten.push(entry);
           } else {
@@ -14048,14 +14070,10 @@ class App {
         const [startH, startM] = arbeit.startzeit.split(':').map(Number);
         startMinutes = startH * 60 + startM;
         
-        // Verwende gespeicherte endzeit_berechnet für den letzten Teil eines Termins
-        if (arbeit.endzeitBerechnet && arbeit.arbeitIndex === arbeit.arbeitenAnzahl - 1) {
-          // Letzte Arbeit des Termins - verwende gespeicherte Endzeit
-          const [endH, endM] = arbeit.endzeitBerechnet.split(':').map(Number);
-          endMinutes = endH * 60 + endM;
-        } else {
-          endMinutes = startMinutes + arbeit.zeitMinuten;
-        }
+        // BUG 8 FIX: Endzeit basierend auf individueller Arbeitszeit berechnen
+        // endzeitBerechnet nur verwenden wenn ALLE Arbeiten dem gleichen Mitarbeiter zugeordnet sind
+        // und dies die letzte Arbeit des Termins ist
+        endMinutes = startMinutes + arbeit.zeitMinuten;
         
         // Wenn die Startzeit in der Pause liegt, nach der Pause verschieben
         if (pauseStartMinuten !== null && startMinutes >= pauseStartMinuten && startMinutes < pauseEndMinuten) {
@@ -14071,13 +14089,8 @@ class App {
           startMinutes = pauseEndMinuten;
         }
         
-        // Verwende gespeicherte endzeit_berechnet für Erweiterungs-Termine oder letzte Arbeit
-        if (arbeit.endzeitBerechnet && (arbeit.istErweiterung || arbeit.arbeitIndex === arbeit.arbeitenAnzahl - 1)) {
-          const [endH, endM] = arbeit.endzeitBerechnet.split(':').map(Number);
-          endMinutes = endH * 60 + endM;
-        } else {
-          endMinutes = startMinutes + arbeit.zeitMinuten;
-        }
+        // BUG 8 FIX: Immer individuelle Arbeitszeit verwenden
+        endMinutes = startMinutes + arbeit.zeitMinuten;
       }
       
       // Prüfe ob der Termin über die Mittagspause geht

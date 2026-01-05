@@ -112,13 +112,15 @@ resetTerminForm(preserveDatum = false) {
   - Dropdown-Logik für Mitarbeiter und Lehrlinge verbessert
 
 ### Bug 4: Termine in Mittagspause verschwinden
-- [ ] **Problem**: Termine die in einer Zeit erstellt werden wo Mittagspause ist, werden nicht angezeigt
-- [ ] **Problem**: Termine rutschen in die Mittagspause
+- [x] **Problem**: Termine die in einer Zeit erstellt werden wo Mittagspause ist, werden nicht angezeigt ✅ BEHOBEN
+- [x] **Problem**: Termine rutschen in die Mittagspause ✅ BEHOBEN
 - **Betroffene Dateien**:
   - `backend/src/controllers/termineController.js` (Zeitberechnung)
   - `frontend/src/components/app.js` (Anzeige-Logik)
-- **Priorität**: 🔴 KRITISCH
-- **Lösung**: Mittagspause bei Zeitberechnung korrekt berücksichtigen, Termine um Pause herum planen
+- **Priorität**: 🔴 KRITISCH ✅ BEHOBEN
+- **Lösung implementiert am**: 5. Januar 2026
+  - Termine mit Startzeit in der Mittagspause werden nach der Pause verschoben
+  - Endzeit wird nach Verschiebung korrekt neu berechnet (nicht mehr alte `endzeitBerechnet` verwenden)
 
 ### Bug 7: Kennzeichen-Suche bei neuen Autos
 - [ ] **Problem**: Bei neu angelegten Fahrzeugen funktioniert die Kennzeichen-Suche nicht
@@ -224,7 +226,7 @@ resetTerminForm(preserveDatum = false) {
 | 1 | Datum verschwindet | 1-2h | [x] ✅ |
 | 2 | Teilverwaltung Klick | 1h | [x] ✅ |
 | 3 | Mitarbeiter-Zuordnung | 2-3h | [x] ✅ |
-| 4 | Mittagspause Termine | 2h | [ ] |
+| 4 | Mittagspause Termine | 2h | [x] ✅ |
 | 7 | Kennzeichen-Suche | 1h | [ ] |
 | 8 | Mehrere Arbeiten Auslastung | 2-3h | [ ] |
 | 11 | All-in-One hohe CPU | 2-4h | [x] ✅ |
@@ -294,7 +296,7 @@ dropZone.ondrop = (e) => {
   - [x] Neuer Termin mit Datum
   - [x] Teilverwaltung Klick
   - [x] Mitarbeiter zuordnen
-  - [ ] Termin in Mittagspause
+  - [x] Termin in Mittagspause
   - [ ] Neues Fahrzeug anlegen
   - [ ] Kennzeichen-Suche
   - [ ] Mehrere Arbeiten zuordnen
