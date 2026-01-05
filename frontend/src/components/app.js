@@ -1477,6 +1477,7 @@ class App {
       this.resetTerminEditForm();
       this.loadEditTermine();
       this.loadTermine();
+      this.loadTermineCache(); // Cache für Kennzeichen-Suche aktualisieren
       this.loadDashboard();
       this.loadArbeitszeiten();
       this.loadTermineZeiten();
@@ -2529,8 +2530,9 @@ class App {
       // Liste neu laden
       await this.loadFahrzeugVerwaltungListe();
       
-      // Auch Termin-Cache aktualisieren
+      // Auch Termin-Cache und Kundenliste aktualisieren
       this.loadTermineCache();
+      this.loadKunden();
       
     } catch (error) {
       console.error('Fehler beim Hinzufügen des Fahrzeugs:', error);
@@ -3587,6 +3589,7 @@ class App {
       this.resetPhasen();
 
       this.loadTermine();
+      this.loadTermineCache(); // Cache für Kennzeichen-Suche aktualisieren
       this.loadDashboard();
       this.loadArbeitszeiten();
       this.loadTermineZeiten();
@@ -3681,6 +3684,7 @@ class App {
       this.resetTermineSubTabs();
 
       this.loadTermine();
+      this.loadTermineCache(); // Cache für Kennzeichen-Suche aktualisieren
       this.loadDashboard();
       this.loadTermineZeiten();
     } catch (error) {
@@ -4246,8 +4250,9 @@ class App {
         statusBadge.style.display = 'none';
       }
 
-      // Liste aktualisieren
+      // Liste und Cache aktualisieren
       this.loadWartendeAktionen();
+      this.loadTermineCache(); // Cache für Kennzeichen-Suche aktualisieren
       this.loadDashboard();
     } catch (error) {
       console.error('Fehler beim Erstellen der wartenden Aktion:', error);
