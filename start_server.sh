@@ -72,8 +72,27 @@ echo ""
 echo "Backend:   http://localhost:3001"
 echo "API:       http://localhost:3001/api"
 echo ""
+
+# Starte Electron App
+echo -e "${BLUE}[START]${NC} Starte Electron-Oberfläche..."
+cd backend
+nohup ./node_modules/.bin/electron . > ../logs/electron.log 2>&1 &
+ELECTRON_PID=$!
+echo $ELECTRON_PID > ../logs/electron.pid
+cd ..
+sleep 2
+
+if ps -p $ELECTRON_PID > /dev/null; then
+    echo -e "${GREEN}[OK]${NC} Electron läuft (PID: $ELECTRON_PID)"
+else
+    echo -e "${YELLOW}[WARNUNG]${NC} Electron konnte nicht gestartet werden"
+    echo "Die Anwendung ist trotzdem unter http://localhost:3001 erreichbar"
+fi
+
+echo ""
 echo "Logs:"
 echo "  Backend:  logs/backend.log"
+echo "  Electron: logs/electron.log"
 echo ""
 echo "Zum Stoppen: ./stop_server.sh"
 echo ""

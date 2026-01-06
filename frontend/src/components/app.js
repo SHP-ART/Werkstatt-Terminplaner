@@ -14631,6 +14631,9 @@ class App {
       `;
     };
     
+    // Tracke das Ende von Blöcken pro Termin, um Überlappungen zu vermeiden
+    const terminEndzeiten = new Map(); // terminId -> letztes Ende in Minuten
+    
     for (const arbeit of sortedArbeiten) {
       let startMinutes, endMinutes;
       
@@ -14643,9 +14646,19 @@ class App {
         startMinutes = startH * 60 + startM;
         
         // BUG 8 FIX: Endzeit basierend auf individueller Arbeitszeit berechnen
-        // endzeitBerechnet nur verwenden wenn ALLE Arbeiten dem gleichen Mitarbeiter zugeordnet sind
-        // und dies die letzte Arbeit des Termins ist
         endMinutes = startMinutes + anzeigeZeit;
+        
+        // Kollisionsvermeidung: Wenn dieser Block mit einem vorherigen Block des gleichen Termins überlappt,
+        // verschiebe ihn ans Ende des vorherigen Blocks
+        const terminId = arbeit.terminId;
+        if (terminEndzeiten.has(terminId)) {
+          const vorherEnde = terminEndzeiten.get(terminId);
+          if (startMinutes < vorherEnde) {
+            // Überlappung! Verschiebe ans Ende des vorherigen Blocks
+            startMinutes = vorherEnde;
+            endMinutes = startMinutes + anzeigeZeit;
+          }
+        }
         
         // Wenn die Startzeit in der Pause liegt, nach der Pause verschieben
         if (pauseStartMinuten !== null && startMinutes >= pauseStartMinuten && startMinutes < pauseEndMinuten) {
@@ -14653,6 +14666,9 @@ class App {
           // Nach Verschiebung immer Endzeit neu berechnen (endzeitBerechnet basiert auf alter Startzeit)
           endMinutes = startMinutes + anzeigeZeit;
         }
+        
+        // Speichere das Ende dieses Blocks für Kollisionsvermeidung
+        terminEndzeiten.set(terminId, Math.max(terminEndzeiten.get(terminId) || 0, endMinutes));
       } else {
         // Ohne Startzeit: Platziere nach letzter Arbeit (und nach Pause falls nötig)
         startMinutes = currentEndMinutes;
@@ -15038,19 +15054,72 @@ class App {
         // Schwebende Termine in "Nicht zugeordnet" anzeigen (aber trotzdem draggable)
         const istSchwebend = termin.ist_schwebend === 1 || termin.ist_schwebend === true;
         
-        // Bestimme Mitarbeiter/Lehrling Zuordnung - GLEICHE LOGIK wie loadZeitleiste()
-        let zuordnungsTyp = null;
-        let mitarbeiterId = null;
-        let lehrlingId = null;
-        let effektiveStartzeit = null; // Startzeit aus arbeitszeiten_details
-        
-        // Parse arbeitszeiten_details für Zuordnung
+        // Parse arbeitszeiten_details
+        let details = null;
         if (termin.arbeitszeiten_details) {
           try {
-            const details = typeof termin.arbeitszeiten_details === 'string' 
+            details = typeof termin.arbeitszeiten_details === 'string' 
               ? JSON.parse(termin.arbeitszeiten_details) 
               : termin.arbeitszeiten_details;
+          } catch (e) {
+            console.warn('Fehler beim Parsen von arbeitszeiten_details:', e);
+          }
+        }
+        
+        // Zähle einzelne Arbeiten (nicht Meta-Felder)
+        const arbeiten = [];
+        if (details) {
+          for (const key in details) {
+            if (key.startsWith('_')) continue; // Meta-Felder überspringen
+            const arbeitData = details[key];
+            // Arbeit mit Details (Objekt) oder einfacher Wert (Zahl)
+            if (typeof arbeitData === 'object' && arbeitData !== null) {
+              arbeiten.push({ name: key, ...arbeitData });
+            } else if (typeof arbeitData === 'number') {
+              arbeiten.push({ name: key, zeit: arbeitData });
+            }
+          }
+        }
+        
+        // Wenn Termin mehrere Arbeiten hat, jede als separaten Block darstellen
+        if (arbeiten.length > 1) {
+          // Mehrere Arbeiten - jede als separater Block
+          arbeiten.forEach((arbeit, index) => {
+            const arbeitZuordnung = this.getArbeitZuordnung(arbeit, details, termin);
             
+            // Erstelle virtuellen Termin für diese Arbeit
+            const arbeitTermin = {
+              ...termin,
+              _arbeitName: arbeit.name,
+              _arbeitIndex: index,
+              _istArbeitBlock: true,
+              _arbeitDauer: arbeit.zeit || 30,
+              startzeit: arbeit.startzeit || details._startzeit || termin.startzeit || termin.bring_zeit || '08:00'
+            };
+            
+            // Platziere auf der richtigen Timeline
+            if (arbeitZuordnung.type === 'lehrling' && arbeitZuordnung.id && lehrlingeMap[arbeitZuordnung.id]) {
+              const pauseStart = lehrlingePauseMap[arbeitZuordnung.id];
+              const timelineElement = this.createArbeitBlockElement(arbeitTermin, arbeit, startHour, endHour, pauseStart, 'lehrling');
+              if (timelineElement) lehrlingeMap[arbeitZuordnung.id].appendChild(timelineElement);
+            } else if (arbeitZuordnung.type === 'mitarbeiter' && arbeitZuordnung.id && mitarbeiterMap[arbeitZuordnung.id]) {
+              const pauseStart = mitarbeiterPauseMap[arbeitZuordnung.id];
+              const timelineElement = this.createArbeitBlockElement(arbeitTermin, arbeit, startHour, endHour, pauseStart, 'mitarbeiter');
+              if (timelineElement) mitarbeiterMap[arbeitZuordnung.id].appendChild(timelineElement);
+            } else {
+              // Nicht zugeordnet - als Mini-Card anzeigen
+              const card = this.createArbeitMiniCard(termin, arbeit, index);
+              sourceContainer.appendChild(card);
+            }
+          });
+        } else {
+          // Einzelne Arbeit oder keine Details - normale Darstellung
+          let zuordnungsTyp = null;
+          let mitarbeiterId = null;
+          let lehrlingId = null;
+          let effektiveStartzeit = null;
+          
+          if (details) {
             // Priorität 1: _gesamt_mitarbeiter_id
             if (details._gesamt_mitarbeiter_id) {
               zuordnungsTyp = details._gesamt_mitarbeiter_id.type;
@@ -15061,71 +15130,55 @@ class App {
               }
             }
             
-            // _startzeit aus Details (falls _gesamt_mitarbeiter_id vorhanden)
             if (details._startzeit) {
               effektiveStartzeit = details._startzeit;
             }
             
-            // Priorität 2: Erste Arbeit mit eigener Zuordnung (wenn keine _gesamt_mitarbeiter_id)
-            if (!zuordnungsTyp) {
-              for (const key in details) {
-                if (key.startsWith('_')) continue; // Meta-Felder überspringen
-                const arbeitDetails = details[key];
-                if (typeof arbeitDetails === 'object' && arbeitDetails !== null) {
-                  if (arbeitDetails.type === 'lehrling' && (arbeitDetails.lehrling_id || arbeitDetails.mitarbeiter_id)) {
-                    zuordnungsTyp = 'lehrling';
-                    lehrlingId = arbeitDetails.lehrling_id || arbeitDetails.mitarbeiter_id;
-                    // Startzeit dieser Arbeit übernehmen
-                    if (arbeitDetails.startzeit) {
-                      effektiveStartzeit = arbeitDetails.startzeit;
-                    }
-                    break;
-                  } else if (arbeitDetails.mitarbeiter_id) {
-                    zuordnungsTyp = arbeitDetails.type || 'mitarbeiter';
-                    mitarbeiterId = arbeitDetails.mitarbeiter_id;
-                    // Startzeit dieser Arbeit übernehmen
-                    if (arbeitDetails.startzeit) {
-                      effektiveStartzeit = arbeitDetails.startzeit;
-                    }
-                    break;
-                  }
-                }
+            // Priorität 2: Erste Arbeit mit eigener Zuordnung
+            if (!zuordnungsTyp && arbeiten.length === 1) {
+              const arbeit = arbeiten[0];
+              if (arbeit.type === 'lehrling' && (arbeit.lehrling_id || arbeit.mitarbeiter_id)) {
+                zuordnungsTyp = 'lehrling';
+                lehrlingId = arbeit.lehrling_id || arbeit.mitarbeiter_id;
+                if (arbeit.startzeit) effektiveStartzeit = arbeit.startzeit;
+              } else if (arbeit.mitarbeiter_id) {
+                zuordnungsTyp = arbeit.type || 'mitarbeiter';
+                mitarbeiterId = arbeit.mitarbeiter_id;
+                if (arbeit.startzeit) effektiveStartzeit = arbeit.startzeit;
               }
             }
-          } catch (e) {
-            console.warn('Fehler beim Parsen von arbeitszeiten_details:', e);
           }
-        }
-        
-        // Priorität 3: Fallback auf termin.mitarbeiter_id
-        if (!zuordnungsTyp && termin.mitarbeiter_id) {
-          mitarbeiterId = termin.mitarbeiter_id;
-          zuordnungsTyp = 'mitarbeiter';
-        }
-        
-        // Erstelle Kopie des Termins mit effektiver Startzeit für die Timeline
-        const terminFuerTimeline = { ...termin };
-        if (effektiveStartzeit) {
-          terminFuerTimeline.startzeit = effektiveStartzeit;
-        }
-        
-        // Termin auf Timeline platzieren
-        if (zuordnungsTyp === 'lehrling' && lehrlingId && lehrlingeMap[lehrlingId]) {
-          const pauseStart = lehrlingePauseMap[lehrlingId];
-          const timelineElements = this.createTimelineTerminWithPause(terminFuerTimeline, startHour, endHour, pauseStart, 'lehrling');
-          timelineElements.forEach(el => {
-            if (el) lehrlingeMap[lehrlingId].appendChild(el);
-          });
-        } else if (mitarbeiterId && mitarbeiterMap[mitarbeiterId]) {
-          const pauseStart = mitarbeiterPauseMap[mitarbeiterId];
-          const timelineElements = this.createTimelineTerminWithPause(terminFuerTimeline, startHour, endHour, pauseStart);
-          timelineElements.forEach(el => {
-            if (el) mitarbeiterMap[mitarbeiterId].appendChild(el);
-          });
-        } else {
-          // Nicht zugeordnet -> Linke Spalte als Mini-Card
-          const card = this.createTerminMiniCard(termin);
-          sourceContainer.appendChild(card);
+          
+          // Priorität 3: Fallback auf termin.mitarbeiter_id
+          if (!zuordnungsTyp && termin.mitarbeiter_id) {
+            mitarbeiterId = termin.mitarbeiter_id;
+            zuordnungsTyp = 'mitarbeiter';
+          }
+          
+          // Erstelle Kopie des Termins mit effektiver Startzeit
+          const terminFuerTimeline = { ...termin };
+          if (effektiveStartzeit) {
+            terminFuerTimeline.startzeit = effektiveStartzeit;
+          }
+          
+          // Termin auf Timeline platzieren
+          if (zuordnungsTyp === 'lehrling' && lehrlingId && lehrlingeMap[lehrlingId]) {
+            const pauseStart = lehrlingePauseMap[lehrlingId];
+            const timelineElements = this.createTimelineTerminWithPause(terminFuerTimeline, startHour, endHour, pauseStart, 'lehrling');
+            timelineElements.forEach(el => {
+              if (el) lehrlingeMap[lehrlingId].appendChild(el);
+            });
+          } else if (mitarbeiterId && mitarbeiterMap[mitarbeiterId]) {
+            const pauseStart = mitarbeiterPauseMap[mitarbeiterId];
+            const timelineElements = this.createTimelineTerminWithPause(terminFuerTimeline, startHour, endHour, pauseStart);
+            timelineElements.forEach(el => {
+              if (el) mitarbeiterMap[mitarbeiterId].appendChild(el);
+            });
+          } else {
+            // Nicht zugeordnet
+            const card = this.createTerminMiniCard(termin);
+            sourceContainer.appendChild(card);
+          }
         }
       });
       
@@ -15189,7 +15242,7 @@ class App {
     const [pauseH, pauseM] = pauseStart.split(':').map(Number);
     const pauseDauer = 30; // 30 Minuten Pause
     
-    const pixelPerHour = 80;
+    const pixelPerHour = 100;
     const pixelPerMinute = pixelPerHour / 60;
     
     const pauseStartMinutes = (pauseH - startHour) * 60 + pauseM;
@@ -15204,6 +15257,161 @@ class App {
     pauseBlock.innerHTML = '🍽️';
     
     track.appendChild(pauseBlock);
+  }
+
+  // Hilfsmethode: Ermittle Zuordnung einer einzelnen Arbeit
+  getArbeitZuordnung(arbeit, details, termin) {
+    // Zuerst: Eigene Zuordnung der Arbeit prüfen
+    if (arbeit.type === 'lehrling' && (arbeit.lehrling_id || arbeit.mitarbeiter_id)) {
+      return { type: 'lehrling', id: arbeit.lehrling_id || arbeit.mitarbeiter_id };
+    }
+    if (arbeit.mitarbeiter_id) {
+      return { type: arbeit.type || 'mitarbeiter', id: arbeit.mitarbeiter_id };
+    }
+    
+    // Fallback: _gesamt_mitarbeiter_id
+    if (details && details._gesamt_mitarbeiter_id) {
+      return { 
+        type: details._gesamt_mitarbeiter_id.type, 
+        id: details._gesamt_mitarbeiter_id.id 
+      };
+    }
+    
+    // Fallback: termin.mitarbeiter_id
+    if (termin.mitarbeiter_id) {
+      return { type: 'mitarbeiter', id: termin.mitarbeiter_id };
+    }
+    
+    return { type: null, id: null };
+  }
+
+  // Erstellt ein Timeline-Element für einen Arbeitsblock
+  createArbeitBlockElement(termin, arbeit, startHour, endHour, pauseStart, type = 'mitarbeiter') {
+    const isSchwebend = termin.ist_schwebend === 1 || termin._istSchwebend;
+    
+    // Startzeit parsen
+    let startzeit = termin.startzeit || '08:00';
+    const [startH, startM] = startzeit.split(':').map(Number);
+    
+    // Dauer dieser Arbeit
+    const dauer = arbeit.zeit || 30;
+    
+    // Nebenzeit-Aufschlag
+    const nebenzeitProzent = this._planungNebenzeitProzent || 0;
+    const dauerMitNebenzeit = nebenzeitProzent > 0 
+      ? Math.round(dauer * (1 + nebenzeitProzent / 100)) 
+      : dauer;
+    
+    // Position berechnen (100px pro Stunde)
+    const pixelPerHour = 100;
+    const pixelPerMinute = pixelPerHour / 60;
+    
+    const startMinutesFromDayStart = (startH - startHour) * 60 + startM;
+    const leftPx = startMinutesFromDayStart * pixelPerMinute;
+    const widthPx = Math.max(dauerMitNebenzeit * pixelPerMinute, 40);
+    
+    // Außerhalb des sichtbaren Bereichs?
+    if (startH < startHour || startH > endHour) {
+      return null;
+    }
+    
+    // Dauer formatiert
+    const dauerText = dauerMitNebenzeit >= 60 
+      ? `${Math.floor(dauerMitNebenzeit/60)}h ${dauerMitNebenzeit%60 > 0 ? (dauerMitNebenzeit%60) + 'min' : ''}`.trim()
+      : `${dauerMitNebenzeit} min`;
+
+    const div = document.createElement('div');
+    const statusClass = termin.status ? ` status-${termin.status.toLowerCase().replace(' ', '-')}` : '';
+    div.className = 'timeline-termin arbeit-block' + statusClass + (isSchwebend ? ' schwebend' : '');
+    div.id = `timeline-arbeit-${termin.id}-${termin._arbeitIndex}`;
+    div.dataset.terminId = termin.id;
+    div.dataset.arbeitName = arbeit.name;
+    div.dataset.arbeitIndex = termin._arbeitIndex;
+    div.dataset.dauer = dauerMitNebenzeit;
+    div.dataset.originalDauer = dauer;
+    div.draggable = true;
+    div.style.left = `${leftPx}px`;
+    div.style.width = `${widthPx}px`;
+    
+    // Farbe basierend auf Arbeit-Index für visuelle Unterscheidung
+    const colors = ['#3498db', '#9b59b6', '#1abc9c', '#f39c12', '#e74c3c'];
+    const colorIndex = termin._arbeitIndex % colors.length;
+    div.style.borderLeft = `4px solid ${colors[colorIndex]}`;
+    
+    div.innerHTML = `
+      <div class="termin-title">${termin.termin_nr || 'Neu'}</div>
+      <div class="termin-info arbeit-name">${arbeit.name}</div>
+      <div class="termin-info">${dauerText}</div>
+    `;
+    div.title = `${termin.termin_nr}\n${termin.kunde_name}\n\n📋 Arbeit: ${arbeit.name}\n⏱️ Dauer: ${dauerText}\n🕐 Start: ${startzeit}`;
+
+    // Drag Events
+    div.addEventListener('dragstart', (e) => {
+      div.classList.add('dragging');
+      e.dataTransfer.setData('text/plain', termin.id);
+      e.dataTransfer.setData('application/x-arbeit-name', arbeit.name);
+      e.dataTransfer.setData('application/x-arbeit-index', termin._arbeitIndex);
+      e.dataTransfer.setData('application/x-startzeit', startzeit);
+      e.dataTransfer.setData('application/x-dauer', dauerMitNebenzeit);
+      e.dataTransfer.setData('application/x-ist-arbeit-block', 'true');
+      e.dataTransfer.effectAllowed = 'move';
+      
+      this.createDragTimeIndicator();
+    });
+
+    div.addEventListener('dragend', () => {
+      div.classList.remove('dragging');
+      document.querySelectorAll('.timeline-track').forEach(zone => zone.classList.remove('drag-over'));
+      this.removeDragTimeIndicator();
+    });
+
+    return div;
+  }
+
+  // Erstellt eine Mini-Card für einen nicht zugeordneten Arbeitsblock
+  createArbeitMiniCard(termin, arbeit, index) {
+    const card = document.createElement('div');
+    card.className = 'termin-mini-card arbeit-block';
+    card.draggable = true;
+    card.dataset.terminId = termin.id;
+    card.dataset.arbeitName = arbeit.name;
+    card.dataset.arbeitIndex = index;
+    
+    const dauer = arbeit.zeit || 30;
+    
+    // Farbe basierend auf Arbeit-Index
+    const colors = ['#3498db', '#9b59b6', '#1abc9c', '#f39c12', '#e74c3c'];
+    const colorIndex = index % colors.length;
+    card.style.borderLeft = `4px solid ${colors[colorIndex]}`;
+    
+    card.innerHTML = `
+      <div class="mini-card-header">
+        <span class="mini-card-nr">${termin.termin_nr || 'Neu'}</span>
+        <span class="mini-card-kennzeichen">${termin.kennzeichen || ''}</span>
+      </div>
+      <div class="mini-card-kunde">${termin.kunde_name || ''}</div>
+      <div class="mini-card-arbeit">${arbeit.name}</div>
+      <div class="mini-card-dauer">${dauer} min</div>
+    `;
+    card.title = `${termin.termin_nr}\n${termin.kunde_name}\n📋 ${arbeit.name}\n⏱️ ${dauer} min`;
+
+    // Drag Events
+    card.addEventListener('dragstart', (e) => {
+      card.classList.add('dragging');
+      e.dataTransfer.setData('text/plain', termin.id);
+      e.dataTransfer.setData('application/x-arbeit-name', arbeit.name);
+      e.dataTransfer.setData('application/x-arbeit-index', index);
+      e.dataTransfer.setData('application/x-dauer', dauer);
+      e.dataTransfer.setData('application/x-ist-arbeit-block', 'true');
+      e.dataTransfer.effectAllowed = 'move';
+    });
+
+    card.addEventListener('dragend', () => {
+      card.classList.remove('dragging');
+      document.querySelectorAll('.drop-zone').forEach(zone => zone.classList.remove('drag-over'));
+    });
+
+    return card;
   }
 
   // Berechne die tatsächliche Gesamtdauer aus arbeitszeiten_details
@@ -15318,8 +15526,8 @@ class App {
   createTimelineTerminElement(termin, startHour, endHour, type, isSchwebend, startzeit, displayDauer, gesamtDauer, istFortsetzung) {
     const [startH, startM] = startzeit.split(':').map(Number);
     
-    // Position berechnen (80px pro Stunde)
-    const pixelPerHour = 80;
+    // Position berechnen (100px pro Stunde)
+    const pixelPerHour = 100;
     const pixelPerMinute = pixelPerHour / 60;
     
     const startMinutesFromDayStart = (startH - startHour) * 60 + startM;
@@ -15397,8 +15605,8 @@ class App {
     // Dauer in Minuten - berechnet aus arbeitszeiten_details
     const dauer = this.getTerminGesamtdauer(termin);
     
-    // Position berechnen (80px pro Stunde)
-    const pixelPerHour = 80;
+    // Position berechnen (100px pro Stunde)
+    const pixelPerHour = 100;
     const pixelPerMinute = pixelPerHour / 60;
     
     const startMinutesFromDayStart = (startH - startHour) * 60 + startM;
@@ -15498,45 +15706,57 @@ class App {
       // Berechne Zeit für Indikator
       const rect = element.getBoundingClientRect();
       const dropX = e.clientX - rect.left;
-      const pixelPerHour = 80;
+      const pixelPerHour = 100;
       const hoursFromStart = dropX / pixelPerHour;
       const totalMinutes = Math.round((startHour + hoursFromStart) * 60);
       const raster = this.planungRaster || 5;
       const snappedMinutes = Math.round(totalMinutes / raster) * raster;
-      const newHour = Math.floor(snappedMinutes / 60);
-      const newMinute = snappedMinutes % 60;
-      const zeit = `${String(newHour).padStart(2, '0')}:${String(newMinute).padStart(2, '0')}`;
+      let newHour = Math.floor(snappedMinutes / 60);
+      let newMinute = snappedMinutes % 60;
       
       // Dauer für Endzeitberechnung (falls vorhanden)
       let dauer = 30; // Standard
-      try {
-        const dauerStr = e.dataTransfer.getData('application/x-dauer');
-        if (dauerStr) dauer = parseInt(dauerStr);
-      } catch (err) {
-        // getData kann während dragover fehlschlagen - verwende gecachten Wert
-        const draggingEl = document.querySelector('.dragging');
-        if (draggingEl && draggingEl.dataset.dauer) {
-          dauer = parseInt(draggingEl.dataset.dauer);
-        }
+      const draggingEl = document.querySelector('.dragging');
+      if (draggingEl && draggingEl.dataset.dauer) {
+        dauer = parseInt(draggingEl.dataset.dauer);
       }
       
-      const endMinutes = snappedMinutes + dauer;
+      // Hole Termin-ID und Arbeit-Index für Kollisionsprüfung
+      const draggingTerminId = draggingEl ? draggingEl.dataset.terminId : null;
+      const draggingArbeitIndex = draggingEl ? draggingEl.dataset.arbeitIndex : null;
+      const excludeArbeitIdx = draggingArbeitIndex !== undefined ? parseInt(draggingArbeitIndex) : null;
+      
+      // Berechne optimale Position (mit automatischem Anhängen bei nahen Terminen)
+      const optimalePosition = this.berechneOptimaleStartzeit(element, snappedMinutes, dauer, draggingTerminId, excludeArbeitIdx);
+      
+      let anzeigeMinuten = snappedMinutes;
+      let hatKollision = false;
+      
+      if (optimalePosition) {
+        anzeigeMinuten = optimalePosition.startMinutes;
+        newHour = Math.floor(anzeigeMinuten / 60);
+        newMinute = anzeigeMinuten % 60;
+      } else {
+        hatKollision = true;
+      }
+      
+      const zeit = `${String(newHour).padStart(2, '0')}:${String(newMinute).padStart(2, '0')}`;
+      const endMinutes = anzeigeMinuten + dauer;
       const endHour = Math.floor(endMinutes / 60);
       const endMinute = endMinutes % 60;
       const endzeit = `${String(endHour).padStart(2, '0')}:${String(endMinute).padStart(2, '0')}`;
       
-      // Indikator aktualisieren
-      this.updateDragTimeIndicator(e.clientX, e.clientY, zeit, endzeit);
+      // Indikator aktualisieren (mit Anpassungshinweis)
+      if (optimalePosition && optimalePosition.angepasst) {
+        this.updateDragTimeIndicator(e.clientX, e.clientY, `→ ${zeit}`, endzeit);
+      } else {
+        this.updateDragTimeIndicator(e.clientX, e.clientY, zeit, endzeit);
+      }
       
-      // Positionslinie anzeigen mit Kollisionsprüfung
+      // Positionslinie an der optimalen Position anzeigen
       const snappedLeftPx = ((newHour - startHour) * 60 + newMinute) * (pixelPerHour / 60);
       
-      // Prüfe Kollisionen für visuelle Rückmeldung
-      const draggingEl = document.querySelector('.dragging');
-      const draggingTerminId = draggingEl ? draggingEl.dataset.terminId : null;
-      const kollision = this.checkDropKollision(element, snappedMinutes, dauer, draggingTerminId);
-      
-      this.showDragPositionLine(element, snappedLeftPx, kollision);
+      this.showDragPositionLine(element, snappedLeftPx, hatKollision ? { hatKollision: true } : null);
     });
 
     element.addEventListener('dragleave', () => {
@@ -15550,8 +15770,12 @@ class App {
       element.classList.remove('drag-over');
       // Zeit-Indikator und Positionslinie entfernen
       this.removeDragTimeIndicator();
+      document.querySelectorAll('.drag-position-line').forEach(el => el.remove());
       
       const terminId = e.dataTransfer.getData('text/plain');
+      const arbeitName = e.dataTransfer.getData('application/x-arbeit-name');
+      const arbeitIndex = e.dataTransfer.getData('application/x-arbeit-index');
+      const istArbeitBlock = e.dataTransfer.getData('application/x-ist-arbeit-block') === 'true';
       const mitarbeiterId = element.dataset.mitarbeiterId;
       const lehrlingId = element.dataset.lehrlingId;
       const targetType = element.dataset.type || 'mitarbeiter';
@@ -15559,7 +15783,7 @@ class App {
       // Berechne neue Startzeit basierend auf Drop-Position
       const rect = element.getBoundingClientRect();
       const dropX = e.clientX - rect.left;
-      const pixelPerHour = 80;
+      const pixelPerHour = 100;
       const hoursFromStart = dropX / pixelPerHour;
       const totalMinutes = Math.round((startHour + hoursFromStart) * 60);
       let newHour = Math.floor(totalMinutes / 60);
@@ -15568,51 +15792,64 @@ class App {
       let newMinute = Math.round((totalMinutes % 60) / raster) * raster;
       let snappedMinutes = newHour * 60 + newMinute;
       
-      // Hole Dauer des gezogenen Termins
+      // Hole Dauer des gezogenen Termins/Arbeit
       const draggingEl = document.querySelector('.dragging');
       let dauer = 30;
       if (draggingEl && draggingEl.dataset.dauer) {
         dauer = parseInt(draggingEl.dataset.dauer);
       }
       
-      // Kollisionsprüfung
-      const kollision = this.checkDropKollision(element, snappedMinutes, dauer, terminId);
+      // Nutze die neue optimierte Kollisionsprüfung mit automatischem Anhängen
+      const excludeArbeitIdx = istArbeitBlock ? parseInt(arbeitIndex) : null;
+      const optimalePosition = this.berechneOptimaleStartzeit(element, snappedMinutes, dauer, terminId, excludeArbeitIdx);
       
-      if (kollision.hatKollision) {
-        // Versuche automatische Korrektur
-        const korrigiert = this.findeFreienSlot(element, snappedMinutes, dauer, terminId, kollision);
-        
-        if (korrigiert) {
-          snappedMinutes = korrigiert.startMinutes;
-          newHour = Math.floor(snappedMinutes / 60);
-          newMinute = snappedMinutes % 60;
-          this.showToast(`Startzeit angepasst auf ${String(newHour).padStart(2, '0')}:${String(newMinute).padStart(2, '0')} (${korrigiert.grund})`, 'info');
-        } else {
-          // Keine Korrektur möglich
-          this.showToast(`❌ ${kollision.grund}`, 'error');
-          return;
-        }
+      if (!optimalePosition) {
+        // Kein freier Slot gefunden
+        this.showToast(`❌ Kein freier Platz für diesen Termin gefunden`, 'error');
+        return;
+      }
+      
+      snappedMinutes = optimalePosition.startMinutes;
+      newHour = Math.floor(snappedMinutes / 60);
+      newMinute = snappedMinutes % 60;
+      
+      if (optimalePosition.angepasst) {
+        this.showToast(`⏱️ ${String(newHour).padStart(2, '0')}:${String(newMinute).padStart(2, '0')} (${optimalePosition.grund})`, 'info');
       }
       
       const newStartzeit = `${String(newHour).padStart(2, '0')}:${String(newMinute).padStart(2, '0')}`;
       
       if (terminId) {
-        await this.moveTerminToMitarbeiterWithTime(terminId, mitarbeiterId, lehrlingId, targetType, newStartzeit);
+        if (istArbeitBlock && arbeitName) {
+          // Einzelnen Arbeitsblock verschieben
+          await this.moveArbeitBlockToMitarbeiter(terminId, arbeitName, parseInt(arbeitIndex), mitarbeiterId, lehrlingId, targetType, newStartzeit);
+        } else {
+          // Ganzen Termin verschieben (alte Logik)
+          await this.moveTerminToMitarbeiterWithTime(terminId, mitarbeiterId, lehrlingId, targetType, newStartzeit);
+        }
       }
     });
   }
 
   // Prüft ob ein Drop an dieser Position eine Kollision verursacht
-  checkDropKollision(track, startMinutes, dauer, excludeTerminId) {
+  // excludeElementId kann terminId oder arbeit-block-id sein
+  checkDropKollision(track, startMinutes, dauer, excludeTerminId, excludeArbeitIndex = null) {
     const endMinutes = startMinutes + dauer;
-    const result = { hatKollision: false, grund: '', typ: null };
+    const result = { 
+      hatKollision: false, 
+      grund: '', 
+      typ: null, 
+      naheTermine: [] // Termine die nahe dran sind (< 45 min Abstand)
+    };
+    
+    const NAHE_GRENZE = 45; // Minuten - wenn näher, wird automatisch angehängt
     
     // 1. Prüfe Mittagspause
     const pauseBlock = track.querySelector('.timeline-mittagspause');
     if (pauseBlock) {
       const pauseLeft = parseFloat(pauseBlock.style.left) || 0;
       const pauseWidth = parseFloat(pauseBlock.style.width) || 0;
-      const pixelPerMinute = 80 / 60;
+      const pixelPerMinute = 100 / 60;
       const pauseStartMinutes = 8 * 60 + (pauseLeft / pixelPerMinute); // startHour = 8
       const pauseEndMinutes = pauseStartMinutes + (pauseWidth / pixelPerMinute);
       
@@ -15635,71 +15872,163 @@ class App {
         result.pauseStartMinutes = pauseStartMinutes;
         return result;
       }
-      
-      // Termin über die Pause hinweg ist ERLAUBT - wird beim Anzeigen gesplittet
-      // (Keine Kollision melden)
     }
     
-    // 2. Prüfe Kollision mit anderen Terminen
-    const termine = track.querySelectorAll('.timeline-termin:not(.fortsetzung)');
-    for (const terminEl of termine) {
-      const tId = terminEl.dataset.terminId;
-      if (tId === excludeTerminId) continue; // Eigenen Termin ignorieren
+    // 2. Sammle alle Termine/Arbeitsblöcke auf diesem Track
+    const alleBlocks = track.querySelectorAll('.timeline-termin:not(.fortsetzung)');
+    const pixelPerMinute = 100 / 60;
+    
+    for (const blockEl of alleBlocks) {
+      const tId = blockEl.dataset.terminId;
+      const arbeitIdx = blockEl.dataset.arbeitIndex;
       
-      const tLeft = parseFloat(terminEl.style.left) || 0;
-      const tWidth = parseFloat(terminEl.style.width) || 0;
-      const pixelPerMinute = 80 / 60;
-      const tStartMinutes = 7 * 60 + (tLeft / pixelPerMinute);
+      // Eigenen Block ignorieren (bei Arbeitsblöcken: gleiche terminId UND gleicher arbeitIndex)
+      if (tId === excludeTerminId) {
+        // Bei Arbeitsblöcken: nur ignorieren wenn auch der Index übereinstimmt
+        if (excludeArbeitIndex !== null) {
+          if (arbeitIdx === String(excludeArbeitIndex)) continue;
+          // Andere Arbeitsblöcke desselben Termins NICHT ignorieren!
+        } else {
+          // Normaler Termin (kein Arbeitsblock) - komplett ignorieren
+          continue;
+        }
+      }
+      
+      const tLeft = parseFloat(blockEl.style.left) || 0;
+      const tWidth = parseFloat(blockEl.style.width) || 0;
+      const tStartMinutes = 8 * 60 + (tLeft / pixelPerMinute); // startHour = 8
       const tEndMinutes = tStartMinutes + (tWidth / pixelPerMinute);
       
-      // Prüfe Überlappung
+      // Prüfe direkte Überlappung
       if (startMinutes < tEndMinutes && endMinutes > tStartMinutes) {
         result.hatKollision = true;
-        result.grund = `Überlappung mit anderem Termin`;
+        result.grund = `Überlappung mit ${blockEl.dataset.arbeitName ? 'Arbeitsblock' : 'Termin'}`;
         result.typ = 'termin';
-        result.konfliktTermin = { start: tStartMinutes, end: tEndMinutes };
+        result.konfliktTermin = { 
+          start: tStartMinutes, 
+          end: tEndMinutes, 
+          terminId: tId,
+          arbeitIndex: arbeitIdx
+        };
         return result;
+      }
+      
+      // Prüfe ob nahe dran (für automatisches Anhängen)
+      const abstandVorher = startMinutes - tEndMinutes; // Positiv = Start ist nach Ende des anderen
+      const abstandNachher = tStartMinutes - endMinutes; // Positiv = Start des anderen ist nach unserem Ende
+      
+      if (abstandVorher >= 0 && abstandVorher < NAHE_GRENZE) {
+        // Dieser Block endet kurz vor unserer gewünschten Startzeit
+        result.naheTermine.push({
+          position: 'vorher',
+          abstand: abstandVorher,
+          terminStart: tStartMinutes,
+          terminEnd: tEndMinutes,
+          terminId: tId
+        });
+      }
+      if (abstandNachher >= 0 && abstandNachher < NAHE_GRENZE) {
+        // Dieser Block startet kurz nach unserem gewünschten Ende
+        result.naheTermine.push({
+          position: 'nachher',
+          abstand: abstandNachher,
+          terminStart: tStartMinutes,
+          terminEnd: tEndMinutes,
+          terminId: tId
+        });
       }
     }
     
     return result;
   }
 
-  // Versucht einen freien Slot zu finden
-  findeFreienSlot(track, gewuenschteStart, dauer, excludeTerminId, kollision) {
+  // Versucht einen freien Slot zu finden und berücksichtigt nahe Termine
+  findeFreienSlot(track, gewuenschteStart, dauer, excludeTerminId, kollision, excludeArbeitIndex = null) {
     const raster = this.planungRaster || 5;
     
     // Bei Pause-Kollision (Start in Pause oder komplett in Pause): Nach Pause verschieben
     if (kollision.typ === 'pause-start' || kollision.typ === 'pause-komplett') {
       const neueStart = Math.ceil(kollision.pauseEndMinutes / raster) * raster;
       // Prüfe ob nach der Pause frei ist
-      const neueKollision = this.checkDropKollision(track, neueStart, dauer, excludeTerminId);
+      const neueKollision = this.checkDropKollision(track, neueStart, dauer, excludeTerminId, excludeArbeitIndex);
       if (!neueKollision.hatKollision) {
         return { startMinutes: neueStart, grund: 'nach Mittagspause' };
       }
     }
     
-    // Bei Termin-Kollision: Vor oder nach dem Konflikt-Termin
+    // Bei Termin-Kollision: Direkt nach dem Konflikt-Termin
     if (kollision.typ === 'termin') {
-      // Versuch 1: Direkt nach dem Konflikt-Termin
+      // Direkt nach dem Konflikt-Termin anhängen
       const nachKonflikt = Math.ceil(kollision.konfliktTermin.end / raster) * raster;
-      const kollisionNach = this.checkDropKollision(track, nachKonflikt, dauer, excludeTerminId);
+      const kollisionNach = this.checkDropKollision(track, nachKonflikt, dauer, excludeTerminId, excludeArbeitIndex);
       if (!kollisionNach.hatKollision) {
-        return { startMinutes: nachKonflikt, grund: 'nach bestehendem Termin' };
+        return { startMinutes: nachKonflikt, grund: 'direkt nach vorherigem Termin' };
       }
       
-      // Versuch 2: Direkt vor dem Konflikt-Termin (wenn genug Platz)
-      const vorKonflikt = Math.floor((kollision.konfliktTermin.start - dauer) / raster) * raster;
-      if (vorKonflikt >= 7 * 60) { // Nicht vor 7:00
-        const kollisionVor = this.checkDropKollision(track, vorKonflikt, dauer, excludeTerminId);
-        if (!kollisionVor.hatKollision) {
-          return { startMinutes: vorKonflikt, grund: 'vor bestehendem Termin' };
-        }
+      // Wenn auch danach Kollision, rekursiv weitersuchen
+      if (kollisionNach.hatKollision && kollisionNach.typ === 'termin') {
+        return this.findeFreienSlot(track, nachKonflikt, dauer, excludeTerminId, kollisionNach, excludeArbeitIndex);
       }
     }
     
     // Keine automatische Korrektur möglich
     return null;
+  }
+
+  // Berechnet die optimale Startzeit wenn nahe an einem anderen Termin
+  berechneOptimaleStartzeit(track, gewuenschteStart, dauer, excludeTerminId, excludeArbeitIndex = null) {
+    const raster = this.planungRaster || 5;
+    const NAHE_GRENZE = 45;
+    
+    // Hole Kollisionsergebnis mit nahen Terminen
+    const kollision = this.checkDropKollision(track, gewuenschteStart, dauer, excludeTerminId, excludeArbeitIndex);
+    
+    // Bei direkter Kollision: freien Slot finden
+    if (kollision.hatKollision) {
+      const freierSlot = this.findeFreienSlot(track, gewuenschteStart, dauer, excludeTerminId, kollision, excludeArbeitIndex);
+      if (freierSlot) {
+        return { 
+          startMinutes: freierSlot.startMinutes, 
+          angepasst: true, 
+          grund: freierSlot.grund 
+        };
+      }
+      return null; // Kein freier Slot gefunden
+    }
+    
+    // Keine direkte Kollision - prüfe ob nahe an anderem Termin
+    if (kollision.naheTermine && kollision.naheTermine.length > 0) {
+      // Finde den nächsten Termin der VOR unserer gewünschten Startzeit endet
+      const termineVorher = kollision.naheTermine.filter(t => t.position === 'vorher');
+      
+      if (termineVorher.length > 0) {
+        // Sortiere nach Abstand (kleinster zuerst)
+        termineVorher.sort((a, b) => a.abstand - b.abstand);
+        const naechsterVorher = termineVorher[0];
+        
+        // Wenn der Abstand klein ist, direkt anhängen
+        if (naechsterVorher.abstand < NAHE_GRENZE && naechsterVorher.abstand > 0) {
+          const angepassteStart = Math.ceil(naechsterVorher.terminEnd / raster) * raster;
+          
+          // Prüfe ob die angepasste Position frei ist
+          const neueKollision = this.checkDropKollision(track, angepassteStart, dauer, excludeTerminId, excludeArbeitIndex);
+          if (!neueKollision.hatKollision) {
+            return {
+              startMinutes: angepassteStart,
+              angepasst: true,
+              grund: `an vorherigen Termin angehängt`
+            };
+          }
+        }
+      }
+    }
+    
+    // Keine Anpassung nötig - gewünschte Startzeit ist OK
+    return {
+      startMinutes: Math.round(gewuenschteStart / raster) * raster,
+      angepasst: false,
+      grund: null
+    };
   }
 
   // Vertikale Positionslinie anzeigen (mit Kollisions-Feedback)
@@ -15714,6 +16043,150 @@ class App {
     }
     line.style.left = `${leftPx}px`;
     track.appendChild(line);
+  }
+
+  // Verschiebt einen einzelnen Arbeitsblock (nicht den ganzen Termin)
+  async moveArbeitBlockToMitarbeiter(terminId, arbeitName, arbeitIndex, mitarbeiterId, lehrlingId, type, startzeit) {
+    try {
+      const termin = await TermineService.getById(terminId);
+      
+      // Speichere Original-Daten wenn noch nicht vorhanden
+      if (!this.planungAenderungen.has(terminId)) {
+        this.planungAenderungen.set(terminId, {
+          originalData: {
+            startzeit: termin.startzeit,
+            mitarbeiter_id: termin.mitarbeiter_id,
+            arbeitszeiten_details: termin.arbeitszeiten_details
+          },
+          arbeitAenderungen: {} // Für individuelle Arbeitsänderungen
+        });
+      }
+      
+      const aenderung = this.planungAenderungen.get(terminId);
+      
+      // Initialisiere arbeitAenderungen falls nicht vorhanden
+      if (!aenderung.arbeitAenderungen) {
+        aenderung.arbeitAenderungen = {};
+      }
+      
+      // Speichere Änderung für diese spezifische Arbeit
+      aenderung.arbeitAenderungen[arbeitName] = {
+        startzeit: startzeit,
+        type: type,
+        mitarbeiter_id: type === 'lehrling' ? null : (mitarbeiterId ? parseInt(mitarbeiterId) : null),
+        lehrling_id: type === 'lehrling' && lehrlingId ? parseInt(lehrlingId) : null
+      };
+      
+      // Setze Flag dass es Arbeits-spezifische Änderungen gibt
+      aenderung.hatArbeitAenderungen = true;
+      
+      // Merke ob der Termin schwebend war
+      if (termin.ist_schwebend === 1 || termin.ist_schwebend === true) {
+        aenderung.warSchwebend = true;
+      }
+      
+      // UI aktualisieren
+      await this.updateArbeitBlockUI(terminId, arbeitName, arbeitIndex, startzeit, mitarbeiterId, lehrlingId, type);
+      
+      // Änderungen-Zähler aktualisieren
+      this.updatePlanungAenderungenUI();
+      
+    } catch (error) {
+      console.error('Fehler beim Verschieben des Arbeitsblocks:', error);
+      alert('Fehler beim Verschieben: ' + (error.message || 'Unbekannter Fehler'));
+    }
+  }
+
+  // UI-Aktualisierung für verschobenen Arbeitsblock
+  async updateArbeitBlockUI(terminId, arbeitName, arbeitIndex, startzeit, mitarbeiterId, lehrlingId, type) {
+    const blockEl = document.getElementById(`timeline-arbeit-${terminId}-${arbeitIndex}`);
+    const miniCard = document.querySelector(`.termin-mini-card[data-termin-id="${terminId}"][data-arbeit-index="${arbeitIndex}"]`);
+    
+    const startHour = 8;
+    const pixelPerHour = 100;
+    const pixelPerMinute = pixelPerHour / 60;
+    
+    const [startH, startM] = startzeit.split(':').map(Number);
+    
+    // Bestimme Ziel-Track
+    let targetTrack = null;
+    if (type === 'lehrling' && lehrlingId) {
+      targetTrack = document.querySelector(`.timeline-track[data-lehrling-id="${lehrlingId}"]`);
+    } else if (mitarbeiterId) {
+      targetTrack = document.querySelector(`.timeline-track[data-mitarbeiter-id="${mitarbeiterId}"]`);
+    }
+    
+    if (blockEl) {
+      // Bestehendes Block-Element verschieben
+      const dauer = parseInt(blockEl.dataset.dauer) || 30;
+      const leftPx = (startH - startHour) * pixelPerHour + startM * pixelPerMinute;
+      const widthPx = Math.max(dauer * pixelPerMinute, 40);
+      
+      blockEl.style.left = `${leftPx}px`;
+      blockEl.style.width = `${widthPx}px`;
+      blockEl.classList.add('geaendert');
+      
+      // Track wechseln wenn nötig
+      const currentTrack = blockEl.closest('.timeline-track');
+      if (targetTrack && targetTrack !== currentTrack) {
+        targetTrack.appendChild(blockEl);
+      }
+    } else if (miniCard && targetTrack) {
+      // Mini-Card in Timeline-Block umwandeln
+      const termin = await TermineService.getById(terminId);
+      const dauer = parseInt(miniCard.dataset.dauer) || 30;
+      
+      // Neues Timeline-Element erstellen
+      const newBlock = document.createElement('div');
+      newBlock.className = 'timeline-termin arbeit-block geaendert';
+      newBlock.id = `timeline-arbeit-${terminId}-${arbeitIndex}`;
+      newBlock.dataset.terminId = terminId;
+      newBlock.dataset.arbeitName = arbeitName;
+      newBlock.dataset.arbeitIndex = arbeitIndex;
+      newBlock.dataset.dauer = dauer;
+      newBlock.draggable = true;
+      
+      const leftPx = (startH - startHour) * pixelPerHour + startM * pixelPerMinute;
+      const widthPx = Math.max(dauer * pixelPerMinute, 40);
+      newBlock.style.left = `${leftPx}px`;
+      newBlock.style.width = `${widthPx}px`;
+      
+      // Farbe
+      const colors = ['#3498db', '#9b59b6', '#1abc9c', '#f39c12', '#e74c3c'];
+      const colorIndex = arbeitIndex % colors.length;
+      newBlock.style.borderLeft = `4px solid ${colors[colorIndex]}`;
+      
+      const dauerText = dauer >= 60 
+        ? `${Math.floor(dauer/60)}h ${dauer%60 > 0 ? (dauer%60) + 'min' : ''}`.trim()
+        : `${dauer} min`;
+      
+      newBlock.innerHTML = `
+        <div class="termin-title">${termin.termin_nr || 'Neu'}</div>
+        <div class="termin-info arbeit-name">${arbeitName}</div>
+        <div class="termin-info">${dauerText}</div>
+      `;
+      
+      // Drag Events
+      newBlock.addEventListener('dragstart', (e) => {
+        newBlock.classList.add('dragging');
+        e.dataTransfer.setData('text/plain', terminId);
+        e.dataTransfer.setData('application/x-arbeit-name', arbeitName);
+        e.dataTransfer.setData('application/x-arbeit-index', arbeitIndex);
+        e.dataTransfer.setData('application/x-dauer', dauer);
+        e.dataTransfer.setData('application/x-ist-arbeit-block', 'true');
+        e.dataTransfer.effectAllowed = 'move';
+        this.createDragTimeIndicator();
+      });
+      
+      newBlock.addEventListener('dragend', () => {
+        newBlock.classList.remove('dragging');
+        document.querySelectorAll('.timeline-track').forEach(zone => zone.classList.remove('drag-over'));
+        this.removeDragTimeIndicator();
+      });
+      
+      targetTrack.appendChild(newBlock);
+      miniCard.remove();
+    }
   }
 
   async moveTerminToMitarbeiterWithTime(terminId, mitarbeiterId, lehrlingId, type, startzeit) {
@@ -15838,7 +16311,7 @@ class App {
     const [startH, startM] = startzeit.split(':').map(Number);
     const startHour = 8;
     const endHour = 18;
-    const pixelPerHour = 80;
+    const pixelPerHour = 100;
     const pixelPerMinute = pixelPerHour / 60;
     
     // Hole Dauer aus dem Element
@@ -15978,60 +16451,124 @@ class App {
             : {};
         } catch (e) {}
         
-        let updateData = { startzeit: aenderung.startzeit };
+        let updateData = {};
+        
+        // Prüfe ob es arbeits-spezifische Änderungen gibt
+        if (aenderung.hatArbeitAenderungen && aenderung.arbeitAenderungen) {
+          // Arbeits-spezifische Änderungen verarbeiten
+          for (const [arbeitName, arbeitAenderung] of Object.entries(aenderung.arbeitAenderungen)) {
+            if (details[arbeitName] && typeof details[arbeitName] === 'object') {
+              // Existierende Arbeit aktualisieren
+              details[arbeitName].startzeit = arbeitAenderung.startzeit;
+              details[arbeitName].type = arbeitAenderung.type;
+              
+              if (arbeitAenderung.type === 'lehrling' && arbeitAenderung.lehrling_id) {
+                details[arbeitName].lehrling_id = arbeitAenderung.lehrling_id;
+                details[arbeitName].mitarbeiter_id = arbeitAenderung.lehrling_id; // Für Kompatibilität
+                delete details[arbeitName].mitarbeiter_id_orig;
+              } else if (arbeitAenderung.mitarbeiter_id) {
+                details[arbeitName].mitarbeiter_id = arbeitAenderung.mitarbeiter_id;
+                delete details[arbeitName].lehrling_id;
+              }
+            } else if (typeof details[arbeitName] === 'number') {
+              // Einfacher Wert -> in Objekt umwandeln
+              const zeit = details[arbeitName];
+              details[arbeitName] = {
+                zeit: zeit,
+                startzeit: arbeitAenderung.startzeit,
+                type: arbeitAenderung.type
+              };
+              if (arbeitAenderung.type === 'lehrling' && arbeitAenderung.lehrling_id) {
+                details[arbeitName].lehrling_id = arbeitAenderung.lehrling_id;
+                details[arbeitName].mitarbeiter_id = arbeitAenderung.lehrling_id;
+              } else if (arbeitAenderung.mitarbeiter_id) {
+                details[arbeitName].mitarbeiter_id = arbeitAenderung.mitarbeiter_id;
+              }
+            }
+          }
+          
+          // Ermittle die früheste Startzeit für den Termin
+          let fruehsteStartzeit = null;
+          for (const key in details) {
+            if (key.startsWith('_')) continue;
+            const arbeit = details[key];
+            if (typeof arbeit === 'object' && arbeit.startzeit) {
+              if (!fruehsteStartzeit || arbeit.startzeit < fruehsteStartzeit) {
+                fruehsteStartzeit = arbeit.startzeit;
+              }
+            }
+          }
+          
+          if (fruehsteStartzeit) {
+            details._startzeit = fruehsteStartzeit;
+            updateData.startzeit = fruehsteStartzeit;
+          }
+          
+          // _gesamt_mitarbeiter_id NICHT ändern, da Arbeiten unterschiedliche Zuordnungen haben können
+          // Stattdessen entfernen, damit die individuelle Zuordnung gilt
+          delete details._gesamt_mitarbeiter_id;
+          
+          updateData.arbeitszeiten_details = JSON.stringify(details);
+          updateData.mitarbeiter_id = null; // Keine Termin-weite Zuordnung mehr
+          
+        } else {
+          // Normale Termin-weite Änderung (alte Logik)
+          updateData.startzeit = aenderung.startzeit;
+          
+          const wirdZugeordnet = aenderung.type !== 'none' && (aenderung.mitarbeiter_id || aenderung.lehrling_id);
+          
+          if (aenderung.type === 'none') {
+            // Zuweisung entfernen
+            updateData.mitarbeiter_id = null;
+            updateData.startzeit = null;
+            delete details._gesamt_mitarbeiter_id;
+            delete details._startzeit;
+            // Auch individuelle Zuordnungen der Arbeiten entfernen
+            for (const key in details) {
+              if (!key.startsWith('_') && typeof details[key] === 'object') {
+                delete details[key].mitarbeiter_id;
+                delete details[key].lehrling_id;
+                delete details[key].type;
+                delete details[key].startzeit;
+              }
+            }
+            updateData.arbeitszeiten_details = JSON.stringify(details);
+          } else if (aenderung.type === 'lehrling' && aenderung.lehrling_id) {
+            updateData.mitarbeiter_id = null;
+            details._gesamt_mitarbeiter_id = { type: 'lehrling', id: aenderung.lehrling_id };
+            details._startzeit = aenderung.startzeit;
+            // Alle Arbeiten dem Lehrling zuordnen
+            for (const key in details) {
+              if (!key.startsWith('_') && typeof details[key] === 'object') {
+                details[key].type = 'lehrling';
+                details[key].lehrling_id = aenderung.lehrling_id;
+                delete details[key].mitarbeiter_id;
+                details[key].startzeit = aenderung.startzeit;
+              }
+            }
+            updateData.arbeitszeiten_details = JSON.stringify(details);
+          } else if (aenderung.mitarbeiter_id) {
+            updateData.mitarbeiter_id = aenderung.mitarbeiter_id;
+            details._gesamt_mitarbeiter_id = { type: 'mitarbeiter', id: aenderung.mitarbeiter_id };
+            details._startzeit = aenderung.startzeit;
+            // Alle Arbeiten dem Mitarbeiter zuordnen
+            for (const key in details) {
+              if (!key.startsWith('_') && typeof details[key] === 'object') {
+                details[key].type = 'mitarbeiter';
+                details[key].mitarbeiter_id = aenderung.mitarbeiter_id;
+                delete details[key].lehrling_id;
+                details[key].startzeit = aenderung.startzeit;
+              }
+            }
+            updateData.arbeitszeiten_details = JSON.stringify(details);
+          } else {
+            updateData.mitarbeiter_id = null;
+          }
+        }
         
         // Prüfe ob Termin schwebend war und jetzt zugeordnet wird
-        const wirdZugeordnet = aenderung.type !== 'none' && (aenderung.mitarbeiter_id || aenderung.lehrling_id);
+        const wirdZugeordnet = aenderung.type !== 'none' && (aenderung.mitarbeiter_id || aenderung.lehrling_id || aenderung.hatArbeitAenderungen);
         const warSchwebend = aenderung.warSchwebend || termin.ist_schwebend === 1 || termin.ist_schwebend === true;
-        
-        if (aenderung.type === 'none') {
-          // Zuweisung entfernen
-          updateData.mitarbeiter_id = null;
-          updateData.startzeit = null;
-          delete details._gesamt_mitarbeiter_id;
-          delete details._startzeit;
-          // Auch individuelle Zuordnungen der Arbeiten entfernen
-          for (const key in details) {
-            if (!key.startsWith('_') && typeof details[key] === 'object') {
-              delete details[key].mitarbeiter_id;
-              delete details[key].lehrling_id;
-              delete details[key].type;
-              delete details[key].startzeit;
-            }
-          }
-          updateData.arbeitszeiten_details = JSON.stringify(details);
-        } else if (aenderung.type === 'lehrling' && aenderung.lehrling_id) {
-          updateData.mitarbeiter_id = null;
-          details._gesamt_mitarbeiter_id = { type: 'lehrling', id: aenderung.lehrling_id };
-          details._startzeit = aenderung.startzeit;
-          // Alle Arbeiten dem Lehrling zuordnen
-          for (const key in details) {
-            if (!key.startsWith('_') && typeof details[key] === 'object') {
-              details[key].type = 'lehrling';
-              details[key].lehrling_id = aenderung.lehrling_id;
-              delete details[key].mitarbeiter_id;
-              details[key].startzeit = aenderung.startzeit;
-            }
-          }
-          updateData.arbeitszeiten_details = JSON.stringify(details);
-        } else if (aenderung.mitarbeiter_id) {
-          updateData.mitarbeiter_id = aenderung.mitarbeiter_id;
-          // WICHTIG: Auch arbeitszeiten_details aktualisieren für Konsistenz
-          details._gesamt_mitarbeiter_id = { type: 'mitarbeiter', id: aenderung.mitarbeiter_id };
-          details._startzeit = aenderung.startzeit;
-          // Alle Arbeiten dem Mitarbeiter zuordnen
-          for (const key in details) {
-            if (!key.startsWith('_') && typeof details[key] === 'object') {
-              details[key].type = 'mitarbeiter';
-              details[key].mitarbeiter_id = aenderung.mitarbeiter_id;
-              delete details[key].lehrling_id;
-              details[key].startzeit = aenderung.startzeit;
-            }
-          }
-          updateData.arbeitszeiten_details = JSON.stringify(details);
-        } else {
-          updateData.mitarbeiter_id = null;
-        }
         
         await TermineService.update(terminId, updateData);
         

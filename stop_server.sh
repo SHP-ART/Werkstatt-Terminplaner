@@ -1,9 +1,9 @@
 #!/bin/bash
 
-# Werkstatt Terminplaner - Backend Stop Script (Port 3001)
+# Werkstatt Terminplaner - Backend Stop Script (Port 3001 + Electron)
 
 echo "=========================================="
-echo "  Backend-Server wird gestoppt (3001)    "
+echo "  Server und Electron werden gestoppt    "
 echo "=========================================="
 echo ""
 
@@ -14,6 +14,31 @@ YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
 
 STOPPED=0
+
+# Stoppe Electron über PID-Datei
+if [ -f "logs/electron.pid" ]; then
+    ELECTRON_PID=$(cat logs/electron.pid)
+    if ps -p $ELECTRON_PID > /dev/null 2>&1; then
+        echo -e "${YELLOW}[STOP]${NC} Stoppe Electron-App (PID: $ELECTRON_PID)..."
+        kill $ELECTRON_PID
+        sleep 1
+
+        # Prüfe ob Prozess noch läuft
+        if ps -p $ELECTRON_PID > /dev/null 2>&1; then
+            echo -e "${YELLOW}[FORCE]${NC} Erzwinge Beendigung..."
+            kill -9 $ELECTRON_PID 2>/dev/null
+        fi
+
+        echo -e "${GREEN}[OK]${NC} Electron gestoppt"
+        rm logs/electron.pid
+        STOPPED=1
+    else
+        echo -e "${YELLOW}[INFO]${NC} Electron läuft nicht (PID nicht gefunden)"
+        rm logs/electron.pid
+    fi
+else
+    echo -e "${YELLOW}[INFO]${NC} Electron PID-Datei nicht gefunden"
+fi
 
 # Stoppe Backend über PID-Datei
 if [ -f "logs/backend.pid" ]; then

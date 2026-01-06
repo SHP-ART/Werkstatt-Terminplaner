@@ -335,9 +335,8 @@ ipcMain.handle('backup-open-folder', async () => {
 
 ipcMain.handle('db-get-path', async () => {
   try {
-    const { getDataPath } = require('./src/config/database');
-    const dbPath = path.join(getDataPath(), 'database', 'werkstatt.db');
-    return { success: true, path: dbPath };
+    const { dbPath, dataDir } = require('./src/config/database');
+    return { success: true, dbPath: dbPath, isCustom: false };
   } catch (error) {
     return { success: false, error: error.message };
   }

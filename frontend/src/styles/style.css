@@ -7274,8 +7274,8 @@ mark.highlight {
 }
 
 .timeline-hour {
-    width: 40px;
-    min-width: 40px;
+    width: 50px;
+    min-width: 50px;
     text-align: center;
     padding: 10px 0;
     border-right: 1px solid #dee2e6;
@@ -7361,9 +7361,9 @@ mark.highlight {
     background: repeating-linear-gradient(
         to right,
         transparent,
-        transparent 79px,
-        #e9ecef 79px,
-        #e9ecef 80px
+        transparent 99px,
+        #e9ecef 99px,
+        #e9ecef 100px
     );
     pointer-events: none;
 }
@@ -7435,6 +7435,32 @@ mark.highlight {
 
 .timeline-termin.fortsetzung .termin-title {
     font-size: 0.75em;
+}
+
+/* Arbeitsblock - einzelne Arbeit aus einem Termin mit mehreren Arbeiten */
+.timeline-termin.arbeit-block {
+    background: linear-gradient(135deg, #2c3e50 0%, #34495e 100%);
+}
+
+.timeline-termin.arbeit-block .arbeit-name {
+    font-weight: 600;
+    color: #f1c40f;
+    font-size: 0.8em;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.termin-mini-card.arbeit-block {
+    border-radius: 6px;
+    padding: 8px;
+}
+
+.termin-mini-card.arbeit-block .mini-card-arbeit {
+    font-weight: 600;
+    color: var(--primary);
+    font-size: 0.85em;
+    margin-top: 4px;
 }
 
 /* Mittagspause Block */

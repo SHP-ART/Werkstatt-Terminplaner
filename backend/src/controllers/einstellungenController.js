@@ -1,7 +1,23 @@
 const EinstellungenModel = require('../models/einstellungenModel');
 const TermineController = require('./termineController');
+const path = require('path');
 
 class EinstellungenController {
+  static async getDatenbankPfad(req, res) {
+    try {
+      // Ermittle den aktuellen Datenbank-Pfad
+      const dataPath = process.env.DATA_PATH || path.join(__dirname, '..', '..');
+      const dbPath = path.join(dataPath, 'database', 'werkstatt.db');
+      
+      res.json({ 
+        success: true,
+        pfad: dbPath,
+        verzeichnis: path.dirname(dbPath)
+      });
+    } catch (err) {
+      res.status(500).json({ success: false, error: err.message });
+    }
+  }
   static async getWerkstatt(req, res) {
     try {
       const row = await EinstellungenModel.getWerkstatt();
