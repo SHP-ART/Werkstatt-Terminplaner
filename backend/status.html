@@ -1,0 +1,493 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Server Status</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: #333;
+            margin: 0;
+            padding: 10px;
+            min-height: 100vh;
+            box-sizing: border-box;
+            font-size: 12px;
+        }
+        .status-box {
+            background-color: #fff;
+            border-radius: 8px;
+            padding: 10px;
+            box-shadow: 0 4px 16px rgba(0,0,0,0.2);
+            margin-bottom: 8px;
+        }
+        h1 {
+            font-size: 1.1em;
+            margin: 0 0 8px 0;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        h2 {
+            font-size: 0.85em;
+            margin: 0 0 6px 0;
+            color: #666;
+        }
+        .status-indicator {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: #28a745;
+            box-shadow: 0 0 8px #28a745;
+            animation: pulse 2s infinite;
+        }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        .info-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 3px 0;
+        }
+        .info-label { color: #666; }
+        .info-value { font-weight: 600; }
+        #url {
+            font-family: monospace;
+            background: #e9ecef;
+            padding: 6px;
+            border-radius: 4px;
+            font-size: 0.9em;
+            text-align: center;
+            margin-top: 6px;
+            word-break: break-all;
+        }
+        .clients-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        .clients-count {
+            font-size: 1.8em;
+            font-weight: bold;
+            color: #007bff;
+        }
+        .stats-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+        }
+        .stat-card {
+            background: #f8f9fa;
+            border-radius: 6px;
+            padding: 8px;
+            text-align: center;
+        }
+        .stat-value {
+            font-size: 1.2em;
+            font-weight: bold;
+        }
+        .stat-label {
+            font-size: 0.75em;
+            color: #666;
+        }
+        .progress-bar {
+            background: #e9ecef;
+            border-radius: 3px;
+            height: 4px;
+            margin-top: 4px;
+        }
+        .progress-fill {
+            height: 100%;
+            border-radius: 3px;
+            transition: width 0.5s;
+        }
+        .progress-fill.cpu { background: linear-gradient(90deg, #28a745, #ffc107, #dc3545); }
+        .progress-fill.memory { background: linear-gradient(90deg, #007bff, #6f42c1); }
+        .requests-list {
+            max-height: 60px;
+            overflow-y: auto;
+            font-size: 0.85em;
+        }
+        .request-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 2px 0;
+            border-bottom: 1px solid #f0f0f0;
+            color: #666;
+        }
+        .request-method { font-weight: 600; color: #28a745; }
+        .request-method.POST { color: #007bff; }
+        .request-method.PUT { color: #ffc107; }
+        .request-method.DELETE { color: #dc3545; }
+        
+        /* Tabs */
+        .tabs {
+            display: flex;
+            gap: 4px;
+            margin-bottom: 10px;
+        }
+        .tab-btn {
+            flex: 1;
+            padding: 8px;
+            border: none;
+            background: #e9ecef;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.85em;
+            font-weight: 600;
+            transition: all 0.2s;
+        }
+        .tab-btn:hover { background: #dee2e6; }
+        .tab-btn.active { background: #667eea; color: white; }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+        
+        /* Backup Styles */
+        .backup-btn {
+            width: 100%;
+            padding: 10px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.9em;
+            font-weight: 600;
+            margin-bottom: 6px;
+            transition: all 0.2s;
+        }
+        .backup-btn.primary { background: #28a745; color: white; }
+        .backup-btn.primary:hover { background: #218838; }
+        .backup-btn.secondary { background: #6c757d; color: white; }
+        .backup-btn.secondary:hover { background: #5a6268; }
+        .backup-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+        
+        .backup-list {
+            max-height: 150px;
+            overflow-y: auto;
+            margin-top: 8px;
+        }
+        .backup-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 6px 8px;
+            background: #f8f9fa;
+            border-radius: 4px;
+            margin-bottom: 4px;
+            font-size: 0.85em;
+        }
+        .backup-item:hover { background: #e9ecef; }
+        .backup-name {
+            flex: 1;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            margin-right: 8px;
+        }
+        .backup-size { color: #666; font-size: 0.8em; margin-right: 8px; }
+        .backup-actions { display: flex; gap: 4px; }
+        .backup-actions button {
+            padding: 4px 8px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.75em;
+        }
+        .btn-restore { background: #007bff; color: white; }
+        .btn-restore:hover { background: #0056b3; }
+        .btn-delete { background: #dc3545; color: white; }
+        .btn-delete:hover { background: #c82333; }
+        
+        .backup-status {
+            padding: 8px;
+            border-radius: 6px;
+            margin-bottom: 8px;
+            font-size: 0.85em;
+        }
+        .backup-status.info { background: #e7f3ff; color: #0056b3; }
+        .backup-status.success { background: #d4edda; color: #155724; }
+        .backup-status.error { background: #f8d7da; color: #721c24; }
+        
+        .empty-state {
+            text-align: center;
+            color: #999;
+            padding: 20px;
+        }
+        
+        /* Database Path Styles */
+        .db-path-box {
+            font-family: monospace;
+            background: #e9ecef;
+            padding: 8px;
+            border-radius: 4px;
+            font-size: 0.8em;
+            word-break: break-all;
+            margin-bottom: 8px;
+            border: 1px solid #dee2e6;
+        }
+        .db-path-box.custom {
+            background: #d4edda;
+            border-color: #28a745;
+        }
+        
+        /* Update Styles */
+        .update-available {
+            background: linear-gradient(135deg, #28a745 0%, #218838 100%);
+            color: white;
+            padding: 12px;
+            border-radius: 6px;
+            text-align: center;
+            margin-bottom: 8px;
+        }
+        .update-version {
+            font-size: 1.4em;
+            font-weight: bold;
+        }
+        .update-progress {
+            background: #e9ecef;
+            border-radius: 4px;
+            height: 8px;
+            margin: 10px 0;
+            overflow: hidden;
+        }
+        .update-progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #007bff, #28a745);
+            transition: width 0.3s;
+        }
+    </style>
+</head>
+<body>
+    <div class="tabs">
+        <button class="tab-btn active" onclick="showTab('status')">📊 Status</button>
+        <button class="tab-btn" onclick="showTab('database')">🗄️ Datenbank</button>
+        <button class="tab-btn" onclick="showTab('backup')">💾 Backup</button>
+        <button class="tab-btn" onclick="showTab('update')" id="tabUpdate">🔄 Update</button>
+        <button class="tab-btn" onclick="showTab('settings')">⚙️ Einstellungen</button>
+    </div>
+
+    <!-- Status Tab -->
+    <div id="tab-status" class="tab-content active">
+        <div class="status-box">
+            <h1><span class="status-indicator" id="statusIndicator"></span> Server</h1>
+            <div class="info-row">
+                <span class="info-label">Version</span>
+                <span class="info-value" id="serverVersion">-</span>
+            </div>
+            <div class="info-row">
+                <span class="info-label">Status</span>
+                <span class="info-value" id="status">Läuft</span>
+            </div>
+            <div class="info-row">
+                <span class="info-label">Uptime</span>
+                <span class="info-value" id="uptime">0:00:00</span>
+            </div>
+            <div id="url">Wird geladen...</div>
+        </div>
+
+        <div class="status-box">
+            <div class="clients-row">
+                <h2>👥 Clients</h2>
+                <span class="clients-count" id="clients">0</span>
+            </div>
+        </div>
+
+        <div class="status-box">
+            <h2>📊 Ressourcen</h2>
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-value" id="cpuUsage">0%</div>
+                    <div class="stat-label">CPU</div>
+                    <div class="progress-bar"><div class="progress-fill cpu" id="cpuBar" style="width: 0%"></div></div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" id="memoryUsage">0 MB</div>
+                    <div class="stat-label">Speicher</div>
+                    <div class="progress-bar"><div class="progress-fill memory" id="memoryBar" style="width: 0%"></div></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="status-box">
+            <h2>📈 Stats</h2>
+            <div class="info-row">
+                <span class="info-label">Anfragen</span>
+                <span class="info-value" id="totalRequests">0</span>
+            </div>
+            <div class="info-row">
+                <span class="info-label">Pro Minute</span>
+                <span class="info-value" id="requestsPerMin">0</span>
+            </div>
+            <div class="info-row">
+                <span class="info-label">Letzter</span>
+                <span class="info-value" id="lastActivity">-</span>
+            </div>
+        </div>
+
+        <div class="status-box">
+            <h2>📝 Requests</h2>
+            <div class="requests-list" id="requestsList">
+                <div style="color: #999; text-align: center;">Keine</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Backup Tab -->
+    <div id="tab-backup" class="tab-content">
+        <div class="status-box">
+            <h2>💾 Datenbank Backup</h2>
+            <div id="backupMessage" class="backup-status info" style="display: none;"></div>
+            
+            <button class="backup-btn primary" onclick="createBackup()" id="btnCreateBackup">
+                ✨ Backup jetzt erstellen
+            </button>
+            <button class="backup-btn secondary" onclick="openBackupFolder()">
+                📁 Backup-Ordner öffnen
+            </button>
+            
+            <div class="info-row" style="margin-top: 8px;">
+                <span class="info-label">Datenbank-Größe</span>
+                <span class="info-value" id="dbSize">-</span>
+            </div>
+            <div class="info-row">
+                <span class="info-label">Anzahl Backups</span>
+                <span class="info-value" id="backupCount">-</span>
+            </div>
+        </div>
+
+        <div class="status-box">
+            <h2>📋 Gespeicherte Backups</h2>
+            <div id="backupList" class="backup-list">
+                <div class="empty-state">Wird geladen...</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Datenbank Tab -->
+    <div id="tab-database" class="tab-content">
+        <div class="status-box">
+            <h2>🗄️ Datenbank-Pfad</h2>
+            <div id="dbMessage" class="backup-status info" style="display: none;"></div>
+            
+            <div class="db-path-box" id="currentDbPath">
+                Wird geladen...
+            </div>
+            
+            <div class="info-row" style="margin-top: 8px;">
+                <span class="info-label">Status</span>
+                <span class="info-value" id="dbStatus">-</span>
+            </div>
+            
+            <button class="backup-btn primary" onclick="selectDatabase()" id="btnSelectDb">
+                📂 Datenbank auswählen
+            </button>
+            <button class="backup-btn secondary" onclick="openDbFolder()">
+                📁 Datenbank-Ordner öffnen
+            </button>
+            <button class="backup-btn secondary" onclick="resetDbPath()" id="btnResetDb">
+                🔄 Auf Standard zurücksetzen
+            </button>
+        </div>
+
+        <div class="status-box">
+            <h2>ℹ️ Hinweis</h2>
+            <p style="font-size: 0.85em; color: #666; margin: 0;">
+                Nach dem Ändern des Datenbank-Pfads muss die Anwendung neu gestartet werden. 
+                Der gewählte Pfad wird gespeichert und bei jedem Start automatisch verwendet.
+            </p>
+            <button class="backup-btn primary" onclick="restartApp()" style="margin-top: 10px;">
+                🔁 Anwendung neu starten
+            </button>
+        </div>
+    </div>
+
+    <!-- Update Tab -->
+    <div id="tab-update" class="tab-content">
+        <div class="status-box">
+            <h2>🔄 Auto-Update</h2>
+            <div id="updateMessage" class="backup-status info" style="display: none;"></div>
+            
+            <div class="info-row">
+                <span class="info-label">Aktuelle Version</span>
+                <span class="info-value" id="currentVersion">-</span>
+            </div>
+            <div class="info-row">
+                <span class="info-label">Status</span>
+                <span class="info-value" id="updateStatusText">Bereit</span>
+            </div>
+            
+            <div id="updateAvailable" style="display: none;">
+                <div class="update-available">
+                    <div>🎉 Neue Version verfügbar!</div>
+                    <div class="update-version" id="newVersion">-</div>
+                </div>
+            </div>
+            
+            <div id="updateProgress" style="display: none;">
+                <div class="info-row">
+                    <span class="info-label">Download</span>
+                    <span class="info-value" id="downloadPercent">0%</span>
+                </div>
+                <div class="update-progress">
+                    <div class="update-progress-fill" id="downloadBar" style="width: 0%"></div>
+                </div>
+            </div>
+            
+            <button class="backup-btn primary" onclick="checkForUpdates()" id="btnCheckUpdate">
+                🔍 Auf Updates prüfen
+            </button>
+            <button class="backup-btn primary" onclick="downloadUpdate()" id="btnDownloadUpdate" style="display: none;">
+                ⬇️ Update herunterladen
+            </button>
+            <button class="backup-btn primary" onclick="installUpdate()" id="btnInstallUpdate" style="display: none; background: #28a745;">
+                ✨ Update installieren & neu starten
+            </button>
+        </div>
+        
+        <div class="status-box">
+            <h2>ℹ️ Hinweis</h2>
+            <p style="font-size: 0.85em; color: #666; margin: 0;">
+                Updates werden automatisch beim Start geprüft. Heruntergeladene Updates werden 
+                beim nächsten Neustart automatisch installiert.
+            </p>
+        </div>
+    </div>
+
+    <!-- Settings Tab -->
+    <div id="tab-settings" class="tab-content">
+        <div class="status-box">
+            <h2>🚀 Windows Autostart</h2>
+            <div id="autostartMessage" class="backup-status info" style="display: none;"></div>
+            
+            <p style="font-size: 0.85em; color: #666; margin: 0 0 12px 0;">
+                Wenn aktiviert, startet der Werkstatt Terminplaner automatisch beim Windows-Start.
+            </p>
+            
+            <div class="info-row" style="margin-bottom: 12px;">
+                <span class="info-label">Autostart</span>
+                <span class="info-value" id="autostartStatus">Lädt...</span>
+            </div>
+            
+            <div style="display: flex; gap: 8px;">
+                <button class="backup-btn primary" onclick="enableAutostart()" id="btnEnableAutostart" style="flex: 1;">
+                    ✅ Aktivieren
+                </button>
+                <button class="backup-btn secondary" onclick="disableAutostart()" id="btnDisableAutostart" style="flex: 1;">
+                    ❌ Deaktivieren
+                </button>
+            </div>
+        </div>
+        
+        <div class="status-box">
+            <h2>ℹ️ Hinweise zum Autostart</h2>
+            <p style="font-size: 0.85em; color: #666; margin: 0;">
+                <strong>Aktivieren:</strong> Die Anwendung wird automatisch beim Windows-Start geöffnet.<br><br>
+                <strong>Deaktivieren:</strong> Die Anwendung muss manuell gestartet werden.<br><br>
+                <strong>Hinweis:</strong> Der Autostart funktioniert nur bei der installierten Version, nicht bei der portablen Version.
+            </p>
+        </div>
+    </div>
+
+    <script src="./status.js"></script>
+</body>
+</html>

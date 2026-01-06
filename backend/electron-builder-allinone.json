@@ -1,0 +1,65 @@
+{
+  "appId": "com.werkstatt.terminplaner",
+  "productName": "Werkstatt Terminplaner",
+  "directories": {
+    "output": "dist-allinone"
+  },
+  "files": [
+    "electron-main.js",
+    "electron-preload.js",
+    "status.html",
+    "status.js",
+    "src/",
+    "database/",
+    ".env"
+  ],
+  "extraResources": [
+    {
+      "from": "../frontend",
+      "to": "frontend",
+      "filter": [
+        "**/*",
+        "!node_modules/**",
+        "!*.md"
+      ]
+    },
+    {
+      "from": "datenbank-reparatur.bat",
+      "to": "datenbank-reparatur.bat"
+    },
+    {
+      "from": "../tools/dist/Datenbank-Reparatur.exe",
+      "to": "Datenbank-Reparatur.exe"
+    }
+  ],
+  "publish": {
+    "provider": "github",
+    "owner": "shp-art",
+    "repo": "Werkstatt-Terminplaner",
+    "releaseType": "release"
+  },
+  "win": {
+    "target": [
+      {
+        "target": "nsis",
+        "arch": ["x64"]
+      },
+      {
+        "target": "dir",
+        "arch": ["x64"]
+      }
+    ],
+    "icon": null
+  },
+  "nsis": {
+    "oneClick": false,
+    "allowToChangeInstallationDirectory": true,
+    "createDesktopShortcut": true,
+    "createStartMenuShortcut": true,
+    "shortcutName": "Werkstatt Terminplaner",
+    "installerIcon": null,
+    "uninstallerIcon": null,
+    "installerHeaderIcon": null,
+    "deleteAppDataOnUninstall": false
+  }
+}

@@ -1,0 +1,32 @@
+{
+  "name": "werkstatt-terminplaner-frontend",
+  "version": "1.0.15",
+  "description": "Frontend für Werkstatt Terminplaner",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "build:exe": "set CSC_IDENTITY_AUTO_DISCOVERY=false&& electron-builder"
+  },
+  "devDependencies": {
+    "electron": "^28.2.3",
+    "electron-builder": "^24.9.1"
+  },
+  "build": {
+    "appId": "com.example.werkstatt-terminplaner",
+    "productName": "Werkstatt Terminplaner",
+    "files": [
+      "index.html",
+      "main.js",
+      "preload.js",
+      "src/",
+      "config.js"
+    ],
+    "win": {
+      "target": "nsis"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
+    }
+  }
+}

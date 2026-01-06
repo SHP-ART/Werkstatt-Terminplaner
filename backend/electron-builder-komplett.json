@@ -1,0 +1,34 @@
+{
+  "appId": "com.werkstatt.terminplaner-komplett",
+  "productName": "Werkstatt Terminplaner Komplett",
+  "directories": {
+    "output": "dist-komplett"
+  },
+  "files": [
+    "electron-main.js",
+    "electron-preload.js",
+    "status.html",
+    "status.js",
+    "src/",
+    "database/",
+    ".env"
+  ],
+  "extraResources": [
+    {
+      "from": "../frontend",
+      "to": "frontend",
+      "filter": [
+        "**/*",
+        "!node_modules/**",
+        "!*.md"
+      ]
+    }
+  ],
+  "win": {
+    "target": "portable",
+    "icon": null
+  },
+  "portable": {
+    "artifactName": "Werkstatt-Komplett-${version}.${ext}"
+  }
+}
