@@ -2,6 +2,9 @@ const sqlite3 = require('sqlite3').verbose();
 const path = require('path');
 const fs = require('fs');
 
+// Versionierung für DB-Schema (erhöhen bei Änderungen)
+const DB_SCHEMA_VERSION = 2;
+
 // Bestimme das Datenverzeichnis:
 // Priorität:
 // 1. Umgebungsvariable DATA_DIR (wird von electron-main.js gesetzt)
@@ -135,6 +138,108 @@ function reconnectDatabase() {
 // Getter für das aktuelle db-Objekt (für Module, die es importieren)
 function getDb() {
   return dbWrapper.connection;
+}
+
+// Automatisches Backup vor Migrationen erstellen
+function createAutoBackup() {
+  return new Promise((resolve) => {
+    try {
+      // Prüfe ob Datenbank existiert
+      if (!fs.existsSync(dbPath)) {
+        console.log('📦 Keine bestehende Datenbank gefunden - kein Backup nötig');
+        resolve(false);
+        return;
+      }
+
+      // Backup-Verzeichnis erstellen
+      const backupDir = path.join(dataDir, 'backups');
+      if (!fs.existsSync(backupDir)) {
+        fs.mkdirSync(backupDir, { recursive: true });
+      }
+
+      // Backup-Dateiname mit Zeitstempel
+      const now = new Date();
+      const timestamp = now.toISOString().replace(/[:.]/g, '-').slice(0, 19);
+      const backupFileName = `werkstatt_backup_${timestamp}.db`;
+      const backupPath = path.join(backupDir, backupFileName);
+
+      // Backup erstellen
+      fs.copyFileSync(dbPath, backupPath);
+      console.log(`✅ Automatisches Backup erstellt: ${backupPath}`);
+
+      // Alte Backups aufräumen (behalte nur die letzten 10)
+      const backupFiles = fs.readdirSync(backupDir)
+        .filter(f => f.startsWith('werkstatt_backup_') && f.endsWith('.db'))
+        .sort()
+        .reverse();
+
+      if (backupFiles.length > 10) {
+        const zuLoeschen = backupFiles.slice(10);
+        zuLoeschen.forEach(file => {
+          try {
+            fs.unlinkSync(path.join(backupDir, file));
+            console.log(`🗑️ Altes Backup gelöscht: ${file}`);
+          } catch (e) {
+            console.error(`Fehler beim Löschen von ${file}:`, e);
+          }
+        });
+      }
+
+      resolve(true);
+    } catch (error) {
+      console.error('⚠️ Fehler beim Erstellen des Backups:', error);
+      resolve(false);
+    }
+  });
+}
+
+// Schema-Version in Datenbank speichern/prüfen
+function checkAndUpdateSchemaVersion() {
+  return new Promise((resolve) => {
+    // Meta-Tabelle für Schema-Version erstellen
+    dbWrapper.connection.run(`CREATE TABLE IF NOT EXISTS _schema_meta (
+      key TEXT PRIMARY KEY,
+      value TEXT
+    )`, (err) => {
+      if (err) {
+        console.error('Fehler beim Erstellen der Meta-Tabelle:', err);
+        resolve({ needsMigration: false, oldVersion: 0 });
+        return;
+      }
+
+      // Aktuelle Version auslesen
+      dbWrapper.connection.get(`SELECT value FROM _schema_meta WHERE key = 'schema_version'`, (err, row) => {
+        const currentVersion = row ? parseInt(row.value) : 0;
+        const needsMigration = currentVersion < DB_SCHEMA_VERSION;
+
+        if (needsMigration) {
+          console.log(`📊 Schema-Migration nötig: Version ${currentVersion} → ${DB_SCHEMA_VERSION}`);
+        } else {
+          console.log(`📊 Schema-Version aktuell: ${currentVersion}`);
+        }
+
+        resolve({ needsMigration, oldVersion: currentVersion });
+      });
+    });
+  });
+}
+
+// Schema-Version nach Migration aktualisieren
+function updateSchemaVersion() {
+  return new Promise((resolve) => {
+    dbWrapper.connection.run(
+      `INSERT OR REPLACE INTO _schema_meta (key, value) VALUES ('schema_version', ?)`,
+      [DB_SCHEMA_VERSION.toString()],
+      (err) => {
+        if (err) {
+          console.error('Fehler beim Aktualisieren der Schema-Version:', err);
+        } else {
+          console.log(`✅ Schema-Version aktualisiert auf: ${DB_SCHEMA_VERSION}`);
+        }
+        resolve();
+      }
+    );
+  });
 }
 
 function initializeDatabase() {
@@ -700,4 +805,42 @@ function initializeDatabase() {
   });
 }
 
-module.exports = { db, getDb, initializeDatabase, reconnectDatabase, dbPath, dataDir };
+// Initialisierung mit automatischem Backup
+async function initializeDatabaseWithBackup() {
+  try {
+    // 1. Schema-Version prüfen
+    const { needsMigration, oldVersion } = await checkAndUpdateSchemaVersion();
+
+    // 2. Bei nötiger Migration: Backup erstellen
+    if (needsMigration) {
+      console.log('🔄 Migration erkannt - erstelle Sicherheits-Backup...');
+      await createAutoBackup();
+    }
+
+    // 3. Normale Initialisierung (enthält Migrationen)
+    initializeDatabase();
+
+    // 4. Schema-Version aktualisieren (nach kurzer Verzögerung für async DB-Operationen)
+    setTimeout(async () => {
+      await updateSchemaVersion();
+    }, 1000);
+
+    console.log('✅ Datenbank-Initialisierung abgeschlossen');
+  } catch (error) {
+    console.error('❌ Fehler bei Datenbank-Initialisierung:', error);
+    // Trotzdem normale Init versuchen
+    initializeDatabase();
+  }
+}
+
+module.exports = { 
+  db, 
+  getDb, 
+  initializeDatabase, 
+  initializeDatabaseWithBackup,
+  createAutoBackup,
+  reconnectDatabase, 
+  dbPath, 
+  dataDir,
+  DB_SCHEMA_VERSION
+};

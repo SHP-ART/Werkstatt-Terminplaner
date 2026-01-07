@@ -46,7 +46,7 @@ logStartup(`Working Directory: ${process.cwd()}`);
 
 // Module laden mit Logging
 logStartup('Lade database.js...');
-const { initializeDatabase } = require('./config/database');
+const { initializeDatabase, initializeDatabaseWithBackup, DB_SCHEMA_VERSION } = require('./config/database');
 logStartup('database.js geladen ✓');
 
 logStartup('Lade version.js...');
@@ -139,7 +139,7 @@ function findFrontendPath() {
     return null;
 }
 
-function startServer(clientCountCallback, requestLogCallback) {
+async function startServer(clientCountCallback, requestLogCallback) {
     logStartup('=== startServer() aufgerufen ===');
     
     // Environment Check durchführen
@@ -213,9 +213,11 @@ function startServer(clientCountCallback, requestLogCallback) {
     }
 
     logStartup('Initialisiere Datenbank...');
+    logStartup(`Schema-Version: ${DB_SCHEMA_VERSION}`);
     try {
-        initializeDatabase();
-        logStartup('Datenbank initialisiert ✓');
+        // Mit automatischem Backup bei Schema-Änderungen
+        await initializeDatabaseWithBackup();
+        logStartup('Datenbank initialisiert (mit Backup-Prüfung) ✓');
     } catch (dbError) {
         logStartup(`FEHLER bei Datenbank-Initialisierung: ${dbError.message}`, 'ERROR');
         logStartup(dbError.stack, 'ERROR');

@@ -6471,6 +6471,33 @@ class App {
 
       // Speichere Konflikte für "Alle anwenden"
       this.aktuelleKonflikte = konflikte;
+      
+      // === NEU: Prüfe Abholzeit-Konflikte (Fertigstellung nach Abholzeit) ===
+      const abholzeitKonflikte = [];
+      
+      for (const t of termineMitZeit) {
+        const termin = t.termin;
+        
+        // Hole Abholzeit aus dem Termin (DB-Feld: abholung_zeit)
+        const abholzeit = termin.abholung_zeit;
+        if (!abholzeit) continue;
+        
+        // Abholzeit in Minuten
+        const [abholH, abholM] = abholzeit.split(':').map(Number);
+        const abholMin = abholH * 60 + abholM;
+        
+        // Vergleiche mit berechneter Endzeit
+        if (t.endeMin > abholMin) {
+          abholzeitKonflikte.push({
+            termin: termin,
+            endzeit: t.endzeit,
+            endeMin: t.endeMin,
+            abholzeit: abholzeit,
+            abholMin: abholMin,
+            differenzMin: t.endeMin - abholMin
+          });
+        }
+      }
 
       // Formatiere Datum für Anzeige
       const datumFormatiert = new Date(datum + 'T00:00:00').toLocaleDateString('de-DE', { 
@@ -6478,12 +6505,15 @@ class App {
       });
 
       // Render Ergebnis
-      if (konflikte.length === 0) {
+      const hatProbleme = konflikte.length > 0 || abholzeitKonflikte.length > 0;
+      
+      if (!hatProbleme) {
         body.innerHTML = `
           <div style="text-align: center; padding: 30px;">
             <span style="font-size: 48px;">✅</span>
-            <h4 style="color: #2e7d32; margin-top: 15px;">Keine Überschneidungen gefunden!</h4>
+            <h4 style="color: #2e7d32; margin-top: 15px;">Keine Probleme gefunden!</h4>
             <p style="color: #666;">Alle Termine am ${datumFormatiert} sind zeitlich korrekt geplant.</p>
+            <p style="color: #888; font-size: 0.9em; margin-top: 10px;">✓ Keine Überschneidungen &nbsp;•&nbsp; ✓ Abholterminzeiten werden eingehalten</p>
           </div>
         `;
       } else {
@@ -6492,81 +6522,135 @@ class App {
         const lehrlingeMap = new Map(lehrlinge.map(l => [`lehrling_${l.id}`, l.name]));
         const personenNamen = new Map([...mitarbeiterMap, ...lehrlingeMap]);
 
-        let html = `
+        let html = '';
+        
+        // === Abholzeit-Konflikte anzeigen ===
+        if (abholzeitKonflikte.length > 0) {
+          html += `
+            <div style="background: #ffebee; padding: 15px; border-radius: 8px; margin-bottom: 20px; border-left: 4px solid #d32f2f;">
+              <strong>🚗 ${abholzeitKonflikte.length} Abholzeit-Konflikt(e)!</strong>
+              <p style="margin: 5px 0 0 0; color: #666;">Diese Termine werden erst nach der geplanten Abholzeit fertig.</p>
+            </div>
+          `;
+          
+          abholzeitKonflikte.forEach((konflikt, index) => {
+            const t = konflikt.termin;
+            const differenzText = konflikt.differenzMin >= 60 
+              ? `${Math.floor(konflikt.differenzMin/60)}h ${konflikt.differenzMin%60}min`
+              : `${konflikt.differenzMin} min`;
+            
+            html += `
+              <div class="konflikt-item" style="background: #fff8f8; padding: 15px; border-radius: 8px; margin-bottom: 15px; border: 1px solid #ffcdd2;">
+                <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 10px;">
+                  <div>
+                    <strong style="color: #d32f2f;">🚗 Abholzeit-Problem</strong>
+                  </div>
+                  <span style="background: #d32f2f; color: white; padding: 2px 8px; border-radius: 12px; font-size: 0.8em;">
+                    ${differenzText} zu spät
+                  </span>
+                </div>
+                
+                <div style="background: white; padding: 10px; border-radius: 5px; border-left: 3px solid #d32f2f;">
+                  <div style="font-weight: 600;">${t.termin_nr}</div>
+                  <div style="font-size: 0.9em; color: #666;">${t.kunde_name || 'Unbekannt'}</div>
+                  <div style="margin-top: 10px; display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                    <div>
+                      <span style="color: #666; font-size: 0.85em;">Fertigstellung:</span><br>
+                      <span style="background: #ffcdd2; padding: 2px 6px; border-radius: 4px; font-weight: 600;">
+                        ${konflikt.endzeit}
+                      </span>
+                    </div>
+                    <div>
+                      <span style="color: #666; font-size: 0.85em;">Abholzeit:</span><br>
+                      <span style="background: #e8f5e9; padding: 2px 6px; border-radius: 4px; font-weight: 600;">
+                        ${konflikt.abholzeit}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            `;
+          });
+        }
+        
+        // === Überschneidungs-Konflikte anzeigen ===
+        if (konflikte.length > 0) {
+          html += `
           <div style="background: #fff3e0; padding: 15px; border-radius: 8px; margin-bottom: 20px; border-left: 4px solid #ff9800;">
             <strong>⚠️ ${konflikte.length} Überschneidung(en) gefunden!</strong>
             <p style="margin: 5px 0 0 0; color: #666;">Klicken Sie auf "Anwenden" um den Vorschlag zu übernehmen.</p>
           </div>
         `;
 
-        konflikte.forEach((konflikt, index) => {
-          const personName = personenNamen.get(konflikt.personKey) || 'Unbekannt';
-          const t1 = konflikt.termin1.termin;
-          const t2 = konflikt.termin2.termin;
-          
-          const konfliktEnde1 = `${Math.floor(konflikt.termin1.endeMin/60).toString().padStart(2,'0')}:${(konflikt.termin1.endeMin%60).toString().padStart(2,'0')}`;
-          const konfliktEnde2 = `${Math.floor(konflikt.termin2.endeMin/60).toString().padStart(2,'0')}:${(konflikt.termin2.endeMin%60).toString().padStart(2,'0')}`;
-          
-          // Erweiterungs-Badge
-          const erw1Badge = konflikt.termin1.istErweiterung ? '<span style="background: #9c27b0; color: white; padding: 1px 5px; border-radius: 3px; font-size: 0.75em; margin-left: 5px;">Erw.</span>' : '';
-          const erw2Badge = konflikt.termin2.istErweiterung ? '<span style="background: #9c27b0; color: white; padding: 1px 5px; border-radius: 3px; font-size: 0.75em; margin-left: 5px;">Erw.</span>' : '';
-          
-          // Datum-Info falls anderer Tag
-          const datum1 = t1.datum !== datum ? `<div style="font-size: 0.8em; color: #9c27b0;">📅 ${new Date(t1.datum + 'T00:00:00').toLocaleDateString('de-DE')}</div>` : '';
-          const datum2 = t2.datum !== datum ? `<div style="font-size: 0.8em; color: #9c27b0;">📅 ${new Date(t2.datum + 'T00:00:00').toLocaleDateString('de-DE')}</div>` : '';
-          
-          html += `
-            <div class="konflikt-item" style="background: #f8f9fa; padding: 15px; border-radius: 8px; margin-bottom: 15px; border: 1px solid #ddd;">
-              <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 10px;">
-                <div>
-                  <strong style="color: #1976d2;">👷 ${personName}</strong>
-                </div>
-                <span style="background: #ff5722; color: white; padding: 2px 8px; border-radius: 12px; font-size: 0.8em;">
-                  Konflikt ${index + 1}
-                </span>
-              </div>
-              
-              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 15px;">
-                <div style="background: white; padding: 10px; border-radius: 5px; border-left: 3px solid #2196f3;">
-                  <div style="font-weight: 600;">${t1.termin_nr}${erw1Badge}</div>
-                  <div style="font-size: 0.9em; color: #666;">${t1.kunde_name || 'Unbekannt'}</div>
-                  ${datum1}
-                  <div style="margin-top: 5px;">
-                    <span style="background: #e3f2fd; padding: 2px 6px; border-radius: 4px; font-size: 0.85em;">
-                      ${konflikt.termin1.startzeit} - ${konfliktEnde1}
-                    </span>
+          konflikte.forEach((konflikt, index) => {
+            const personName = personenNamen.get(konflikt.personKey) || 'Unbekannt';
+            const t1 = konflikt.termin1.termin;
+            const t2 = konflikt.termin2.termin;
+            
+            const konfliktEnde1 = `${Math.floor(konflikt.termin1.endeMin/60).toString().padStart(2,'0')}:${(konflikt.termin1.endeMin%60).toString().padStart(2,'0')}`;
+            const konfliktEnde2 = `${Math.floor(konflikt.termin2.endeMin/60).toString().padStart(2,'0')}:${(konflikt.termin2.endeMin%60).toString().padStart(2,'0')}`;
+            
+            // Erweiterungs-Badge
+            const erw1Badge = konflikt.termin1.istErweiterung ? '<span style="background: #9c27b0; color: white; padding: 1px 5px; border-radius: 3px; font-size: 0.75em; margin-left: 5px;">Erw.</span>' : '';
+            const erw2Badge = konflikt.termin2.istErweiterung ? '<span style="background: #9c27b0; color: white; padding: 1px 5px; border-radius: 3px; font-size: 0.75em; margin-left: 5px;">Erw.</span>' : '';
+            
+            // Datum-Info falls anderer Tag
+            const datum1 = t1.datum !== datum ? `<div style="font-size: 0.8em; color: #9c27b0;">📅 ${new Date(t1.datum + 'T00:00:00').toLocaleDateString('de-DE')}</div>` : '';
+            const datum2 = t2.datum !== datum ? `<div style="font-size: 0.8em; color: #9c27b0;">📅 ${new Date(t2.datum + 'T00:00:00').toLocaleDateString('de-DE')}</div>` : '';
+            
+            html += `
+              <div class="konflikt-item" style="background: #f8f9fa; padding: 15px; border-radius: 8px; margin-bottom: 15px; border: 1px solid #ddd;">
+                <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 10px;">
+                  <div>
+                    <strong style="color: #1976d2;">👷 ${personName}</strong>
                   </div>
-                </div>
-                <div style="background: white; padding: 10px; border-radius: 5px; border-left: 3px solid #ff9800;">
-                  <div style="font-weight: 600;">${t2.termin_nr}${erw2Badge}</div>
-                  <div style="font-size: 0.9em; color: #666;">${t2.kunde_name || 'Unbekannt'}</div>
-                  ${datum2}
-                  <div style="margin-top: 5px;">
-                    <span style="background: #fff3e0; padding: 2px 6px; border-radius: 4px; font-size: 0.85em;">
-                      ${konflikt.termin2.startzeit} - ${konfliktEnde2}
-                    </span>
-                    <span style="color: #d32f2f; font-size: 0.85em; margin-left: 5px;">⚠️ Überschneidung</span>
-                  </div>
-                </div>
-              </div>
-              
-              <div style="background: ${konflikt.istMachbar ? '#e8f5e9' : '#ffebee'}; padding: 10px; border-radius: 5px; display: flex; justify-content: space-between; align-items: center;">
-                <div>
-                  <strong>💡 Vorschlag:</strong> ${t2.termin_nr} verschieben auf 
-                  <span style="font-weight: 600; color: ${konflikt.istMachbar ? '#2e7d32' : '#d32f2f'};">
-                    ${konflikt.vorschlagStart}
+                  <span style="background: #ff5722; color: white; padding: 2px 8px; border-radius: 12px; font-size: 0.8em;">
+                    Konflikt ${index + 1}
                   </span>
-                  ${!konflikt.istMachbar ? '<span style="color: #d32f2f; font-size: 0.85em;"> (endet nach 18:00!)</span>' : ''}
                 </div>
-                <button class="btn ${konflikt.istMachbar ? 'btn-primary' : 'btn-secondary'}" 
-                        onclick="app.wendeVorschlagAn(${index})"
-                        ${!konflikt.istMachbar ? 'title="Endet nach 18 Uhr - trotzdem anwendbar"' : ''}>
-                  ${konflikt.istMachbar ? '✅ Anwenden' : '⚠️ Anwenden'}
-                </button>
+                
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 15px;">
+                  <div style="background: white; padding: 10px; border-radius: 5px; border-left: 3px solid #2196f3;">
+                    <div style="font-weight: 600;">${t1.termin_nr}${erw1Badge}</div>
+                    <div style="font-size: 0.9em; color: #666;">${t1.kunde_name || 'Unbekannt'}</div>
+                    ${datum1}
+                    <div style="margin-top: 5px;">
+                      <span style="background: #e3f2fd; padding: 2px 6px; border-radius: 4px; font-size: 0.85em;">
+                        ${konflikt.termin1.startzeit} - ${konfliktEnde1}
+                      </span>
+                    </div>
+                  </div>
+                  <div style="background: white; padding: 10px; border-radius: 5px; border-left: 3px solid #ff9800;">
+                    <div style="font-weight: 600;">${t2.termin_nr}${erw2Badge}</div>
+                    <div style="font-size: 0.9em; color: #666;">${t2.kunde_name || 'Unbekannt'}</div>
+                    ${datum2}
+                    <div style="margin-top: 5px;">
+                      <span style="background: #fff3e0; padding: 2px 6px; border-radius: 4px; font-size: 0.85em;">
+                        ${konflikt.termin2.startzeit} - ${konfliktEnde2}
+                      </span>
+                      <span style="color: #d32f2f; font-size: 0.85em; margin-left: 5px;">⚠️ Überschneidung</span>
+                    </div>
+                  </div>
+                </div>
+                
+                <div style="background: ${konflikt.istMachbar ? '#e8f5e9' : '#ffebee'}; padding: 10px; border-radius: 5px; display: flex; justify-content: space-between; align-items: center;">
+                  <div>
+                    <strong>💡 Vorschlag:</strong> ${t2.termin_nr} verschieben auf 
+                    <span style="font-weight: 600; color: ${konflikt.istMachbar ? '#2e7d32' : '#d32f2f'};">
+                      ${konflikt.vorschlagStart}
+                    </span>
+                    ${!konflikt.istMachbar ? '<span style="color: #d32f2f; font-size: 0.85em;"> (endet nach 18:00!)</span>' : ''}
+                  </div>
+                  <button class="btn ${konflikt.istMachbar ? 'btn-primary' : 'btn-secondary'}" 
+                          onclick="app.wendeVorschlagAn(${index})"
+                          ${!konflikt.istMachbar ? 'title="Endet nach 18 Uhr - trotzdem anwendbar"' : ''}>
+                    ${konflikt.istMachbar ? '✅ Anwenden' : '⚠️ Anwenden'}
+                  </button>
+                </div>
               </div>
-            </div>
-          `;
-        });
+            `;
+          });
+        }
 
         body.innerHTML = html;
         alleAnwendenBtn.style.display = konflikte.some(k => k.istMachbar) ? 'block' : 'none';
@@ -12545,7 +12629,22 @@ class App {
     const inputs = liste.querySelectorAll('input[type="number"]');
     const selects = liste.querySelectorAll('select[id^="modal_mitarbeiter_"]');
     let gesamtStunden = 0;
-    const arbeitszeitenDetails = {};
+    
+    // Lade aktuellen Termin frisch aus der Datenbank für korrekte arbeitszeiten_details
+    const termin = await TermineService.getById(this.currentTerminId);
+    
+    // Bestehende arbeitszeiten_details beibehalten und nur überschreiben was geändert wird
+    let arbeitszeitenDetails = {};
+    if (termin.arbeitszeiten_details) {
+      try {
+        arbeitszeitenDetails = typeof termin.arbeitszeiten_details === 'string' 
+          ? JSON.parse(termin.arbeitszeiten_details) 
+          : termin.arbeitszeiten_details;
+      } catch (e) {
+        console.error('Fehler beim Parsen von arbeitszeiten_details:', e);
+        arbeitszeitenDetails = {};
+      }
+    }
 
     // Sammle Gesamt-Mitarbeiter-Zuordnung
     const gesamtMitarbeiterValue = document.getElementById('modalGesamtMitarbeiter').value;
@@ -12557,63 +12656,81 @@ class App {
         const id = parseInt(gesamtMitarbeiterValue.replace('l_', ''), 10);
         arbeitszeitenDetails._gesamt_mitarbeiter_id = { type: 'lehrling', id: id };
       }
+    } else {
+      // Keine Gesamt-Zuordnung -> entfernen
+      delete arbeitszeitenDetails._gesamt_mitarbeiter_id;
     }
 
     // Sammle individuelle Zeiten und Mitarbeiter-Zuordnungen pro Arbeit
-    const termin = this.termineById[this.currentTerminId];
     const arbeitenListe = this.parseArbeiten(termin.arbeit || '');
 
-    inputs.forEach((input, index) => {
-      const stunden = parseFloat(input.value) || 0;
+    // Iteriere direkt über die Arbeitenliste statt über inputs
+    arbeitenListe.forEach((arbeitName, index) => {
+      // Zeit-Input auslesen
+      const zeitInput = document.getElementById(`modal_zeit_${index}`);
+      const stunden = zeitInput ? (parseFloat(zeitInput.value) || 0) : 0;
       gesamtStunden += stunden;
 
-      // Speichere die Zeit in Minuten für jede Arbeit
-      if (arbeitenListe[index]) {
-        const zeitMinuten = Math.round(stunden * 60);
-        const mitarbeiterSelect = document.getElementById(`modal_mitarbeiter_${index}`);
-        const mitarbeiterValue = mitarbeiterSelect ? mitarbeiterSelect.value : '';
-        
-        // NEU: Teile-Status auslesen
-        const teileSelect = document.getElementById(`modal_teile_${index}`);
-        const teileStatus = teileSelect ? teileSelect.value : '';
-        
-        // NEU: Startzeit auslesen
-        const startzeitInput = document.getElementById(`modal_startzeit_${index}`);
-        const startzeit = startzeitInput ? startzeitInput.value : '';
+      const zeitMinuten = Math.round(stunden * 60);
+      
+      // Mitarbeiter-Select auslesen
+      const mitarbeiterSelect = document.getElementById(`modal_mitarbeiter_${index}`);
+      const mitarbeiterValue = mitarbeiterSelect ? mitarbeiterSelect.value : '';
+      
+      // Teile-Status auslesen
+      const teileSelect = document.getElementById(`modal_teile_${index}`);
+      const teileStatus = teileSelect ? teileSelect.value : '';
+      
+      // Startzeit auslesen
+      const startzeitInput = document.getElementById(`modal_startzeit_${index}`);
+      const startzeit = startzeitInput ? startzeitInput.value.trim() : '';
 
-        // Neue Struktur: {zeit: 30, mitarbeiter_id: 1, type: 'mitarbeiter', teile_status: 'vorraetig', startzeit: '09:00'}
-        if (mitarbeiterValue || teileStatus || startzeit) {
-          if (mitarbeiterValue && mitarbeiterValue.startsWith('ma_')) {
-            const id = parseInt(mitarbeiterValue.replace('ma_', ''), 10);
-            arbeitszeitenDetails[arbeitenListe[index]] = {
-              zeit: zeitMinuten,
-              mitarbeiter_id: id,
-              type: 'mitarbeiter',
-              teile_status: teileStatus,
-              startzeit: startzeit
-            };
-          } else if (mitarbeiterValue && mitarbeiterValue.startsWith('l_')) {
-            const id = parseInt(mitarbeiterValue.replace('l_', ''), 10);
-            arbeitszeitenDetails[arbeitenListe[index]] = {
-              zeit: zeitMinuten,
-              lehrling_id: id,
-              mitarbeiter_id: id, // Für Kompatibilität
-              type: 'lehrling',
-              teile_status: teileStatus,
-              startzeit: startzeit
-            };
-          } else {
-            // Nur Teile-Status/Startzeit ohne Mitarbeiter
-            arbeitszeitenDetails[arbeitenListe[index]] = {
-              zeit: zeitMinuten,
-              teile_status: teileStatus,
-              startzeit: startzeit
-            };
-          }
-        } else {
-          // Wenn keine individuelle Zuordnung, nur Zeit speichern (kompatibel mit alter Struktur)
-          arbeitszeitenDetails[arbeitenListe[index]] = zeitMinuten;
-        }
+      // Bestehende Arbeit-Details holen oder neues Objekt erstellen
+      let existingDetails = arbeitszeitenDetails[arbeitName];
+      
+      // In Objekt-Format konvertieren wenn es nur eine Zahl ist
+      if (typeof existingDetails === 'number') {
+        existingDetails = { zeit: existingDetails };
+      } else if (!existingDetails || typeof existingDetails !== 'object') {
+        existingDetails = {};
+      }
+      
+      // Aktualisiere die Werte
+      existingDetails.zeit = zeitMinuten;
+      
+      if (teileStatus) {
+        existingDetails.teile_status = teileStatus;
+      }
+      
+      if (startzeit) {
+        existingDetails.startzeit = startzeit;
+      }
+      
+      // Mitarbeiter-Zuordnung aktualisieren
+      if (mitarbeiterValue && mitarbeiterValue.startsWith('ma_')) {
+        const id = parseInt(mitarbeiterValue.replace('ma_', ''), 10);
+        existingDetails.mitarbeiter_id = id;
+        existingDetails.type = 'mitarbeiter';
+        delete existingDetails.lehrling_id;
+      } else if (mitarbeiterValue && mitarbeiterValue.startsWith('l_')) {
+        const id = parseInt(mitarbeiterValue.replace('l_', ''), 10);
+        existingDetails.lehrling_id = id;
+        existingDetails.mitarbeiter_id = id; // Für Kompatibilität
+        existingDetails.type = 'lehrling';
+      } else if (mitarbeiterValue === '') {
+        // Explizit "Keine Zuordnung" gewählt -> Mitarbeiter entfernen
+        delete existingDetails.mitarbeiter_id;
+        delete existingDetails.lehrling_id;
+        delete existingDetails.type;
+      }
+      // Wenn mitarbeiterValue undefined ist, bestehende Zuordnung beibehalten
+      
+      // Speichere das aktualisierte Objekt (oder nur die Zeit wenn keine anderen Daten)
+      if (Object.keys(existingDetails).length === 1 && existingDetails.zeit) {
+        // Nur Zeit vorhanden -> als einfache Zahl speichern (Rückwärtskompatibilität)
+        arbeitszeitenDetails[arbeitName] = existingDetails.zeit;
+      } else {
+        arbeitszeitenDetails[arbeitName] = existingDetails;
       }
     });
 
@@ -14221,102 +14338,272 @@ class App {
           }
         }
 
-        // Erstelle separate Einträge für jede Arbeit (bei mehreren Arbeiten)
-        let laufendeStartzeit = terminStartzeit;
-        const arbeitEntries = [];
+        // Automatisch erkennen ob dieser Termin getrennt angezeigt werden muss
+        // (unterschiedliche Mitarbeiter ODER unterschiedliche Startzeiten für verschiedene Arbeiten)
+        let mussGetrenntAnzeigen = false;
         
-        for (let i = 0; i < arbeitenListe.length; i++) {
-          const arbeit = arbeitenListe[i];
-          const arbeitDetails = typeof details[arbeit] === 'object' ? details[arbeit] : { zeit: details[arbeit] || 0 };
-          let zeitMinuten = arbeitDetails.zeit || (termin.geschaetzte_zeit / arbeitenListe.length) || 60;
+        if (arbeitenListe.length > 1) {
+          // Sammle alle Mitarbeiter-IDs und Startzeiten der Arbeiten
+          const mitarbeiterSet = new Set();
+          const startzeitenSet = new Set();
           
-          // Nebenzeit-Aufschlag hinzufügen (z.B. 20% = zeitMinuten * 1.2)
-          if (nebenzeitProzent > 0) {
-            zeitMinuten = Math.round(zeitMinuten * (1 + nebenzeitProzent / 100));
-          }
-          
-          // Feature 10: Bei abgeschlossenen Terminen die ANGEZEIGTE Zeit auf tatsächliche Zeit kürzen
-          // (Die Auslastungsberechnung bleibt bei geschätzter Zeit, da dem Kunden diese berechnet wird)
-          let anzeigeZeitMinuten = zeitMinuten;
-          if (termin.status === 'abgeschlossen' && termin.tatsaechliche_zeit && termin.tatsaechliche_zeit > 0) {
-            // Bei mehreren Arbeiten: proportional aufteilen
-            if (arbeitenListe.length > 1) {
-              const anteil = zeitMinuten / (termin.geschaetzte_zeit || zeitMinuten * arbeitenListe.length);
-              anzeigeZeitMinuten = Math.round(termin.tatsaechliche_zeit * anteil);
-            } else {
-              anzeigeZeitMinuten = termin.tatsaechliche_zeit;
-            }
-          }
-          
-          // BUG 8 FIX: Bestimme Mitarbeiter/Lehrling für DIESE Arbeit (individuelle Zuordnung hat Vorrang)
-          let arbeitZuordnungsTyp = defaultZuordnungsTyp;
-          let arbeitMitarbeiterId = defaultMitarbeiterId;
-          let arbeitLehrlingId = defaultLehrlingId;
-          
-          // Prüfe ob diese Arbeit eine eigene Zuordnung hat
-          if (!istSchwebend && typeof arbeitDetails === 'object') {
+          for (const arbeit of arbeitenListe) {
+            const arbeitDetails = typeof details[arbeit] === 'object' ? details[arbeit] : {};
+            
+            // Mitarbeiter dieser Arbeit bestimmen
+            let arbeitMitarbeiterKey = 'default';
             if (arbeitDetails.type === 'lehrling' && (arbeitDetails.lehrling_id || arbeitDetails.mitarbeiter_id)) {
-              arbeitZuordnungsTyp = 'lehrling';
-              arbeitLehrlingId = arbeitDetails.lehrling_id || arbeitDetails.mitarbeiter_id;
-              arbeitMitarbeiterId = null;
+              arbeitMitarbeiterKey = `l_${arbeitDetails.lehrling_id || arbeitDetails.mitarbeiter_id}`;
             } else if (arbeitDetails.mitarbeiter_id) {
-              arbeitZuordnungsTyp = arbeitDetails.type || 'mitarbeiter';
-              arbeitMitarbeiterId = arbeitDetails.mitarbeiter_id;
-              arbeitLehrlingId = null;
+              arbeitMitarbeiterKey = `m_${arbeitDetails.mitarbeiter_id}`;
+            } else if (defaultZuordnungsTyp === 'lehrling' && defaultLehrlingId) {
+              arbeitMitarbeiterKey = `l_${defaultLehrlingId}`;
+            } else if (defaultMitarbeiterId) {
+              arbeitMitarbeiterKey = `m_${defaultMitarbeiterId}`;
+            }
+            mitarbeiterSet.add(arbeitMitarbeiterKey);
+            
+            // Startzeit dieser Arbeit
+            if (arbeitDetails.startzeit) {
+              startzeitenSet.add(arbeitDetails.startzeit);
             }
           }
           
-          // Startzeit für diese Arbeit bestimmen
-          let arbeitStartzeit = arbeitDetails.startzeit || laufendeStartzeit;
+          // Getrennt anzeigen wenn: unterschiedliche Mitarbeiter ODER mehr als eine verschiedene Startzeit
+          mussGetrenntAnzeigen = mitarbeiterSet.size > 1 || startzeitenSet.size > 1;
+        }
+        
+        if (mussGetrenntAnzeigen) {
+          // === GETRENNTE ANSICHT: Separate Einträge für jede Arbeit ===
+          let laufendeStartzeit = terminStartzeit;
+          const arbeitEntries = [];
           
-          // Falls keine Startzeit und vorherige Arbeit existiert, nach vorheriger Arbeit starten
-          if (!arbeitStartzeit && i > 0 && arbeitEntries[i-1]) {
-            const prev = arbeitEntries[i-1];
-            if (prev.startzeit) {
-              const [h, m] = prev.startzeit.split(':').map(Number);
-              const prevEndMinuten = h * 60 + m + prev.zeitMinuten;
-              const newH = Math.floor(prevEndMinuten / 60);
-              const newM = prevEndMinuten % 60;
-              arbeitStartzeit = `${newH.toString().padStart(2, '0')}:${newM.toString().padStart(2, '0')}`;
+          for (let i = 0; i < arbeitenListe.length; i++) {
+            const arbeit = arbeitenListe[i];
+            const arbeitDetails = typeof details[arbeit] === 'object' ? details[arbeit] : { zeit: details[arbeit] || 0 };
+            let zeitMinuten = arbeitDetails.zeit || (termin.geschaetzte_zeit / arbeitenListe.length) || 60;
+            
+            // Nebenzeit-Aufschlag hinzufügen
+            if (nebenzeitProzent > 0) {
+              zeitMinuten = Math.round(zeitMinuten * (1 + nebenzeitProzent / 100));
+            }
+            
+            // Feature 10: Bei abgeschlossenen Terminen die ANGEZEIGTE Zeit auf tatsächliche Zeit kürzen
+            let anzeigeZeitMinuten = zeitMinuten;
+            if (termin.status === 'abgeschlossen' && termin.tatsaechliche_zeit && termin.tatsaechliche_zeit > 0) {
+              if (arbeitenListe.length > 1) {
+                const anteil = zeitMinuten / (termin.geschaetzte_zeit || zeitMinuten * arbeitenListe.length);
+                anzeigeZeitMinuten = Math.round(termin.tatsaechliche_zeit * anteil);
+              } else {
+                anzeigeZeitMinuten = termin.tatsaechliche_zeit;
+              }
+            }
+            
+            // Mitarbeiter/Lehrling für DIESE Arbeit (individuelle Zuordnung hat Vorrang)
+            let arbeitZuordnungsTyp = defaultZuordnungsTyp;
+            let arbeitMitarbeiterId = defaultMitarbeiterId;
+            let arbeitLehrlingId = defaultLehrlingId;
+            
+            if (!istSchwebend && typeof arbeitDetails === 'object') {
+              if (arbeitDetails.type === 'lehrling' && (arbeitDetails.lehrling_id || arbeitDetails.mitarbeiter_id)) {
+                arbeitZuordnungsTyp = 'lehrling';
+                arbeitLehrlingId = arbeitDetails.lehrling_id || arbeitDetails.mitarbeiter_id;
+                arbeitMitarbeiterId = null;
+              } else if (arbeitDetails.mitarbeiter_id) {
+                arbeitZuordnungsTyp = arbeitDetails.type || 'mitarbeiter';
+                arbeitMitarbeiterId = arbeitDetails.mitarbeiter_id;
+                arbeitLehrlingId = null;
+              }
+            }
+            
+            // Startzeit für diese Arbeit bestimmen
+            let arbeitStartzeit = arbeitDetails.startzeit || laufendeStartzeit;
+            
+            // Falls keine Startzeit und vorherige Arbeit existiert, nach vorheriger Arbeit starten
+            if (!arbeitStartzeit && i > 0 && arbeitEntries[i-1]) {
+              const prev = arbeitEntries[i-1];
+              if (prev.startzeit) {
+                const [h, m] = prev.startzeit.split(':').map(Number);
+                const prevEndMinuten = h * 60 + m + prev.zeitMinuten;
+                const newH = Math.floor(prevEndMinuten / 60);
+                const newM = prevEndMinuten % 60;
+                arbeitStartzeit = `${newH.toString().padStart(2, '0')}:${newM.toString().padStart(2, '0')}`;
+              }
+            }
+
+            // Zähle Erweiterungen zu diesem Termin
+            const erweiterungen = termine.filter(t => t.erweiterung_von_id === termin.id && !t.ist_geloescht);
+            const erweiterungAnzahl = erweiterungen.length;
+            
+            // Bestimme die endzeit_berechnet
+            let endzeitFuerAnzeige = null;
+            if (erweiterungAnzahl > 0) {
+              endzeitFuerAnzeige = null;
+            } else if (termin.erweiterung_von_id) {
+              const hauptTermin = termine.find(t => t.id === termin.erweiterung_von_id);
+              if (hauptTermin && hauptTermin.endzeit_berechnet) {
+                endzeitFuerAnzeige = hauptTermin.endzeit_berechnet;
+              }
+            } else {
+              endzeitFuerAnzeige = termin.endzeit_berechnet || null;
+            }
+            
+            const terminEntry = {
+              terminId: termin.id,
+              terminNr: termin.termin_nr,
+              kunde: termin.kunde_name,
+              kennzeichen: termin.kennzeichen,
+              arbeit: arbeit,
+              arbeitenListe: arbeitenListe,
+              arbeitIndex: i,
+              arbeitenAnzahl: arbeitenListe.length,
+              zeitMinuten: zeitMinuten,
+              anzeigeZeitMinuten: anzeigeZeitMinuten,
+              startzeit: arbeitStartzeit,
+              endzeitBerechnet: endzeitFuerAnzeige,
+              abholungZeit: termin.abholung_zeit || null,
+              status: termin.status || 'geplant',
+              istIntern: !termin.kennzeichen || termin.abholung_details === 'Interner Termin',
+              interneAuftragsnummer: termin.interne_auftragsnummer || '',
+              istSchwebend: istSchwebend,
+              istErweiterung: termin.ist_erweiterung === 1 || termin.ist_erweiterung === true,
+              erweiterungAnzahl: erweiterungAnzahl,
+              erweiterungVonId: termin.erweiterung_von_id || null,
+              zuordnungsTyp: arbeitZuordnungsTyp,
+              mitarbeiterId: arbeitMitarbeiterId,
+              lehrlingId: arbeitLehrlingId
+            };
+            
+            arbeitEntries.push(terminEntry);
+            
+            // Update laufende Startzeit für nächste Arbeit
+            if (arbeitStartzeit) {
+              const [h, m] = arbeitStartzeit.split(':').map(Number);
+              const endMinuten = h * 60 + m + zeitMinuten;
+              const newH = Math.floor(endMinuten / 60);
+              const newM = endMinuten % 60;
+              laufendeStartzeit = `${newH.toString().padStart(2, '0')}:${newM.toString().padStart(2, '0')}`;
             }
           }
 
+          // Zuordnung zu Mitarbeiter oder Lehrling - pro Arbeit individuell
+          for (const entry of arbeitEntries) {
+            if (entry.zuordnungsTyp === 'lehrling' && entry.lehrlingId) {
+              const key = `l_${entry.lehrlingId}`;
+              if (!arbeitenMap.has(key)) {
+                arbeitenMap.set(key, { typ: 'lehrling', id: entry.lehrlingId, arbeiten: [] });
+              }
+              arbeitenMap.get(key).arbeiten.push(entry);
+            } else if (entry.mitarbeiterId) {
+              const key = `m_${entry.mitarbeiterId}`;
+              if (!arbeitenMap.has(key)) {
+                arbeitenMap.set(key, { typ: 'mitarbeiter', id: entry.mitarbeiterId, arbeiten: [] });
+              }
+              arbeitenMap.get(key).arbeiten.push(entry);
+            } else {
+              ohneZuordnung.push(entry);
+            }
+          }
+          
+        } else {
+          // === ZUSAMMENGEFASSTE ANSICHT: Ein Eintrag pro Termin ===
+          // Berechne Gesamtzeit und früheste Startzeit
+          let gesamtZeitMinuten = 0;
+          let gesamtAnzeigeZeitMinuten = 0;
+          let fruehesteStartzeit = terminStartzeit;
+          let arbeitenMitZeiten = [];
+          
+          // Bestimme Mitarbeiter/Lehrling Zuordnung für den gesamten Termin (wird im Loop ggf. aktualisiert)
+          let terminZuordnungsTyp = defaultZuordnungsTyp;
+          let terminMitarbeiterId = defaultMitarbeiterId;
+          let terminLehrlingId = defaultLehrlingId;
+          
+          for (let i = 0; i < arbeitenListe.length; i++) {
+            const arbeit = arbeitenListe[i];
+            const arbeitDetails = typeof details[arbeit] === 'object' ? details[arbeit] : { zeit: details[arbeit] || 0 };
+            let zeitMinuten = arbeitDetails.zeit || (termin.geschaetzte_zeit / arbeitenListe.length) || 60;
+            
+            // Nebenzeit-Aufschlag hinzufügen (z.B. 20% = zeitMinuten * 1.2)
+            if (nebenzeitProzent > 0) {
+              zeitMinuten = Math.round(zeitMinuten * (1 + nebenzeitProzent / 100));
+            }
+            
+            gesamtZeitMinuten += zeitMinuten;
+            
+            // Feature 10: Bei abgeschlossenen Terminen die ANGEZEIGTE Zeit auf tatsächliche Zeit kürzen
+            let anzeigeZeitMinuten = zeitMinuten;
+            if (termin.status === 'abgeschlossen' && termin.tatsaechliche_zeit && termin.tatsaechliche_zeit > 0) {
+              if (arbeitenListe.length > 1) {
+                const anteil = zeitMinuten / (termin.geschaetzte_zeit || zeitMinuten * arbeitenListe.length);
+                anzeigeZeitMinuten = Math.round(termin.tatsaechliche_zeit * anteil);
+              } else {
+                anzeigeZeitMinuten = termin.tatsaechliche_zeit;
+              }
+            }
+            gesamtAnzeigeZeitMinuten += anzeigeZeitMinuten;
+            
+            // Startzeit für diese Arbeit bestimmen (für Anzeige im Tooltip)
+            let arbeitStartzeit = arbeitDetails.startzeit || null;
+            if (arbeitStartzeit && (!fruehesteStartzeit || arbeitStartzeit < fruehesteStartzeit)) {
+              fruehesteStartzeit = arbeitStartzeit;
+            }
+            
+            arbeitenMitZeiten.push({
+              name: arbeit,
+              zeit: zeitMinuten,
+              startzeit: arbeitStartzeit
+            });
+            
+            // Prüfe ob diese Arbeit eine Mitarbeiter-Zuordnung hat (erste gefundene gewinnt)
+            if (!istSchwebend && typeof arbeitDetails === 'object') {
+              if (arbeitDetails.type === 'lehrling' && (arbeitDetails.lehrling_id || arbeitDetails.mitarbeiter_id)) {
+                if (!terminZuordnungsTyp || terminZuordnungsTyp === defaultZuordnungsTyp) {
+                  terminZuordnungsTyp = 'lehrling';
+                  terminLehrlingId = arbeitDetails.lehrling_id || arbeitDetails.mitarbeiter_id;
+                  terminMitarbeiterId = null;
+                }
+              } else if (arbeitDetails.mitarbeiter_id) {
+                if (!terminMitarbeiterId || terminMitarbeiterId === defaultMitarbeiterId) {
+                  terminZuordnungsTyp = arbeitDetails.type || 'mitarbeiter';
+                  terminMitarbeiterId = arbeitDetails.mitarbeiter_id;
+                }
+              }
+            }
+          }
+          
           // Zähle Erweiterungen zu diesem Termin
           const erweiterungen = termine.filter(t => t.erweiterung_von_id === termin.id && !t.ist_geloescht);
           const erweiterungAnzahl = erweiterungen.length;
           
-          // Bestimme die endzeit_berechnet:
-          // - Wenn dieser Termin Erweiterungen hat: nicht verwenden (Endzeit wird auf Erweiterung angezeigt)
-          // - Wenn dies eine Erweiterung ist: endzeit_berechnet vom Haupttermin holen
-          // - Sonst: eigene endzeit_berechnet verwenden
+          // Bestimme die endzeit_berechnet
           let endzeitFuerAnzeige = null;
           if (erweiterungAnzahl > 0) {
-            // Hat Erweiterungen - Endzeit wird auf der Erweiterung angezeigt
             endzeitFuerAnzeige = null;
           } else if (termin.erweiterung_von_id) {
-            // Ist eine Erweiterung - hole endzeit_berechnet vom Haupttermin
             const hauptTermin = termine.find(t => t.id === termin.erweiterung_von_id);
             if (hauptTermin && hauptTermin.endzeit_berechnet) {
               endzeitFuerAnzeige = hauptTermin.endzeit_berechnet;
             }
           } else {
-            // Normaler Termin ohne Erweiterungen
             endzeitFuerAnzeige = termin.endzeit_berechnet || null;
           }
           
+          // Erstelle einen zusammengefassten Termin-Entry
           const terminEntry = {
             terminId: termin.id,
             terminNr: termin.termin_nr,
             kunde: termin.kunde_name,
             kennzeichen: termin.kennzeichen,
-            arbeit: arbeit,
+            arbeit: arbeitenListe.join(', '), // Alle Arbeiten kommasepariert
             arbeitenListe: arbeitenListe,
-            arbeitIndex: i,
+            arbeitenMitZeiten: arbeitenMitZeiten, // Detaillierte Liste für Tooltip
+            arbeitIndex: 0,
             arbeitenAnzahl: arbeitenListe.length,
-            zeitMinuten: zeitMinuten,
-            anzeigeZeitMinuten: anzeigeZeitMinuten, // Feature 10: Für Zeitleisten-Darstellung
-            startzeit: arbeitStartzeit,
+            zeitMinuten: gesamtZeitMinuten,
+            anzeigeZeitMinuten: gesamtAnzeigeZeitMinuten,
+            startzeit: fruehesteStartzeit,
             endzeitBerechnet: endzeitFuerAnzeige,
+            abholungZeit: termin.abholung_zeit || null,
             status: termin.status || 'geplant',
             istIntern: !termin.kennzeichen || termin.abholung_details === 'Interner Termin',
             interneAuftragsnummer: termin.interne_auftragsnummer || '',
@@ -14324,40 +14611,26 @@ class App {
             istErweiterung: termin.ist_erweiterung === 1 || termin.ist_erweiterung === true,
             erweiterungAnzahl: erweiterungAnzahl,
             erweiterungVonId: termin.erweiterung_von_id || null,
-            // BUG 8 FIX: Individuelle Zuordnung pro Arbeit speichern
-            zuordnungsTyp: arbeitZuordnungsTyp,
-            mitarbeiterId: arbeitMitarbeiterId,
-            lehrlingId: arbeitLehrlingId
+            zuordnungsTyp: terminZuordnungsTyp,
+            mitarbeiterId: terminMitarbeiterId,
+            lehrlingId: terminLehrlingId
           };
-          
-          arbeitEntries.push(terminEntry);
-          
-          // Update laufende Startzeit für nächste Arbeit
-          if (arbeitStartzeit) {
-            const [h, m] = arbeitStartzeit.split(':').map(Number);
-            const endMinuten = h * 60 + m + zeitMinuten;
-            const newH = Math.floor(endMinuten / 60);
-            const newM = endMinuten % 60;
-            laufendeStartzeit = `${newH.toString().padStart(2, '0')}:${newM.toString().padStart(2, '0')}`;
-          }
-        }
 
-        // BUG 8 FIX: Zuordnung zu Mitarbeiter oder Lehrling - jetzt pro Arbeit individuell
-        for (const entry of arbeitEntries) {
-          if (entry.zuordnungsTyp === 'lehrling' && entry.lehrlingId) {
-            const key = `l_${entry.lehrlingId}`;
+          // Zuordnung zu Mitarbeiter oder Lehrling
+          if (terminEntry.zuordnungsTyp === 'lehrling' && terminEntry.lehrlingId) {
+            const key = `l_${terminEntry.lehrlingId}`;
             if (!arbeitenMap.has(key)) {
-              arbeitenMap.set(key, { typ: 'lehrling', id: entry.lehrlingId, arbeiten: [] });
+              arbeitenMap.set(key, { typ: 'lehrling', id: terminEntry.lehrlingId, arbeiten: [] });
             }
-            arbeitenMap.get(key).arbeiten.push(entry);
-          } else if (entry.mitarbeiterId) {
-            const key = `m_${entry.mitarbeiterId}`;
+            arbeitenMap.get(key).arbeiten.push(terminEntry);
+          } else if (terminEntry.mitarbeiterId) {
+            const key = `m_${terminEntry.mitarbeiterId}`;
             if (!arbeitenMap.has(key)) {
-              arbeitenMap.set(key, { typ: 'mitarbeiter', id: entry.mitarbeiterId, arbeiten: [] });
+              arbeitenMap.set(key, { typ: 'mitarbeiter', id: terminEntry.mitarbeiterId, arbeiten: [] });
             }
-            arbeitenMap.get(key).arbeiten.push(entry);
+            arbeitenMap.get(key).arbeiten.push(terminEntry);
           } else {
-            ohneZuordnung.push(entry);
+            ohneZuordnung.push(terminEntry);
           }
         }
       }
@@ -14612,18 +14885,32 @@ class App {
       // Mehrteiliger Termin
       const arbeitenAnzahl = arbeit.arbeitenAnzahl || 1;
       
-      // Arbeiten-Liste für Tooltip
-      const arbeitenTooltip = arbeit.arbeit;
+      // Arbeiten-Liste für Tooltip - bei zusammengefassten Blöcken alle Arbeiten auflisten
+      let arbeitenTooltip = arbeit.arbeit;
+      if (arbeit.arbeitenMitZeiten && arbeit.arbeitenMitZeiten.length > 1) {
+        arbeitenTooltip = arbeit.arbeitenMitZeiten.map(a => 
+          `${a.name} (${a.zeit} Min.)`
+        ).join('&#10;🔧 ');
+      }
+      
+      // Abholzeit-Info für Tooltip
+      const abholzeitTooltip = arbeit.abholungZeit ? `&#10;🚗 Abholung: ${arbeit.abholungZeit}` : '';
+      
+      // Kurzanzeige der Arbeiten im Block (bei mehreren: erste + Anzahl)
+      let arbeitKurzText = arbeit.arbeit;
+      if (arbeit.arbeitenListe && arbeit.arbeitenListe.length > 1) {
+        arbeitKurzText = `${arbeit.arbeitenListe[0]} +${arbeit.arbeitenListe.length - 1}`;
+      }
       
       // Kennzeichen oben, Arbeit darunter
       const blockHaupt = arbeit.kennzeichen || (arbeit.istIntern ? '🔧 ' + arbeit.kunde : arbeit.kunde);
-      const blockArbeit = `<span class="zeitleiste-block-arbeit">${this.escapeHtml(arbeit.arbeit)}</span>`;
+      const blockArbeit = `<span class="zeitleiste-block-arbeit">${this.escapeHtml(arbeitKurzText)}</span>`;
 
       return `
         <div class="zeitleiste-block ${statusClass} ${internClass} ${schwebendClass} ${erweiterungClass}" 
              style="left: ${leftPercent}%; width: ${Math.max(widthPercent, 3)}%;"
              onclick="app.openZeitleisteKontextmenu(event, ${arbeit.terminId}, '${this.escapeHtml(arbeit.kunde)}', '${this.escapeHtml(arbeit.arbeit)}', '${arbeit.terminNr}', '${auftragsnrEscaped}')"
-             title="${arbeit.kunde}${arbeit.kennzeichen ? ' - ' + arbeit.kennzeichen : ''}&#10;🔧 ${arbeitenTooltip}${fortsetzungText}&#10;${startZeitText} - ${endZeitText} (${dauerText})${auftragsnrText}${schwebendTitleText}${erweiterungTitleText}${erweiterungBadgeTitleText}">
+             title="${arbeit.kunde}${arbeit.kennzeichen ? ' - ' + arbeit.kennzeichen : ''}&#10;🔧 ${arbeitenTooltip}${fortsetzungText}&#10;${startZeitText} - ${endZeitText} (${dauerText})${abholzeitTooltip}${auftragsnrText}${schwebendTitleText}${erweiterungTitleText}${erweiterungBadgeTitleText}">
           ${schwebendBadge}<span class="zeitleiste-block-haupt">${this.escapeHtml(blockHaupt)}</span>${blockArbeit}
           <span class="zeitleiste-block-zeit">${startZeitText} - ${endZeitText}</span>
           ${erweiterungBadge}${istErweiterungIcon}
@@ -15338,12 +15625,15 @@ class App {
     const colorIndex = termin._arbeitIndex % colors.length;
     div.style.borderLeft = `4px solid ${colors[colorIndex]}`;
     
+    // Abholzeit-Info
+    const abholzeitInfo = termin.abholung_zeit ? `\n🚗 Abholung: ${termin.abholung_zeit}` : '';
+    
     div.innerHTML = `
       <div class="termin-title">${termin.termin_nr || 'Neu'}</div>
       <div class="termin-info arbeit-name">${arbeit.name}</div>
       <div class="termin-info">${dauerText}</div>
     `;
-    div.title = `${termin.termin_nr}\n${termin.kunde_name}\n\n📋 Arbeit: ${arbeit.name}\n⏱️ Dauer: ${dauerText}\n🕐 Start: ${startzeit}`;
+    div.title = `${termin.termin_nr}\n${termin.kunde_name}\n\n📋 Arbeit: ${arbeit.name}\n⏱️ Dauer: ${dauerText}\n🕐 Start: ${startzeit}${abholzeitInfo}`;
 
     // Drag Events
     div.addEventListener('dragstart', (e) => {
@@ -15393,7 +15683,10 @@ class App {
       <div class="mini-card-arbeit">${arbeit.name}</div>
       <div class="mini-card-dauer">${dauer} min</div>
     `;
-    card.title = `${termin.termin_nr}\n${termin.kunde_name}\n📋 ${arbeit.name}\n⏱️ ${dauer} min`;
+    
+    // Abholzeit-Info
+    const abholzeitInfo = termin.abholung_zeit ? `\n🚗 Abholung: ${termin.abholung_zeit}` : '';
+    card.title = `${termin.termin_nr}\n${termin.kunde_name}\n📋 ${arbeit.name}\n⏱️ ${dauer} min${abholzeitInfo}`;
 
     // Drag Events
     card.addEventListener('dragstart', (e) => {
@@ -15544,6 +15837,9 @@ class App {
       ? `${Math.floor(gesamtDauer/60)}h ${gesamtDauer%60 > 0 ? (gesamtDauer%60) + 'min' : ''}`.trim()
       : `${gesamtDauer} min`;
 
+    // Abholzeit-Info
+    const abholzeitInfo = termin.abholung_zeit ? `\n🚗 Abholung: ${termin.abholung_zeit}` : '';
+
     const div = document.createElement('div');
     const statusClass = termin.status ? ` status-${termin.status.toLowerCase().replace(' ', '-')}` : '';
     div.className = 'timeline-termin' + statusClass + (isSchwebend ? ' schwebend' : '') + (istFortsetzung ? ' fortsetzung' : '');
@@ -15561,13 +15857,13 @@ class App {
         <div class="termin-title">↪ ${termin.termin_nr || 'Neu'}</div>
         <div class="termin-info">${displayDauer} min (Forts.)</div>
       `;
-      div.title = `${termin.termin_nr} (Fortsetzung nach Pause)\n${termin.kunde_name}\n${termin.arbeit}`;
+      div.title = `${termin.termin_nr} (Fortsetzung nach Pause)\n${termin.kunde_name}\n${termin.arbeit}${abholzeitInfo}`;
     } else {
       div.innerHTML = `
         <div class="termin-title">${termin.termin_nr || 'Neu'} - ${termin.kennzeichen || ''}</div>
         <div class="termin-info">${termin.kunde_name || ''} • ${dauerText}</div>
       `;
-      div.title = `${termin.termin_nr}\n${termin.kunde_name}\n${termin.arbeit}\n${startzeit} - ${dauerText}`;
+      div.title = `${termin.termin_nr}\n${termin.kunde_name}\n${termin.arbeit}\n${startzeit} - ${dauerText}${abholzeitInfo}`;
     }
 
     // Drag Events nur für Hauptteil
@@ -15623,6 +15919,9 @@ class App {
       ? `${Math.floor(dauer/60)}h ${dauer%60 > 0 ? (dauer%60) + 'min' : ''}`.trim()
       : `${dauer} min`;
 
+    // Abholzeit-Info
+    const abholzeitInfo = termin.abholung_zeit ? `\n🚗 Abholung: ${termin.abholung_zeit}` : '';
+
     const div = document.createElement('div');
     div.className = 'timeline-termin' + (isSchwebend ? ' schwebend' : '');
     div.id = `timeline-termin-${termin.id}`;
@@ -15637,7 +15936,7 @@ class App {
       <div class="termin-info">${termin.kunde_name || ''} • ${dauerText}</div>
     `;
     
-    div.title = `${termin.termin_nr}\n${termin.kunde_name}\n${termin.arbeit}\n${startzeit} - ${dauerText}`;
+    div.title = `${termin.termin_nr}\n${termin.kunde_name}\n${termin.arbeit}\n${startzeit} - ${dauerText}${abholzeitInfo}`;
 
     // Drag Events
     div.addEventListener('dragstart', (e) => {
@@ -16431,6 +16730,120 @@ class App {
       return;
     }
     
+    // === Abholzeit-Prüfung vor dem Speichern ===
+    const abholzeitKonflikte = [];
+    
+    for (const [terminId, aenderung] of this.planungAenderungen) {
+      try {
+        const termin = await TermineService.getById(terminId);
+        // DB-Feld: abholung_zeit
+        const abholzeit = termin.abholung_zeit;
+        if (!abholzeit) continue;
+        
+        // Berechne Endzeit basierend auf den Änderungen
+        let startzeit = aenderung.startzeit;
+        let gesamtDauer = 0;
+        
+        // Parse arbeitszeiten_details für Dauer
+        let details = {};
+        try {
+          details = termin.arbeitszeiten_details ? 
+            (typeof termin.arbeitszeiten_details === 'string' ? JSON.parse(termin.arbeitszeiten_details) : termin.arbeitszeiten_details) 
+            : {};
+        } catch (e) {}
+        
+        // Berechne Gesamtdauer aus arbeitszeiten_details
+        for (const key in details) {
+          if (key.startsWith('_')) continue;
+          const arbeit = details[key];
+          if (typeof arbeit === 'object' && arbeit.zeit) {
+            gesamtDauer += parseInt(arbeit.zeit) || 0;
+          } else if (typeof arbeit === 'number') {
+            gesamtDauer += parseInt(arbeit) || 0;
+          }
+        }
+        
+        // Fallback auf geschaetzte_zeit falls keine Details
+        if (gesamtDauer === 0) {
+          gesamtDauer = parseInt(termin.geschaetzte_zeit) || 0;
+        }
+        
+        // Wenn Arbeits-spezifische Änderungen, finde die späteste Endzeit
+        if (aenderung.hatArbeitAenderungen && aenderung.arbeitAenderungen) {
+          let spaetesteEndzeit = 0;
+          for (const [arbeitName, arbeitAenderung] of Object.entries(aenderung.arbeitAenderungen)) {
+            const arbeitStartzeit = arbeitAenderung.startzeit;
+            if (!arbeitStartzeit) continue;
+            
+            const [h, m] = arbeitStartzeit.split(':').map(Number);
+            const startMin = h * 60 + m;
+            
+            // Hole Dauer für diese Arbeit
+            let arbeitDauer = 30; // Default
+            if (details[arbeitName]) {
+              if (typeof details[arbeitName] === 'object' && details[arbeitName].zeit) {
+                arbeitDauer = parseInt(details[arbeitName].zeit) || 30;
+              } else if (typeof details[arbeitName] === 'number') {
+                arbeitDauer = parseInt(details[arbeitName]) || 30;
+              }
+            }
+            
+            const endeMin = startMin + arbeitDauer;
+            if (endeMin > spaetesteEndzeit) {
+              spaetesteEndzeit = endeMin;
+            }
+          }
+          
+          if (spaetesteEndzeit > 0) {
+            // Vergleiche mit Abholzeit
+            const [abholH, abholM] = abholzeit.split(':').map(Number);
+            const abholMin = abholH * 60 + abholM;
+            
+            if (spaetesteEndzeit > abholMin) {
+              const endzeitStr = `${Math.floor(spaetesteEndzeit/60).toString().padStart(2,'0')}:${(spaetesteEndzeit%60).toString().padStart(2,'0')}`;
+              abholzeitKonflikte.push({
+                termin: termin,
+                endzeit: endzeitStr,
+                abholzeit: abholzeit
+              });
+            }
+          }
+        } else if (startzeit && gesamtDauer > 0) {
+          // Normale Termin-Änderung
+          const [h, m] = startzeit.split(':').map(Number);
+          const startMin = h * 60 + m;
+          const endeMin = startMin + gesamtDauer;
+          
+          const [abholH, abholM] = abholzeit.split(':').map(Number);
+          const abholMin = abholH * 60 + abholM;
+          
+          if (endeMin > abholMin) {
+            const endzeitStr = `${Math.floor(endeMin/60).toString().padStart(2,'0')}:${(endeMin%60).toString().padStart(2,'0')}`;
+            abholzeitKonflikte.push({
+              termin: termin,
+              endzeit: endzeitStr,
+              abholzeit: abholzeit
+            });
+          }
+        }
+      } catch (e) {
+        console.error('Fehler bei Abholzeit-Prüfung:', e);
+      }
+    }
+    
+    // Warnung anzeigen falls Abholzeit-Konflikte
+    if (abholzeitKonflikte.length > 0) {
+      let warnText = `⚠️ Warnung: ${abholzeitKonflikte.length} Termin(e) werden erst nach der Abholzeit fertig:\n\n`;
+      abholzeitKonflikte.forEach(k => {
+        warnText += `• ${k.termin.termin_nr} - Fertig: ${k.endzeit}, Abholung: ${k.abholzeit}\n`;
+      });
+      warnText += '\nTrotzdem speichern?';
+      
+      if (!confirm(warnText)) {
+        return;
+      }
+    }
+    
     const speichernBtn = document.getElementById('planungSpeichernBtn');
     if (speichernBtn) {
       speichernBtn.disabled = true;
@@ -16475,6 +16888,19 @@ class App {
               const zeit = details[arbeitName];
               details[arbeitName] = {
                 zeit: zeit,
+                startzeit: arbeitAenderung.startzeit,
+                type: arbeitAenderung.type
+              };
+              if (arbeitAenderung.type === 'lehrling' && arbeitAenderung.lehrling_id) {
+                details[arbeitName].lehrling_id = arbeitAenderung.lehrling_id;
+                details[arbeitName].mitarbeiter_id = arbeitAenderung.lehrling_id;
+              } else if (arbeitAenderung.mitarbeiter_id) {
+                details[arbeitName].mitarbeiter_id = arbeitAenderung.mitarbeiter_id;
+              }
+            } else {
+              // Arbeit existiert noch nicht in details -> neu erstellen
+              details[arbeitName] = {
+                zeit: 30, // Standard-Zeit
                 startzeit: arbeitAenderung.startzeit,
                 type: arbeitAenderung.type
               };
