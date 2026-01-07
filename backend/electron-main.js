@@ -509,8 +509,14 @@ ipcMain.handle('update-install', async () => {
 ipcMain.handle('update-get-status', async () => {
   const { VERSION } = require('./src/config/version');
   return { 
+    success: true,
     ...updateStatus,
-    currentVersion: VERSION
+    currentVersion: VERSION,
+    isPackaged: app.isPackaged,
+    checking: updateStatus.status === 'checking',
+    downloading: updateStatus.status === 'downloading',
+    downloaded: updateStatus.status === 'downloaded',
+    available: updateStatus.updateAvailable
   };
 });
 
