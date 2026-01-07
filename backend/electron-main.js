@@ -1,8 +1,9 @@
-const { app, BrowserWindow, ipcMain, shell } = require('electron');
+const { app, BrowserWindow, ipcMain, shell, dialog } = require('electron');
 const path = require('path');
 const os = require('os');
 const fs = require('fs');
 const net = require('net');
+const { autoUpdater } = require('electron-updater');
 
 // Globaler Handler für unbehandelte Promise-Rejections (unterdrückt EINTR-Fehler)
 process.on('unhandledRejection', (reason, promise) => {
@@ -390,26 +391,125 @@ ipcMain.handle('app-restart', async () => {
 });
 
 // =============================================================================
-// AUTO-UPDATE HANDLER (Platzhalter)
+// AUTO-UPDATE FUNKTIONALITÄT
 // =============================================================================
 
+// Auto-Updater Konfiguration
+autoUpdater.autoDownload = false;
+autoUpdater.autoInstallOnAppQuit = true;
+
+// Update-Status Tracking
+let updateStatus = {
+  status: 'idle',
+  message: 'Bereit',
+  progress: 0,
+  updateAvailable: false,
+  updateDownloaded: false,
+  version: null,
+  error: null
+};
+
+// Auto-Updater Events
+autoUpdater.on('checking-for-update', () => {
+  updateStatus = { ...updateStatus, status: 'checking', message: 'Suche nach Updates...' };
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send('update-status', updateStatus);
+  }
+});
+
+autoUpdater.on('update-available', (info) => {
+  updateStatus = { 
+    ...updateStatus, 
+    status: 'available', 
+    message: `Update ${info.version} verfügbar`,
+    updateAvailable: true,
+    version: info.version
+  };
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send('update-status', updateStatus);
+  }
+});
+
+autoUpdater.on('update-not-available', () => {
+  updateStatus = { 
+    ...updateStatus, 
+    status: 'idle', 
+    message: 'Keine Updates verfügbar',
+    updateAvailable: false
+  };
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send('update-status', updateStatus);
+  }
+});
+
+autoUpdater.on('download-progress', (progress) => {
+  updateStatus = { 
+    ...updateStatus, 
+    status: 'downloading', 
+    message: `Download: ${Math.round(progress.percent)}%`,
+    progress: progress.percent
+  };
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send('update-status', updateStatus);
+  }
+});
+
+autoUpdater.on('update-downloaded', (info) => {
+  updateStatus = { 
+    ...updateStatus, 
+    status: 'downloaded', 
+    message: `Update ${info.version} bereit zur Installation`,
+    updateDownloaded: true,
+    progress: 100
+  };
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send('update-status', updateStatus);
+  }
+});
+
+autoUpdater.on('error', (err) => {
+  updateStatus = { 
+    ...updateStatus, 
+    status: 'error', 
+    message: `Update-Fehler: ${err.message}`,
+    error: err.message
+  };
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send('update-status', updateStatus);
+  }
+});
+
 ipcMain.handle('update-check', async () => {
-  return { success: true, updateAvailable: false, message: 'Keine Updates verfügbar' };
+  try {
+    const result = await autoUpdater.checkForUpdates();
+    return { success: true, updateInfo: result?.updateInfo };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
 });
 
 ipcMain.handle('update-download', async () => {
-  return { success: false, message: 'Auto-Update nicht konfiguriert' };
+  try {
+    await autoUpdater.downloadUpdate();
+    return { success: true };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
 });
 
 ipcMain.handle('update-install', async () => {
-  return { success: false, message: 'Auto-Update nicht konfiguriert' };
+  try {
+    autoUpdater.quitAndInstall(false, true);
+    return { success: true };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
 });
 
 ipcMain.handle('update-get-status', async () => {
   const { VERSION } = require('./src/config/version');
   return { 
-    status: 'idle', 
-    message: 'Keine Updates verfügbar',
+    ...updateStatus,
     currentVersion: VERSION
   };
 });
