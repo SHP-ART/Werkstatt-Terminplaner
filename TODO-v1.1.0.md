@@ -29,13 +29,20 @@ Eine neue Übersicht in "🏗️ Planung & Zuweisung (Beta)" die alle schwebende
 Ersatzautos sollen automatisch zur Abholzeit des Kunden wieder verfügbar werden. Das System plant die Rückgabe basierend auf der Abholzeit des Termins.
 
 ### Aufgaben
-- [ ] Ersatzauto-Verfügbarkeit bis `abholung_zeit` des Termins blockieren
-- [ ] Neue Übersicht "Ersatzauto-Verfügbarkeit" erstellen
-- [ ] Anzeige: Welches Ersatzauto ist wann belegt
-- [ ] Warnung bei Doppelbuchung (Ersatzauto noch nicht zurück)
-- [ ] Kalender-Ansicht für Ersatzauto-Belegung
-- [ ] Bei Termin-Erstellung: Prüfen ob Ersatzauto zur gewünschten Zeit verfügbar
-- [ ] Benachrichtigung wenn Ersatzauto zurückgegeben werden soll
+- [x] Ersatzauto-Verfügbarkeit bis `abholung_zeit` des Termins blockieren
+- [x] Neue Übersicht "Ersatzauto-Verfügbarkeit" erstellen
+- [x] Anzeige: Welches Ersatzauto ist wann belegt
+- [x] Warnung bei Doppelbuchung (Ersatzauto noch nicht zurück) - **Zeigt Details welche Termine blockieren**
+- [x] Kalender-Ansicht für Ersatzauto-Belegung (5-Wochen-Übersicht)
+- [x] Bei Termin-Erstellung: Prüfen ob Ersatzauto zur gewünschten Zeit verfügbar
+- [x] Dashboard-Widget für heute fällige Rückgaben
+
+### Implementierte Features
+- **Verfügbarkeitsprüfung**: Zeigt "X von Y frei" beim Termin-Anlegen
+- **Konflikt-Details**: Bei "Alle vergeben" werden die blockierenden Termine mit Kunde, Kennzeichen und Bis-Datum angezeigt
+- **Dashboard-Widget**: "Heute fällige Ersatzauto-Rückgaben" zeigt erwartete Rückgaben mit Uhrzeit, Kunde, Kennzeichen
+- **Überfällig-Warnung**: Rückgaben die über der erwarteten Zeit sind werden rot markiert
+- **5-Wochen-Kalender**: Verfügbarkeits-Übersicht im Ersatzauto-Tab
 
 ### Technische Umsetzung
 - Neue Tabelle oder Feld für Ersatzauto-Buchungen
@@ -174,13 +181,30 @@ Ein neues Backup soll:
 ## Priorität
 1. ~~Bug 1 (Schwebender Termin Datum)~~ - ✅ Erledigt
 2. Bug 2 (Datum beim Anlegen) - **Kritisch**
-3. Bug 3 (Backup Datum/Zeit) - Mittel
-4. Feature 1 (Schwebende Termine Übersicht) - Hohe Priorität
-5. Feature 2 (Ersatzautos) - Mittlere Priorität
+3. ~~Bug 3 (Backup Datum/Zeit)~~ - ✅ Erledigt
+4. ~~Feature 1 (Schwebende Termine Übersicht)~~ - ✅ Erledigt
+5. ~~Feature 2 (Ersatzautos)~~ - ✅ Erledigt
 
 ---
 
 ## ✅ Erledigte Verbesserungen
+
+### Shift+Click Schnell-Status in Planung (erledigt)
+- **Feature**: Mit Shift+Klick auf einen Termin-Balken in "🏗️ Planung & Zuweisung" erscheint ein Schnell-Status-Dialog
+- **Funktionen**:
+  - Bei Status "geplant": Button zum Setzen auf "In Arbeit"
+  - Bei Status "in_arbeit": Frage ob fertig → setzt auf "abgeschlossen" mit tatsächlicher Zeit
+  - Bei Abschluss: Balken wird visuell auf die tatsächliche Arbeitszeit gekürzt
+  - Auslastung bleibt unverändert (verwendet weiterhin geschätzte Zeit)
+- **Dateien**:
+  - `frontend/src/components/app.js`: `showSchnellStatusDialog()`, `setzeSchnellStatus()`, `updateTimelineBlockVisual()`
+  - `frontend/src/styles/style.css`: `.schnell-status-dialog`, `.btn-schnell-status`
+- **Hinweis**: Das ⇧-Symbol erscheint beim Hover über Termin-Balken als Hinweis auf die Shift+Click-Funktion
+
+### Bug 3: Backup verwendet lokale Zeit (erledigt)
+- **Problem**: `new Date().toISOString()` verwendete UTC-Zeit statt lokaler Zeit im Backup-Dateinamen
+- **Lösung**: Lokale Zeitkomponenten verwenden (`getFullYear()`, `getMonth()`, `getHours()` etc.)
+- **Neues Format**: `werkstatt_backup_2026-01-08T17-30-00.db`
 
 ### Bug 1: Schwebender Termin Datum beim Drop (erledigt)
 - **Problem**: Beim Verschieben eines schwebenden Termins auf einen anderen Tag wurde nur die Startzeit aktualisiert, nicht das Datum

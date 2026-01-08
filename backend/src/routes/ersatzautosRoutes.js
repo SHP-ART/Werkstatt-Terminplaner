@@ -11,6 +11,9 @@ router.get('/aktiv', ersatzautosController.getActive);
 // Aktuelle Buchungen (heute und laufende)
 router.get('/buchungen/aktuell', ersatzautosController.getAktuelleBuchungen);
 
+// Heute fällige Rückgaben
+router.get('/rueckgaben/heute', ersatzautosController.getHeuteRueckgaben);
+
 // Verfügbarkeit für Datum
 router.get('/verfuegbarkeit/:datum', ersatzautosController.getVerfuegbarkeit);
 

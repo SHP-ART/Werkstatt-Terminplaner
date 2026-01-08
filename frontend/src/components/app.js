@@ -678,6 +678,9 @@ class App {
     // Nur anzeigen wenn Checkbox aktiviert ist
     if (!checkbox.checked) {
       statusEl.style.display = 'none';
+      // Entferne Details-Container falls vorhanden
+      const detailsEl = document.getElementById('ersatzautoDetails');
+      if (detailsEl) detailsEl.remove();
       return;
     }
     
@@ -698,13 +701,59 @@ class App {
       if (istVerfuegbar) {
         statusEl.className = 'ersatzauto-status verfuegbar';
         text.textContent = `${verfuegbarkeit.verfuegbar} von ${verfuegbarkeit.gesamt} frei`;
+        // Entferne alte Details
+        const detailsEl = document.getElementById('ersatzautoDetails');
+        if (detailsEl) detailsEl.remove();
       } else {
         statusEl.className = 'ersatzauto-status nicht-verfuegbar';
         text.textContent = `Alle ${verfuegbarkeit.gesamt} vergeben`;
+        
+        // Lade und zeige Details, welche Termine die Autos belegen
+        this.showErsatzautoKonfliktDetails(datum, statusEl);
       }
     } catch (error) {
       console.error('Fehler beim Prüfen der Ersatzauto-Verfügbarkeit:', error);
       statusEl.style.display = 'none';
+    }
+  }
+
+  // Zeige Details bei Ersatzauto-Konflikt
+  async showErsatzautoKonfliktDetails(datum, statusEl) {
+    try {
+      const details = await ErsatzautosService.getVerfuegbarkeitDetails(datum);
+      
+      // Entferne alten Details-Container falls vorhanden
+      let detailsEl = document.getElementById('ersatzautoDetails');
+      if (detailsEl) detailsEl.remove();
+      
+      if (details.termine && details.termine.length > 0) {
+        detailsEl = document.createElement('div');
+        detailsEl.id = 'ersatzautoDetails';
+        detailsEl.className = 'ersatzauto-konflikt-details';
+        
+        const terminListe = details.termine.slice(0, 3).map(t => 
+          `<div class="konflikt-termin">
+            <span class="konflikt-kunde">${t.kunde_name || 'Unbekannt'}</span>
+            <span class="konflikt-kennzeichen">${t.kennzeichen || '-'}</span>
+            <span class="konflikt-bis">bis ${t.ersatzauto_bis_datum || t.abholung_datum || t.datum}</span>
+          </div>`
+        ).join('');
+        
+        const mehrText = details.termine.length > 3 
+          ? `<div class="konflikt-mehr">+${details.termine.length - 3} weitere</div>` 
+          : '';
+        
+        detailsEl.innerHTML = `
+          <div class="konflikt-header">⚠️ Diese Termine belegen Ersatzautos:</div>
+          ${terminListe}
+          ${mehrText}
+        `;
+        
+        // Füge nach dem Status-Element ein
+        statusEl.parentNode.insertBefore(detailsEl, statusEl.nextSibling);
+      }
+    } catch (error) {
+      console.error('Fehler beim Laden der Ersatzauto-Konflikt-Details:', error);
     }
   }
 
@@ -7102,6 +7151,31 @@ class App {
   // ============================================
 
   /**
+   * Öffnet das Erweiterungs-Modal für einen bestimmten Termin (aus Schnell-Status-Dialog)
+   */
+  async openErweiterungModalForTermin(terminId) {
+    // Setze currentDetailTerminId und rufe dann openErweiterungModal auf
+    this.currentDetailTerminId = terminId;
+    
+    // Stelle sicher, dass der Termin im Cache ist
+    if (!this.termineById[terminId]) {
+      try {
+        const termin = await TermineService.getById(terminId);
+        if (termin) {
+          this.termineById[terminId] = termin;
+        }
+      } catch (error) {
+        console.error('Fehler beim Laden des Termins:', error);
+        this.showToast('❌ Termin konnte nicht geladen werden', 'error');
+        return;
+      }
+    }
+    
+    // Öffne das normale Erweiterungs-Modal
+    await this.openErweiterungModal();
+  }
+
+  /**
    * Öffnet das Erweiterungs-Modal für den aktuellen Termin
    */
   async openErweiterungModal() {
@@ -8319,6 +8393,7 @@ class App {
     await this.loadDashboardTermineHeute();
     await this.loadWochenUebersicht();
     await this.loadMonatsUebersicht();
+    await this.loadErsatzautoRueckgaben();
   }
 
   async loadDashboardStats() {
@@ -9144,6 +9219,60 @@ class App {
     } catch (error) {
       console.error('Fehler beim Laden der Monatsübersicht:', error);
       container.innerHTML = '<div class="loading">Monatsübersicht konnte nicht geladen werden</div>';
+    }
+  }
+
+  // Heute fällige Ersatzauto-Rückgaben laden
+  async loadErsatzautoRueckgaben() {
+    const section = document.getElementById('ersatzautoRueckgabenSection');
+    const container = document.getElementById('ersatzautoRueckgabenListe');
+    if (!section || !container) return;
+
+    try {
+      const rueckgaben = await ErsatzautosService.getHeuteRueckgaben();
+      
+      if (!rueckgaben || rueckgaben.length === 0) {
+        section.style.display = 'none';
+        return;
+      }
+
+      section.style.display = 'block';
+      
+      container.innerHTML = rueckgaben.map(r => {
+        const rueckgabeZeit = r.rueckgabe_zeit || r.abholung_zeit || r.ersatzauto_bis_zeit || '18:00';
+        const jetzt = new Date();
+        const [h, m] = rueckgabeZeit.split(':').map(Number);
+        const rueckgabeDate = new Date();
+        rueckgabeDate.setHours(h, m, 0, 0);
+        
+        const istUeberfaellig = jetzt > rueckgabeDate;
+        const statusClass = istUeberfaellig ? 'ueberfaellig' : 'erwartet';
+        const statusIcon = istUeberfaellig ? '⚠️' : '🕐';
+        const statusText = istUeberfaellig ? 'Überfällig!' : 'Erwartet';
+        
+        return `
+          <div class="rueckgabe-karte ${statusClass}">
+            <div class="rueckgabe-header">
+              <span class="rueckgabe-zeit">${statusIcon} ${rueckgabeZeit} Uhr</span>
+              <span class="rueckgabe-status">${statusText}</span>
+            </div>
+            <div class="rueckgabe-kunde">
+              <strong>${r.kunde_name || 'Unbekannt'}</strong>
+            </div>
+            <div class="rueckgabe-details">
+              <span class="rueckgabe-kennzeichen">🚗 ${r.kennzeichen || '-'}</span>
+              ${r.kunde_telefon ? `<span class="rueckgabe-telefon">📞 ${r.kunde_telefon}</span>` : ''}
+            </div>
+            <div class="rueckgabe-termin">
+              <small>Termin: ${r.termin_nr || '-'} | Seit: ${this.formatDate(r.datum)}</small>
+            </div>
+          </div>
+        `;
+      }).join('');
+      
+    } catch (error) {
+      console.error('Fehler beim Laden der Ersatzauto-Rückgaben:', error);
+      section.style.display = 'none';
     }
   }
 
@@ -10666,6 +10795,10 @@ class App {
           <p style="margin-bottom: 15px; color: #64748b;">Wie lange soll das Fahrzeug gesperrt werden?</p>
           
           <div class="sperren-optionen">
+            <button class="sperren-option-btn sperren-heute" onclick="app.sperrenFuerTage(${id}, 0)" title="Fahrzeug ist heute zurück und ab morgen wieder verfügbar">
+              <span class="option-tage">☀️</span>
+              <span class="option-label">Nur heute</span>
+            </button>
             <button class="sperren-option-btn" onclick="app.sperrenFuerTage(${id}, 1)">
               <span class="option-tage">1</span>
               <span class="option-label">Tag</span>
@@ -10783,6 +10916,583 @@ class App {
     if (modal) {
       modal.classList.remove('active');
       setTimeout(() => modal.remove(), 300);
+    }
+  }
+
+  // ========== SCHNELL-STATUS-WECHSEL (Shift+Click in Planung) ==========
+  
+  // Schnell-Status-Dialog für Timeline-Termin anzeigen
+  showSchnellStatusDialog(termin, element, startzeit, dauer) {
+    // Alten Dialog entfernen falls vorhanden
+    const existingDialog = document.getElementById('schnellStatusDialog');
+    if (existingDialog) existingDialog.remove();
+    
+    const currentStatus = termin.status || 'geplant';
+    const terminId = termin.id;
+    
+    // Aktuelle Uhrzeit
+    const jetzt = new Date();
+    const aktuelleZeit = `${String(jetzt.getHours()).padStart(2, '0')}:${String(jetzt.getMinutes()).padStart(2, '0')}`;
+    
+    // Berechne wie lange der Termin schon läuft
+    const [startH, startM] = startzeit.split(':').map(Number);
+    const startMinuten = startH * 60 + startM;
+    const jetztMinuten = jetzt.getHours() * 60 + jetzt.getMinutes();
+    const verstricheneMinuten = Math.max(0, jetztMinuten - startMinuten);
+    const verstricheneText = verstricheneMinuten >= 60 
+      ? `${Math.floor(verstricheneMinuten/60)}h ${verstricheneMinuten%60}min` 
+      : `${verstricheneMinuten} Min`;
+    
+    // Arbeiten aus Termin extrahieren
+    const arbeitenText = this.getTerminArbeitenText(termin);
+    
+    // Abholzeit formatieren
+    const abholzeitText = termin.abholung_zeit || termin.abhol_zeit || '—';
+    const abholDatumText = termin.abhol_datum ? this.formatDatum(termin.abhol_datum) : (termin.datum ? this.formatDatum(termin.datum) : '—');
+    
+    // Dauer formatieren
+    const dauerText = dauer >= 60 
+      ? `${Math.floor(dauer/60)}h ${dauer%60 > 0 ? (dauer%60) + 'min' : ''}`.trim()
+      : `${dauer} min`;
+    
+    // Dialog erstellen
+    const dialog = document.createElement('div');
+    dialog.id = 'schnellStatusDialog';
+    dialog.className = 'schnell-status-dialog';
+    
+    // Status-spezifischer Header und Aktionen
+    let statusHeader = '';
+    let statusAktionen = '';
+    
+    if (currentStatus === 'geplant') {
+      statusHeader = `
+        <div class="schnell-status-header">
+          <span class="status-icon">🔵</span>
+          <span>Status: <strong>Geplant</strong></span>
+        </div>`;
+      statusAktionen = `
+        <div class="schnell-status-aktion">
+          <button class="btn-schnell-status btn-in-arbeit" data-action="in_arbeit">
+            🔧 In Arbeit setzen
+          </button>
+        </div>`;
+    } else if (currentStatus === 'in_arbeit') {
+      statusHeader = `
+        <div class="schnell-status-header">
+          <span class="status-icon">🔧</span>
+          <span>Status: <strong>In Arbeit</strong></span>
+        </div>`;
+      statusAktionen = `
+        <div class="schnell-status-frage">
+          <p>⏱️ Läuft seit: <strong>${verstricheneText}</strong> (aktuell ${aktuelleZeit})</p>
+        </div>
+        <div class="schnell-status-zeit-eingabe">
+          <label>🏁 Tatsächliche Arbeitszeit:</label>
+          <div class="zeit-eingabe-row">
+            <input type="number" id="schnellZeitStunden" min="0" max="23" value="${Math.floor(verstricheneMinuten/60)}" placeholder="Std"> h
+            <input type="number" id="schnellZeitMinuten" min="0" max="59" value="${verstricheneMinuten%60}" placeholder="Min"> min
+          </div>
+        </div>
+        <div class="schnell-status-aktionen">
+          <button class="btn-schnell-status btn-abgeschlossen" data-action="abgeschlossen-custom">
+            ✅ Abschließen
+          </button>
+          <button class="btn-schnell-status btn-weiter" data-action="close">
+            ⏳ Läuft noch
+          </button>
+        </div>`;
+    } else if (currentStatus === 'abgeschlossen') {
+      statusHeader = `
+        <div class="schnell-status-header">
+          <span class="status-icon">✅</span>
+          <span>Status: <strong>Abgeschlossen</strong></span>
+        </div>`;
+      statusAktionen = `
+        <div class="schnell-status-aktion">
+          <button class="btn-schnell-status btn-zurueck" data-action="in_arbeit">
+            🔙 Zurück auf "In Arbeit"
+          </button>
+        </div>`;
+    } else {
+      statusHeader = `
+        <div class="schnell-status-header">
+          <span class="status-icon">❓</span>
+          <span>Status: <strong>${currentStatus}</strong></span>
+        </div>`;
+      statusAktionen = `
+        <div class="schnell-status-aktion">
+          <button class="btn-schnell-status btn-in-arbeit" data-action="in_arbeit">
+            🔧 In Arbeit setzen
+          </button>
+        </div>`;
+    }
+    
+    dialog.innerHTML = `
+      <div class="schnell-status-content erweitert">
+        <button class="schnell-status-close" data-action="close">×</button>
+        
+        ${statusHeader}
+        
+        <div class="schnell-status-details">
+          <div class="detail-row titel">
+            <span class="detail-label">📋</span>
+            <span class="detail-value"><strong>${termin.termin_nr}</strong> — ${termin.kunde_name || 'Unbekannt'}</span>
+          </div>
+          <div class="detail-row">
+            <span class="detail-label">🚗</span>
+            <span class="detail-value">${termin.kennzeichen || '—'}</span>
+          </div>
+          <div class="detail-row">
+            <span class="detail-label">🔧</span>
+            <span class="detail-value arbeit-text">${arbeitenText}</span>
+          </div>
+          <div class="detail-divider"></div>
+          <div class="detail-row">
+            <span class="detail-label">⏱️</span>
+            <span class="detail-value">Geplant: <strong>${dauerText}</strong> ab ${startzeit}</span>
+          </div>
+          <div class="detail-row">
+            <span class="detail-label">📅</span>
+            <span class="detail-value">Abholung: <strong>${abholzeitText}</strong> (${abholDatumText})</span>
+          </div>
+        </div>
+        
+        ${statusAktionen}
+        
+        <div class="schnell-status-footer">
+          <button class="btn-schnell-link" data-action="erweitern" title="Auftrag erweitern">
+            ➕ Erweitern
+          </button>
+          <button class="btn-schnell-link" data-action="erweitert" title="Mehr bearbeiten">
+            ✏️ Mehr...
+          </button>
+        </div>
+      </div>
+    `;
+    
+    // Position berechnen (nahe am Element)
+    const rect = element.getBoundingClientRect();
+    document.body.appendChild(dialog);
+    
+    // Event-Listener für Buttons hinzufügen (Arrow-Function behält this-Kontext)
+    dialog.querySelectorAll('[data-action]').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const action = btn.dataset.action;
+        
+        if (action === 'close') {
+          this.closeSchnellStatusDialog();
+        } else if (action === 'abgeschlossen') {
+          const zeit = parseInt(btn.dataset.zeit) || null;
+          this.setzeSchnellStatus(terminId, 'abgeschlossen', zeit);
+        } else if (action === 'abgeschlossen-custom') {
+          // Tatsächliche Zeit aus Eingabefeldern lesen
+          const stunden = parseInt(document.getElementById('schnellZeitStunden')?.value) || 0;
+          const minuten = parseInt(document.getElementById('schnellZeitMinuten')?.value) || 0;
+          const gesamtMinuten = stunden * 60 + minuten;
+          this.setzeSchnellStatus(terminId, 'abgeschlossen', gesamtMinuten > 0 ? gesamtMinuten : null);
+        } else if (action === 'erweitern') {
+          // Auftrag erweitern - Modal öffnen
+          this.closeSchnellStatusDialog();
+          this.openErweiterungModalForTermin(terminId);
+        } else if (action === 'erweitert') {
+          // Erweitertes Bearbeitungs-Popup öffnen
+          this.closeSchnellStatusDialog();
+          this.showSchnellBearbeitungDialog(termin);
+        } else {
+          this.setzeSchnellStatus(terminId, action);
+        }
+      });
+    });
+    
+    // Dialog positionieren
+    const dialogRect = dialog.getBoundingClientRect();
+    let left = rect.left + rect.width / 2 - dialogRect.width / 2;
+    let top = rect.bottom + 10;
+    
+    // Bildschirmgrenzen prüfen
+    if (left < 10) left = 10;
+    if (left + dialogRect.width > window.innerWidth - 10) {
+      left = window.innerWidth - dialogRect.width - 10;
+    }
+    if (top + dialogRect.height > window.innerHeight - 10) {
+      top = rect.top - dialogRect.height - 10;
+    }
+    
+    dialog.style.left = `${left}px`;
+    dialog.style.top = `${top}px`;
+    
+    // Animation
+    setTimeout(() => dialog.classList.add('active'), 10);
+    
+    // Click außerhalb schließt Dialog
+    setTimeout(() => {
+      document.addEventListener('click', this.handleSchnellStatusOutsideClick);
+    }, 100);
+  }
+  
+  // Click außerhalb des Dialogs
+  handleSchnellStatusOutsideClick = (e) => {
+    const dialog = document.getElementById('schnellStatusDialog');
+    if (dialog && !dialog.contains(e.target)) {
+      this.closeSchnellStatusDialog();
+    }
+  }
+  
+  // Dialog schließen
+  closeSchnellStatusDialog() {
+    const dialog = document.getElementById('schnellStatusDialog');
+    if (dialog) {
+      dialog.classList.remove('active');
+      setTimeout(() => dialog.remove(), 200);
+    }
+    document.removeEventListener('click', this.handleSchnellStatusOutsideClick);
+  }
+  
+  // Schnell-Bearbeitungs-Dialog (erweitertes Popup)
+  showSchnellBearbeitungDialog(termin) {
+    // Alten Dialog entfernen falls vorhanden
+    const existingDialog = document.getElementById('schnellBearbeitungDialog');
+    if (existingDialog) existingDialog.remove();
+    
+    const terminId = termin.id;
+    
+    // Aktuelle Werte
+    const arbeitenText = this.getTerminArbeitenText(termin);
+    const abholzeit = termin.abholung_zeit || termin.abhol_zeit || '';
+    const abholDatum = termin.abhol_datum || termin.datum || '';
+    
+    // Fertigstellungszeit berechnen (Startzeit + Dauer)
+    let fertigstellungszeit = termin.fertigstellung_zeit || termin.geplante_fertigstellung || '';
+    if (!fertigstellungszeit) {
+      // Berechne aus Startzeit + Dauer
+      const startzeit = termin.startzeit || termin.bring_zeit || '08:00';
+      const dauer = termin.geschaetzte_dauer || this.getTerminGesamtdauer(termin) || 60;
+      fertigstellungszeit = this.berechneEndzeit(startzeit, dauer);
+    }
+    
+    // Dialog erstellen
+    const dialog = document.createElement('div');
+    dialog.id = 'schnellBearbeitungDialog';
+    dialog.className = 'schnell-bearbeitung-dialog';
+    
+    dialog.innerHTML = `
+      <div class="schnell-bearbeitung-overlay"></div>
+      <div class="schnell-bearbeitung-content">
+        <div class="schnell-bearbeitung-header">
+          <h3>✏️ ${termin.termin_nr} bearbeiten</h3>
+          <button class="schnell-bearbeitung-close" data-action="close">×</button>
+        </div>
+        
+        <div class="schnell-bearbeitung-info">
+          <span>🚗 ${termin.kennzeichen || '—'}</span>
+          <span>👤 ${termin.kunde_name || 'Unbekannt'}</span>
+        </div>
+        
+        <div class="schnell-bearbeitung-form">
+          <div class="form-group">
+            <label>🔧 Arbeit / Beschreibung</label>
+            <textarea id="schnellArbeit" rows="3" placeholder="Arbeiten beschreiben...">${termin.arbeit || arbeitenText || ''}</textarea>
+          </div>
+          
+          <div class="form-row">
+            <div class="form-group">
+              <label>📅 Abholdatum</label>
+              <input type="date" id="schnellAbholDatum" value="${abholDatum}">
+            </div>
+            <div class="form-group">
+              <label>🕐 Abholzeit</label>
+              <input type="time" id="schnellAbholZeit" value="${abholzeit}">
+            </div>
+          </div>
+          
+          <div class="form-row">
+            <div class="form-group">
+              <label>🕒 Startzeit</label>
+              <input type="time" id="schnellStartzeit" value="${termin.startzeit || termin.bring_zeit || '08:00'}">
+            </div>
+            <div class="form-group">
+              <label>🏁 Fertigstellungszeit</label>
+              <input type="time" id="schnellFertigstellung" value="${fertigstellungszeit}">
+            </div>
+          </div>
+          
+          <div class="form-row">
+            <div class="form-group">
+              <label>⏱️ Geschätzte Dauer (Min)</label>
+              <input type="number" id="schnellDauer" min="0" value="${termin.geschaetzte_zeit || this.getTerminGesamtdauer(termin) || 60}">
+            </div>
+            <div class="form-group">
+              <label>📝 Notizen</label>
+              <input type="text" id="schnellNotizen" value="${termin.notizen || ''}" placeholder="Kurze Notiz...">
+            </div>
+          </div>
+        </div>
+        
+        <div class="schnell-bearbeitung-footer">
+          <button class="btn-schnell-cancel" data-action="close">Abbrechen</button>
+          <button class="btn-schnell-save" data-action="speichern">💾 Speichern</button>
+        </div>
+      </div>
+    `;
+    
+    document.body.appendChild(dialog);
+    
+    // Event-Listener
+    dialog.querySelectorAll('[data-action]').forEach(btn => {
+      btn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        const action = btn.dataset.action;
+        
+        if (action === 'close') {
+          this.closeSchnellBearbeitungDialog();
+        } else if (action === 'speichern') {
+          await this.speichereSchnellBearbeitung(terminId);
+        }
+      });
+    });
+    
+    // Overlay schließt Dialog
+    dialog.querySelector('.schnell-bearbeitung-overlay').addEventListener('click', () => {
+      this.closeSchnellBearbeitungDialog();
+    });
+    
+    // Animation
+    setTimeout(() => dialog.classList.add('active'), 10);
+    
+    // Focus auf erstes Feld
+    setTimeout(() => {
+      document.getElementById('schnellArbeit')?.focus();
+    }, 100);
+  }
+  
+  // Schnell-Bearbeitungs-Dialog schließen
+  closeSchnellBearbeitungDialog() {
+    const dialog = document.getElementById('schnellBearbeitungDialog');
+    if (dialog) {
+      dialog.classList.remove('active');
+      setTimeout(() => dialog.remove(), 200);
+    }
+  }
+  
+  // Schnell-Bearbeitung speichern
+  async speichereSchnellBearbeitung(terminId) {
+    try {
+      const updateData = {};
+      const termin = this.termineById[terminId];
+      
+      // Werte aus Formular lesen
+      const arbeit = document.getElementById('schnellArbeit')?.value?.trim();
+      const abholDatum = document.getElementById('schnellAbholDatum')?.value;
+      const abholZeit = document.getElementById('schnellAbholZeit')?.value;
+      const startzeit = document.getElementById('schnellStartzeit')?.value;
+      const fertigstellung = document.getElementById('schnellFertigstellung')?.value;
+      let dauer = parseInt(document.getElementById('schnellDauer')?.value) || null;
+      const notizen = document.getElementById('schnellNotizen')?.value?.trim();
+      
+      // Wenn Fertigstellungszeit geändert wurde, berechne neue Dauer
+      if (fertigstellung && startzeit) {
+        const [startH, startM] = startzeit.split(':').map(Number);
+        const [endH, endM] = fertigstellung.split(':').map(Number);
+        const startMinuten = startH * 60 + startM;
+        const endMinuten = endH * 60 + endM;
+        const berechnungsDauer = endMinuten - startMinuten;
+        
+        // Nur übernehmen wenn positiv
+        if (berechnungsDauer > 0) {
+          dauer = berechnungsDauer;
+        }
+      }
+      
+      // Nur geänderte Felder übernehmen
+      if (arbeit !== undefined) updateData.arbeit = arbeit;
+      if (abholDatum) updateData.abhol_datum = abholDatum;
+      if (abholZeit) updateData.abholung_zeit = abholZeit;
+      if (startzeit) updateData.startzeit = startzeit;
+      if (fertigstellung) updateData.fertigstellung_zeit = fertigstellung;
+      if (dauer) {
+        // Bei "in_arbeit" oder "abgeschlossen" -> tatsaechliche_zeit für Balkenlänge
+        // Sonst -> geschaetzte_zeit
+        if (termin && (termin.status === 'in_arbeit' || termin.status === 'abgeschlossen')) {
+          updateData.tatsaechliche_zeit = dauer;
+        } else {
+          updateData.geschaetzte_zeit = dauer;
+        }
+      }
+      if (notizen !== undefined) updateData.notizen = notizen;
+      
+      // Speichern
+      await TermineService.update(terminId, updateData);
+      
+      // Cache aktualisieren
+      if (this.termineById[terminId]) {
+        Object.assign(this.termineById[terminId], updateData);
+      }
+      
+      // Dialog schließen
+      this.closeSchnellBearbeitungDialog();
+      
+      // Feedback
+      this.showToast('✅ Termin aktualisiert', 'success');
+      
+      // Auslastung neu laden falls aktiv
+      if (document.getElementById('auslastung-dragdrop')?.classList.contains('active')) {
+        this.loadAuslastungDragDrop();
+      }
+      
+    } catch (error) {
+      console.error('Fehler beim Speichern:', error);
+      this.showToast('❌ Fehler beim Speichern', 'error');
+    }
+  }
+  
+  // Schnell-Status setzen
+  async setzeSchnellStatus(terminId, neuerStatus, tatsaechlicheMinuten = null) {
+    try {
+      const updateData = { status: neuerStatus };
+      
+      // Bei Abschluss: tatsächliche Zeit setzen
+      if (neuerStatus === 'abgeschlossen' && tatsaechlicheMinuten !== null) {
+        updateData.tatsaechliche_zeit = tatsaechlicheMinuten;
+      }
+      
+      await TermineService.update(terminId, updateData);
+      
+      // Cache aktualisieren
+      if (this.termineById[terminId]) {
+        this.termineById[terminId].status = neuerStatus;
+        if (tatsaechlicheMinuten !== null) {
+          this.termineById[terminId].tatsaechliche_zeit = tatsaechlicheMinuten;
+        }
+      }
+      
+      // Dialog schließen
+      this.closeSchnellStatusDialog();
+      
+      // Feedback
+      const statusEmoji = {
+        'geplant': '🔵',
+        'in_arbeit': '🔧',
+        'abgeschlossen': '✅'
+      };
+      
+      let message = `${statusEmoji[neuerStatus] || '✓'} Status geändert: ${neuerStatus.replace('_', ' ')}`;
+      if (neuerStatus === 'abgeschlossen' && tatsaechlicheMinuten !== null) {
+        const zeitText = tatsaechlicheMinuten >= 60 
+          ? `${Math.floor(tatsaechlicheMinuten/60)}h ${tatsaechlicheMinuten%60}min`
+          : `${tatsaechlicheMinuten} Min`;
+        message += ` (Arbeitszeit: ${zeitText})`;
+      }
+      this.showToast(message, 'success');
+      
+      // Timeline aktualisieren (visuell den Balken kürzen bei Abschluss)
+      if (neuerStatus === 'abgeschlossen' && tatsaechlicheMinuten !== null) {
+        this.updateTimelineBlockVisual(terminId, tatsaechlicheMinuten);
+      } else {
+        // Nur Status-Klasse aktualisieren
+        this.updateTimelineBlockStatus(terminId, neuerStatus);
+      }
+      
+      // Dashboard und andere Views aktualisieren
+      this.loadDashboard();
+      await this.loadHeuteTermine();
+      
+    } catch (error) {
+      console.error('Fehler beim Status-Wechsel:', error);
+      this.showToast('❌ Fehler beim Status-Wechsel', 'error');
+    }
+  }
+  
+  // Timeline-Block Status visuell aktualisieren
+  updateTimelineBlockStatus(terminId, neuerStatus) {
+    // Status-Farben für border-left (überschreibt Inline-Styles)
+    const statusFarben = {
+      'geplant': '#1d4ed8',
+      'in_arbeit': '#b45309',
+      'in-arbeit': '#b45309',
+      'abgeschlossen': '#047857'
+    };
+    
+    // Status-Hintergründe
+    const statusHintergrund = {
+      'geplant': 'linear-gradient(135deg, #3b82f6 0%, #60a5fa 100%)',
+      'in_arbeit': 'linear-gradient(135deg, #f59e0b 0%, #fbbf24 100%)',
+      'in-arbeit': 'linear-gradient(135deg, #f59e0b 0%, #fbbf24 100%)',
+      'abgeschlossen': 'linear-gradient(135deg, #10b981 0%, #34d399 100%)'
+    };
+    
+    const statusKey = neuerStatus.toLowerCase().replace(' ', '-');
+    
+    const block = document.getElementById(`timeline-termin-${terminId}`);
+    if (block) {
+      // Alte Status-Klassen entfernen
+      block.classList.remove('status-geplant', 'status-in_arbeit', 'status-in-arbeit', 'status-abgeschlossen');
+      // Neue Status-Klasse hinzufügen
+      block.classList.add(`status-${statusKey}`);
+      // Inline-Styles direkt setzen um CSS zu überschreiben
+      if (statusFarben[statusKey]) {
+        block.style.borderLeft = `4px solid ${statusFarben[statusKey]}`;
+      }
+      if (statusHintergrund[statusKey]) {
+        block.style.background = statusHintergrund[statusKey];
+      }
+    }
+    
+    // Auch Arbeit-Blöcke aktualisieren
+    document.querySelectorAll(`[id^="timeline-arbeit-${terminId}-"]`).forEach(arbeitBlock => {
+      arbeitBlock.classList.remove('status-geplant', 'status-in_arbeit', 'status-in-arbeit', 'status-abgeschlossen');
+      arbeitBlock.classList.add(`status-${statusKey}`);
+      // Inline-Styles direkt setzen um CSS zu überschreiben
+      if (statusFarben[statusKey]) {
+        arbeitBlock.style.borderLeft = `4px solid ${statusFarben[statusKey]}`;
+      }
+      if (statusHintergrund[statusKey]) {
+        arbeitBlock.style.background = statusHintergrund[statusKey];
+      }
+    });
+  }
+  
+  // Timeline-Block visuell kürzen (bei Abschluss mit tatsächlicher Zeit)
+  // Nur kürzen, nicht verlängern!
+  updateTimelineBlockVisual(terminId, tatsaechlicheMinuten) {
+    const block = document.getElementById(`timeline-termin-${terminId}`);
+    if (block) {
+      // Status aktualisieren
+      this.updateTimelineBlockStatus(terminId, 'abgeschlossen');
+      
+      // Ursprüngliche Dauer aus data-Attribut holen
+      const originalDauer = parseInt(block.dataset.dauer) || 0;
+      
+      // Nur kürzen wenn tatsächliche Zeit kürzer als geplant, NICHT verlängern
+      if (tatsaechlicheMinuten < originalDauer) {
+        // Breite anpassen (100px pro Stunde = 1.67px pro Minute)
+        const pixelPerMinute = 100 / 60;
+        const neueBreite = Math.max(tatsaechlicheMinuten * pixelPerMinute, 40); // Mindestbreite 40px
+        
+        // Animation für den Balken
+        block.style.transition = 'width 0.3s ease-out';
+        block.style.width = `${neueBreite}px`;
+      }
+      
+      // Termin-Info aktualisieren
+      const infoElement = block.querySelector('.termin-info');
+      if (infoElement) {
+        const zeitText = tatsaechlicheMinuten >= 60 
+          ? `${Math.floor(tatsaechlicheMinuten/60)}h ${tatsaechlicheMinuten%60 > 0 ? (tatsaechlicheMinuten%60) + 'min' : ''}`.trim()
+          : `${tatsaechlicheMinuten} min`;
+        const kundenName = infoElement.textContent.split('•')[0].trim();
+        infoElement.innerHTML = `${kundenName} • ✅ ${zeitText}`;
+      }
+      
+      // Fortsetzungs-Teil entfernen falls vorhanden (nur wenn gekürzt)
+      if (tatsaechlicheMinuten < originalDauer) {
+        const teil2 = document.getElementById(`timeline-termin-${terminId}-teil2`);
+        if (teil2) {
+          teil2.style.transition = 'opacity 0.3s ease-out';
+          teil2.style.opacity = '0';
+          setTimeout(() => teil2.remove(), 300);
+        }
+      }
     }
   }
 
@@ -15454,12 +16164,12 @@ class App {
       mitarbeiterListe.forEach(ma => {
         const maxMinuten = (ma.arbeitsstunden_pro_tag || 8) * 60;
         
-        // Aktuelle Auslastung aus API holen
+        // Aktuelle Auslastung aus API holen (belegt_minuten_roh = reine Arbeitszeit ohne Nebenzeit)
         let currentMinuten = 0;
         if (auslastungData && auslastungData.mitarbeiter_auslastung) {
           const maAuslastung = auslastungData.mitarbeiter_auslastung.find(m => m.mitarbeiter_id === ma.id);
           if (maAuslastung) {
-            currentMinuten = maAuslastung.gesamt_minuten || 0;
+            currentMinuten = maAuslastung.belegt_minuten_roh || maAuslastung.belegt_minuten || 0;
           }
         }
 
@@ -15488,12 +16198,12 @@ class App {
       lehrlingeListe.forEach(lehrling => {
         const maxMinuten = (lehrling.arbeitsstunden_pro_tag || 8) * 60;
         
-        // Aktuelle Auslastung aus API holen (Lehrlinge)
+        // Aktuelle Auslastung aus API holen (belegt_minuten_roh = reine Arbeitszeit ohne Nebenzeit)
         let currentMinuten = 0;
         if (auslastungData && auslastungData.lehrlinge_auslastung) {
           const lAuslastung = auslastungData.lehrlinge_auslastung.find(l => l.lehrling_id === lehrling.id);
           if (lAuslastung) {
-            currentMinuten = lAuslastung.gesamt_minuten || 0;
+            currentMinuten = lAuslastung.belegt_minuten_roh || lAuslastung.belegt_minuten || 0;
           }
         }
 
@@ -15530,6 +16240,9 @@ class App {
       });
 
       termine.forEach(termin => {
+        // Termin im Cache speichern für späteren Zugriff (z.B. Shift+Click)
+        this.termineById[termin.id] = termin;
+        
         // Schwebende Termine separat in eigenem Panel anzeigen (nicht hier)
         const istSchwebend = termin.ist_schwebend === 1 || termin.ist_schwebend === true;
         if (istSchwebend) {
@@ -15676,7 +16389,7 @@ class App {
         let currentMinuten = 0;
         if (auslastungData && auslastungData.mitarbeiter_auslastung) {
           const maAuslastung = auslastungData.mitarbeiter_auslastung.find(m => m.mitarbeiter_id === ma.id);
-          if (maAuslastung) currentMinuten = maAuslastung.gesamt_minuten || 0;
+          if (maAuslastung) currentMinuten = maAuslastung.belegt_minuten_roh || maAuslastung.belegt_minuten || 0;
         }
         
         const kapSpan = document.getElementById(`kapazitaet-ma-${ma.id}`);
@@ -15697,7 +16410,7 @@ class App {
         let currentMinuten = 0;
         if (auslastungData && auslastungData.lehrlinge_auslastung) {
           const lAuslastung = auslastungData.lehrlinge_auslastung.find(l => l.lehrling_id === lehrling.id);
-          if (lAuslastung) currentMinuten = lAuslastung.gesamt_minuten || 0;
+          if (lAuslastung) currentMinuten = lAuslastung.belegt_minuten_roh || lAuslastung.belegt_minuten || 0;
         }
         
         const kapSpan = document.getElementById(`kapazitaet-lehrling-${lehrling.id}`);
@@ -15920,6 +16633,17 @@ class App {
       this.loadTerminInForm(termin.id);
     });
 
+    // Shift+Click für schnellen Status-Wechsel
+    bar.addEventListener('click', (e) => {
+      if (e.shiftKey) {
+        e.preventDefault();
+        e.stopPropagation();
+        const aktuellerTermin = this.termineById[termin.id] || termin;
+        const startzeit = termin.startzeit || termin.bring_zeit || '08:00';
+        this.showSchnellStatusDialog(aktuellerTermin, bar, startzeit, dauer);
+      }
+    });
+
     return bar;
   }
 
@@ -16066,6 +16790,17 @@ class App {
       div.classList.remove('dragging');
       document.querySelectorAll('.timeline-track').forEach(zone => zone.classList.remove('drag-over'));
       this.removeDragTimeIndicator();
+    });
+
+    // Shift+Click für schnellen Status-Wechsel
+    div.addEventListener('click', (e) => {
+      if (e.shiftKey) {
+        e.preventDefault();
+        e.stopPropagation();
+        // Aktuellen Termin aus Cache holen (für aktuellen Status)
+        const aktuellerTermin = this.termineById[termin.id] || termin;
+        this.showSchnellStatusDialog(aktuellerTermin, div, startzeit, dauer);
+      }
     });
 
     return div;
@@ -16298,6 +17033,17 @@ class App {
         // Zeit-Indikator entfernen
         this.removeDragTimeIndicator();
       });
+
+      // Shift+Click für schnellen Status-Wechsel
+      div.addEventListener('click', (e) => {
+        if (e.shiftKey) {
+          e.preventDefault();
+          e.stopPropagation();
+          // Aktuellen Termin aus Cache holen (für aktuellen Status)
+          const aktuellerTermin = this.termineById[termin.id] || termin;
+          this.showSchnellStatusDialog(aktuellerTermin, div, startzeit, gesamtDauer);
+        }
+      });
     }
 
     return div;
@@ -16368,6 +17114,17 @@ class App {
       document.querySelectorAll('.timeline-track').forEach(zone => zone.classList.remove('drag-over'));
       // Zeit-Indikator entfernen
       this.removeDragTimeIndicator();
+    });
+
+    // Shift+Click für schnellen Status-Wechsel
+    div.addEventListener('click', (e) => {
+      if (e.shiftKey) {
+        e.preventDefault();
+        e.stopPropagation();
+        // Aktuellen Termin aus Cache holen (für aktuellen Status)
+        const aktuellerTermin = this.termineById[termin.id] || termin;
+        this.showSchnellStatusDialog(aktuellerTermin, div, startzeit, dauer);
+      }
     });
 
     return div;
@@ -17608,6 +18365,17 @@ class App {
       this.removeDragTimeIndicator();
     });
 
+    // Shift+Click für schnellen Status-Wechsel
+    card.addEventListener('click', (e) => {
+      if (e.shiftKey) {
+        e.preventDefault();
+        e.stopPropagation();
+        const aktuellerTermin = this.termineById[termin.id] || termin;
+        const startzeit = termin.startzeit || termin.bring_zeit || '08:00';
+        this.showSchnellStatusDialog(aktuellerTermin, card, startzeit, dauer);
+      }
+    });
+
     return card;
   }
 
@@ -17730,3 +18498,5 @@ class App {
 
 
 const app = new App();
+// App global verfügbar machen für onclick-Handler
+window.app = app;

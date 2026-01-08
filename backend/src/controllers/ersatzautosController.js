@@ -126,6 +126,17 @@ const ersatzautosController = {
     }
   },
 
+  // Heute fällige Rückgaben
+  getHeuteRueckgaben: async (req, res) => {
+    try {
+      const rueckgaben = await ErsatzautosModel.getHeuteRueckgaben();
+      res.json(rueckgaben);
+    } catch (err) {
+      console.error('Fehler beim Abrufen der heute fälligen Rückgaben:', err);
+      res.status(500).json({ error: 'Interner Serverfehler' });
+    }
+  },
+
   // Manuelle Sperrung umschalten
   toggleManuellGesperrt: async (req, res) => {
     try {

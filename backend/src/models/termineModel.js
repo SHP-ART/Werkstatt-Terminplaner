@@ -151,7 +151,7 @@ class TermineModel {
       abholung_details, abholung_zeit, abholung_datum, bring_zeit, kontakt_option,
       kilometerstand, ersatzauto, ersatzauto_tage, ersatzauto_bis_datum, ersatzauto_bis_zeit,
       vin, fahrzeugtyp, muss_bearbeitet_werden, interne_auftragsnummer,
-      startzeit, endzeit_berechnet
+      startzeit, endzeit_berechnet, fertigstellung_zeit, notizen
     } = data;
     
     // Baue die SQL-Query dynamisch auf
@@ -265,6 +265,14 @@ class TermineModel {
     if (interne_auftragsnummer !== undefined) {
       updates.push('interne_auftragsnummer = ?');
       values.push(interne_auftragsnummer || null);
+    }
+    if (fertigstellung_zeit !== undefined) {
+      updates.push('fertigstellung_zeit = ?');
+      values.push(fertigstellung_zeit || null);
+    }
+    if (notizen !== undefined) {
+      updates.push('notizen = ?');
+      values.push(notizen || null);
     }
 
     if (updates.length === 0) {

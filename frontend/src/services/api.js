@@ -432,6 +432,11 @@ class ErsatzautosService {
     return ApiService.get('/ersatzautos/buchungen/aktuell');
   }
 
+  // Heute fällige Rückgaben
+  static async getHeuteRueckgaben() {
+    return ApiService.get('/ersatzautos/rueckgaben/heute');
+  }
+
   // Manuelle Sperrung umschalten (Toggle)
   static async toggleManuellGesperrt(id) {
     return ApiService.post(`/ersatzautos/${id}/toggle-gesperrt`);

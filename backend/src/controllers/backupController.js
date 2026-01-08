@@ -58,8 +58,20 @@ const BackupController = {
   create: (req, res) => {
     try {
       ensureBackupDir();
-      const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-      const backupName = `werkstatt-backup-${timestamp}.db`;
+      // Lokale Zeit verwenden statt UTC
+      const now = new Date();
+      const timestamp = [
+        now.getFullYear(),
+        String(now.getMonth() + 1).padStart(2, '0'),
+        String(now.getDate()).padStart(2, '0'),
+        'T',
+        String(now.getHours()).padStart(2, '0'),
+        '-',
+        String(now.getMinutes()).padStart(2, '0'),
+        '-',
+        String(now.getSeconds()).padStart(2, '0')
+      ].join('');
+      const backupName = `werkstatt_backup_${timestamp}.db`;
       const dest = path.join(backupDir, backupName);
 
       if (!fs.existsSync(dbPath)) {

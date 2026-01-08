@@ -229,5 +229,49 @@ class ErsatzautosModel {
     
     return await allAsync(query, [heute, heute, heute, heute, heute]);
   }
+
+  // Heute fällige Rückgaben holen
+  static async getHeuteRueckgaben() {
+    const heute = new Date().toISOString().split('T')[0];
+    
+    const query = `
+      SELECT t.id, t.termin_nr, t.kennzeichen, t.datum, 
+             t.ersatzauto_tage, t.ersatzauto_bis_datum, t.ersatzauto_bis_zeit,
+             t.abholung_datum, t.abholung_zeit, t.status,
+             COALESCE(k.name, t.kunde_name) as kunde_name,
+             COALESCE(k.telefon, t.kunde_telefon) as kunde_telefon,
+             -- Berechne End-Datum
+             CASE 
+               WHEN t.ersatzauto_bis_datum IS NOT NULL THEN t.ersatzauto_bis_datum
+               WHEN t.abholung_datum IS NOT NULL THEN t.abholung_datum
+               WHEN t.ersatzauto_tage IS NOT NULL THEN date(t.datum, '+' || (t.ersatzauto_tage - 1) || ' days')
+               ELSE t.datum
+             END as bis_datum,
+             -- Rückgabe-Zeit ermitteln
+             CASE 
+               WHEN t.ersatzauto_bis_zeit IS NOT NULL THEN t.ersatzauto_bis_zeit
+               WHEN t.abholung_zeit IS NOT NULL THEN t.abholung_zeit
+               ELSE '18:00'
+             END as rueckgabe_zeit
+      FROM termine t
+      LEFT JOIN kunden k ON t.kunde_id = k.id
+      WHERE t.ersatzauto = 1 
+      AND t.status NOT IN ('storniert', 'erledigt')
+      AND t.geloescht_am IS NULL
+      AND (
+        -- Rückgabe heute: ersatzauto_bis_datum = heute
+        t.ersatzauto_bis_datum = ?
+        -- ODER abholung_datum = heute
+        OR t.abholung_datum = ?
+        -- ODER berechnet aus ersatzauto_tage
+        OR (t.ersatzauto_tage IS NOT NULL AND date(t.datum, '+' || (t.ersatzauto_tage - 1) || ' days') = ?)
+        -- ODER eintägiger Termin heute
+        OR (t.datum = ? AND t.ersatzauto_bis_datum IS NULL AND t.abholung_datum IS NULL AND t.ersatzauto_tage IS NULL)
+      )
+      ORDER BY rueckgabe_zeit ASC
+    `;
+    
+    return await allAsync(query, [heute, heute, heute, heute]);
+  }
 }
 module.exports = ErsatzautosModel;

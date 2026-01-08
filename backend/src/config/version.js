@@ -1,13 +1,13 @@
 // Zentrale Versionsverwaltung für Werkstatt-Terminplaner
 // Diese Datei ist die "Single Source of Truth" für die Programmversion
 
-const VERSION = '1.0.17';
+const VERSION = '1.1.0';
 
 module.exports = {
   VERSION,
   // Zusätzliche Metadaten
   APP_NAME: 'Werkstatt Terminplaner',
-  RELEASE_DATE: '2026-01-06',
+  RELEASE_DATE: '2026-01-08',
   
   // Hilfsfunktion für formatierte Ausgabe
   getVersionString: () => `v${VERSION}`,
