@@ -1,6 +1,7 @@
 {
   "appId": "com.werkstatt.terminplaner",
   "productName": "Werkstatt Terminplaner",
+  "artifactName": "${name}-Setup-${version}.${ext}",
   "directories": {
     "output": "dist-allinone"
   },
