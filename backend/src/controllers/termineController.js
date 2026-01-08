@@ -1265,6 +1265,108 @@ class TermineController {
     }
   }
 
+  /**
+   * Findet Termine mit ähnlicher Bringzeit (±15 Minuten) für ein bestimmtes Datum
+   * Wird verwendet um dem Benutzer anzuzeigen, wie viele Kunden zur gleichen Zeit kommen
+   * Gibt auch Vorschläge für freie Zeitslots im Halbstunden-Takt zurück
+   */
+  static async getBringzeitUeberschneidungen(req, res) {
+    try {
+      const { datum, bringzeit, exclude } = req.query;
+
+      if (!datum || !bringzeit) {
+        return res.status(400).json({ error: 'Datum und Bringzeit sind erforderlich' });
+      }
+
+      // Bringzeit in Minuten umrechnen
+      const [stunden, minuten] = bringzeit.split(':').map(Number);
+      if (isNaN(stunden) || isNaN(minuten)) {
+        return res.status(400).json({ error: 'Ungültiges Zeitformat' });
+      }
+      const bringzeitMinuten = stunden * 60 + minuten;
+      
+      // ±15 Minuten Fenster
+      const vonMinuten = bringzeitMinuten - 15;
+      const bisMinuten = bringzeitMinuten + 15;
+      
+      // Zeitstrings für SQL-Vergleich erstellen
+      const vonZeit = `${String(Math.floor(Math.max(0, vonMinuten) / 60)).padStart(2, '0')}:${String(Math.max(0, vonMinuten) % 60).padStart(2, '0')}`;
+      const bisZeit = `${String(Math.floor(Math.min(1439, bisMinuten) / 60)).padStart(2, '0')}:${String(Math.min(1439, bisMinuten) % 60).padStart(2, '0')}`;
+
+      // Termine mit Bringzeit im Zeitfenster laden
+      const termine = await TermineModel.getBringzeitUeberschneidungen(datum, vonZeit, bisZeit, exclude);
+
+      // Alle Bringzeiten des Tages laden für Vorschläge
+      const alleBringzeiten = await TermineModel.getAlleBringzeitenDesTages(datum, exclude);
+      
+      // Vorschläge für freie Zeitslots berechnen (08:00 - 18:00, Halbstunden-Takt)
+      const vorschlaege = [];
+      const werkstattStart = 8 * 60;  // 08:00
+      const werkstattEnde = 18 * 60;  // 18:00
+      
+      // Bringzeiten in Minuten umrechnen für schnellen Vergleich
+      const belegteZeiten = (alleBringzeiten || []).map(t => {
+        const [h, m] = t.bring_zeit.split(':').map(Number);
+        return h * 60 + m;
+      });
+      
+      // Prüfe jeden Halbstunden-Slot
+      for (let slotMinuten = werkstattStart; slotMinuten <= werkstattEnde; slotMinuten += 30) {
+        // Zähle wie viele Termine ±15 Minuten um diesen Slot liegen
+        let anzahlImSlot = 0;
+        belegteZeiten.forEach(bz => {
+          if (Math.abs(bz - slotMinuten) <= 15) {
+            anzahlImSlot++;
+          }
+        });
+        
+        // Zeitstring formatieren
+        const slotZeit = `${String(Math.floor(slotMinuten / 60)).padStart(2, '0')}:${String(slotMinuten % 60).padStart(2, '0')}`;
+        
+        // Nur Slots mit max. 1 Überschneidung vorschlagen (und nicht die aktuelle Zeit)
+        if (anzahlImSlot <= 1 && Math.abs(slotMinuten - bringzeitMinuten) > 15) {
+          vorschlaege.push({
+            zeit: slotZeit,
+            anzahl: anzahlImSlot,
+            frei: anzahlImSlot === 0
+          });
+        }
+      }
+      
+      // Sortiere Vorschläge: Komplett frei zuerst, dann nach Nähe zur gewünschten Zeit
+      vorschlaege.sort((a, b) => {
+        // Zuerst nach Anzahl (weniger ist besser)
+        if (a.anzahl !== b.anzahl) return a.anzahl - b.anzahl;
+        // Dann nach Nähe zur gewünschten Zeit
+        const [aH, aM] = a.zeit.split(':').map(Number);
+        const [bH, bM] = b.zeit.split(':').map(Number);
+        const aMinuten = aH * 60 + aM;
+        const bMinuten = bH * 60 + bM;
+        return Math.abs(aMinuten - bringzeitMinuten) - Math.abs(bMinuten - bringzeitMinuten);
+      });
+
+      res.json({
+        anzahl: termine.length,
+        termine: termine.map(t => ({
+          id: t.id,
+          termin_nr: t.termin_nr,
+          kunde_name: t.kunde_name,
+          kennzeichen: t.kennzeichen,
+          bring_zeit: t.bring_zeit
+        })),
+        zeitfenster: {
+          von: vonZeit,
+          bis: bisZeit,
+          mitte: bringzeit
+        },
+        vorschlaege: vorschlaege.slice(0, 6) // Max. 6 Vorschläge
+      });
+    } catch (err) {
+      console.error('Fehler bei getBringzeitUeberschneidungen:', err);
+      res.status(500).json({ error: err.message });
+    }
+  }
+
   // Papierkorb-Funktionen
   static async getDeleted(req, res) {
     try {

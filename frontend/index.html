@@ -556,6 +556,7 @@
                         <div class="form-group" id="bringzeitGroup">
                             <label>Bringzeit:</label>
                             <input type="text" id="bring_zeit" placeholder="HH:MM" pattern="[0-2][0-9]:[0-5][0-9]" maxlength="5" title="24h-Format (z.B. 08:00, 14:30)" oninput="this.value = this.value.replace(/[^0-9:]/g, ''); if(this.value.length === 2 && !this.value.includes(':')) this.value += ':';" style="text-align: center;">
+                            <div id="bringzeitHinweis" class="bringzeit-hinweis" style="display: none;"></div>
                         </div>
                         <div class="form-group" id="abholzeitGroup">
                             <label>Abholzeit:</label>
@@ -832,6 +833,7 @@
                                 <div class="form-group" id="editBringzeitGroup">
                                     <label>Bringzeit:</label>
                                     <input type="text" id="edit_bring_zeit" placeholder="HH:MM" pattern="[0-2][0-9]:[0-5][0-9]" maxlength="5" title="24h-Format (z.B. 08:00, 14:30)" oninput="this.value = this.value.replace(/[^0-9:]/g, ''); if(this.value.length === 2 && !this.value.includes(':')) this.value += ':';" style="text-align: center;">
+                                    <div id="editBringzeitHinweis" class="bringzeit-hinweis" style="display: none;"></div>
                                 </div>
                                 <div class="form-group" id="editAbholzeitGroup">
                                     <label>Abholzeit:</label>
@@ -2141,6 +2143,25 @@
                         <div class="timeline-body" id="timelineBody">
                             <!-- Mitarbeiter Rows werden hier generiert -->
                         </div>
+                    </div>
+                </div>
+
+                <!-- Schwebende Termine (mit Balken-Darstellung) -->
+                <div class="schwebende-panel">
+                    <div class="schwebende-header">
+                        <h3>⏸️ Schwebende Termine</h3>
+                        <div class="schwebende-controls">
+                            <select id="schwebendeSortierung" onchange="app.sortSchwebendeTermine(this.value)">
+                                <option value="datum">Nach Datum</option>
+                                <option value="dauer">Nach Dauer</option>
+                                <option value="kunde">Nach Kunde</option>
+                                <option value="dringlichkeit">Nach Dringlichkeit</option>
+                            </select>
+                            <span id="schwebendeCount" class="schwebende-count">0 Termine</span>
+                        </div>
+                    </div>
+                    <div id="schwebendeTermineContainer" class="schwebende-container">
+                        <!-- Schwebende Termine als Balken werden hier eingefügt -->
                     </div>
                 </div>
 

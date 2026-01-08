@@ -184,6 +184,18 @@ class TermineService {
     return ApiService.get(`/termine/vorschlaege?datum=${datum}&dauer=${dauer}`);
   }
 
+  /**
+   * Prüft Bringzeit-Überschneidungen für ein Datum und eine Zeit
+   * Gibt Termine zurück, die ±15 Minuten um die angegebene Zeit liegen
+   */
+  static async getBringzeitUeberschneidungen(datum, bringzeit, excludeTerminId = null) {
+    let url = `/termine/bringzeit-ueberschneidungen?datum=${datum}&bringzeit=${bringzeit}`;
+    if (excludeTerminId) {
+      url += `&exclude=${excludeTerminId}`;
+    }
+    return ApiService.get(url);
+  }
+
   // Schwebend-Funktionen (Termin noch nicht fest eingeplant)
   static async setSchwebend(id, istSchwebend) {
     return ApiService.post(`/termine/${id}/schwebend`, { ist_schwebend: istSchwebend });

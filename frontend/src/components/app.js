@@ -268,6 +268,39 @@ class App {
     if (cancelImportBtn) {
       cancelImportBtn.addEventListener('click', () => this.cancelExcelImport());
     }
+
+    // Bringzeit-Prüfung Event-Listener
+    const bringZeitInputNew = document.getElementById('bring_zeit');
+    const datumInputForBringzeit = document.getElementById('datum');
+    if (bringZeitInputNew) {
+      bringZeitInputNew.addEventListener('blur', () => this.pruefeBringzeitUeberschneidung('bring_zeit', 'datum', 'bringzeitHinweis'));
+      bringZeitInputNew.addEventListener('change', () => this.pruefeBringzeitUeberschneidung('bring_zeit', 'datum', 'bringzeitHinweis'));
+    }
+    if (datumInputForBringzeit) {
+      datumInputForBringzeit.addEventListener('change', () => {
+        // Prüfe Bringzeit wenn sich das Datum ändert und Bringzeit bereits eingegeben ist
+        const bringzeit = document.getElementById('bring_zeit')?.value;
+        if (bringzeit && bringzeit.match(/^\d{2}:\d{2}$/)) {
+          this.pruefeBringzeitUeberschneidung('bring_zeit', 'datum', 'bringzeitHinweis');
+        }
+      });
+    }
+    
+    // Bringzeit-Prüfung für Edit-Modal
+    const editBringZeitInputNew = document.getElementById('edit_bring_zeit');
+    const editDatumInputNew = document.getElementById('edit_datum');
+    if (editBringZeitInputNew) {
+      editBringZeitInputNew.addEventListener('blur', () => this.pruefeBringzeitUeberschneidung('edit_bring_zeit', 'edit_datum', 'editBringzeitHinweis', this.editingTerminId));
+      editBringZeitInputNew.addEventListener('change', () => this.pruefeBringzeitUeberschneidung('edit_bring_zeit', 'edit_datum', 'editBringzeitHinweis', this.editingTerminId));
+    }
+    if (editDatumInputNew) {
+      editDatumInputNew.addEventListener('change', () => {
+        const bringzeit = document.getElementById('edit_bring_zeit')?.value;
+        if (bringzeit && bringzeit.match(/^\d{2}:\d{2}$/)) {
+          this.pruefeBringzeitUeberschneidung('edit_bring_zeit', 'edit_datum', 'editBringzeitHinweis', this.editingTerminId);
+        }
+      });
+    }
     
     // Fahrzeug-Auswahl Modal Event-Listener
     const closeFahrzeugAuswahl = document.getElementById('closeFahrzeugAuswahl');
@@ -1740,6 +1773,12 @@ class App {
     
     // Bei JEDEM Tab-Wechsel: Sub-Tabs im "termine" Container zurücksetzen
     this.resetTermineSubTabs();
+    
+    // Stoppe Timeline "Jetzt"-Linie Interval wenn nicht auf Planungs-Tab oder Auslastungs-Tab
+    if (tabName !== 'auslastung-dragdrop' && tabName !== 'auslastung' && this.nowLineInterval) {
+      clearInterval(this.nowLineInterval);
+      this.nowLineInterval = null;
+    }
 
     if (tabName === 'termine') {
       // Formular komplett zurücksetzen beim Öffnen des Termine-Tabs
@@ -7749,6 +7788,9 @@ class App {
 
     // Aktualisiere Wocheninfo-Anzeige
     this.updateAuslastungWocheInfo();
+    
+    // Starte Zeitleisten-Jetzt-Marker Aktualisierung
+    this.startZeitleisteNowLineUpdate();
 
     try {
       const data = await AuslastungService.getByDatum(datum);
@@ -11421,6 +11463,96 @@ class App {
     return `${tag}.${monat}.${jahr}`;
   }
 
+  /**
+   * Prüft wie viele andere Termine ±15 Minuten um die eingegebene Bringzeit liegen
+   * und zeigt einen Hinweis sowie Vorschläge für freie Zeiten an
+   */
+  async pruefeBringzeitUeberschneidung(bringzeitInputId, datumInputId, hinweisElementId, excludeTerminId = null) {
+    const bringzeitInput = document.getElementById(bringzeitInputId);
+    const datumInput = document.getElementById(datumInputId);
+    const hinweisElement = document.getElementById(hinweisElementId);
+    
+    if (!bringzeitInput || !datumInput || !hinweisElement) return;
+    
+    const bringzeit = bringzeitInput.value;
+    const datum = datumInput.value;
+    
+    // Validiere Eingaben
+    if (!bringzeit || !bringzeit.match(/^\d{2}:\d{2}$/) || !datum) {
+      hinweisElement.style.display = 'none';
+      return;
+    }
+    
+    try {
+      // API-Anfrage um Termine mit ähnlicher Bringzeit zu finden
+      const response = await TermineService.getBringzeitUeberschneidungen(datum, bringzeit, excludeTerminId);
+      
+      const anzahl = response.anzahl || 0;
+      const termine = response.termine || [];
+      const vorschlaege = response.vorschlaege || [];
+      
+      let hinweisHtml = '';
+      
+      if (anzahl === 0) {
+        hinweisHtml = `<span class="hinweis-icon">✅</span> Keine anderen Kunden um ${bringzeit}`;
+        hinweisElement.className = 'bringzeit-hinweis hinweis-ok';
+      } else if (anzahl <= 2) {
+        const kundenText = termine.map(t => t.kunde_name || t.kennzeichen).slice(0, 2).join(', ');
+        hinweisHtml = `<span class="hinweis-icon">ℹ️</span> ${anzahl} Kunde(n) um diese Zeit: ${kundenText}`;
+        hinweisElement.className = 'bringzeit-hinweis hinweis-ok';
+      } else if (anzahl <= 4) {
+        hinweisHtml = `<span class="hinweis-icon">⚠️</span> ${anzahl} Kunden kommen ±15 Min. um ${bringzeit}`;
+        hinweisElement.className = 'bringzeit-hinweis hinweis-warnung';
+      } else {
+        hinweisHtml = `<span class="hinweis-icon">🚨</span> ${anzahl} Kunden kommen ±15 Min. um ${bringzeit} - Zeitfenster voll!`;
+        hinweisElement.className = 'bringzeit-hinweis hinweis-kritisch';
+      }
+      
+      // Vorschläge für freie Zeiten anzeigen (wenn es Überschneidungen gibt)
+      if (anzahl > 0 && vorschlaege.length > 0) {
+        const freieZeiten = vorschlaege.filter(v => v.frei).slice(0, 4);
+        const wenigBelegteZeiten = vorschlaege.filter(v => !v.frei).slice(0, 2);
+        
+        if (freieZeiten.length > 0 || wenigBelegteZeiten.length > 0) {
+          hinweisHtml += `<div class="bringzeit-vorschlaege">`;
+          hinweisHtml += `<span class="vorschlaege-label">💡 Freie Zeiten:</span>`;
+          
+          freieZeiten.forEach(v => {
+            hinweisHtml += `<button type="button" class="vorschlag-btn vorschlag-frei" data-zeit="${v.zeit}" data-input="${bringzeitInputId}" title="Komplett frei">${v.zeit}</button>`;
+          });
+          
+          wenigBelegteZeiten.forEach(v => {
+            hinweisHtml += `<button type="button" class="vorschlag-btn vorschlag-wenig" data-zeit="${v.zeit}" data-input="${bringzeitInputId}" title="1 Kunde um diese Zeit">${v.zeit}</button>`;
+          });
+          
+          hinweisHtml += `</div>`;
+        }
+      }
+      
+      hinweisElement.innerHTML = hinweisHtml;
+      hinweisElement.style.display = 'block';
+      
+      // Event-Listener für Vorschlag-Buttons hinzufügen
+      hinweisElement.querySelectorAll('.vorschlag-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          e.preventDefault();
+          const zeit = btn.dataset.zeit;
+          const inputId = btn.dataset.input;
+          const input = document.getElementById(inputId);
+          if (input) {
+            input.value = zeit;
+            // Trigger change event um die Prüfung neu auszuführen
+            input.dispatchEvent(new Event('change'));
+          }
+        });
+      });
+      
+    } catch (error) {
+      console.error('Fehler bei Bringzeit-Prüfung:', error);
+      hinweisElement.style.display = 'none';
+    }
+  }
+
   getGeschaetzteZeit(arbeitenListe) {
     const zeitFeld = document.getElementById('geschaetzte_zeit');
     const input = zeitFeld ? zeitFeld.value : null;
@@ -14250,6 +14382,64 @@ class App {
   // ==========================================
   // ZEITLEISTEN-ANSICHT (8-18 Uhr)
   // ==========================================
+  
+  // Startet automatische Aktualisierung des "Jetzt"-Markers in der Zeitleiste
+  startZeitleisteNowLineUpdate() {
+    // Vorherigen Interval stoppen falls vorhanden
+    if (this.nowLineInterval) {
+      clearInterval(this.nowLineInterval);
+      this.nowLineInterval = null;
+    }
+    
+    const updateZeitleisteMarker = () => {
+      const heute = this.formatDateLocal(new Date());
+      const selectedDatum = document.getElementById('auslastungDatum')?.value;
+      
+      // Nur aktualisieren wenn heute ausgewählt ist
+      if (selectedDatum !== heute) {
+        // Alle Marker entfernen wenn nicht heute
+        document.querySelectorAll('.zeitleiste-jetzt-marker').forEach(m => m.remove());
+        return;
+      }
+      
+      const START_HOUR = 8;
+      const END_HOUR = 18;
+      const TOTAL_HOURS = END_HOUR - START_HOUR;
+      
+      const now = new Date();
+      const currentHour = now.getHours() + now.getMinutes() / 60;
+      
+      // Außerhalb der sichtbaren Stunden
+      if (currentHour < START_HOUR || currentHour > END_HOUR) {
+        document.querySelectorAll('.zeitleiste-jetzt-marker').forEach(m => m.remove());
+        return;
+      }
+      
+      const jetztPosition = ((currentHour - START_HOUR) / TOTAL_HOURS) * 100;
+      
+      // Aktualisiere alle existierenden Marker
+      document.querySelectorAll('.zeitleiste-jetzt-marker').forEach(marker => {
+        marker.style.left = `${jetztPosition}%`;
+      });
+      
+      // Falls noch keine Marker existieren, aber Zeilen da sind, füge sie hinzu
+      document.querySelectorAll('.zeitleiste-row').forEach(row => {
+        const timeline = row.querySelector('.zeitleiste-timeline');
+        if (timeline && !timeline.querySelector('.zeitleiste-jetzt-marker')) {
+          const marker = document.createElement('div');
+          marker.className = 'zeitleiste-jetzt-marker';
+          marker.style.left = `${jetztPosition}%`;
+          timeline.appendChild(marker);
+        }
+      });
+    };
+    
+    // Initial aktualisieren
+    updateZeitleisteMarker();
+    
+    // Alle 60 Sekunden aktualisieren
+    this.nowLineInterval = setInterval(updateZeitleisteMarker, 60000);
+  }
 
   async loadZeitleiste(datum) {
     const body = document.getElementById('zeitleisteBody');
@@ -15222,10 +15412,12 @@ class App {
 
       // 4. Container leeren
       const sourceContainer = document.getElementById('dragDropNichtZugeordnet');
+      const schwebendeContainer = document.getElementById('schwebendeTermineContainer');
       const timelineHeader = document.getElementById('timelineHours');
       const timelineBody = document.getElementById('timelineBody');
       
       if (sourceContainer) sourceContainer.innerHTML = ''; 
+      if (schwebendeContainer) schwebendeContainer.innerHTML = '';
       if (timelineHeader) timelineHeader.innerHTML = '';
       if (timelineBody) timelineBody.innerHTML = '';
 
@@ -15338,8 +15530,11 @@ class App {
       });
 
       termine.forEach(termin => {
-        // Schwebende Termine in "Nicht zugeordnet" anzeigen (aber trotzdem draggable)
+        // Schwebende Termine separat in eigenem Panel anzeigen (nicht hier)
         const istSchwebend = termin.ist_schwebend === 1 || termin.ist_schwebend === true;
+        if (istSchwebend) {
+          return; // Schwebende Termine später separat verarbeiten
+        }
         
         // Parse arbeitszeiten_details
         let details = null;
@@ -15472,6 +15667,9 @@ class App {
       // Drop-Zone für "Nicht zugeordnet"
       this.setupDropZone(sourceContainer);
 
+      // 8. Schwebende Termine separat im eigenen Panel rendern
+      this.renderSchwebendeTermine(schwebendeTermine, schwebendeContainer);
+
       // Kapazitäten einfärben - Mitarbeiter
       mitarbeiterListe.forEach(ma => {
         const maxMinuten = (ma.arbeitsstunden_pro_tag || 8) * 60;
@@ -15544,6 +15742,221 @@ class App {
     pauseBlock.innerHTML = '🍽️';
     
     track.appendChild(pauseBlock);
+  }
+
+  /**
+   * Rendert schwebende Termine als Balken im separaten Panel
+   * @param {Array} schwebendeTermine - Array mit schwebenden Terminen
+   * @param {HTMLElement} container - Container für die Balken
+   */
+  renderSchwebendeTermine(schwebendeTermine, container) {
+    if (!container) return;
+    
+    // Sortierung anwenden (Standard: nach Datum)
+    const sortSelect = document.getElementById('schwebendeSortierung');
+    const sortierung = sortSelect ? sortSelect.value : 'datum';
+    
+    const sortierteTermine = this.sortSchwebendeTermineArray(schwebendeTermine, sortierung);
+    
+    // Counter aktualisieren
+    const countElement = document.getElementById('schwebendeCount');
+    if (countElement) {
+      countElement.textContent = `${sortierteTermine.length} Termin${sortierteTermine.length !== 1 ? 'e' : ''}`;
+    }
+    
+    // Balken erstellen
+    sortierteTermine.forEach(termin => {
+      const bar = this.createSchwebenderTerminBar(termin);
+      container.appendChild(bar);
+    });
+    
+    // Speichere Referenz für Sortierung
+    this._schwebendeTermineCache = schwebendeTermine;
+  }
+
+  /**
+   * Sortiert das Array von schwebenden Terminen
+   */
+  sortSchwebendeTermineArray(termine, sortierung) {
+    return [...termine].sort((a, b) => {
+      switch (sortierung) {
+        case 'datum':
+          // Nach Abholzeit/Datum sortieren
+          const datumA = a.abhol_datum || a.datum || '9999-12-31';
+          const datumB = b.abhol_datum || b.datum || '9999-12-31';
+          return datumA.localeCompare(datumB);
+          
+        case 'dauer':
+          // Nach geschätzter Zeit (längste zuerst)
+          const dauerA = this.getTerminGesamtdauer(a);
+          const dauerB = this.getTerminGesamtdauer(b);
+          return dauerB - dauerA;
+          
+        case 'kunde':
+          // Alphabetisch nach Kundenname
+          const kundeA = (a.kunde_name || '').toLowerCase();
+          const kundeB = (b.kunde_name || '').toLowerCase();
+          return kundeA.localeCompare(kundeB);
+          
+        case 'dringlichkeit':
+          // Nach Dringlichkeit (hoch zuerst)
+          const dringlichkeitOrder = { 'hoch': 1, 'mittel': 2, 'normal': 3, 'niedrig': 4 };
+          const dringA = this.getTerminDringlichkeit(a);
+          const dringB = this.getTerminDringlichkeit(b);
+          return (dringlichkeitOrder[dringA] || 3) - (dringlichkeitOrder[dringB] || 3);
+          
+        default:
+          return 0;
+      }
+    });
+  }
+
+  /**
+   * Handler für Sortierungs-Änderung
+   */
+  sortSchwebendeTermine(sortierung) {
+    const container = document.getElementById('schwebendeTermineContainer');
+    if (!container || !this._schwebendeTermineCache) return;
+    
+    container.innerHTML = '';
+    this.renderSchwebendeTermine(this._schwebendeTermineCache, container);
+  }
+
+  /**
+   * Ermittelt die Dringlichkeit eines Termins
+   */
+  getTerminDringlichkeit(termin) {
+    // Prüfe ob explizite Dringlichkeit gesetzt ist
+    if (termin.dringlichkeit) {
+      return termin.dringlichkeit.toLowerCase();
+    }
+    
+    // Berechne basierend auf Abholzeit
+    if (termin.abhol_datum) {
+      const heute = new Date();
+      heute.setHours(0, 0, 0, 0);
+      const abholDatum = new Date(termin.abhol_datum);
+      abholDatum.setHours(0, 0, 0, 0);
+      
+      const tageUntilAbhol = Math.ceil((abholDatum - heute) / (1000 * 60 * 60 * 24));
+      
+      if (tageUntilAbhol <= 0) return 'hoch';      // Überfällig oder heute
+      if (tageUntilAbhol <= 1) return 'mittel';    // Morgen
+      if (tageUntilAbhol <= 3) return 'normal';    // 2-3 Tage
+      return 'niedrig';                            // Mehr als 3 Tage
+    }
+    
+    return 'normal';
+  }
+
+  /**
+   * Erstellt einen Balken für einen schwebenden Termin
+   */
+  createSchwebenderTerminBar(termin) {
+    const bar = document.createElement('div');
+    
+    // Dauer berechnen
+    const dauer = this.getTerminGesamtdauer(termin);
+    const dringlichkeit = this.getTerminDringlichkeit(termin);
+    
+    bar.className = `schwebender-termin-bar dringlichkeit-${dringlichkeit}`;
+    bar.draggable = true;
+    bar.id = `schwebend-bar-${termin.id}`;
+    
+    // CSS Custom Property für dynamische Breite
+    bar.style.setProperty('--termin-dauer', dauer);
+    
+    // Tooltip-Daten erstellen
+    const dauerText = dauer >= 60 
+      ? `${Math.floor(dauer/60)}h ${dauer%60 > 0 ? (dauer%60) + 'min' : ''}`.trim()
+      : `${dauer} min`;
+    
+    const abholInfo = termin.abhol_datum 
+      ? `Abholung: ${this.formatDatum(termin.abhol_datum)}` 
+      : 'Keine Abholzeit';
+    
+    const tooltip = [
+      `🚗 ${termin.kennzeichen || 'Kein KFZ'}`,
+      `👤 ${termin.kunde_name || 'Unbekannt'}`,
+      `⏱️ Dauer: ${dauerText}`,
+      `📅 ${abholInfo}`,
+      `📋 ${this.getTerminArbeitenText(termin)}`
+    ].join('\n');
+    
+    bar.setAttribute('data-tooltip', tooltip);
+    bar.dataset.terminId = termin.id;
+    bar.dataset.dauer = dauer;
+    bar.dataset.dringlichkeit = dringlichkeit;
+    
+    // Inhalt des Balkens
+    bar.innerHTML = `
+      <div class="bar-header">${termin.termin_nr || 'Neu'} • ${termin.kennzeichen || ''}</div>
+      <div class="bar-details">${termin.kunde_name || 'Unbekannt'}</div>
+      <div class="bar-zeit">${dauerText}</div>
+    `;
+    
+    // Drag Events
+    bar.addEventListener('dragstart', (e) => {
+      bar.classList.add('dragging');
+      e.dataTransfer.setData('text/plain', termin.id);
+      e.dataTransfer.setData('application/x-dauer', dauer.toString());
+      e.dataTransfer.setData('application/x-schwebend', 'true');
+      e.dataTransfer.effectAllowed = 'move';
+      
+      // Zeit-Indikator erstellen
+      this.createDragTimeIndicator();
+    });
+
+    bar.addEventListener('dragend', () => {
+      bar.classList.remove('dragging');
+      document.querySelectorAll('.drop-zone').forEach(zone => zone.classList.remove('drag-over'));
+      // Zeit-Indikator entfernen
+      this.removeDragTimeIndicator();
+    });
+    
+    // Doppelklick zum Bearbeiten
+    bar.addEventListener('dblclick', () => {
+      this.showTab('termin-formular');
+      this.loadTerminInForm(termin.id);
+    });
+
+    return bar;
+  }
+
+  /**
+   * Gibt einen kurzen Text zu den Arbeiten eines Termins zurück
+   */
+  getTerminArbeitenText(termin) {
+    let details = null;
+    if (termin.arbeitszeiten_details) {
+      try {
+        details = typeof termin.arbeitszeiten_details === 'string' 
+          ? JSON.parse(termin.arbeitszeiten_details) 
+          : termin.arbeitszeiten_details;
+      } catch (e) {
+        return termin.arbeit || 'Keine Arbeit';
+      }
+    }
+    
+    if (!details) {
+      return termin.arbeit || 'Keine Arbeit';
+    }
+    
+    const arbeiten = [];
+    for (const key in details) {
+      if (key.startsWith('_')) continue;
+      arbeiten.push(key);
+    }
+    
+    if (arbeiten.length === 0) {
+      return termin.arbeit || 'Keine Arbeit';
+    }
+    
+    if (arbeiten.length <= 2) {
+      return arbeiten.join(', ');
+    }
+    
+    return `${arbeiten.slice(0, 2).join(', ')} +${arbeiten.length - 2}`;
   }
 
   // Hilfsmethode: Ermittle Zuordnung einer einzelnen Arbeit
@@ -16349,11 +16762,15 @@ class App {
     try {
       const termin = await TermineService.getById(terminId);
       
+      // Aktuelles Datum aus dem Planungs-Datumsfeld holen
+      const zielDatum = document.getElementById('auslastungDragDropDatum')?.value;
+      
       // Speichere Original-Daten wenn noch nicht vorhanden
       if (!this.planungAenderungen.has(terminId)) {
         this.planungAenderungen.set(terminId, {
           originalData: {
             startzeit: termin.startzeit,
+            datum: termin.datum,
             mitarbeiter_id: termin.mitarbeiter_id,
             arbeitszeiten_details: termin.arbeitszeiten_details
           },
@@ -16362,6 +16779,20 @@ class App {
       }
       
       const aenderung = this.planungAenderungen.get(terminId);
+      
+      // Merke ob der Termin schwebend war
+      const istSchwebend = termin.ist_schwebend === 1 || termin.ist_schwebend === true;
+      if (istSchwebend) {
+        aenderung.warSchwebend = true;
+      }
+      
+      // Bug 1 Fix: Datum setzen - IMMER wenn schwebend, oder wenn Ziel-Datum anders ist
+      if (zielDatum) {
+        if (istSchwebend || zielDatum !== termin.datum) {
+          aenderung.datum = zielDatum;
+          console.log('[DEBUG] ArbeitBlock - Datum wird gesetzt:', zielDatum, '(Original:', termin.datum, ', istSchwebend:', istSchwebend, ')');
+        }
+      }
       
       // Initialisiere arbeitAenderungen falls nicht vorhanden
       if (!aenderung.arbeitAenderungen) {
@@ -16378,11 +16809,6 @@ class App {
       
       // Setze Flag dass es Arbeits-spezifische Änderungen gibt
       aenderung.hatArbeitAenderungen = true;
-      
-      // Merke ob der Termin schwebend war
-      if (termin.ist_schwebend === 1 || termin.ist_schwebend === true) {
-        aenderung.warSchwebend = true;
-      }
       
       // UI aktualisieren
       await this.updateArbeitBlockUI(terminId, arbeitName, arbeitIndex, startzeit, mitarbeiterId, lehrlingId, type);
@@ -16493,11 +16919,15 @@ class App {
       // Lade aktuellen Termin für Original-Daten (falls noch nicht im Puffer)
       const termin = await TermineService.getById(terminId);
       
+      // Aktuelles Datum aus dem Planungs-Datumsfeld holen
+      const zielDatum = document.getElementById('auslastungDragDropDatum')?.value;
+      
       // Speichere Original-Daten wenn noch nicht vorhanden
       if (!this.planungAenderungen.has(terminId)) {
         this.planungAenderungen.set(terminId, {
           originalData: {
             startzeit: termin.startzeit,
+            datum: termin.datum,
             mitarbeiter_id: termin.mitarbeiter_id,
             arbeitszeiten_details: termin.arbeitszeiten_details
           }
@@ -16510,8 +16940,17 @@ class App {
       aenderung.type = type;
       
       // Merke ob der Termin schwebend war (für Speichern)
-      if (termin.ist_schwebend === 1 || termin.ist_schwebend === true) {
+      const istSchwebend = termin.ist_schwebend === 1 || termin.ist_schwebend === true;
+      if (istSchwebend) {
         aenderung.warSchwebend = true;
+      }
+      
+      // Bug 1 Fix: Datum setzen - IMMER wenn schwebend, oder wenn Ziel-Datum anders ist
+      if (zielDatum) {
+        if (istSchwebend || zielDatum !== termin.datum) {
+          aenderung.datum = zielDatum;
+          console.log('[DEBUG] Datum wird gesetzt:', zielDatum, '(Original:', termin.datum, ', istSchwebend:', istSchwebend, ')');
+        }
       }
       
       if (type === 'lehrling' && lehrlingId) {
@@ -16542,14 +16981,27 @@ class App {
     let terminEl = document.getElementById(`timeline-termin-${terminId}`);
     const fortsetzungEl = document.getElementById(`timeline-termin-${terminId}-teil2`);
     const miniCard = document.getElementById(`termin-card-${terminId}`);
+    const schwebendeBar = document.getElementById(`schwebend-bar-${terminId}`);
     
     // Entferne evtl. vorhandene Fortsetzung (wird ggf. neu erstellt)
     if (fortsetzungEl) {
       fortsetzungEl.remove();
     }
     
-    // Wenn kein Timeline-Element existiert, aber eine Mini-Card -> Termin kommt aus "Nicht zugeordnet"
-    if (!terminEl && miniCard) {
+    // Entferne schwebende Bar wenn vorhanden (beim Drag aus dem Schwebende-Panel)
+    if (schwebendeBar) {
+      schwebendeBar.remove();
+      // Counter aktualisieren
+      const container = document.getElementById('schwebendeTermineContainer');
+      const countElement = document.getElementById('schwebendeCount');
+      if (container && countElement) {
+        const verbleibendeTermine = container.querySelectorAll('.schwebender-termin-bar').length;
+        countElement.textContent = `${verbleibendeTermine} Termin${verbleibendeTermine !== 1 ? 'e' : ''}`;
+      }
+    }
+    
+    // Wenn kein Timeline-Element existiert, aber eine Mini-Card oder Schwebende-Bar -> Termin kommt von außerhalb
+    if (!terminEl && (miniCard || schwebendeBar)) {
       // Lade Termin-Daten und erstelle Timeline-Element
       try {
         const termin = await TermineService.getById(terminId);
@@ -16592,8 +17044,10 @@ class App {
           this.removeDragTimeIndicator();
         });
         
-        // Mini-Card aus "Nicht zugeordnet" entfernen
-        miniCard.remove();
+        // Mini-Card aus "Nicht zugeordnet" entfernen (falls vorhanden)
+        if (miniCard) {
+          miniCard.remove();
+        }
         
       } catch (error) {
         console.error('Fehler beim Erstellen des Timeline-Elements:', error);
@@ -16930,6 +17384,11 @@ class App {
             updateData.startzeit = fruehsteStartzeit;
           }
           
+          // Bug 1 Fix: Datum aktualisieren wenn gesetzt (auch bei Arbeits-spezifischen Änderungen)
+          if (aenderung.datum) {
+            updateData.datum = aenderung.datum;
+          }
+          
           // _gesamt_mitarbeiter_id NICHT ändern, da Arbeiten unterschiedliche Zuordnungen haben können
           // Stattdessen entfernen, damit die individuelle Zuordnung gilt
           delete details._gesamt_mitarbeiter_id;
@@ -16940,6 +17399,11 @@ class App {
         } else {
           // Normale Termin-weite Änderung (alte Logik)
           updateData.startzeit = aenderung.startzeit;
+          
+          // Bug 1 Fix: Datum aktualisieren wenn gesetzt
+          if (aenderung.datum) {
+            updateData.datum = aenderung.datum;
+          }
           
           const wirdZugeordnet = aenderung.type !== 'none' && (aenderung.mitarbeiter_id || aenderung.lehrling_id);
           
@@ -17054,23 +17518,44 @@ class App {
   }
 
   addTimelineNowLine(startHour, endHour) {
-    const now = new Date();
-    const currentHour = now.getHours();
-    const currentMinute = now.getMinutes();
+    // Alte Linien entfernen
+    document.querySelectorAll('.timeline-now-line').forEach(line => line.remove());
     
-    if (currentHour < startHour || currentHour > endHour) return;
+    // Vorherigen Interval stoppen falls vorhanden
+    if (this.nowLineInterval) {
+      clearInterval(this.nowLineInterval);
+      this.nowLineInterval = null;
+    }
     
-    const pixelPerHour = 80;
-    const pixelPerMinute = pixelPerHour / 60;
-    const leftPx = ((currentHour - startHour) * 60 + currentMinute) * pixelPerMinute;
+    const updateNowLine = () => {
+      // Alte Linien entfernen
+      document.querySelectorAll('.timeline-now-line').forEach(line => line.remove());
+      
+      const now = new Date();
+      const currentHour = now.getHours();
+      const currentMinute = now.getMinutes();
+      
+      // Nur anzeigen wenn innerhalb der sichtbaren Stunden
+      if (currentHour < startHour || currentHour > endHour) return;
+      
+      const pixelPerHour = 100; // Muss mit anderen Timeline-Elementen übereinstimmen
+      const pixelPerMinute = pixelPerHour / 60;
+      const leftPx = ((currentHour - startHour) * 60 + currentMinute) * pixelPerMinute;
+      
+      // Füge Linie zu jeder Timeline-Track hinzu
+      document.querySelectorAll('.timeline-track').forEach(track => {
+        const line = document.createElement('div');
+        line.className = 'timeline-now-line';
+        line.style.left = `${leftPx}px`;
+        track.appendChild(line);
+      });
+    };
     
-    // Füge Linie zu jeder Timeline-Track hinzu
-    document.querySelectorAll('.timeline-track').forEach(track => {
-      const line = document.createElement('div');
-      line.className = 'timeline-now-line';
-      line.style.left = `${leftPx}px`;
-      track.appendChild(line);
-    });
+    // Initial zeichnen
+    updateNowLine();
+    
+    // Alle 60 Sekunden aktualisieren
+    this.nowLineInterval = setInterval(updateNowLine, 60000);
   }
 
   createTerminMiniCard(termin) {

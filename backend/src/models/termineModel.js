@@ -598,6 +598,65 @@ class TermineModel {
     return await allAsync(query, [datum]);
   }
 
+  /**
+   * Findet Termine mit Bringzeit in einem bestimmten Zeitfenster
+   * Wird für die Bringzeit-Überschneidungs-Prüfung verwendet
+   */
+  static async getBringzeitUeberschneidungen(datum, vonZeit, bisZeit, excludeTerminId = null) {
+    let query = `
+      SELECT 
+        t.id,
+        t.termin_nr,
+        t.bring_zeit,
+        t.kennzeichen,
+        k.name as kunde_name
+      FROM termine t
+      LEFT JOIN kunden k ON t.kunde_id = k.id
+      WHERE t.datum = ? 
+        AND t.bring_zeit IS NOT NULL 
+        AND t.bring_zeit != ''
+        AND t.bring_zeit >= ?
+        AND t.bring_zeit <= ?
+        AND t.geloescht_am IS NULL
+        AND t.status != 'abgeschlossen'
+    `;
+    
+    const params = [datum, vonZeit, bisZeit];
+    
+    if (excludeTerminId) {
+      query += ' AND t.id != ?';
+      params.push(excludeTerminId);
+    }
+    
+    query += ' ORDER BY t.bring_zeit';
+    
+    return await allAsync(query, params);
+  }
+
+  /**
+   * Lädt alle Bringzeiten eines Tages für die Vorschlags-Berechnung
+   */
+  static async getAlleBringzeitenDesTages(datum, excludeTerminId = null) {
+    let query = `
+      SELECT bring_zeit
+      FROM termine
+      WHERE datum = ? 
+        AND bring_zeit IS NOT NULL 
+        AND bring_zeit != ''
+        AND geloescht_am IS NULL
+        AND status != 'abgeschlossen'
+    `;
+    
+    const params = [datum];
+    
+    if (excludeTerminId) {
+      query += ' AND id != ?';
+      params.push(excludeTerminId);
+    }
+    
+    return await allAsync(query, params);
+  }
+
   static async getAuslastungProLehrling(datum) {
     // Berechnet Auslastung pro Lehrling basierend auf arbeitszeiten_details
     // Da Lehrlinge über JSON in arbeitszeiten_details zugeordnet werden, müssen wir
