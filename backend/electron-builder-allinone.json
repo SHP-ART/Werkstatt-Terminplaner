@@ -1,7 +1,7 @@
 {
   "appId": "com.werkstatt.terminplaner",
   "productName": "Werkstatt Terminplaner",
-  "artifactName": "${name}-Setup-${version}.${ext}",
+  "artifactName": "Werkstatt-Terminplaner-Setup-${version}.${ext}",
   "directories": {
     "output": "dist-allinone"
   },
@@ -11,7 +11,7 @@
     "status.html",
     "status.js",
     "src/",
-    "database/",
+    "database/.gitkeep",
     ".env"
   ],
   "extraResources": [
@@ -61,6 +61,7 @@
     "installerIcon": null,
     "uninstallerIcon": null,
     "installerHeaderIcon": null,
-    "deleteAppDataOnUninstall": false
+    "deleteAppDataOnUninstall": false,
+    "include": "installer.nsh"
   }
 }
