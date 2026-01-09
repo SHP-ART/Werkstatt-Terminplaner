@@ -398,6 +398,25 @@ ipcMain.handle('app-restart', async () => {
 autoUpdater.autoDownload = false;
 autoUpdater.autoInstallOnAppQuit = true;
 
+// Logging für Debugging
+autoUpdater.logger = require('electron').app;
+autoUpdater.logger = {
+  info: (msg) => console.log('[AutoUpdater INFO]', msg),
+  warn: (msg) => console.warn('[AutoUpdater WARN]', msg),
+  error: (msg) => console.error('[AutoUpdater ERROR]', msg),
+  debug: (msg) => console.log('[AutoUpdater DEBUG]', msg)
+};
+
+// GitHub Release URL explizit setzen
+autoUpdater.setFeedURL({
+  provider: 'github',
+  owner: 'SHP-ART',
+  repo: 'Werkstatt-Terminplaner'
+});
+
+console.log('[AutoUpdater] Feed URL konfiguriert für SHP-ART/Werkstatt-Terminplaner');
+console.log('[AutoUpdater] App isPackaged:', app.isPackaged);
+
 // Update-Status Tracking
 let updateStatus = {
   status: 'idle',
@@ -411,6 +430,7 @@ let updateStatus = {
 
 // Auto-Updater Events
 autoUpdater.on('checking-for-update', () => {
+  console.log('[AutoUpdater] Checking for updates...');
   updateStatus = { ...updateStatus, status: 'checking', message: 'Suche nach Updates...' };
   if (mainWindow && !mainWindow.isDestroyed()) {
     mainWindow.webContents.send('update-status', updateStatus);
@@ -418,6 +438,7 @@ autoUpdater.on('checking-for-update', () => {
 });
 
 autoUpdater.on('update-available', (info) => {
+  console.log('[AutoUpdater] Update available:', info.version);
   updateStatus = { 
     ...updateStatus, 
     status: 'available', 
@@ -430,7 +451,9 @@ autoUpdater.on('update-available', (info) => {
   }
 });
 
-autoUpdater.on('update-not-available', () => {
+autoUpdater.on('update-not-available', (info) => {
+  console.log('[AutoUpdater] No update available. Current version is up to date.');
+  console.log('[AutoUpdater] Info:', JSON.stringify(info));
   updateStatus = { 
     ...updateStatus, 
     status: 'idle', 
@@ -468,6 +491,8 @@ autoUpdater.on('update-downloaded', (info) => {
 });
 
 autoUpdater.on('error', (err) => {
+  console.error('[AutoUpdater] Error:', err.message);
+  console.error('[AutoUpdater] Stack:', err.stack);
   updateStatus = { 
     ...updateStatus, 
     status: 'error', 
@@ -480,10 +505,20 @@ autoUpdater.on('error', (err) => {
 });
 
 ipcMain.handle('update-check', async () => {
+  console.log('[AutoUpdater] Manual check triggered');
+  console.log('[AutoUpdater] app.isPackaged:', app.isPackaged);
+  
+  // Warnung wenn nicht gepackt
+  if (!app.isPackaged) {
+    console.warn('[AutoUpdater] App läuft im Entwicklungsmodus - Update-Check wird trotzdem versucht');
+  }
+  
   try {
     const result = await autoUpdater.checkForUpdates();
+    console.log('[AutoUpdater] Check result:', JSON.stringify(result?.updateInfo));
     return { success: true, updateInfo: result?.updateInfo };
   } catch (error) {
+    console.error('[AutoUpdater] Check failed:', error.message);
     return { success: false, error: error.message };
   }
 });
