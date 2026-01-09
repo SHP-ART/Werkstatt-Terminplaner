@@ -262,7 +262,7 @@ CREATE TABLE IF NOT EXISTS lehrling_turnus (
 - [ ] Backend: ersatzautosModel.js - Sperrgrund speichern/laden
 - [ ] Backend: ersatzautosController.js - Sperrgrund-Logik
 - [ ] Frontend: Sperr-Dialog mit Eingabefeld erstellen
-- [ ] Frontend: Zeitanzeige (Abholung/Rückgabe) hinzufügen
+- [x] Frontend: Zeitanzeige (Abholung/Rückgabe) hinzufügen (Verbesserung 1) ✅
 - [ ] Frontend: Sperrgrund in Übersicht anzeigen
 - [x] Frontend: Schnellzugriff "Neuer Termin" über Banner (Verbesserung 5) ✅
 - [x] Frontend: Auslastungsbalken in Planung & Zuweisung (Verbesserung 4) ✅

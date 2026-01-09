@@ -11595,6 +11595,20 @@ class App {
           zeitraumText += ` bis ${buchung.ersatzauto_bis_zeit} Uhr`;
         }
         
+        // Hol- und Bringzeiten ermitteln
+        const bringZeit = buchung.bring_zeit || null;
+        const abholZeit = buchung.abholung_zeit || buchung.ersatzauto_bis_zeit || null;
+        
+        // Zeitanzeige-HTML erstellen
+        let zeitenHtml = '';
+        if (bringZeit || abholZeit) {
+          zeitenHtml = `
+              <div style="margin-top: 6px; font-size: 0.85rem; color: #6b7280; display: flex; flex-wrap: wrap; gap: 12px;">
+                ${bringZeit ? `<span>🕐 <strong>Abholung:</strong> ${bringZeit} Uhr</span>` : ''}
+                ${abholZeit ? `<span>🕐 <strong>Rückgabe:</strong> ${abholZeit} Uhr</span>` : ''}
+              </div>`;
+        }
+        
         return `
           <div class="buchung-card${istHeute ? ' heute' : ''}" style="display: flex; gap: 15px; padding: 15px; background: ${istHeute ? '#fef3c7' : '#f8fafc'}; border-radius: 8px; margin-bottom: 10px; border-left: 4px solid ${istHeute ? '#f59e0b' : '#3b82f6'};">
             <div class="buchung-icon" style="font-size: 2rem;">🚗</div>
@@ -11616,6 +11630,7 @@ class App {
               <div style="margin-top: 8px; font-size: 0.85rem; color: #6b7280;">
                 <span style="color: #9ca3af;">📅 Zeitraum:</span> ${zeitraumText}
               </div>
+              ${zeitenHtml}
             </div>
           </div>
         `;

@@ -198,7 +198,7 @@ class ErsatzautosModel {
     const query = `
       SELECT t.id, t.termin_nr, t.kennzeichen, t.datum, 
              t.ersatzauto_tage, t.ersatzauto_bis_datum, t.ersatzauto_bis_zeit,
-             t.abholung_datum, t.abholung_zeit, t.status,
+             t.abholung_datum, t.abholung_zeit, t.bring_zeit, t.status,
              COALESCE(k.name, t.kunde_name) as kunde_name,
              COALESCE(k.telefon, t.kunde_telefon) as kunde_telefon,
              -- Berechne End-Datum
