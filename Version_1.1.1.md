@@ -264,8 +264,9 @@ CREATE TABLE IF NOT EXISTS lehrling_turnus (
 - [ ] Frontend: Sperr-Dialog mit Eingabefeld erstellen
 - [ ] Frontend: Zeitanzeige (Abholung/Rückgabe) hinzufügen
 - [ ] Frontend: Sperrgrund in Übersicht anzeigen
-- [x] Frontend: Schnellzugriff "Neuer Termin" über Banner (Verbesserung 5)
-- [x] Frontend: Auslastungsbalken in Planung & Zuweisung (Verbesserung 4)
+- [x] Frontend: Schnellzugriff "Neuer Termin" über Banner (Verbesserung 5) ✅
+- [x] Frontend: Auslastungsbalken in Planung & Zuweisung (Verbesserung 4) ✅
+- [x] Frontend: Schnellauswahl Service-Art bei Neuer Termin (Verbesserung 3) ✅
 - [ ] Testen: Fahrzeug sperren mit Grund
 - [ ] Testen: Zeitanzeige bei vergebenen Fahrzeugen
 - [ ] Version in config/version.js aktualisieren

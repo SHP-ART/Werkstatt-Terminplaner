@@ -387,7 +387,10 @@ class App {
       }
     });
 
-    document.getElementById('abholung_typ').addEventListener('change', () => this.toggleAbholungDetails());
+    // Service-Art Radio-Buttons (Neuer Termin)
+    document.querySelectorAll('input[name="abholung_typ"]').forEach(radio => {
+      radio.addEventListener('change', () => this.toggleAbholungDetails());
+    });
 
     // Ersatzauto Verfügbarkeit prüfen
     document.getElementById('ersatzauto').addEventListener('change', () => this.checkErsatzautoVerfuegbarkeit());
@@ -634,7 +637,8 @@ class App {
   }
 
   toggleAbholungDetails() {
-    const abholungTyp = document.getElementById('abholung_typ').value;
+    const abholungTypRadio = document.querySelector('input[name="abholung_typ"]:checked');
+    const abholungTyp = abholungTypRadio ? abholungTypRadio.value : 'bringen';
     const detailsGroup = document.getElementById('abholungDetailsGroup');
     const zeitRow = document.getElementById('abholungZeitRow');
     const bringzeitGroup = document.getElementById('bringzeitGroup');
@@ -769,7 +773,8 @@ class App {
     const checkbox = document.getElementById('ersatzauto');
     if (!checkbox || !checkbox.checked) return true; // Kein Ersatzauto = OK
     
-    const abholungTyp = document.getElementById('abholung_typ').value;
+    const abholungTypRadio = document.querySelector('input[name="abholung_typ"]:checked');
+    const abholungTyp = abholungTypRadio ? abholungTypRadio.value : 'bringen';
     const ersatzautoTageEl = document.getElementById('ersatzauto_tage');
     const abholungDatumEl = document.getElementById('abholung_datum');
     const abholungZeitEl = document.getElementById('abholung_zeit');
@@ -3354,7 +3359,8 @@ class App {
       return;
     }
 
-    const abholungTyp = document.getElementById('abholung_typ').value;
+    const abholungTypRadio = document.querySelector('input[name="abholung_typ"]:checked');
+    const abholungTyp = abholungTypRadio ? abholungTypRadio.value : 'bringen';
     const abholungZeit = document.getElementById('abholung_zeit').value || null;
     const abholungDatum = document.getElementById('abholung_datum').value || null;
     const bringZeit = document.getElementById('bring_zeit').value || null;

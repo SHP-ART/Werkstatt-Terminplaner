@@ -546,14 +546,26 @@
                         <textarea id="umfang" rows="3" placeholder="Zusätzliche Informationen..."></textarea>
                     </div>
 
-                    <div class="form-group">
+                    <div class="form-group service-art-auswahl">
                         <label>Fahrzeug Abholung/Lieferung:</label>
-                        <select id="abholung_typ">
-                            <option value="bringen">Kunde bringt/holt selbst</option>
-                            <option value="hol_bring">Hol- und Bringservice</option>
-                            <option value="ruecksprache">Telefonische Rücksprache</option>
-                            <option value="warten">Kunde wartet</option>
-                        </select>
+                        <div class="service-art-checkboxen">
+                            <label class="service-art-option">
+                                <input type="radio" name="abholung_typ" value="bringen" checked>
+                                <span class="service-art-label">🚗 Holt/bringt selbst</span>
+                            </label>
+                            <label class="service-art-option">
+                                <input type="radio" name="abholung_typ" value="hol_bring">
+                                <span class="service-art-label">🚚 Hol-/Bring-Service</span>
+                            </label>
+                            <label class="service-art-option">
+                                <input type="radio" name="abholung_typ" value="warten">
+                                <span class="service-art-label">⏳ Kunde wartet</span>
+                            </label>
+                            <label class="service-art-option">
+                                <input type="radio" name="abholung_typ" value="ruecksprache">
+                                <span class="service-art-label">📞 Telefonische Rücksprache</span>
+                            </label>
+                        </div>
                     </div>
 
                     <div class="form-group" id="abholungDetailsGroup" style="display: none;">
