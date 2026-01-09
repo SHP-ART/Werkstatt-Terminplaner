@@ -161,6 +161,13 @@ class App {
       button.addEventListener('click', (e) => this.handleSubTabChange(e));
     });
 
+    // Schnellzugriff: Klick auf Header-Banner öffnet "Neuer Termin"
+    const headerBanner = document.querySelector('header.animated-header');
+    if (headerBanner) {
+      headerBanner.addEventListener('click', () => this.navigateToNeuerTermin());
+      headerBanner.setAttribute('title', 'Klicken für neuen Termin');
+    }
+
     document.getElementById('terminForm').addEventListener('submit', (e) => this.handleTerminSubmit(e));
     document.getElementById('internerTerminForm').addEventListener('submit', (e) => this.handleInternerTerminSubmit(e));
     document.getElementById('kundenForm').addEventListener('submit', (e) => this.handleKundenSubmit(e));
@@ -1795,6 +1802,50 @@ class App {
   }
 
   // === ENDE PHASEN-SYSTEM METHODEN ===
+
+  // === SCHNELLZUGRIFF: Navigiert direkt zum "Neuer Termin" Formular ===
+  navigateToNeuerTermin() {
+    // 1. Zum Termine-Tab wechseln
+    document.querySelectorAll('.tab-content').forEach(content => {
+      content.classList.remove('active');
+    });
+    document.querySelectorAll('.tab-button').forEach(button => {
+      button.classList.remove('active');
+    });
+    
+    const termineTab = document.getElementById('termine');
+    const termineTabButton = document.querySelector('.tab-button[data-tab="termine"]');
+    
+    if (termineTab && termineTabButton) {
+      termineTab.classList.add('active');
+      termineTabButton.classList.add('active');
+      
+      // 2. Zum "Neuer Termin" Sub-Tab wechseln
+      const termineContainer = document.getElementById('termine');
+      termineContainer.querySelectorAll('.sub-tab-content').forEach(content => {
+        content.classList.remove('active');
+      });
+      termineContainer.querySelectorAll('.sub-tab-button').forEach(btn => {
+        btn.classList.remove('active');
+      });
+      
+      const neuerTerminContent = document.getElementById('neuerTermin');
+      const neuerTerminButton = termineContainer.querySelector('.sub-tab-button[data-subtab="neuerTermin"]');
+      
+      if (neuerTerminContent && neuerTerminButton) {
+        neuerTerminContent.classList.add('active');
+        neuerTerminButton.classList.add('active');
+      }
+      
+      // 3. Fokus auf das erste Eingabefeld setzen
+      setTimeout(() => {
+        const kundenSuche = document.getElementById('terminNameSuche');
+        if (kundenSuche) {
+          kundenSuche.focus();
+        }
+      }, 100);
+    }
+  }
 
   handleTabChange(e) {
     // closest() verwenden, falls auf ein Kind-Element (z.B. <span>) geklickt wurde

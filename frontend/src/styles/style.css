@@ -43,6 +43,23 @@ header.animated-header {
     border: none;
     position: relative;
     overflow: hidden;
+    cursor: pointer;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+header.animated-header:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 14px 50px rgba(13, 27, 42, 0.4);
+}
+
+header.animated-header:hover .header-subtitle::after {
+    content: ' • Klicken für neuen Termin';
+    font-weight: bold;
+    opacity: 0.9;
+}
+
+header.animated-header:active {
+    transform: translateY(0);
 }
 
 @keyframes headerGradient {
