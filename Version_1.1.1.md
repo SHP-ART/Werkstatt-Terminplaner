@@ -2,13 +2,16 @@
 
 **Release**: 9. Januar 2026  
 **Basis-Version**: v1.1.0  
-**Status**: In Entwicklung
+**Status**: ✅ Fertig
 
 ---
 
 ## 📋 Übersicht
 
-Version 1.1.1 verbessert die Ersatzfahrzeug-Verwaltung mit detaillierteren Zeitanzeigen und einer Sperrgrund-Funktion für manuell gesperrte Fahrzeuge.
+Version 1.1.1 bringt umfangreiche Verbesserungen für die Werkstatt-Verwaltung:
+- **Ersatzfahrzeuge**: Detaillierte Zeitanzeigen und Sperrgrund-Funktion
+- **Terminplanung**: Auslastungsbalken und Schnellzugriffe
+- **Lehrlinge**: Berufsschul-Turnus mit automatischer Abwesenheitsberechnung
 
 ---
 
@@ -143,16 +146,9 @@ ALTER TABLE ersatzautos ADD COLUMN sperrgrund TEXT;
 -- Neues Feld für Sperrdatum (automatische Migration beim Start/Restore)
 ALTER TABLE ersatzautos ADD COLUMN gesperrt_seit TEXT;
 
--- Neue Tabelle für Lehrlings-Turnus (Berufsschule)
-CREATE TABLE IF NOT EXISTS lehrling_turnus (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  mitarbeiter_id INTEGER NOT NULL,
-  jahr INTEGER NOT NULL,
-  schulwochen TEXT NOT NULL,  -- Komma-getrennte KW-Nummern: "2,4,6,8,10"
-  gemeinsamer_turnus INTEGER DEFAULT 0,
-  erstellt_am TEXT DEFAULT CURRENT_TIMESTAMP,
-  FOREIGN KEY (mitarbeiter_id) REFERENCES mitarbeiter(id)
-);
+-- Neues Feld für Berufsschul-Wochen bei Lehrlingen (automatische Migration)
+ALTER TABLE lehrlinge ADD COLUMN berufsschul_wochen TEXT;
+-- Beispielwert: "1,5,9,13,17,21" (Komma-getrennte Kalenderwochennummern)
 ```
 
 ### Backend-Änderungen (geplant)
@@ -161,12 +157,15 @@ CREATE TABLE IF NOT EXISTS lehrling_turnus (
 | `ersatzautosModel.js` | Sperrgrund beim Sperren speichern/laden |
 | `ersatzautosController.js` | Sperrgrund-Parameter verarbeiten |
 | `ersatzautosRoutes.js` | API-Endpunkt anpassen |
+| `lehrlingeModel.js` | berufsschul_wochen Feld hinzufügen |
+| `database.js` | Auto-Migration für neue Felder |
 
 ### Frontend-Änderungen (geplant)
 | Datei | Änderungen |
 |-------|------------|
-| `app.js` | Sperr-Dialog mit Grund-Eingabe, erweiterte Zeitanzeige |
-| `style.css` | Styles für Sperrgrund-Dialog |
+| `app.js` | Sperr-Dialog mit Grund-Eingabe, erweiterte Zeitanzeige, Berufsschul-Turnus |
+| `style.css` | Styles für Sperrgrund-Dialog, Berufsschul-Zeile in Zeitleiste |
+| `index.html` | Berufsschul-KW Spalte in Lehrlinge-Tabelle |
 
 ---
 
@@ -263,9 +262,10 @@ CREATE TABLE IF NOT EXISTS lehrling_turnus (
 - [x] Frontend: Schnellzugriff "Neuer Termin" über Banner (Verbesserung 5) ✅
 - [x] Frontend: Auslastungsbalken in Planung & Zuweisung (Verbesserung 4) ✅
 - [x] Frontend: Schnellauswahl Service-Art bei Neuer Termin (Verbesserung 3) ✅
-- [ ] Testen: Fahrzeug sperren mit Grund
-- [ ] Testen: Zeitanzeige bei vergebenen Fahrzeugen
-- [ ] Version in config/version.js aktualisieren
+- [x] Frontend: Turnusplan für Lehrlinge - Berufsschule (Verbesserung 6) ✅
+- [x] Testen: Fahrzeug sperren mit Grund ✅
+- [x] Testen: Zeitanzeige bei vergebenen Fahrzeugen ✅
+- [x] Version in config/version.js aktualisieren ✅
 
 ---
 

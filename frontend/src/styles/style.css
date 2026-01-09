@@ -6066,6 +6066,20 @@ mark.highlight {
     color: #f57c00;
 }
 
+/* Berufsschule - Lehrling in Schulwoche */
+.zeitleiste-row.berufsschule {
+    background: #e3f2fd;
+}
+
+.zeitleiste-row.berufsschule .zeitleiste-mitarbeiter {
+    background: #bbdefb;
+    color: #1565c0;
+}
+
+.zeitleiste-row.berufsschule .zeitleiste-timeline {
+    opacity: 0.5;
+}
+
 /* Nicht zugeordnet - Inline Container (hintereinander ohne Zeiteinordnung) */
 .nicht-zugeordnet-timeline {
     background: #fff8e1 !important;

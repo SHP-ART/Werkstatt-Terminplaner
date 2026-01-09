@@ -1528,13 +1528,17 @@
                                 <th>Name</th>
                                 <th>Aufgabenbewältigung (%)</th>
                                 <th>Mittagspause</th>
+                                <th>📚 Berufsschul-KW</th>
                                 <th>Aktiv</th>
                                 <th>Aktionen</th>
                             </tr>
                         </thead>
                         <tbody></tbody>
                     </table>
-                    <p class="hint" style="margin-top: 10px;">Aufgabenbewältigung: 100% = Standardzeit, 200% = doppelte Zeit (z.B. Radwechsel 0,5h → 1h)</p>
+                    <p class="hint" style="margin-top: 10px;">
+                        Aufgabenbewältigung: 100% = Standardzeit, 200% = doppelte Zeit<br>
+                        📚 Berufsschul-KW: Klicken Sie auf die KW-Spalte oder gehen Sie zu "Abwesenheiten → Berufsschule"
+                    </p>
                 </div>
 
                 <div class="form-section">
@@ -1543,6 +1547,7 @@
                     <div class="sub-tabs">
                         <button class="sub-tab-button active" data-subtab="urlaubAbwesenheit">Urlaub</button>
                         <button class="sub-tab-button" data-subtab="krankAbwesenheit">Krank</button>
+                        <button class="sub-tab-button" data-subtab="berufsschuleAbwesenheit">📚 Berufsschule</button>
                     </div>
 
                     <div id="urlaubAbwesenheit" class="sub-tab-content active">
@@ -1623,6 +1628,35 @@
                                 </thead>
                                 <tbody></tbody>
                             </table>
+                        </div>
+                    </div>
+
+                    <div id="berufsschuleAbwesenheit" class="sub-tab-content">
+                        <h4>📚 Berufsschul-Turnus für Lehrlinge</h4>
+                        <p class="hint" style="margin-bottom: 20px;">
+                            Hier können Sie für jeden Lehrling die Kalenderwochen hinterlegen, in denen er in der Berufsschule ist.
+                            Der Lehrling wird dann automatisch als "abwesend" markiert.
+                        </p>
+                        
+                        <div id="berufsschulLehrlingeListe">
+                            <table id="berufsschulTable">
+                                <thead>
+                                    <tr>
+                                        <th>Lehrling</th>
+                                        <th>Berufsschul-Wochen (KW)</th>
+                                        <th>Aktionen</th>
+                                    </tr>
+                                </thead>
+                                <tbody></tbody>
+                            </table>
+                        </div>
+                        
+                        <div style="margin-top: 20px; padding: 15px; background: #e3f2fd; border-radius: 8px;">
+                            <h5 style="margin: 0 0 10px 0;">💡 Hinweis zur Eingabe</h5>
+                            <p style="margin: 0; font-size: 0.9em;">
+                                Geben Sie die Kalenderwochen komma-getrennt ein, z.B. <strong>2,4,6,8,10,12</strong> für einen 2-Wochen-Turnus.<br>
+                                Die aktuelle Kalenderwoche wird in der Zeitleiste automatisch erkannt.
+                            </p>
                         </div>
                     </div>
                 </div>

@@ -592,6 +592,13 @@ function initializeDatabase() {
       }
     });
 
+    // Berufsschul-Wochen für Lehrlinge (komma-getrennte KW-Nummern, z.B. "2,4,6,8,10") (V1.1.1)
+    dbWrapper.connection.run(`ALTER TABLE lehrlinge ADD COLUMN berufsschul_wochen TEXT`, (err) => {
+      if (err && !err.message.includes('duplicate column')) {
+        console.error('Fehler beim Hinzufügen von berufsschul_wochen:', err);
+      }
+    });
+
     // Foreign Key für mitarbeiter_id (SQLite unterstützt keine ALTER TABLE ADD CONSTRAINT, daher nur Index)
     dbWrapper.connection.run(`CREATE INDEX IF NOT EXISTS idx_termine_mitarbeiter_id ON termine(mitarbeiter_id)`, (err) => {
       if (err) console.error('Fehler beim Erstellen des Index idx_termine_mitarbeiter_id:', err);

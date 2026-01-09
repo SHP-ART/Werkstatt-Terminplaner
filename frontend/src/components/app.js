@@ -35,6 +35,30 @@ class App {
     return `${year}-${month}-${day}`;
   }
 
+  // Hilfsfunktion: Kalenderwoche berechnen (ISO 8601)
+  getKalenderwoche(date) {
+    const d = date instanceof Date ? new Date(date) : new Date(date);
+    d.setHours(0, 0, 0, 0);
+    // Donnerstag dieser Woche bestimmt das Jahr der KW
+    d.setDate(d.getDate() + 3 - (d.getDay() + 6) % 7);
+    const week1 = new Date(d.getFullYear(), 0, 4);
+    return 1 + Math.round(((d - week1) / 86400000 - 3 + (week1.getDay() + 6) % 7) / 7);
+  }
+
+  // Prüft, ob ein Lehrling an einem bestimmten Datum in der Berufsschule ist
+  isLehrlingInBerufsschule(lehrling, datum) {
+    if (!lehrling || !lehrling.berufsschul_wochen || !datum) {
+      return { inSchule: false, kw: null };
+    }
+    // berufsschul_wochen kann sein: "1,5,9,13" oder "1, 5, 9, 13"
+    const kw = this.getKalenderwoche(datum);
+    const schulwochen = lehrling.berufsschul_wochen.split(',')
+      .map(w => parseInt(w.trim(), 10))
+      .filter(w => !isNaN(w));
+    const inSchule = schulwochen.includes(kw);
+    return { inSchule, kw };
+  }
+
   // Toast-Benachrichtigung anzeigen
   showToast(message, type = 'info') {
     // Prüfen ob bereits ein Toast-Container existiert
@@ -2000,6 +2024,10 @@ class App {
       this.loadAbwesenheitenPersonen();
       this.loadKrankListe();
       this.validateKrankDatum();
+    }
+
+    if (subTabName === 'berufsschuleAbwesenheit') {
+      this.loadBerufsschulLehrlinge();
     }
 
     if (subTabName === 'settingsBackup') {
@@ -5329,13 +5357,33 @@ class App {
         mitarbeiterOptions += '</optgroup>';
       }
 
-      const verfuegbareLehrlinge = lehrlinge.filter(l => !abwesendeLehrlingeIds.has(l.id));
+      // Trenne Lehrlinge: verfügbar, abwesend (Urlaub/Krank), Berufsschule
+      const berufsschulLehrlinge = [];
+      const verfuegbareLehrlinge = lehrlinge.filter(l => {
+        if (abwesendeLehrlingeIds.has(l.id)) return false;
+        // Prüfe Berufsschule
+        const schule = this.isLehrlingInBerufsschule(l, termin.datum);
+        if (schule.inSchule) {
+          berufsschulLehrlinge.push({ ...l, kw: schule.kw });
+          return false;
+        }
+        return true;
+      });
       const abwesendeLehrlinge = lehrlinge.filter(l => abwesendeLehrlingeIds.has(l.id));
       
       if (verfuegbareLehrlinge.length > 0) {
         mitarbeiterOptions += '<optgroup label="Lehrlinge">';
         mitarbeiterOptions += verfuegbareLehrlinge.map(l =>
           `<option value="l_${l.id}" ${zugeordneteLehrlingId === l.id ? 'selected' : ''}>${l.name}</option>`
+        ).join('');
+        mitarbeiterOptions += '</optgroup>';
+      }
+      
+      // Lehrlinge in Berufsschule separat anzeigen (ausgegraut)
+      if (berufsschulLehrlinge.length > 0) {
+        mitarbeiterOptions += '<optgroup label="📚 Berufsschule">';
+        mitarbeiterOptions += berufsschulLehrlinge.map(l =>
+          `<option value="l_${l.id}" disabled style="color: #666;">📚 ${l.name} (KW ${l.kw} - Berufsschule)</option>`
         ).join('');
         mitarbeiterOptions += '</optgroup>';
       }
@@ -12279,6 +12327,84 @@ class App {
     }
   }
 
+  // Berufsschul-Turnus für Lehrlinge laden und anzeigen
+  async loadBerufsschulLehrlinge() {
+    try {
+      const lehrlinge = await LehrlingeService.getAktive();
+      const tbody = document.querySelector('#berufsschulTable tbody');
+      
+      if (!tbody) return;
+      tbody.innerHTML = '';
+
+      if (lehrlinge.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="3" style="text-align: center; color: #666;">Keine Lehrlinge vorhanden</td></tr>';
+        return;
+      }
+
+      // Aktuelle KW berechnen
+      const aktuelleKW = this.getKalenderwoche(new Date());
+
+      lehrlinge.forEach(lehrling => {
+        const row = document.createElement('tr');
+        const schulwochen = lehrling.berufsschul_wochen || '';
+        
+        // Prüfe ob Lehrling gerade in Berufsschule ist
+        const schulwochenArray = schulwochen.split(',').map(w => parseInt(w.trim(), 10)).filter(w => !isNaN(w));
+        const istInSchule = schulwochenArray.includes(aktuelleKW);
+        const statusBadge = istInSchule 
+          ? '<span style="background: #1565c0; color: white; padding: 2px 6px; border-radius: 4px; font-size: 0.8em; margin-left: 8px;">📚 Aktuell in Schule (KW ' + aktuelleKW + ')</span>'
+          : '';
+
+        row.innerHTML = `
+          <td>
+            <strong>${lehrling.name}</strong>${statusBadge}
+          </td>
+          <td>
+            <input type="text" 
+                   id="berufsschul_${lehrling.id}" 
+                   value="${schulwochen}" 
+                   placeholder="z.B. 2,4,6,8,10,12"
+                   style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+          </td>
+          <td>
+            <button class="btn btn-primary" onclick="app.saveBerufsschulWochen(${lehrling.id})">💾 Speichern</button>
+          </td>
+        `;
+        tbody.appendChild(row);
+      });
+    } catch (error) {
+      console.error('Fehler beim Laden der Lehrlinge für Berufsschule:', error);
+    }
+  }
+
+  // Berufsschul-Wochen für einen Lehrling speichern
+  async saveBerufsschulWochen(lehrlingId) {
+    const input = document.getElementById(`berufsschul_${lehrlingId}`);
+    if (!input) return;
+
+    const wochen = input.value.trim();
+    
+    // Validierung: Nur Zahlen und Kommas erlaubt
+    if (wochen && !/^(\d{1,2})(,\s*\d{1,2})*$/.test(wochen)) {
+      alert('Ungültiges Format. Bitte nur Kalenderwochen komma-getrennt eingeben (z.B. 2,4,6,8,10)');
+      return;
+    }
+
+    try {
+      await LehrlingeService.update(lehrlingId, { berufsschul_wochen: wochen });
+      this.showToast(`Berufsschul-Wochen für Lehrling gespeichert`, 'success');
+      
+      // Tabelle neu laden um Status-Badge zu aktualisieren
+      this.loadBerufsschulLehrlinge();
+      
+      // Auch Lehrlinge-Tabelle aktualisieren falls geöffnet
+      this.loadLehrlinge();
+    } catch (error) {
+      console.error('Fehler beim Speichern der Berufsschul-Wochen:', error);
+      alert('Fehler beim Speichern. Bitte erneut versuchen.');
+    }
+  }
+
   formatDatum(datum) {
     if (!datum) return '-';
     const d = new Date(datum);
@@ -12514,16 +12640,29 @@ class App {
       tbody.innerHTML = '';
 
       if (lehrlinge.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="5" class="loading">Keine Lehrlinge vorhanden</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="6" class="loading">Keine Lehrlinge vorhanden</td></tr>';
         return;
       }
 
+      // Aktuelle KW berechnen für Anzeige
+      const aktuelleKW = this.getKalenderwoche(new Date());
+
       lehrlinge.forEach(l => {
         const row = tbody.insertRow();
+        // Berufsschul-Anzeige: nur lesend mit Status
+        const schulwochen = l.berufsschul_wochen || '';
+        const schulwochenArray = schulwochen.split(',').map(w => parseInt(w.trim(), 10)).filter(w => !isNaN(w));
+        const istInSchule = schulwochenArray.includes(aktuelleKW);
+        let schulAnzeige = schulwochen ? schulwochen : '<span style="color: #999;">-</span>';
+        if (istInSchule) {
+          schulAnzeige = `<span style="color: #1565c0; font-weight: bold;">📚 ${schulwochen}</span>`;
+        }
+        
         row.innerHTML = `
           <td><input type="text" id="lehrling_name_${l.id}" value="${l.name || ''}" style="width: 100%; padding: 5px;"></td>
           <td><input type="number" id="lehrling_aufgabe_${l.id}" value="${l.aufgabenbewaeltigung_prozent || 100}" min="0" max="500" step="1" style="width: 100%; padding: 5px;"></td>
           <td><input type="text" id="lehrling_mittagspause_${l.id}" value="${l.mittagspause_start || '12:00'}" style="width: 100%; padding: 5px; text-align: center;" placeholder="HH:MM" pattern="[0-2][0-9]:[0-5][0-9]" maxlength="5" title="24h-Format (z.B. 12:00)" oninput="this.value = this.value.replace(/[^0-9:]/g, ''); if(this.value.length === 2 && !this.value.includes(':')) this.value += ':';"></td>
+          <td style="text-align: center; cursor: pointer;" onclick="app.showSubTab('berufsschuleAbwesenheit')" title="Zum Bearbeiten: Klicken Sie hier oder gehen Sie zu Abwesenheiten → Berufsschule">${schulAnzeige}</td>
           <td><input type="checkbox" id="lehrling_aktiv_${l.id}" ${l.aktiv !== 0 ? 'checked' : ''}></td>
           <td>
             <button class="btn btn-primary" onclick="app.saveLehrling(${l.id})">💾</button>
@@ -12642,6 +12781,7 @@ class App {
       <td><input type="text" id="new_lehrling_name" placeholder="Name" style="width: 100%; padding: 5px;"></td>
       <td><input type="number" id="new_lehrling_aufgabe" value="100" min="0" max="500" step="1" style="width: 100%; padding: 5px;"></td>
       <td><input type="text" id="new_lehrling_mittagspause" value="12:00" style="width: 100%; padding: 5px; text-align: center;" placeholder="HH:MM" pattern="[0-2][0-9]:[0-5][0-9]" maxlength="5" title="24h-Format (z.B. 12:00)" oninput="this.value = this.value.replace(/[^0-9:]/g, ''); if(this.value.length === 2 && !this.value.includes(':')) this.value += ':';"></td>
+      <td style="text-align: center; color: #999;">-</td>
       <td><input type="checkbox" id="new_lehrling_aktiv" checked></td>
       <td>
         <button class="btn btn-primary" onclick="app.saveNewLehrling()">💾</button>
@@ -12662,6 +12802,7 @@ class App {
     const name = document.getElementById('new_lehrling_name').value.trim();
     const aufgabe = parseFloat(document.getElementById('new_lehrling_aufgabe').value);
     const mittagspause = document.getElementById('new_lehrling_mittagspause').value || '12:00';
+    // berufsschul_wochen wird später über den Abwesenheits-Tab gepflegt
     const aktiv = document.getElementById('new_lehrling_aktiv').checked;
 
     if (!name) {
@@ -12688,6 +12829,7 @@ class App {
     const name = document.getElementById(`lehrling_name_${id}`).value.trim();
     const aufgabe = parseFloat(document.getElementById(`lehrling_aufgabe_${id}`).value);
     const mittagspause = document.getElementById(`lehrling_mittagspause_${id}`).value || '12:00';
+    // berufsschul_wochen wird über den Abwesenheits-Tab gepflegt, nicht hier ändern
     const aktiv = document.getElementById(`lehrling_aktiv_${id}`).checked;
 
     if (!name) {
@@ -12926,10 +13068,18 @@ class App {
         const option = document.createElement('option');
         option.value = `l_${l.id}`;
         const istAbwesend = abwesendeIds.has(`l_${l.id}`);
-        option.textContent = istAbwesend ? `🚫 ${l.name} (ABWESEND)` : `🎓 ${l.name} (Lehrling)`;
-        option.style.color = istAbwesend ? '#c62828' : '';
+        // Prüfe auch Berufsschule
+        const schule = this.isLehrlingInBerufsschule(l, termin.datum);
         if (istAbwesend) {
+          option.textContent = `🚫 ${l.name} (ABWESEND)`;
+          option.style.color = '#c62828';
           option.disabled = true;
+        } else if (schule.inSchule) {
+          option.textContent = `📚 ${l.name} (KW ${schule.kw} - Berufsschule)`;
+          option.style.color = '#1565c0';
+          option.disabled = true;
+        } else {
+          option.textContent = `🎓 ${l.name} (Lehrling)`;
         }
         gesamtMitarbeiterSelect.appendChild(option);
       });
@@ -13039,9 +13189,21 @@ class App {
           const value = `l_${l.id}`;
           const selected = value === mitarbeiterId ? 'selected' : '';
           const istAbwesend = abwesendeIds.has(value);
-          const disabled = istAbwesend ? 'disabled' : '';
-          const label = istAbwesend ? `🚫 ${l.name} (ABWESEND)` : `🎓 ${l.name} (Lehrling)`;
-          const style = istAbwesend ? 'style="color: #c62828;"' : '';
+          // Prüfe auch Berufsschule - benötigt Zugriff auf termin.datum
+          const schule = this.isLehrlingInBerufsschule(l, termin.datum);
+          let disabled = '';
+          let label = `🎓 ${l.name} (Lehrling)`;
+          let style = '';
+          
+          if (istAbwesend) {
+            disabled = 'disabled';
+            label = `🚫 ${l.name} (ABWESEND)`;
+            style = 'style="color: #c62828;"';
+          } else if (schule.inSchule) {
+            disabled = 'disabled';
+            label = `📚 ${l.name} (KW ${schule.kw} - Berufsschule)`;
+            style = 'style="color: #1565c0;"';
+          }
           mitarbeiterOptions += `<option value="${value}" ${selected} ${disabled} ${style}>${label}</option>`;
         });
       }
@@ -15711,7 +15873,12 @@ class App {
       const arbeiten = data ? data.arbeiten : [];
       const mittagspauseStart = lehrling.mittagspause_start || '12:00';
       
-      html += this.renderZeitleisteRow(lehrling.name, 'Lehrling', arbeiten, START_HOUR, END_HOUR, TOTAL_HOURS, jetztMarkerHtml, false, mittagspauseStart, mittagspauseDauer);
+      // Prüfe ob Lehrling in Berufsschule ist
+      const schule = this.isLehrlingInBerufsschule(lehrling, datum);
+      const berufsschulBadge = schule.inSchule ? ` 📚 KW ${schule.kw}` : '';
+      const rowStyle = schule.inSchule ? 'berufsschule' : false;
+      
+      html += this.renderZeitleisteRow(lehrling.name + berufsschulBadge, 'Lehrling', arbeiten, START_HOUR, END_HOUR, TOTAL_HOURS, jetztMarkerHtml, rowStyle, mittagspauseStart, mittagspauseDauer);
     }
 
     // Nicht zugeordnete Arbeiten - ohne Zeiteinordnung, hintereinander
@@ -15791,8 +15958,14 @@ class App {
     `;
   }
 
-  renderZeitleisteRow(name, typ, arbeiten, startHour, endHour, totalHours, jetztMarkerHtml, isWarning = false, mittagspauseStart = null, mittagspauseDauer = 30) {
-    const rowClass = isWarning ? 'zeitleiste-row nicht-zugeordnet' : 'zeitleiste-row';
+  renderZeitleisteRow(name, typ, arbeiten, startHour, endHour, totalHours, jetztMarkerHtml, isSpecial = false, mittagspauseStart = null, mittagspauseDauer = 30) {
+    // isSpecial kann 'berufsschule' sein oder true/false für alte Kompatibilität
+    let rowClass = 'zeitleiste-row';
+    if (isSpecial === true) {
+      rowClass = 'zeitleiste-row nicht-zugeordnet';
+    } else if (isSpecial === 'berufsschule') {
+      rowClass = 'zeitleiste-row berufsschule';
+    }
     
     // Gitter erstellen
     let gitterHtml = '<div class="zeitleiste-gitter">';

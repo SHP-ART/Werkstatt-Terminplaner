@@ -48,6 +48,29 @@ async function getCachedAktiveLehrlinge() {
   return aktiveLehrlingeCache.data;
 }
 
+// Hilfsfunktion: Kalenderwoche berechnen (ISO 8601)
+function getKalenderwoche(date) {
+  const d = date instanceof Date ? new Date(date) : new Date(date);
+  d.setHours(0, 0, 0, 0);
+  // Donnerstag dieser Woche bestimmt das Jahr der KW
+  d.setDate(d.getDate() + 3 - (d.getDay() + 6) % 7);
+  const week1 = new Date(d.getFullYear(), 0, 4);
+  return 1 + Math.round(((d - week1) / 86400000 - 3 + (week1.getDay() + 6) % 7) / 7);
+}
+
+// Prüft, ob ein Lehrling an einem bestimmten Datum in der Berufsschule ist
+function isLehrlingInBerufsschule(lehrling, datum) {
+  if (!lehrling || !lehrling.berufsschul_wochen || !datum) {
+    return false;
+  }
+  // berufsschul_wochen kann sein: "1,5,9,13" oder "1, 5, 9, 13"
+  const kw = getKalenderwoche(datum);
+  const schulwochen = lehrling.berufsschul_wochen.split(',')
+    .map(w => parseInt(w.trim(), 10))
+    .filter(w => !isNaN(w));
+  return schulwochen.includes(kw);
+}
+
 // =====================================================
 // HILFSFUNKTION: Berechnet Endzeit für einen Termin
 // =====================================================
@@ -836,6 +859,28 @@ class TermineController {
           }
         }
       });
+      
+      // Prüfe zusätzlich Lehrlinge in Berufsschul-Wochen
+      console.log(`📚 Prüfe Berufsschul-Wochen für Datum: ${datum}`);
+      const aktuelleKW = getKalenderwoche(datum);
+      console.log(`   Aktuelle KW: ${aktuelleKW}`);
+      (lehrlinge || []).forEach(lehrling => {
+        if (isLehrlingInBerufsschule(lehrling, datum)) {
+          // Nur hinzufügen wenn nicht schon abwesend (Urlaub/Krank)
+          if (!abwesendeLehrlinge.has(lehrling.id)) {
+            abwesendeLehrlinge.add(lehrling.id);
+            console.log(`   ✓ Lehrling ${lehrling.id} (${lehrling.name}) in Berufsschule (KW ${aktuelleKW})`);
+            debugAbwesenheiten.push({
+              typ: 'lehrling',
+              id: lehrling.id,
+              name: lehrling.name,
+              grund: `Berufsschule (KW ${aktuelleKW})`,
+              berufsschul_wochen: lehrling.berufsschul_wochen
+            });
+          }
+        }
+      });
+      
       console.log(`✅ Abwesende Mitarbeiter IDs im Set: [${Array.from(abwesendeMitarbeiter).join(', ')}]`);
       console.log(`✅ Abwesende Lehrlinge IDs im Set: [${Array.from(abwesendeLehrlinge).join(', ')}]`);
 

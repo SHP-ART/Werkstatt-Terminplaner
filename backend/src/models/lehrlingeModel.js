@@ -14,16 +14,16 @@ class LehrlingeModel {
   }
 
   static async create(data) {
-    const { name, nebenzeit_prozent, aufgabenbewaeltigung_prozent, aktiv, mittagspause_start } = data;
+    const { name, nebenzeit_prozent, aufgabenbewaeltigung_prozent, aktiv, mittagspause_start, berufsschul_wochen } = data;
     const result = await runAsync(
-      'INSERT INTO lehrlinge (name, nebenzeit_prozent, aufgabenbewaeltigung_prozent, aktiv, mittagspause_start) VALUES (?, ?, ?, ?, ?)',
-      [name, nebenzeit_prozent || 0, aufgabenbewaeltigung_prozent || 100, aktiv !== undefined ? aktiv : 1, mittagspause_start || '12:00']
+      'INSERT INTO lehrlinge (name, nebenzeit_prozent, aufgabenbewaeltigung_prozent, aktiv, mittagspause_start, berufsschul_wochen) VALUES (?, ?, ?, ?, ?, ?)',
+      [name, nebenzeit_prozent || 0, aufgabenbewaeltigung_prozent || 100, aktiv !== undefined ? aktiv : 1, mittagspause_start || '12:00', berufsschul_wochen || null]
     );
     return { id: result.lastID, ...data };
   }
 
   static async update(id, data) {
-    const { name, nebenzeit_prozent, aufgabenbewaeltigung_prozent, aktiv, mittagspause_start } = data;
+    const { name, nebenzeit_prozent, aufgabenbewaeltigung_prozent, aktiv, mittagspause_start, berufsschul_wochen } = data;
     const updates = [];
     const values = [];
 
@@ -46,6 +46,10 @@ class LehrlingeModel {
     if (mittagspause_start !== undefined) {
       updates.push('mittagspause_start = ?');
       values.push(mittagspause_start);
+    }
+    if (berufsschul_wochen !== undefined) {
+      updates.push('berufsschul_wochen = ?');
+      values.push(berufsschul_wochen);
     }
 
     if (updates.length === 0) {
