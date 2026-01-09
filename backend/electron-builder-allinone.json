@@ -11,8 +11,8 @@
     "status.html",
     "status.js",
     "src/",
-    "database/.gitkeep",
-    ".env"
+    ".env",
+    "!database/**"
   ],
   "extraResources": [
     {
