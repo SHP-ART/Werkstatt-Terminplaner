@@ -16171,6 +16171,9 @@ class App {
       // Speichere für spätere Verwendung in getTerminGesamtdauer
       this._planungNebenzeitProzent = nebenzeitProzent;
 
+      // 3c. Auslastungsbalken aktualisieren
+      this.updatePlanungAuslastungsbalken(auslastungData, mitarbeiterListe, lehrlingeListe);
+
       // 4. Container leeren
       const sourceContainer = document.getElementById('dragDropNichtZugeordnet');
       const schwebendeContainer = document.getElementById('schwebendeTermineContainer');
@@ -16584,6 +16587,76 @@ class App {
     
     container.innerHTML = '';
     this.renderSchwebendeTermine(this._schwebendeTermineCache, container);
+  }
+
+  /**
+   * Aktualisiert den Auslastungsbalken in Planung & Zuweisung
+   */
+  updatePlanungAuslastungsbalken(auslastungData, mitarbeiterListe, lehrlingeListe) {
+    const prozentElement = document.getElementById('planungAuslastungProzent');
+    const fillElement = document.getElementById('planungAuslastungFill');
+    const minutenElement = document.getElementById('planungAuslastungMinuten');
+    
+    if (!prozentElement || !fillElement || !minutenElement) return;
+    
+    // Verwende dieselbe Berechnung wie in der Auslastungs-Ansicht
+    // Die Werte kommen direkt vom Backend (inkl. Nebenzeit-Berechnung)
+    let prozent = 0;
+    let belegtMinuten = 0;
+    let gesamtKapazitaet = 0;
+    
+    if (auslastungData) {
+      // Verwende die vom Backend berechneten Werte (konsistent mit Auslastungs-Tab)
+      prozent = auslastungData.auslastung_prozent || 0;
+      belegtMinuten = auslastungData.belegt_minuten_mit_service || auslastungData.belegt_minuten || 0;
+      gesamtKapazitaet = auslastungData.gesamt_minuten || 0;
+    }
+    
+    // Falls keine Backend-Daten, berechne aus Mitarbeiter-Listen (Fallback)
+    if (gesamtKapazitaet === 0) {
+      if (mitarbeiterListe && mitarbeiterListe.length > 0) {
+        mitarbeiterListe.forEach(ma => {
+          gesamtKapazitaet += (ma.arbeitsstunden_pro_tag || 8) * 60;
+        });
+      }
+      if (lehrlingeListe && lehrlingeListe.length > 0) {
+        lehrlingeListe.forEach(lehrling => {
+          gesamtKapazitaet += (lehrling.arbeitsstunden_pro_tag || 8) * 60;
+        });
+      }
+    }
+    
+    const prozentCapped = Math.min(prozent, 100); // Maximal 100% für Balkenbreite
+    
+    // Auslastungs-Klasse bestimmen (gleiche Schwellwerte wie Auslastungs-Tab)
+    let auslastungKlasse = 'auslastung-niedrig';
+    if (prozent > 100) {
+      auslastungKlasse = 'auslastung-hoch';
+    } else if (prozent > 80) {
+      auslastungKlasse = 'auslastung-mittel';
+    }
+    
+    // UI aktualisieren
+    prozentElement.textContent = `${Math.round(prozent)}%`;
+    prozentElement.className = auslastungKlasse;
+    
+    fillElement.style.width = `${prozentCapped}%`;
+    fillElement.className = `planung-auslastung-fill ${auslastungKlasse}`;
+    
+    // Stunden/Minuten formatieren
+    const belegtStunden = Math.floor(belegtMinuten / 60);
+    const belegtRestMinuten = Math.round(belegtMinuten % 60);
+    const kapazitaetStunden = Math.floor(gesamtKapazitaet / 60);
+    const kapazitaetRestMinuten = Math.round(gesamtKapazitaet % 60);
+    
+    const belegtText = belegtStunden > 0 
+      ? `${belegtStunden}h ${belegtRestMinuten > 0 ? belegtRestMinuten + 'min' : ''}`.trim()
+      : `${belegtRestMinuten}min`;
+    const kapazitaetText = kapazitaetStunden > 0 
+      ? `${kapazitaetStunden}h ${kapazitaetRestMinuten > 0 ? kapazitaetRestMinuten + 'min' : ''}`.trim()
+      : `${gesamtKapazitaet}min`;
+    
+    minutenElement.textContent = `${belegtText} / ${kapazitaetText} belegt`;
   }
 
   /**

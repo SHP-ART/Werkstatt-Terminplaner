@@ -2098,6 +2098,20 @@
                 <p class="page-subtitle">Drag & Drop Terminplanung mit Zeitleiste</p>
             </div>
 
+            <!-- Auslastungsbalken für den ausgewählten Tag -->
+            <div class="planung-auslastung-bar" id="planungAuslastungBar">
+                <div class="planung-auslastung-label">
+                    <span>📊 Tagesauslastung:</span>
+                    <span id="planungAuslastungProzent">0%</span>
+                </div>
+                <div class="planung-auslastung-track">
+                    <div class="planung-auslastung-fill" id="planungAuslastungFill" style="width: 0%"></div>
+                </div>
+                <div class="planung-auslastung-details" id="planungAuslastungDetails">
+                    <span id="planungAuslastungMinuten">0 / 0 min</span>
+                </div>
+            </div>
+
             <div class="auslastung-navigation">
                 <div class="nav-row">
                     <button type="button" id="planungPrevTag" class="btn btn-nav" title="Vorheriger Tag">◀ Tag</button>
