@@ -10770,15 +10770,29 @@ class App {
       const gesperrtBis = auto.gesperrt_bis;
       const istAbgelaufen = gesperrtBis && gesperrtBis < heute;
       const istGesperrt = auto.manuell_gesperrt === 1 && !istAbgelaufen;
+      const sperrgrund = auto.sperrgrund || null;
+      const gesperrtSeit = auto.gesperrt_seit || null;
       
       const statusClass = istGesperrt ? 'gesperrt' : 'verfuegbar';
-      const statusText = istGesperrt 
+      let statusText = istGesperrt 
         ? (gesperrtBis ? `Gesperrt bis ${new Date(gesperrtBis).toLocaleDateString('de-DE')}` : 'Gesperrt') 
         : 'Verfügbar';
       const icon = istGesperrt ? '🔴' : '🟢';
       const hinweisText = istGesperrt 
         ? '🔓 Klicken zum Freigeben' 
         : '🔒 Klicken zum Sperren';
+      
+      // Sperrgrund-Anzeige
+      let sperrgrundHtml = '';
+      if (istGesperrt && sperrgrund) {
+        sperrgrundHtml = `<div class="kachel-sperrgrund">⛔ ${sperrgrund}</div>`;
+      }
+      
+      // Gesperrt seit Anzeige
+      let gesperrtSeitHtml = '';
+      if (istGesperrt && gesperrtSeit) {
+        gesperrtSeitHtml = `<div class="kachel-gesperrt-seit">📅 Seit: ${new Date(gesperrtSeit).toLocaleDateString('de-DE')}</div>`;
+      }
       
       return `
         <div class="ersatzauto-kachel ${statusClass}" 
@@ -10794,6 +10808,8 @@ class App {
           <div class="kachel-name">${auto.name}</div>
           <div class="kachel-kennzeichen">${auto.kennzeichen}</div>
           ${auto.typ ? `<div class="kachel-typ">📋 ${auto.typ}</div>` : ''}
+          ${sperrgrundHtml}
+          ${gesperrtSeitHtml}
           <div class="kachel-hinweis">
             <span>${hinweisText}</span>
           </div>
@@ -10849,6 +10865,12 @@ class App {
         </div>
         <div class="modal-body">
           <p><strong>${name}</strong> (${kennzeichen})</p>
+          
+          <div class="sperren-grund" style="margin-bottom: 20px;">
+            <label style="display: block; margin-bottom: 8px; font-weight: 500;">Grund für die Sperrung (optional):</label>
+            <input type="text" id="sperrenGrund" class="form-input" placeholder="z.B. TÜV, Reparatur, Unfall, Service..." style="width: 100%;">
+          </div>
+          
           <p style="margin-bottom: 15px; color: #64748b;">Wie lange soll das Fahrzeug gesperrt werden?</p>
           
           <div class="sperren-optionen">
@@ -10948,7 +10970,9 @@ class App {
   // Sperrung mit gewähltem Datum bestätigen
   async bestaetigenSperrenMitDatum(id) {
     const datumInput = document.getElementById('sperrenBisDatum');
+    const grundInput = document.getElementById('sperrenGrund');
     const bisDatum = datumInput?.value;
+    const sperrgrund = grundInput?.value?.trim() || null;
     
     if (!bisDatum) {
       alert('Bitte wählen Sie ein Datum aus.');
@@ -10956,9 +10980,28 @@ class App {
     }
     
     try {
-      await ErsatzautosService.sperrenBis(id, bisDatum);
+      // Prüfen ob es Buchungen im Sperrzeitraum gibt
+      const heute = this.formatDateLocal(new Date());
+      const buchungen = await ErsatzautosService.getBuchungenImZeitraum(heute, bisDatum);
+      
+      if (buchungen && buchungen.length > 0) {
+        // Warnung erstellen
+        const buchungsListe = buchungen.map(b => {
+          const datum = new Date(b.datum).toLocaleDateString('de-DE');
+          return `• ${b.termin_nr || 'Termin'} - ${b.kunde_name || 'Unbekannt'} (${datum})`;
+        }).join('\n');
+        
+        const warnung = `⚠️ ACHTUNG: Im Sperrzeitraum gibt es ${buchungen.length} Termin(e) mit Ersatzfahrzeug-Bedarf!\n\n${buchungsListe}\n\nMöchten Sie das Fahrzeug trotzdem sperren?`;
+        
+        if (!confirm(warnung)) {
+          return; // Abbrechen
+        }
+      }
+      
+      await ErsatzautosService.sperrenBis(id, bisDatum, sperrgrund);
       this.closeSperrenModal();
-      alert(`✅ Fahrzeug gesperrt bis ${new Date(bisDatum).toLocaleDateString('de-DE')}.`);
+      const grundText = sperrgrund ? ` (Grund: ${sperrgrund})` : '';
+      alert(`✅ Fahrzeug gesperrt bis ${new Date(bisDatum).toLocaleDateString('de-DE')}${grundText}.`);
       this.loadErsatzautos();
       this.loadDashboard();
     } catch (error) {

@@ -25,11 +25,12 @@ class ErsatzautosModel {
     return await ErsatzautosModel.getById(id);
   }
 
-  // Zeitbasierte Sperrung setzen (sperren bis zu einem bestimmten Datum)
-  static async sperrenBis(id, bisDatum) {
+  // Zeitbasierte Sperrung setzen (sperren bis zu einem bestimmten Datum) mit Sperrgrund
+  static async sperrenBis(id, bisDatum, sperrgrund = null) {
+    const heute = new Date().toISOString().split('T')[0];
     await runAsync(
-      'UPDATE ersatzautos SET manuell_gesperrt = 1, gesperrt_bis = ? WHERE id = ?',
-      [bisDatum, id]
+      'UPDATE ersatzautos SET manuell_gesperrt = 1, gesperrt_bis = ?, sperrgrund = ?, gesperrt_seit = ? WHERE id = ?',
+      [bisDatum, sperrgrund, heute, id]
     );
     return await ErsatzautosModel.getById(id);
   }
@@ -37,7 +38,7 @@ class ErsatzautosModel {
   // Sperrung aufheben
   static async entsperren(id) {
     await runAsync(
-      'UPDATE ersatzautos SET manuell_gesperrt = 0, gesperrt_bis = NULL WHERE id = ?',
+      'UPDATE ersatzautos SET manuell_gesperrt = 0, gesperrt_bis = NULL, sperrgrund = NULL, gesperrt_seit = NULL WHERE id = ?',
       [id]
     );
     return await ErsatzautosModel.getById(id);
@@ -272,6 +273,39 @@ class ErsatzautosModel {
     `;
     
     return await allAsync(query, [heute, heute, heute, heute]);
+  }
+
+  // Buchungen im angegebenen Zeitraum finden (für Sperrwarnung)
+  static async getBuchungenImZeitraum(vonDatum, bisDatum) {
+    const query = `
+      SELECT t.id, t.termin_nr, t.kennzeichen, t.datum, 
+             t.ersatzauto_tage, t.ersatzauto_bis_datum,
+             COALESCE(k.name, t.kunde_name) as kunde_name,
+             -- Berechne End-Datum
+             CASE 
+               WHEN t.ersatzauto_bis_datum IS NOT NULL THEN t.ersatzauto_bis_datum
+               WHEN t.abholung_datum IS NOT NULL THEN t.abholung_datum
+               WHEN t.ersatzauto_tage IS NOT NULL THEN date(t.datum, '+' || (t.ersatzauto_tage - 1) || ' days')
+               ELSE t.datum
+             END as bis_datum
+      FROM termine t
+      LEFT JOIN kunden k ON t.kunde_id = k.id
+      WHERE t.ersatzauto = 1 
+      AND t.status NOT IN ('storniert', 'erledigt')
+      AND t.geloescht_am IS NULL
+      AND (
+        -- Termin überschneidet sich mit dem Sperrzeitraum
+        (t.datum <= ? AND (
+          t.ersatzauto_bis_datum >= ?
+          OR t.abholung_datum >= ?
+          OR (t.ersatzauto_tage IS NOT NULL AND date(t.datum, '+' || (t.ersatzauto_tage - 1) || ' days') >= ?)
+          OR (t.ersatzauto_bis_datum IS NULL AND t.abholung_datum IS NULL AND t.ersatzauto_tage IS NULL AND t.datum >= ?)
+        ))
+      )
+      ORDER BY t.datum ASC
+    `;
+    
+    return await allAsync(query, [bisDatum, vonDatum, vonDatum, vonDatum, vonDatum]);
   }
 }
 module.exports = ErsatzautosModel;

@@ -137,10 +137,10 @@ Version 1.1.1 verbessert die Ersatzfahrzeug-Verwaltung mit detaillierteren Zeita
 
 ### Datenbank-Änderungen (geplant)
 ```sql
--- Neues Feld für Sperrgrund
+-- Neues Feld für Sperrgrund (automatische Migration beim Start/Restore)
 ALTER TABLE ersatzautos ADD COLUMN sperrgrund TEXT;
 
--- Neues Feld für Sperrdatum (falls nicht vorhanden)
+-- Neues Feld für Sperrdatum (automatische Migration beim Start/Restore)
 ALTER TABLE ersatzautos ADD COLUMN gesperrt_seit TEXT;
 
 -- Neue Tabelle für Lehrlings-Turnus (Berufsschule)
@@ -246,24 +246,20 @@ CREATE TABLE IF NOT EXISTS lehrling_turnus (
 ## 🚀 Upgrade-Anleitung
 
 1. **Code aktualisieren**: `git pull origin master`
-2. **Datenbank migrieren**: 
-   ```bash
-   sqlite3 backend/database/werkstatt.db "ALTER TABLE ersatzautos ADD COLUMN sperrgrund TEXT;"
-   sqlite3 backend/database/werkstatt.db "ALTER TABLE ersatzautos ADD COLUMN gesperrt_seit TEXT;"
-   ```
-   *(Nur nötig wenn Datenbank bereits existiert)*
-3. **Server neu starten**: `./start.sh` oder `start.bat`
+2. **Server neu starten**: `./start.sh` oder `start.bat`
+   - Datenbank-Migration erfolgt automatisch beim Start
+   - Auch beim Wiederherstellen eines alten Backups werden fehlende Felder automatisch hinzugefügt
 
 ---
 
 ## ✅ Checkliste für Implementierung
 
-- [ ] Datenbank-Schema erweitern (sperrgrund, gesperrt_seit)
-- [ ] Backend: ersatzautosModel.js - Sperrgrund speichern/laden
-- [ ] Backend: ersatzautosController.js - Sperrgrund-Logik
-- [ ] Frontend: Sperr-Dialog mit Eingabefeld erstellen
+- [x] Datenbank-Schema erweitern (sperrgrund, gesperrt_seit) ✅
+- [x] Backend: ersatzautosModel.js - Sperrgrund speichern/laden ✅
+- [x] Backend: ersatzautosController.js - Sperrgrund-Logik ✅
+- [x] Frontend: Sperr-Dialog mit Eingabefeld erstellen ✅
 - [x] Frontend: Zeitanzeige (Abholung/Rückgabe) hinzufügen (Verbesserung 1) ✅
-- [ ] Frontend: Sperrgrund in Übersicht anzeigen
+- [x] Frontend: Sperrgrund in Übersicht anzeigen ✅
 - [x] Frontend: Schnellzugriff "Neuer Termin" über Banner (Verbesserung 5) ✅
 - [x] Frontend: Auslastungsbalken in Planung & Zuweisung (Verbesserung 4) ✅
 - [x] Frontend: Schnellauswahl Service-Art bei Neuer Termin (Verbesserung 3) ✅

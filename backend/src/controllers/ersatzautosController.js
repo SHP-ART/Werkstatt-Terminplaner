@@ -126,6 +126,21 @@ const ersatzautosController = {
     }
   },
 
+  // Buchungen im Zeitraum prüfen (für Sperrwarnung)
+  getBuchungenImZeitraum: async (req, res) => {
+    try {
+      const { von, bis } = req.query;
+      if (!von || !bis) {
+        return res.status(400).json({ error: 'Parameter "von" und "bis" sind erforderlich' });
+      }
+      const buchungen = await ErsatzautosModel.getBuchungenImZeitraum(von, bis);
+      res.json(buchungen);
+    } catch (err) {
+      console.error('Fehler beim Abrufen der Buchungen im Zeitraum:', err);
+      res.status(500).json({ error: 'Interner Serverfehler' });
+    }
+  },
+
   // Heute fällige Rückgaben
   getHeuteRueckgaben: async (req, res) => {
     try {
@@ -173,17 +188,17 @@ const ersatzautosController = {
     }
   },
 
-  // Zeitbasierte Sperrung setzen (sperren bis zu einem bestimmten Datum)
+  // Zeitbasierte Sperrung setzen (sperren bis zu einem bestimmten Datum) mit Sperrgrund
   sperrenBis: async (req, res) => {
     const id = req.params.id;
-    const { bisDatum } = req.body;
+    const { bisDatum, sperrgrund } = req.body;
     
     if (!bisDatum) {
       return res.status(400).json({ error: 'Feld "bisDatum" ist erforderlich' });
     }
     
     try {
-      const auto = await ErsatzautosModel.sperrenBis(id, bisDatum);
+      const auto = await ErsatzautosModel.sperrenBis(id, bisDatum, sperrgrund || null);
       if (!auto) {
         return res.status(404).json({ error: 'Ersatzauto nicht gefunden' });
       }

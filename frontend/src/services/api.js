@@ -432,6 +432,11 @@ class ErsatzautosService {
     return ApiService.get('/ersatzautos/buchungen/aktuell');
   }
 
+  // Buchungen im Zeitraum prüfen (für Sperrwarnung)
+  static async getBuchungenImZeitraum(von, bis) {
+    return ApiService.get(`/ersatzautos/buchungen/zeitraum?von=${von}&bis=${bis}`);
+  }
+
   // Heute fällige Rückgaben
   static async getHeuteRueckgaben() {
     return ApiService.get('/ersatzautos/rueckgaben/heute');
@@ -447,9 +452,9 @@ class ErsatzautosService {
     return ApiService.put(`/ersatzautos/${id}/gesperrt`, { gesperrt });
   }
 
-  // Zeitbasierte Sperrung setzen (sperren bis zu einem bestimmten Datum)
-  static async sperrenBis(id, bisDatum) {
-    return ApiService.post(`/ersatzautos/${id}/sperren-bis`, { bisDatum });
+  // Zeitbasierte Sperrung setzen (sperren bis zu einem bestimmten Datum) mit Sperrgrund
+  static async sperrenBis(id, bisDatum, sperrgrund = null) {
+    return ApiService.post(`/ersatzautos/${id}/sperren-bis`, { bisDatum, sperrgrund });
   }
 
   // Sperrung aufheben

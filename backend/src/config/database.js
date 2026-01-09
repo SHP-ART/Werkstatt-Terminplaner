@@ -709,6 +709,20 @@ function initializeDatabase() {
       }
     });
 
+    // Migration: sperrgrund Feld für Sperrgrund hinzufügen (V1.1.1)
+    dbWrapper.connection.run(`ALTER TABLE ersatzautos ADD COLUMN sperrgrund TEXT`, (err) => {
+      if (err && !err.message.includes('duplicate column')) {
+        console.error('Fehler beim Hinzufügen von sperrgrund:', err);
+      }
+    });
+
+    // Migration: gesperrt_seit Feld für Sperrdatum hinzufügen (V1.1.1)
+    dbWrapper.connection.run(`ALTER TABLE ersatzautos ADD COLUMN gesperrt_seit TEXT`, (err) => {
+      if (err && !err.message.includes('duplicate column')) {
+        console.error('Fehler beim Hinzufügen von gesperrt_seit:', err);
+      }
+    });
+
     dbWrapper.connection.run(`CREATE TABLE IF NOT EXISTS abwesenheiten (
       datum TEXT PRIMARY KEY,
       urlaub INTEGER DEFAULT 0,

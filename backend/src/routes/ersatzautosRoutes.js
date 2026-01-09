@@ -11,6 +11,9 @@ router.get('/aktiv', ersatzautosController.getActive);
 // Aktuelle Buchungen (heute und laufende)
 router.get('/buchungen/aktuell', ersatzautosController.getAktuelleBuchungen);
 
+// Buchungen im Zeitraum prüfen (für Sperrwarnung)
+router.get('/buchungen/zeitraum', ersatzautosController.getBuchungenImZeitraum);
+
 // Heute fällige Rückgaben
 router.get('/rueckgaben/heute', ersatzautosController.getHeuteRueckgaben);
 

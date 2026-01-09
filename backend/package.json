@@ -5,6 +5,7 @@
   "main": "electron-main.js",
   "scripts": {
     "start": "electron .",
+    "server": "node src/server.js",
     "dev": "nodemon src/server.js",
     "build:exe": "electron-builder",
     "build:allinone": "electron-builder --config electron-builder-allinone.json",
