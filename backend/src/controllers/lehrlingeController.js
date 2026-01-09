@@ -75,7 +75,7 @@ class LehrlingeController {
         return res.status(404).json({ error: 'Lehrling nicht gefunden' });
       }
 
-      const { name, nebenzeit_prozent, aufgabenbewaeltigung_prozent, aktiv, mittagspause_start } = req.body;
+      const { name, nebenzeit_prozent, aufgabenbewaeltigung_prozent, aktiv, mittagspause_start, berufsschul_wochen } = req.body;
       const data = {};
 
       if (name !== undefined) {
@@ -92,6 +92,9 @@ class LehrlingeController {
       }
       if (mittagspause_start !== undefined) {
         data.mittagspause_start = mittagspause_start;
+      }
+      if (berufsschul_wochen !== undefined) {
+        data.berufsschul_wochen = berufsschul_wochen;
       }
 
       const result = await LehrlingeModel.update(id, data);

@@ -150,7 +150,7 @@ class TermineModel {
       mitarbeiter_id, dringlichkeit, kennzeichen, umfang, datum, abholung_typ,
       abholung_details, abholung_zeit, abholung_datum, bring_zeit, kontakt_option,
       kilometerstand, ersatzauto, ersatzauto_tage, ersatzauto_bis_datum, ersatzauto_bis_zeit,
-      vin, fahrzeugtyp, muss_bearbeitet_werden, interne_auftragsnummer,
+      vin, fahrzeugtyp, muss_bearbeitet_werden, ist_schwebend, interne_auftragsnummer,
       startzeit, endzeit_berechnet, fertigstellung_zeit, notizen
     } = data;
     
@@ -261,6 +261,10 @@ class TermineModel {
     if (muss_bearbeitet_werden !== undefined) {
       updates.push('muss_bearbeitet_werden = ?');
       values.push(muss_bearbeitet_werden ? 1 : 0);
+    }
+    if (ist_schwebend !== undefined) {
+      updates.push('ist_schwebend = ?');
+      values.push(ist_schwebend ? 1 : 0);
     }
     if (interne_auftragsnummer !== undefined) {
       updates.push('interne_auftragsnummer = ?');

@@ -453,6 +453,17 @@
                                 <strong id="terminAuslastungGesamt">-</strong>
                             </div>
                         </div>
+                        
+                        <!-- Termine für diesen Tag -->
+                        <div id="newTermineAmTag" style="margin-top: 15px; padding-top: 12px; border-top: 1px solid #dee2e6;">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                                <strong style="color: #1565c0;">📋 Termine an diesem Tag:</strong>
+                                <span id="newTermineAnzahl" style="font-size: 0.85em; color: #666;">0 Termine</span>
+                            </div>
+                            <div id="newTermineListe" style="max-height: 200px; overflow-y: auto; font-size: 0.85em;">
+                                <!-- Termine werden hier dynamisch eingefügt -->
+                            </div>
+                        </div>
                     </div>
 
                     <!-- Telefon für neuen Kunden -->
@@ -684,13 +695,13 @@
                         </div>
                     </div>
 
-                    <!-- Termin-Auswahl Dropdown -->
-                    <div class="form-group" style="margin-bottom: 20px;">
-                        <label>Termin auswählen:</label>
-                        <div style="display: flex; gap: 10px; flex-wrap: wrap; align-items: center;">
-                            <select id="editTerminAuswahl" style="flex: 1; min-width: 300px;">
-                                <option value="">-- Erst Datum wählen, dann Termin auswählen --</option>
-                            </select>
+                    <!-- Termin-Liste (klickbar) -->
+                    <div id="editTerminListeContainer" style="margin-bottom: 20px;">
+                        <label style="font-weight: 600; margin-bottom: 10px; display: block;">📋 Termine an diesem Tag:</label>
+                        <div id="editTerminListe" style="max-height: 350px; overflow-y: auto; border: 1px solid #dee2e6; border-radius: 8px; background: #fff;">
+                            <div style="padding: 20px; text-align: center; color: #666;">
+                                Bitte wählen Sie zuerst ein Datum im Kalender
+                            </div>
                         </div>
                     </div>
 
@@ -749,24 +760,9 @@
                                 </div>
                             </div>
 
-                            <div id="editTerminAuslastungAnzeige" style="margin-bottom: 20px; padding: 15px; background: #f8f9fa; border-radius: 8px; border-left: 4px solid #4a90e2; display: none;">
-                                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
-                                    <strong style="font-size: 1.1em;">Auslastung für gewähltes Datum</strong>
-                                    <span id="editTerminAuslastungProzent" style="font-size: 1.2em; font-weight: bold; color: #4a90e2;">-</span>
-                                </div>
-                                <div style="background: #e9ecef; border-radius: 5px; height: 20px; overflow: hidden; margin-bottom: 10px;">
-                                    <div id="editTerminAuslastungBalken" style="background: #4a90e2; height: 100%; width: 0%; transition: width 0.3s, background 0.3s;"></div>
-                                </div>
-                                <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; font-size: 0.9em;">
-                                    <div>
-                                        <span style="color: #666;">Verfügbar:</span>
-                                        <strong id="editTerminAuslastungVerfuegbar">-</strong>
-                                    </div>
-                                    <div>
-                                        <span style="color: #666;">Gesamt:</span>
-                                        <strong id="editTerminAuslastungGesamt">-</strong>
-                                    </div>
-                                </div>
+                            <!-- Auslastungsanzeige ausgeblendet - redundant da Termine bereits in der Liste oben angezeigt werden -->
+                            <div id="editTerminAuslastungAnzeige" style="display: none !important;">
+                                <!-- Diese Box wird nicht mehr benötigt -->
                             </div>
 
                             <div class="form-row">
@@ -2215,6 +2211,14 @@
                     </div>
                 </div>
 
+                <!-- Unter dem Zeitplan: Nicht zugeordnete Termine (zuerst) -->
+                <div class="unassigned-panel">
+                    <h3>📋 Nicht zugeordnet</h3>
+                    <div id="dragDropNichtZugeordnet" class="drop-zone source-zone" data-mitarbeiter-id="null">
+                        <!-- Termine werden hier eingefügt -->
+                    </div>
+                </div>
+
                 <!-- Schwebende Termine (mit Balken-Darstellung) -->
                 <div class="schwebende-panel">
                     <div class="schwebende-header">
@@ -2231,14 +2235,6 @@
                     </div>
                     <div id="schwebendeTermineContainer" class="schwebende-container">
                         <!-- Schwebende Termine als Balken werden hier eingefügt -->
-                    </div>
-                </div>
-
-                <!-- Unter dem Zeitplan: Nicht zugeordnete Termine -->
-                <div class="unassigned-panel">
-                    <h3>📋 Nicht zugeordnet</h3>
-                    <div id="dragDropNichtZugeordnet" class="drop-zone source-zone" data-mitarbeiter-id="null">
-                        <!-- Termine werden hier eingefügt -->
                     </div>
                 </div>
             </div>

@@ -6080,6 +6080,28 @@ mark.highlight {
     opacity: 0.5;
 }
 
+/* Abwesend - Urlaub/Krank */
+.zeitleiste-row.abwesend {
+    background: linear-gradient(135deg, #ffebee 0%, #ffcdd2 100%);
+    opacity: 0.85;
+}
+
+.zeitleiste-row.abwesend .zeitleiste-mitarbeiter {
+    background: #ffcdd2;
+    color: #c62828;
+    font-weight: 600;
+}
+
+.zeitleiste-row.abwesend .zeitleiste-timeline {
+    background: repeating-linear-gradient(
+        45deg,
+        rgba(198, 40, 40, 0.05),
+        rgba(198, 40, 40, 0.05) 10px,
+        rgba(198, 40, 40, 0.1) 10px,
+        rgba(198, 40, 40, 0.1) 20px
+    );
+}
+
 /* Nicht zugeordnet - Inline Container (hintereinander ohne Zeiteinordnung) */
 .nicht-zugeordnet-timeline {
     background: #fff8e1 !important;
@@ -6158,6 +6180,17 @@ mark.highlight {
     font-size: 0.7em;
     opacity: 0.8;
     margin-top: 2px;
+}
+
+/* Bring/Abholzeit Anzeige in Nicht-Zugeordnet Kacheln */
+.zeitleiste-block-zeiten {
+    font-size: 0.65em;
+    color: #1565c0;
+    opacity: 0.9;
+    margin-top: 2px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 /* Mittagspause Block - Modern & Übersichtlich */
@@ -7423,6 +7456,18 @@ mark.highlight {
     text-align: right;
 }
 
+/* Bring/Abholzeit in Mini-Cards */
+.termin-mini-card .zeiten,
+.termin-mini-card .mini-card-zeiten {
+    font-size: 0.7em;
+    color: #1565c0;
+    margin-top: 2px;
+    text-align: right;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
 /* Status Colors for Mini Cards */
 .termin-mini-card.status-offen { border-left-color: #ffc107; }
 .termin-mini-card.status-in-bearbeitung { border-left-color: #17a2b8; }
@@ -7557,8 +7602,7 @@ mark.highlight {
 /* ======== SCHWEBENDE TERMINE PANEL ======== */
 .schwebende-panel {
     width: 100%;
-    min-height: 100px;
-    max-height: 200px;
+    min-height: 60px;
     background: linear-gradient(135deg, #fff8e1 0%, #fff3c4 100%);
     border-radius: 8px;
     padding: 12px 15px;
@@ -7566,7 +7610,6 @@ mark.highlight {
     border-left: 4px solid #ffa000;
     display: flex;
     flex-direction: column;
-    overflow: hidden;
     flex-shrink: 0;
 }
 
@@ -7613,7 +7656,6 @@ mark.highlight {
     display: flex;
     flex-wrap: wrap;
     gap: 10px;
-    overflow-y: auto;
     padding: 5px 0;
 }
 
@@ -7708,13 +7750,49 @@ mark.highlight {
 .schwebender-termin-bar .bar-zeit {
     position: absolute;
     right: 6px;
-    top: 50%;
-    transform: translateY(-50%);
+    top: 6px;
     font-size: 0.7em;
     font-weight: 600;
     background: rgba(255,255,255,0.8);
     padding: 2px 6px;
     border-radius: 10px;
+}
+
+/* Bring/Abholzeit Anzeige */
+.schwebender-termin-bar .bar-zeiten {
+    position: absolute;
+    right: 6px;
+    top: 24px;
+    font-size: 0.6em;
+    color: #1565c0;
+    background: rgba(255,255,255,0.9);
+    padding: 1px 5px;
+    border-radius: 8px;
+    white-space: nowrap;
+}
+
+/* Einplanen-Button für schwebende Termine */
+.schwebender-termin-bar .btn-einplanen {
+    position: absolute;
+    right: 6px;
+    bottom: 4px;
+    padding: 2px 8px;
+    font-size: 0.65em;
+    background: #4a90e2;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    opacity: 0;
+    transition: opacity 0.2s, background 0.2s;
+}
+
+.schwebender-termin-bar:hover .btn-einplanen {
+    opacity: 1;
+}
+
+.schwebender-termin-bar .btn-einplanen:hover {
+    background: #357abd;
 }
 
 /* Tooltip für schwebende Termine */
@@ -7840,15 +7918,13 @@ mark.highlight {
 
 .unassigned-panel {
     width: 100%;
-    min-height: 80px;
-    max-height: 120px;
+    min-height: 60px;
     background: #fff;
     border-radius: 8px;
     padding: 10px 15px;
     box-shadow: 0 2px 10px rgba(0,0,0,0.05);
     display: flex;
     flex-direction: column;
-    overflow-y: auto;
     flex-shrink: 0;
 }
 
@@ -7954,6 +8030,48 @@ mark.highlight {
 
 .timeline-row:hover {
     background: rgba(0,0,0,0.02);
+}
+
+/* Abwesende Mitarbeiter/Lehrlinge in der Timeline */
+.timeline-row.abwesend {
+    background: linear-gradient(135deg, #ffebee 0%, #ffcdd2 100%);
+    opacity: 0.7;
+}
+
+.timeline-row.abwesend:hover {
+    background: linear-gradient(135deg, #ffebee 0%, #ffcdd2 100%);
+}
+
+.timeline-row.abwesend .timeline-mitarbeiter {
+    background: #ffcdd2;
+    border-right-color: #ef9a9a;
+}
+
+.timeline-row.abwesend .timeline-mitarbeiter-kapazitaet {
+    color: #c62828;
+}
+
+.abwesend-badge {
+    display: inline-block;
+    background: #c62828;
+    color: white;
+    font-size: 0.65em;
+    padding: 1px 6px;
+    border-radius: 8px;
+    margin-left: 6px;
+    vertical-align: middle;
+    font-weight: normal;
+}
+
+.abwesend-track {
+    background: repeating-linear-gradient(
+        45deg,
+        rgba(198, 40, 40, 0.05),
+        rgba(198, 40, 40, 0.05) 10px,
+        rgba(198, 40, 40, 0.1) 10px,
+        rgba(198, 40, 40, 0.1) 20px
+    );
+    cursor: not-allowed;
 }
 
 .timeline-mitarbeiter {
@@ -8933,4 +9051,114 @@ mark.highlight {
 .timeline-termin.status-abgeschlossen {
     background: linear-gradient(135deg, #10b981 0%, #34d399 100%);
     border-left: 4px solid #047857;
+}
+
+/* ================================================
+   EDIT TERMIN LISTE (klickbare Liste statt Dropdown)
+   ================================================ */
+
+#editTerminListe {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    max-height: 300px;
+    overflow-y: auto;
+    padding: 8px;
+    background: #f8fafc;
+    border-radius: 8px;
+    border: 1px solid #e2e8f0;
+}
+
+#editTerminListe:empty::before {
+    content: 'Keine Termine für diesen Tag';
+    color: #9ca3af;
+    font-style: italic;
+    padding: 16px;
+    text-align: center;
+}
+
+.edit-termin-item {
+    display: flex;
+    flex-direction: column;
+    padding: 12px;
+    background: white;
+    border: 2px solid #e2e8f0;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.edit-termin-item:hover {
+    border-color: var(--accent);
+    background: #fef2f2;
+    transform: translateX(4px);
+}
+
+.edit-termin-item.active {
+    border-color: var(--accent);
+    background: linear-gradient(135deg, #fef2f2 0%, #fee2e2 100%);
+    box-shadow: 0 2px 8px rgba(210, 20, 44, 0.15);
+}
+
+.edit-termin-item .termin-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 4px;
+}
+
+.edit-termin-item .termin-kunde {
+    font-weight: 600;
+    color: var(--steel);
+    font-size: 1rem;
+}
+
+.edit-termin-item .termin-status {
+    font-size: 0.75rem;
+    padding: 2px 8px;
+    border-radius: 12px;
+    font-weight: 500;
+}
+
+.edit-termin-item .termin-status.geplant {
+    background: #dbeafe;
+    color: #1e40af;
+}
+
+.edit-termin-item .termin-status.in_arbeit {
+    background: #fef3c7;
+    color: #b45309;
+}
+
+.edit-termin-item .termin-status.abgeschlossen {
+    background: #d1fae5;
+    color: #047857;
+}
+
+.edit-termin-item .termin-fahrzeug {
+    color: #64748b;
+    font-size: 0.85rem;
+    margin-bottom: 4px;
+}
+
+.edit-termin-item .termin-zeiten {
+    display: flex;
+    gap: 16px;
+    font-size: 0.8rem;
+    color: #6b7280;
+}
+
+.edit-termin-item .termin-zeiten span {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.edit-termin-item .termin-arbeit {
+    font-size: 0.8rem;
+    color: #6b7280;
+    margin-top: 4px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
