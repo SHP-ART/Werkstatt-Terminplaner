@@ -7657,6 +7657,9 @@ class App {
       <span><strong>Zeit:</strong> ${termin.bring_zeit || '08:00'} - ${endzeitBerechnet}</span>
       <span><strong>Dauer:</strong> ${termin.geschaetzte_zeit || 0} Min</span>
     `;
+    
+    // Lade und zeige bestehende Erweiterungen
+    await this.ladeBestehendeErweiterungen(termin.id);
 
     // Berechne "Morgen"-Datum (nächster Arbeitstag)
     const morgenDatum = this.naechsterArbeitstag(termin.datum);
@@ -7692,6 +7695,94 @@ class App {
     document.getElementById('erweiterungModal').style.display = 'none';
     this.erweiterungTermin = null;
     this.erweiterungKonflikte = null;
+  }
+
+  /**
+   * Lädt und zeigt bestehende Erweiterungen für einen Termin
+   */
+  async ladeBestehendeErweiterungen(terminId) {
+    const bestehendeBox = document.getElementById('erweiterungBestehendeBox');
+    const bestehendeListe = document.getElementById('erweiterungBestehendeListe');
+    
+    if (!bestehendeBox || !bestehendeListe) return;
+    
+    // Sammle Erweiterungen aus dem Cache
+    const erweiterungen = [];
+    Object.values(this.termineById).forEach(t => {
+      if (t.erweiterung_von_id === terminId && !t.ist_geloescht && t.geloescht_am === null) {
+        erweiterungen.push(t);
+      }
+    });
+    
+    // Falls nicht im Cache, lade von der API
+    if (erweiterungen.length === 0) {
+      try {
+        const apiErweiterungen = await TermineService.getErweiterungen(terminId);
+        if (apiErweiterungen && apiErweiterungen.length > 0) {
+          erweiterungen.push(...apiErweiterungen);
+        }
+      } catch (e) {
+        console.warn('Fehler beim Laden der Erweiterungen:', e);
+      }
+    }
+    
+    if (erweiterungen.length === 0) {
+      bestehendeBox.style.display = 'none';
+      return;
+    }
+    
+    // Sortiere nach Datum
+    erweiterungen.sort((a, b) => {
+      const datumA = a.datum || '';
+      const datumB = b.datum || '';
+      return datumA.localeCompare(datumB);
+    });
+    
+    // Baue HTML für bestehende Erweiterungen
+    let html = `<div class="erweiterung-bestehende-liste">`;
+    
+    erweiterungen.forEach(erw => {
+      const dauerText = erw.geschaetzte_zeit ? `${erw.geschaetzte_zeit} Min` : '-';
+      const zeitText = erw.bring_zeit ? erw.bring_zeit : '-';
+      const statusClass = erw.status ? erw.status.toLowerCase().replace(' ', '-') : 'geplant';
+      const statusIcon = this.getStatusIcon(erw.status);
+      
+      html += `
+        <div class="erweiterung-bestehende-item" onclick="app.showTerminDetails(${erw.id}); app.closeErweiterungModal();">
+          <div class="erweiterung-bestehende-header">
+            <span class="erweiterung-bestehende-nr">${erw.termin_nr || '#' + erw.id}</span>
+            <span class="erweiterung-bestehende-status status-badge-${statusClass}">${statusIcon} ${erw.status || 'geplant'}</span>
+          </div>
+          <div class="erweiterung-bestehende-details">
+            <span>📅 ${this.formatDateGerman(erw.datum)}</span>
+            <span>⏰ ${zeitText}</span>
+            <span>⏱️ ${dauerText}</span>
+          </div>
+          <div class="erweiterung-bestehende-arbeit">${this.escapeHtml(erw.arbeit || '-')}</div>
+        </div>
+      `;
+    });
+    
+    html += `</div>`;
+    html += `<div class="erweiterung-bestehende-info">ℹ️ Klicken Sie auf eine Erweiterung, um Details anzuzeigen</div>`;
+    
+    bestehendeListe.innerHTML = html;
+    bestehendeBox.style.display = 'block';
+  }
+  
+  /**
+   * Hilfsfunktion: Status-Icon zurückgeben
+   */
+  getStatusIcon(status) {
+    const icons = {
+      'geplant': '📋',
+      'in_arbeit': '🔧',
+      'in arbeit': '🔧',
+      'wartend': '⏸️',
+      'abgeschlossen': '✅',
+      'storniert': '❌'
+    };
+    return icons[(status || '').toLowerCase()] || '📋';
   }
 
   /**
@@ -9978,7 +10069,7 @@ class App {
         if (!aExact && bExact) return 1;
       }
       
-      return a.kennzeichen.localeCompare(b.kennzeichen);
+      return (a.kennzeichen || '').localeCompare(b.kennzeichen || '')
     });
     
     const maxTreffer = treffer.slice(0, 10);
@@ -16463,10 +16554,12 @@ class App {
     
     // Sortiere Arbeiten nach Startzeit
     const sortedArbeiten = [...arbeiten].sort((a, b) => {
-      if (!a.startzeit && !b.startzeit) return 0;
-      if (!a.startzeit) return 1;
-      if (!b.startzeit) return -1;
-      return a.startzeit.localeCompare(b.startzeit);
+      const zeitA = a.startzeit || '';
+      const zeitB = b.startzeit || '';
+      if (!zeitA && !zeitB) return 0;
+      if (!zeitA) return 1;
+      if (!zeitB) return -1;
+      return zeitA.localeCompare(zeitB);
     });
 
     // Berechne Positionen für überlappende Blöcke
@@ -17862,10 +17955,25 @@ class App {
 
     // Abholzeit-Info
     const abholzeitInfo = termin.abholung_zeit ? `\n🚗 Abholung: ${termin.abholung_zeit}` : '';
+    
+    // Erweiterungs-Infos ermitteln
+    const istErweiterung = termin.ist_erweiterung === 1 || termin.ist_erweiterung === true || termin.erweiterung_von_id;
+    const erweiterungVonId = termin.erweiterung_von_id;
+    
+    // Zähle Erweiterungen zu diesem Termin (aus termineById Cache)
+    let erweiterungAnzahl = 0;
+    if (this.termineById) {
+      Object.values(this.termineById).forEach(t => {
+        if (t.erweiterung_von_id === termin.id && !t.ist_geloescht) {
+          erweiterungAnzahl++;
+        }
+      });
+    }
 
     const div = document.createElement('div');
     const statusClass = termin.status ? ` status-${termin.status.toLowerCase().replace(' ', '-')}` : '';
-    div.className = 'timeline-termin' + statusClass + (isSchwebend ? ' schwebend' : '') + (istFortsetzung ? ' fortsetzung' : '');
+    const erweiterungClass = istErweiterung ? ' erweiterung-block' : '';
+    div.className = 'timeline-termin' + statusClass + erweiterungClass + (isSchwebend ? ' schwebend' : '') + (istFortsetzung ? ' fortsetzung' : '');
     div.id = istFortsetzung ? `timeline-termin-${termin.id}-teil2` : `timeline-termin-${termin.id}`;
     div.dataset.terminId = termin.id;
     div.dataset.dauer = gesamtDauer;
@@ -17874,22 +17982,82 @@ class App {
     div.style.left = `${leftPx}px`;
     div.style.width = `${widthPx}px`;
     
+    // Erweiterungs-Badge HTML
+    const erweiterungBadgeHtml = erweiterungAnzahl > 0 
+      ? `<span class="timeline-erweiterung-badge" title="${erweiterungAnzahl} Erweiterung(en) - Klicken zum Anzeigen">🔗${erweiterungAnzahl}</span>` 
+      : '';
+    
+    // Ist-Erweiterung Badge (wenn dieser Termin selbst eine Erweiterung ist)
+    const istErweiterungBadgeHtml = istErweiterung 
+      ? `<span class="timeline-ist-erweiterung" title="Dies ist eine Erweiterung">🔗</span>` 
+      : '';
+    
+    // Erweiterungs-Info für Tooltip
+    const erweiterungInfo = istErweiterung ? '\n🔗 ERWEITERUNG' : '';
+    const hatErweiterungenInfo = erweiterungAnzahl > 0 ? `\n🔗 ${erweiterungAnzahl} Erweiterung(en)` : '';
+    
     if (istFortsetzung) {
       // Fortsetzung: Kompaktere Anzeige mit Verbindungsindikator
       div.innerHTML = `
-        <div class="termin-title">↪ ${termin.termin_nr || 'Neu'}</div>
+        <div class="termin-title">↪ ${termin.termin_nr || 'Neu'}${istErweiterungBadgeHtml}</div>
         <div class="termin-info">${displayDauer} min (Forts.)</div>
       `;
-      div.title = `${termin.termin_nr} (Fortsetzung nach Pause)\n${termin.kunde_name}\n${termin.arbeit}${abholzeitInfo}`;
+      div.title = `${termin.termin_nr} (Fortsetzung nach Pause)\n${termin.kunde_name}\n${termin.arbeit}${abholzeitInfo}${erweiterungInfo}`;
     } else {
       div.innerHTML = `
-        <div class="termin-title">${termin.termin_nr || 'Neu'} - ${termin.kennzeichen || ''}</div>
+        <div class="termin-title">${termin.termin_nr || 'Neu'} - ${termin.kennzeichen || ''}${istErweiterungBadgeHtml}${erweiterungBadgeHtml}</div>
         <div class="termin-info">${termin.kunde_name || ''} • ${dauerText}</div>
       `;
-      div.title = `${termin.termin_nr}\n${termin.kunde_name}\n${termin.arbeit}\n${startzeit} - ${dauerText}${abholzeitInfo}`;
+      div.title = `${termin.termin_nr}\n${termin.kunde_name}\n${termin.arbeit}\n${startzeit} - ${dauerText}${abholzeitInfo}${erweiterungInfo}${hatErweiterungenInfo}`;
+    }
+    
+    // Klick-Handler für Erweiterungs-Badge (wenn vorhanden)
+    if (erweiterungAnzahl > 0) {
+      const badge = div.querySelector('.timeline-erweiterung-badge');
+      if (badge) {
+        badge.addEventListener('click', (e) => {
+          e.stopPropagation();
+          e.preventDefault();
+          this.showVerknuepfteTermine(termin.id);
+        });
+      }
+    }
+    
+    // Klick-Handler für Ist-Erweiterung Badge (zeigt verknüpfte Termine)
+    if (istErweiterung) {
+      const istBadge = div.querySelector('.timeline-ist-erweiterung');
+      if (istBadge) {
+        istBadge.addEventListener('click', (e) => {
+          e.stopPropagation();
+          e.preventDefault();
+          this.showVerknuepfteTermine(termin.id);
+        });
+      }
     }
 
-    // Drag Events nur für Hauptteil
+    // Klick: Normaler Klick = Schnell-Menü, Shift+Klick = Details
+    // Gilt für ALLE Termine (auch Fortsetzungen und Erweiterungen)
+    div.addEventListener('click', (e) => {
+      // Ignoriere wenn auf Badge geklickt wurde (hat eigenen Handler)
+      if (e.target.classList.contains('timeline-erweiterung-badge') || 
+          e.target.classList.contains('timeline-ist-erweiterung')) {
+        return;
+      }
+      
+      e.preventDefault();
+      e.stopPropagation();
+      const aktuellerTermin = this.termineById[termin.id] || termin;
+      
+      if (e.shiftKey) {
+        // Shift+Klick - Termin-Details anzeigen
+        this.showTerminDetails(termin.id);
+      } else {
+        // Normaler Klick - Schnell-Status-Menü
+        this.showSchnellStatusDialog(aktuellerTermin, div, startzeit, gesamtDauer);
+      }
+    });
+
+    // Drag Events nur für Hauptteil (nicht Fortsetzungen)
     if (!istFortsetzung) {
       div.addEventListener('dragstart', (e) => {
         div.classList.add('dragging');
@@ -17907,17 +18075,6 @@ class App {
         document.querySelectorAll('.timeline-track').forEach(zone => zone.classList.remove('drag-over'));
         // Zeit-Indikator entfernen
         this.removeDragTimeIndicator();
-      });
-
-      // Shift+Click für schnellen Status-Wechsel
-      div.addEventListener('click', (e) => {
-        if (e.shiftKey) {
-          e.preventDefault();
-          e.stopPropagation();
-          // Aktuellen Termin aus Cache holen (für aktuellen Status)
-          const aktuellerTermin = this.termineById[termin.id] || termin;
-          this.showSchnellStatusDialog(aktuellerTermin, div, startzeit, gesamtDauer);
-        }
       });
     }
 
@@ -17991,7 +18148,7 @@ class App {
       this.removeDragTimeIndicator();
     });
 
-    // Shift+Click für schnellen Status-Wechsel
+    // Klick für Termin-Details (normal) oder schnellen Status-Wechsel (Shift+Click)
     div.addEventListener('click', (e) => {
       if (e.shiftKey) {
         e.preventDefault();
@@ -17999,6 +18156,11 @@ class App {
         // Aktuellen Termin aus Cache holen (für aktuellen Status)
         const aktuellerTermin = this.termineById[termin.id] || termin;
         this.showSchnellStatusDialog(aktuellerTermin, div, startzeit, dauer);
+      } else {
+        // Normaler Klick - Termin-Details anzeigen
+        e.preventDefault();
+        e.stopPropagation();
+        this.showTerminDetails(termin.id);
       }
     });
 
@@ -18641,9 +18803,23 @@ class App {
         const isSchwebend = termin.ist_schwebend === 1 || termin._istSchwebend;
         const statusClass = termin.status ? ` status-${termin.status.toLowerCase().replace(' ', '-')}` : '';
         
+        // Erweiterungs-Infos ermitteln
+        const istErweiterung = termin.ist_erweiterung === 1 || termin.ist_erweiterung === true || termin.erweiterung_von_id;
+        const erweiterungClass = istErweiterung ? ' erweiterung-block' : '';
+        
+        // Zähle Erweiterungen zu diesem Termin (aus termineById Cache)
+        let erweiterungAnzahl = 0;
+        if (this.termineById) {
+          Object.values(this.termineById).forEach(t => {
+            if (t.erweiterung_von_id === termin.id && !t.ist_geloescht) {
+              erweiterungAnzahl++;
+            }
+          });
+        }
+        
         // Neues Timeline-Element erstellen
         terminEl = document.createElement('div');
-        terminEl.className = 'timeline-termin' + statusClass + (isSchwebend ? ' schwebend' : '');
+        terminEl.className = 'timeline-termin' + statusClass + erweiterungClass + (isSchwebend ? ' schwebend' : '');
         terminEl.id = `timeline-termin-${terminId}`;
         terminEl.dataset.terminId = terminId;
         terminEl.dataset.dauer = dauer;
@@ -18654,11 +18830,70 @@ class App {
           ? `${Math.floor(dauer/60)}h ${dauer%60 > 0 ? (dauer%60) + 'min' : ''}`.trim()
           : `${dauer} min`;
         
+        // Erweiterungs-Badge HTML
+        const erweiterungBadgeHtml = erweiterungAnzahl > 0 
+          ? `<span class="timeline-erweiterung-badge" title="${erweiterungAnzahl} Erweiterung(en) - Klicken zum Anzeigen">🔗${erweiterungAnzahl}</span>` 
+          : '';
+        
+        // Ist-Erweiterung Badge (wenn dieser Termin selbst eine Erweiterung ist)
+        const istErweiterungBadgeHtml = istErweiterung 
+          ? `<span class="timeline-ist-erweiterung" title="Dies ist eine Erweiterung">🔗</span>` 
+          : '';
+        
         terminEl.innerHTML = `
-          <div class="termin-title">${termin.termin_nr || 'Neu'} - ${termin.kennzeichen || ''}</div>
+          <div class="termin-title">${termin.termin_nr || 'Neu'} - ${termin.kennzeichen || ''}${istErweiterungBadgeHtml}${erweiterungBadgeHtml}</div>
           <div class="termin-info">${termin.kunde_name || ''} • ${dauerText}</div>
         `;
-        terminEl.title = `${termin.termin_nr}\n${termin.kunde_name}\n${termin.arbeit}\n${startzeit} - ${dauerText}`;
+        
+        // Erweiterungs-Info für Tooltip
+        const erweiterungInfo = istErweiterung ? '\n🔗 ERWEITERUNG' : '';
+        const hatErweiterungenInfo = erweiterungAnzahl > 0 ? `\n🔗 ${erweiterungAnzahl} Erweiterung(en)` : '';
+        terminEl.title = `${termin.termin_nr}\n${termin.kunde_name}\n${termin.arbeit}\n${startzeit} - ${dauerText}${erweiterungInfo}${hatErweiterungenInfo}`;
+        
+        // Klick-Handler für Erweiterungs-Badge (wenn vorhanden)
+        if (erweiterungAnzahl > 0) {
+          const badge = terminEl.querySelector('.timeline-erweiterung-badge');
+          if (badge) {
+            badge.addEventListener('click', (e) => {
+              e.stopPropagation();
+              e.preventDefault();
+              this.showVerknuepfteTermine(termin.id);
+            });
+          }
+        }
+        
+        // Klick-Handler für Ist-Erweiterung Badge
+        if (istErweiterung) {
+          const istBadge = terminEl.querySelector('.timeline-ist-erweiterung');
+          if (istBadge) {
+            istBadge.addEventListener('click', (e) => {
+              e.stopPropagation();
+              e.preventDefault();
+              this.showVerknuepfteTermine(termin.id);
+            });
+          }
+        }
+        
+        // Klick: Normaler Klick = Schnell-Menü, Shift+Klick = Details
+        terminEl.addEventListener('click', (e) => {
+          // Ignoriere wenn auf Badge geklickt wurde (hat eigenen Handler)
+          if (e.target.classList.contains('timeline-erweiterung-badge') || 
+              e.target.classList.contains('timeline-ist-erweiterung')) {
+            return;
+          }
+          
+          e.preventDefault();
+          e.stopPropagation();
+          const aktuellerTermin = this.termineById[termin.id] || termin;
+          
+          if (e.shiftKey) {
+            // Shift+Klick - Termin-Details anzeigen
+            this.showTerminDetails(termin.id);
+          } else {
+            // Normaler Klick - Schnell-Status-Menü
+            this.showSchnellStatusDialog(aktuellerTermin, terminEl, startzeit, dauer);
+          }
+        });
         
         // Drag Events hinzufügen
         terminEl.addEventListener('dragstart', (e) => {
@@ -19193,7 +19428,9 @@ class App {
   createTerminMiniCard(termin) {
     const card = document.createElement('div');
     const isSchwebend = termin.ist_schwebend === 1 || termin._istSchwebend;
-    card.className = `termin-mini-card status-${termin.status.toLowerCase().replace(' ', '-')}${isSchwebend ? ' schwebend' : ''}`;
+    const istErweiterung = termin.ist_erweiterung === 1 || termin.ist_erweiterung === true || termin.erweiterung_von_id;
+    
+    card.className = `termin-mini-card status-${termin.status.toLowerCase().replace(' ', '-')}${isSchwebend ? ' schwebend' : ''}${istErweiterung ? ' erweiterung-block' : ''}`;
     card.draggable = true;
     card.id = `termin-card-${termin.id}`;
     
@@ -19203,6 +19440,26 @@ class App {
     card.dataset.schwebend = isSchwebend ? '1' : '0';
 
     const schwebendBadge = isSchwebend ? '<span class="schwebend-badge" title="Schwebender Termin">⏸</span>' : '';
+    
+    // Zähle Erweiterungen zu diesem Termin
+    let erweiterungAnzahl = 0;
+    if (this.termineById) {
+      Object.values(this.termineById).forEach(t => {
+        if (t.erweiterung_von_id === termin.id && !t.ist_geloescht) {
+          erweiterungAnzahl++;
+        }
+      });
+    }
+    
+    // Erweiterungs-Badge (für Termine mit Erweiterungen)
+    const erweiterungBadge = erweiterungAnzahl > 0 
+      ? `<span class="mini-card-erweiterung-badge" title="${erweiterungAnzahl} Erweiterung(en)">🔗${erweiterungAnzahl}</span>` 
+      : '';
+    
+    // Ist-Erweiterung Badge
+    const istErweiterungBadge = istErweiterung 
+      ? '<span class="mini-card-ist-erweiterung" title="Dies ist eine Erweiterung">🔗</span>' 
+      : '';
     
     // Dauer formatiert anzeigen
     const dauerText = dauer >= 60 
@@ -19216,7 +19473,7 @@ class App {
     
     card.innerHTML = `
       <div class="header">
-        <span>${schwebendBadge}${termin.termin_nr || 'Neu'}</span>
+        <span>${schwebendBadge}${istErweiterungBadge}${termin.termin_nr || 'Neu'}${erweiterungBadge}</span>
         <span>${termin.kennzeichen || ''}</span>
       </div>
       <div class="details">
@@ -19227,6 +19484,30 @@ class App {
       </div>
       ${zeitenInfo ? `<div class="zeiten">${zeitenInfo}</div>` : ''}
     `;
+    
+    // Klick-Handler für Erweiterungs-Badge
+    if (erweiterungAnzahl > 0) {
+      const badge = card.querySelector('.mini-card-erweiterung-badge');
+      if (badge) {
+        badge.addEventListener('click', (e) => {
+          e.stopPropagation();
+          e.preventDefault();
+          this.showVerknuepfteTermine(termin.id);
+        });
+      }
+    }
+    
+    // Klick-Handler für Ist-Erweiterung Badge
+    if (istErweiterung) {
+      const badge = card.querySelector('.mini-card-ist-erweiterung');
+      if (badge) {
+        badge.addEventListener('click', (e) => {
+          e.stopPropagation();
+          e.preventDefault();
+          this.showVerknuepfteTermine(termin.id);
+        });
+      }
+    }
 
     // Drag Events
     card.addEventListener('dragstart', (e) => {
@@ -19246,13 +19527,18 @@ class App {
       this.removeDragTimeIndicator();
     });
 
-    // Shift+Click für schnellen Status-Wechsel
+    // Klick: Normaler Klick = Schnell-Menü, Shift+Klick = Details
     card.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const aktuellerTermin = this.termineById[termin.id] || termin;
+      const startzeit = termin.startzeit || termin.bring_zeit || '08:00';
+      
       if (e.shiftKey) {
-        e.preventDefault();
-        e.stopPropagation();
-        const aktuellerTermin = this.termineById[termin.id] || termin;
-        const startzeit = termin.startzeit || termin.bring_zeit || '08:00';
+        // Shift+Klick - Details anzeigen
+        this.showTerminDetails(termin.id);
+      } else {
+        // Normaler Klick - Schnell-Status-Dialog
         this.showSchnellStatusDialog(aktuellerTermin, card, startzeit, dauer);
       }
     });

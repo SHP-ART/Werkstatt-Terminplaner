@@ -1,7 +1,7 @@
 const { getAsync, allAsync, runAsync } = require('../utils/dbHelper');
 
 class TermineModel {
-  static async generateTerminNr() {
+  static async generateTerminNr(retryOffset = 0) {
     const year = new Date().getFullYear();
     const prefix = `T-${year}-`;
 
@@ -9,7 +9,7 @@ class TermineModel {
     const row = await getAsync(
       `SELECT termin_nr FROM termine
        WHERE termin_nr LIKE ?
-       ORDER BY termin_nr DESC LIMIT 1`,
+       ORDER BY CAST(SUBSTR(termin_nr, 8) AS INTEGER) DESC LIMIT 1`,
       [`${prefix}%`]
     );
 
@@ -19,6 +19,9 @@ class TermineModel {
       const lastNumber = parseInt(row.termin_nr.split('-')[2]);
       nextNumber = lastNumber + 1;
     }
+
+    // Bei Retry: erhöhe die Nummer
+    nextNumber += retryOffset;
 
     // Format: T-2024-001, T-2024-002, etc.
     const terminNr = `${prefix}${String(nextNumber).padStart(3, '0')}`;
@@ -104,46 +107,66 @@ class TermineModel {
       status
     } = termin;
 
-    // Generiere zuerst die Termin-Nummer
-    const terminNr = await this.generateTerminNr();
+    // Retry-Logik für UNIQUE constraint Fehler
+    const maxRetries = 5;
+    let lastError = null;
 
-    const result = await runAsync(
-      `INSERT INTO termine
-       (termin_nr, kunde_id, kunde_name, kunde_telefon, kennzeichen, arbeit, umfang, geschaetzte_zeit, datum, abholung_typ, abholung_details, abholung_zeit, bring_zeit, kontakt_option, kilometerstand, ersatzauto, ersatzauto_tage, ersatzauto_bis_datum, ersatzauto_bis_zeit, abholung_datum, mitarbeiter_id, arbeitszeiten_details, dringlichkeit, vin, fahrzeugtyp, ist_schwebend, schwebend_prioritaet, status)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [
-        terminNr,
-        kunde_id,
-        kunde_name,
-        kunde_telefon,
-        kennzeichen,
-        arbeit,
-        umfang,
-        geschaetzte_zeit,
-        datum,
-        abholung_typ,
-        abholung_details,
-        abholung_zeit,
-        bring_zeit,
-        kontakt_option,
-        kilometerstand,
-        ersatzauto,
-        ersatzauto_tage || null,
-        ersatzauto_bis_datum || null,
-        ersatzauto_bis_zeit || null,
-        abholung_datum || null,
-        mitarbeiter_id || null,
-        arbeitszeiten_details || null,
-        dringlichkeit || null,
-        vin || null,
-        fahrzeugtyp || null,
-        ist_schwebend ? 1 : 0,
-        schwebend_prioritaet || 'mittel',
-        status || 'geplant'
-      ]
-    );
-    // Gib die Termin-Nummer zurück
-    return { id: result.lastID, terminNr };
+    for (let retry = 0; retry < maxRetries; retry++) {
+      try {
+        // Generiere Termin-Nummer mit Retry-Offset
+        const terminNr = await this.generateTerminNr(retry);
+
+        const result = await runAsync(
+          `INSERT INTO termine
+           (termin_nr, kunde_id, kunde_name, kunde_telefon, kennzeichen, arbeit, umfang, geschaetzte_zeit, datum, abholung_typ, abholung_details, abholung_zeit, bring_zeit, kontakt_option, kilometerstand, ersatzauto, ersatzauto_tage, ersatzauto_bis_datum, ersatzauto_bis_zeit, abholung_datum, mitarbeiter_id, arbeitszeiten_details, dringlichkeit, vin, fahrzeugtyp, ist_schwebend, schwebend_prioritaet, status)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [
+            terminNr,
+            kunde_id,
+            kunde_name,
+            kunde_telefon,
+            kennzeichen,
+            arbeit,
+            umfang,
+            geschaetzte_zeit,
+            datum,
+            abholung_typ,
+            abholung_details,
+            abholung_zeit,
+            bring_zeit,
+            kontakt_option,
+            kilometerstand,
+            ersatzauto,
+            ersatzauto_tage || null,
+            ersatzauto_bis_datum || null,
+            ersatzauto_bis_zeit || null,
+            abholung_datum || null,
+            mitarbeiter_id || null,
+            arbeitszeiten_details || null,
+            dringlichkeit || null,
+            vin || null,
+            fahrzeugtyp || null,
+            ist_schwebend ? 1 : 0,
+            schwebend_prioritaet || 'mittel',
+            status || 'geplant'
+          ]
+        );
+        // Erfolgreich - gib die Termin-Nummer zurück
+        return { id: result.lastID, terminNr };
+      } catch (error) {
+        lastError = error;
+        // Bei UNIQUE constraint Fehler: retry mit höherer Nummer
+        if (error.message && error.message.includes('UNIQUE constraint failed: termine.termin_nr')) {
+          console.log(`Termin-Nummer Konflikt, Versuch ${retry + 2}/${maxRetries}...`);
+          continue;
+        }
+        // Bei anderen Fehlern: sofort werfen
+        throw error;
+      }
+    }
+
+    // Alle Retries fehlgeschlagen
+    throw lastError || new Error('Konnte keine eindeutige Termin-Nummer generieren');
   }
 
   static async update(id, data) {

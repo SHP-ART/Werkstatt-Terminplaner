@@ -5914,22 +5914,34 @@ mark.highlight {
     border-radius: 8px;
 }
 
-/* Altes Badge (nicht mehr verwendet, aber für Kompatibilität) */
+/* Erweiterungs-Badge in Zeitleiste (inline und standard) - klickbar machen */
 .zeitleiste-erweiterung-badge {
-    font-size: 9px;
-    margin-right: 4px;
-    background: rgba(255,255,255,0.25);
-    padding: 1px 4px;
-    border-radius: 8px;
-    cursor: pointer;
+    font-size: 10px;
+    margin-left: 5px;
+    background: rgba(255,255,255,0.4);
+    padding: 2px 6px;
+    border-radius: 10px;
+    cursor: pointer !important;
     display: inline-flex;
     align-items: center;
     gap: 2px;
-    transition: background 0.2s;
+    transition: background 0.2s, transform 0.2s;
+    pointer-events: auto !important;
+    position: relative;
+    z-index: 10;
 }
 
 .zeitleiste-erweiterung-badge:hover {
-    background: rgba(255,255,255,0.45);
+    background: rgba(255,255,255,0.7);
+    transform: scale(1.1);
+}
+
+/* Badge in inline-Blöcken (Nicht zugeordnet Bereich) */
+.zeitleiste-block-inline .zeitleiste-erweiterung-badge {
+    font-size: 9px;
+    padding: 1px 5px;
+    margin-left: 4px;
+    vertical-align: middle;
 }
 
 /* Verknüpfte Termine Modal */
@@ -7046,6 +7058,102 @@ mark.highlight {
     padding: 4px 0;
 }
 
+/* Bestehende Erweiterungen im Modal */
+.erweiterung-bestehende {
+    background: linear-gradient(135deg, #fff3e0 0%, #ffe0b2 100%) !important;
+    border-color: #ffb74d !important;
+}
+
+.erweiterung-bestehende strong {
+    color: #e65100 !important;
+}
+
+.erweiterung-bestehende-liste {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-top: 10px;
+}
+
+.erweiterung-bestehende-item {
+    background: white;
+    border: 1px solid #ffcc80;
+    border-radius: 8px;
+    padding: 10px 12px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.erweiterung-bestehende-item:hover {
+    background: #fff8e1;
+    border-color: #ff9800;
+    transform: translateX(5px);
+}
+
+.erweiterung-bestehende-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 6px;
+}
+
+.erweiterung-bestehende-nr {
+    font-weight: bold;
+    color: #1565c0;
+}
+
+.erweiterung-bestehende-status {
+    font-size: 0.8em;
+    padding: 2px 8px;
+    border-radius: 10px;
+    background: #e0e0e0;
+}
+
+.erweiterung-bestehende-status.status-badge-geplant {
+    background: #e3f2fd;
+    color: #1976d2;
+}
+
+.erweiterung-bestehende-status.status-badge-in_arbeit,
+.erweiterung-bestehende-status.status-badge-in-arbeit {
+    background: #fff3e0;
+    color: #f57c00;
+}
+
+.erweiterung-bestehende-status.status-badge-abgeschlossen {
+    background: #e8f5e9;
+    color: #388e3c;
+}
+
+.erweiterung-bestehende-status.status-badge-wartend {
+    background: #f3e5f5;
+    color: #7b1fa2;
+}
+
+.erweiterung-bestehende-details {
+    display: flex;
+    gap: 15px;
+    font-size: 0.85em;
+    color: #666;
+    margin-bottom: 5px;
+}
+
+.erweiterung-bestehende-arbeit {
+    font-size: 0.9em;
+    color: #333;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.erweiterung-bestehende-info {
+    font-size: 0.8em;
+    color: #888;
+    margin-top: 10px;
+    text-align: center;
+    font-style: italic;
+}
+
 .erweiterung-section {
     background: #f8fafc;
     border: 1px solid #e2e8f0;
@@ -7587,6 +7695,46 @@ mark.highlight {
 .termin-mini-card.schwebend:hover {
     background: linear-gradient(135deg, #ffecb3 0%, #ffe082 100%);
     box-shadow: 0 4px 8px rgba(255, 152, 0, 0.3);
+}
+
+/* Erweiterungs-Termine in Mini-Cards */
+.termin-mini-card.erweiterung-block {
+    background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%);
+    border-left-color: #1565c0 !important;
+}
+
+/* Erweiterungs-Badge in Mini-Cards */
+.mini-card-erweiterung-badge {
+    display: inline-flex;
+    align-items: center;
+    background: #1976d2;
+    color: white;
+    padding: 1px 5px;
+    border-radius: 8px;
+    font-size: 0.7em;
+    margin-left: 4px;
+    cursor: pointer !important;
+    pointer-events: auto !important;
+    transition: background 0.2s, transform 0.2s;
+}
+
+.mini-card-erweiterung-badge:hover {
+    background: #1565c0;
+    transform: scale(1.1);
+}
+
+/* Ist-Erweiterung Badge in Mini-Cards */
+.mini-card-ist-erweiterung {
+    display: inline-flex;
+    align-items: center;
+    margin-right: 3px;
+    font-size: 0.8em;
+    cursor: pointer !important;
+    pointer-events: auto !important;
+}
+
+.mini-card-ist-erweiterung:hover {
+    transform: scale(1.1);
 }
 
 .schwebend-badge {
@@ -8238,7 +8386,7 @@ mark.highlight {
     border-radius: 4px;
     padding: 4px 8px;
     font-size: 0.8em;
-    cursor: grab;
+    cursor: pointer;
     overflow: hidden;
     box-shadow: 0 2px 4px rgba(0,0,0,0.2);
     display: flex;
@@ -8246,6 +8394,7 @@ mark.highlight {
     justify-content: center;
     z-index: 5;
     transition: transform 0.1s, box-shadow 0.1s;
+    user-select: none;
 }
 
 .timeline-termin:hover {
@@ -8295,6 +8444,49 @@ mark.highlight {
 
 .timeline-termin.fortsetzung .termin-title {
     font-size: 0.75em;
+}
+
+/* Erweiterungs-Termine in Timeline (Planung & Zuweisung) */
+.timeline-termin.erweiterung-block {
+    background: linear-gradient(135deg, #1565c0 0%, #0d47a1 100%) !important;
+    border-left: 4px solid #0a3d91;
+}
+
+/* Erweiterungs-Badge in Timeline (für Termine mit Erweiterungen) */
+.timeline-erweiterung-badge {
+    display: inline-flex;
+    align-items: center;
+    background: rgba(255,255,255,0.4);
+    padding: 1px 5px;
+    border-radius: 8px;
+    font-size: 0.7em;
+    margin-left: 4px;
+    cursor: pointer !important;
+    pointer-events: auto !important;
+    z-index: 20;
+    transition: background 0.2s, transform 0.2s;
+}
+
+.timeline-erweiterung-badge:hover {
+    background: rgba(255,255,255,0.7);
+    transform: scale(1.15);
+}
+
+/* Badge für Termine die selbst Erweiterungen sind */
+.timeline-ist-erweiterung {
+    display: inline-flex;
+    align-items: center;
+    margin-left: 4px;
+    font-size: 0.7em;
+    cursor: pointer !important;
+    pointer-events: auto !important;
+    z-index: 20;
+    opacity: 0.9;
+}
+
+.timeline-ist-erweiterung:hover {
+    opacity: 1;
+    transform: scale(1.1);
 }
 
 /* Arbeitsblock - einzelne Arbeit aus einem Termin mit mehreren Arbeiten */
