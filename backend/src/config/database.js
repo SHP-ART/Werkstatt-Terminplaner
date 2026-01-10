@@ -435,6 +435,13 @@ function initializeDatabase() {
       }
     });
 
+    // Priorität für schwebende Termine (hoch, mittel, niedrig)
+    dbWrapper.connection.run(`ALTER TABLE termine ADD COLUMN schwebend_prioritaet TEXT DEFAULT 'mittel'`, (err) => {
+      if (err && !err.message.includes('duplicate column')) {
+        console.error('Fehler beim Hinzufügen von schwebend_prioritaet:', err);
+      }
+    });
+
     // Parent-Termin-ID für gesplittete Termine (verweist auf ursprünglichen Termin)
     dbWrapper.connection.run(`ALTER TABLE termine ADD COLUMN parent_termin_id INTEGER`, (err) => {
       if (err && !err.message.includes('duplicate column')) {

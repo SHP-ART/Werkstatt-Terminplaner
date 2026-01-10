@@ -4724,6 +4724,7 @@ class App {
     const notizen = document.getElementById('wartend_notizen').value.trim();
     const teileStatus = document.getElementById('wartend_teile_status')?.value || '';
     const kundeNameEingabe = document.getElementById('wartendNameSuche')?.value.trim() || '';
+    const prioritaet = document.querySelector('input[name="wartendPrioritaet"]:checked')?.value || 'mittel';
 
     if (!kennzeichen || !beschreibung) {
       alert('Bitte Kennzeichen und Beschreibung ausfüllen.');
@@ -4782,7 +4783,8 @@ class App {
       abholung_typ: 'warten',
       abholung_details: 'Wartende Aktion',
       status: 'wartend',
-      arbeitszeiten_details: teileStatus ? JSON.stringify(arbeitszeitenDetails) : null
+      arbeitszeiten_details: teileStatus ? JSON.stringify(arbeitszeitenDetails) : null,
+      schwebend_prioritaet: prioritaet
     };
 
     try {
@@ -4837,6 +4839,15 @@ class App {
         const erstelltAm = termin.erstellt_am ? new Date(termin.erstellt_am).toLocaleDateString('de-DE') : 'Unbekannt';
         const zeitAnzeige = termin.geschaetzte_zeit ? `${(termin.geschaetzte_zeit / 60).toFixed(1)} h` : '-';
         
+        // Priorität Badge
+        const prioritaet = termin.schwebend_prioritaet || 'mittel';
+        const prioritaetBadgeMap = {
+          'hoch': '<span class="prioritaet-badge prioritaet-badge-hoch" title="Hohe Priorität">🔴 Hoch</span>',
+          'mittel': '<span class="prioritaet-badge prioritaet-badge-mittel" title="Mittlere Priorität">🟡 Mittel</span>',
+          'niedrig': '<span class="prioritaet-badge prioritaet-badge-niedrig" title="Niedrige Priorität">🟢 Niedrig</span>'
+        };
+        const prioritaetBadge = prioritaetBadgeMap[prioritaet] || prioritaetBadgeMap['mittel'];
+        
         // Teile-Status aus arbeitszeiten_details extrahieren
         let teileStatusHtml = '';
         if (termin.arbeitszeiten_details) {
@@ -4867,7 +4878,10 @@ class App {
         
         return `
           <div class="wartende-karte" data-termin-id="${termin.id}">
-            <div class="wartende-karte-erstellt">Erstellt: ${erstelltAm}</div>
+            <div class="wartende-karte-erstellt">
+              ${prioritaetBadge}
+              <span style="margin-left: auto;">Erstellt: ${erstelltAm}</span>
+            </div>
             <div class="wartende-karte-header">
               <span class="wartende-karte-kunde">${termin.kunde_name || 'Unbekannt'}</span>
               <span class="wartende-karte-kennzeichen">${termin.kennzeichen || '-'}</span>
@@ -17246,6 +17260,13 @@ class App {
           const dringA = this.getTerminDringlichkeit(a);
           const dringB = this.getTerminDringlichkeit(b);
           return (dringlichkeitOrder[dringA] || 3) - (dringlichkeitOrder[dringB] || 3);
+        
+        case 'prioritaet':
+          // Nach Priorität (hoch zuerst)
+          const prioritaetOrder = { 'hoch': 1, 'mittel': 2, 'niedrig': 3 };
+          const prioA = a.schwebend_prioritaet || 'mittel';
+          const prioB = b.schwebend_prioritaet || 'mittel';
+          return (prioritaetOrder[prioA] || 2) - (prioritaetOrder[prioB] || 2);
           
         default:
           return 0;
@@ -17407,9 +17428,18 @@ class App {
     bar.dataset.dauer = dauer;
     bar.dataset.dringlichkeit = dringlichkeit;
     
+    // Priorität Badge erstellen
+    const prioritaet = termin.schwebend_prioritaet || 'mittel';
+    const prioritaetBadges = {
+      'hoch': '<span class="prioritaet-badge prioritaet-badge-hoch" title="Hohe Priorität">🔴</span>',
+      'mittel': '<span class="prioritaet-badge prioritaet-badge-mittel" title="Mittlere Priorität">🟡</span>',
+      'niedrig': '<span class="prioritaet-badge prioritaet-badge-niedrig" title="Niedrige Priorität">🟢</span>'
+    };
+    const prioritaetBadge = prioritaetBadges[prioritaet] || prioritaetBadges['mittel'];
+    
     // Inhalt des Balkens
     bar.innerHTML = `
-      <div class="bar-header">${termin.termin_nr || 'Neu'} • ${termin.kennzeichen || ''}</div>
+      <div class="bar-header">${prioritaetBadge} ${termin.termin_nr || 'Neu'} • ${termin.kennzeichen || ''}</div>
       <div class="bar-details">${termin.kunde_name || 'Unbekannt'}</div>
       <div class="bar-zeit">⏱️ ${dauerText}</div>
       ${zeitenInfo ? `<div class="bar-zeiten">${zeitenInfo}</div>` : ''}

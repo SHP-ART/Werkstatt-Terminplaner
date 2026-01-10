@@ -1047,7 +1047,27 @@
                                 <input type="number" id="wartend_zeit" min="0.25" step="0.25" placeholder="z.B. 2.5">
                             </div>
                             <div class="form-group">
-                                <label>� Teile-Status:</label>
+                                <label>🎯 Priorität:</label>
+                                <div class="prioritaet-auswahl">
+                                    <label class="prioritaet-option prioritaet-hoch">
+                                        <input type="radio" name="wartendPrioritaet" value="hoch">
+                                        <span>🔴 Hoch</span>
+                                    </label>
+                                    <label class="prioritaet-option prioritaet-mittel">
+                                        <input type="radio" name="wartendPrioritaet" value="mittel" checked>
+                                        <span>🟡 Mittel</span>
+                                    </label>
+                                    <label class="prioritaet-option prioritaet-niedrig">
+                                        <input type="radio" name="wartendPrioritaet" value="niedrig">
+                                        <span>🟢 Niedrig</span>
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>📦 Teile-Status:</label>
                                 <select id="wartend_teile_status">
                                     <option value="">-- Nicht relevant --</option>
                                     <option value="bestellen">⚠️ Muss bestellt werden</option>
@@ -2229,6 +2249,7 @@
                                 <option value="dauer">Nach Dauer</option>
                                 <option value="kunde">Nach Kunde</option>
                                 <option value="dringlichkeit">Nach Dringlichkeit</option>
+                                <option value="prioritaet">Nach Priorität</option>
                             </select>
                             <span id="schwebendeCount" class="schwebende-count">0 Termine</span>
                         </div>

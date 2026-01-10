@@ -6810,8 +6810,109 @@ mark.highlight {
     position: absolute;
     top: 10px;
     right: 15px;
+    left: 15px;
     font-size: 0.8em;
     color: #999;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+/* Priorität Styles */
+.prioritaet-auswahl {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+.prioritaet-option {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 16px;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    border: 2px solid transparent;
+    background: #f5f5f5;
+}
+
+.prioritaet-option:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.prioritaet-option input[type="radio"] {
+    display: none;
+}
+
+.prioritaet-option input[type="radio"]:checked + span {
+    font-weight: 600;
+}
+
+.prioritaet-option.prioritaet-hoch {
+    background: linear-gradient(135deg, #ffebee 0%, #ffcdd2 100%);
+    border-color: #ef5350;
+}
+
+.prioritaet-option.prioritaet-hoch:hover {
+    background: linear-gradient(135deg, #ffcdd2 0%, #ef9a9a 100%);
+}
+
+.prioritaet-option.prioritaet-hoch input[type="radio"]:checked + span {
+    color: #c62828;
+}
+
+.prioritaet-option.prioritaet-mittel {
+    background: linear-gradient(135deg, #fff8e1 0%, #ffecb3 100%);
+    border-color: #ffca28;
+}
+
+.prioritaet-option.prioritaet-mittel:hover {
+    background: linear-gradient(135deg, #ffecb3 0%, #ffe082 100%);
+}
+
+.prioritaet-option.prioritaet-mittel input[type="radio"]:checked + span {
+    color: #f57f17;
+}
+
+.prioritaet-option.prioritaet-niedrig {
+    background: linear-gradient(135deg, #e8f5e9 0%, #c8e6c9 100%);
+    border-color: #66bb6a;
+}
+
+.prioritaet-option.prioritaet-niedrig:hover {
+    background: linear-gradient(135deg, #c8e6c9 0%, #a5d6a7 100%);
+}
+
+.prioritaet-option.prioritaet-niedrig input[type="radio"]:checked + span {
+    color: #2e7d32;
+}
+
+/* Priorität Badge */
+.prioritaet-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 8px;
+    border-radius: 12px;
+    font-size: 0.85em;
+    font-weight: 500;
+}
+
+.prioritaet-badge-hoch {
+    background: linear-gradient(135deg, #ffebee 0%, #ffcdd2 100%);
+    color: #c62828;
+}
+
+.prioritaet-badge-mittel {
+    background: linear-gradient(135deg, #fff8e1 0%, #ffecb3 100%);
+    color: #f57f17;
+}
+
+.prioritaet-badge-niedrig {
+    background: linear-gradient(135deg, #e8f5e9 0%, #c8e6c9 100%);
+    color: #2e7d32;
 }
 
 .btn-sparkle-warning {
