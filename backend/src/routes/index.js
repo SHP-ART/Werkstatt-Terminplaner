@@ -13,6 +13,7 @@ const mitarbeiterRoutes = require('./mitarbeiterRoutes');
 const lehrlingeRoutes = require('./lehrlingeRoutes');
 const ersatzautosRoutes = require('./ersatzautosRoutes');
 const phasenRoutes = require('./phasenRoutes');
+const aiRoutes = require('./aiRoutes');
 
 router.use('/kunden', kundenRoutes);
 router.use('/termine', termineRoutes);
@@ -25,6 +26,7 @@ router.use('/mitarbeiter', mitarbeiterRoutes);
 router.use('/lehrlinge', lehrlingeRoutes);
 router.use('/ersatzautos', ersatzautosRoutes);
 router.use('/phasen', phasenRoutes);
+router.use('/ai', aiRoutes);
 
 router.get('/health', (req, res) => {
   res.json({ status: 'OK', timestamp: new Date().toISOString() });

@@ -32,9 +32,9 @@
 | Zeit | Aufgabe | Status |
 |------|---------|--------|
 | 1h | OpenAI Account erstellen, API-Key generieren | ⬜ |
-| 1h | `openai` npm-Paket installieren | ⬜ |
-| 1h | `.env` um `OPENAI_API_KEY` erweitern | ⬜ |
-| 2h | Basis `openaiService.js` erstellen (Grundstruktur) | ⬜ |
+| 1h | `openai` npm-Paket installieren | ✅ |
+| 1h | `.env` um `OPENAI_API_KEY` erweitern | ✅ |
+| 2h | Basis `openaiService.js` erstellen (Grundstruktur) | ✅ |
 
 #### Dienstag (12.01.)
 | Zeit | Aufgabe | Status |
@@ -60,9 +60,9 @@
 #### Freitag (15.01.)
 | Zeit | Aufgabe | Status |
 |------|---------|--------|
-| 2h | `aiController.js` erstellen | ⬜ |
-| 1h | `aiRoutes.js` erstellen | ⬜ |
-| 2h | API-Endpunkte testen (curl/Postman) | ⬜ |
+| 2h | `aiController.js` erstellen | ✅ |
+| 1h | `aiRoutes.js` erstellen | ✅ |
+| 2h | API-Endpunkte testen (curl/Postman) | ✅ |
 | 1h | Bugfixes & Dokumentation | ⬜ |
 
 **Meilenstein Woche 1:** ✅ Backend-API vollständig funktionsfähig
