@@ -1694,6 +1694,49 @@ class TermineController {
       res.status(500).json({ error: err.message });
     }
   }
+
+  /**
+   * Prüft auf Duplikat-Termine (gleicher Kunde am gleichen Tag)
+   * GET /termine/duplikat-check?datum=YYYY-MM-DD&kunde_id=X oder &kunde_name=Name
+   */
+  static async checkDuplikate(req, res) {
+    try {
+      const { datum, kunde_id, kunde_name, exclude_id } = req.query;
+
+      if (!datum) {
+        return res.status(400).json({ error: 'Datum ist erforderlich' });
+      }
+
+      if (!kunde_id && !kunde_name) {
+        return res.status(400).json({ error: 'kunde_id oder kunde_name ist erforderlich' });
+      }
+
+      const duplikate = await TermineModel.checkDuplikate(
+        datum,
+        kunde_id ? parseInt(kunde_id, 10) : null,
+        kunde_name || null,
+        exclude_id ? parseInt(exclude_id, 10) : null
+      );
+
+      res.json({
+        hatDuplikate: duplikate.length > 0,
+        anzahl: duplikate.length,
+        termine: duplikate.map(t => ({
+          id: t.id,
+          termin_nr: t.termin_nr,
+          datum: t.datum,
+          kunde_name: t.kunde_name,
+          kennzeichen: t.kennzeichen,
+          arbeit: t.arbeit,
+          status: t.status,
+          bring_zeit: t.bring_zeit
+        }))
+      });
+    } catch (err) {
+      console.error('Fehler bei checkDuplikate:', err);
+      res.status(500).json({ error: err.message });
+    }
+  }
 }
 
 // Exportiere auch die Cache-Invalidierungsfunktion für andere Controller

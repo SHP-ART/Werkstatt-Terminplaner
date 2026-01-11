@@ -4046,6 +4046,33 @@ class App {
     }
 
     try {
+      // Prüfe auf Duplikate (gleicher Kunde am gleichen Tag)
+      const duplikatCheck = await TermineService.checkDuplikate(
+        termin.datum,
+        resolvedKundeId,
+        resolvedKundeName
+      );
+
+      if (duplikatCheck.hatDuplikate) {
+        // Formatiere die bestehenden Termine für die Anzeige
+        const termineInfo = duplikatCheck.termine.map(t => {
+          const zeitInfo = t.bring_zeit ? ` um ${t.bring_zeit} Uhr` : '';
+          const arbeiten = t.arbeit.length > 50 ? t.arbeit.substring(0, 50) + '...' : t.arbeit;
+          return `• ${t.termin_nr}${zeitInfo}: ${arbeiten} (${t.kennzeichen || 'ohne Kennzeichen'})`;
+        }).join('\n');
+
+        const bestaetigung = confirm(
+          `⚠️ Achtung: Es gibt bereits ${duplikatCheck.anzahl} Termin(e) für diesen Kunden am ${new Date(termin.datum + 'T12:00:00').toLocaleDateString('de-DE')}:\n\n` +
+          `${termineInfo}\n\n` +
+          `Möchten Sie trotzdem einen weiteren Termin anlegen?`
+        );
+        
+        if (!bestaetigung) {
+          this.pendingTerminData = null;
+          return;
+        }
+      }
+
       // Validiere Termin vor dem Erstellen
       const validation = await TermineService.validate({
         datum: termin.datum,

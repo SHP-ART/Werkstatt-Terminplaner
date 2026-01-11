@@ -62,6 +62,51 @@ class TermineModel {
     return await allAsync(query, [datum]);
   }
 
+  /**
+   * Prüft ob es bereits Termine für einen Kunden an einem bestimmten Datum gibt
+   * @param {string} datum - Das Datum im Format YYYY-MM-DD
+   * @param {number|null} kundeId - Die Kunden-ID (optional)
+   * @param {string|null} kundeName - Der Kundenname (falls keine ID)
+   * @param {number|null} excludeId - Optional: Termin-ID die ausgeschlossen werden soll (für Updates)
+   * @returns {Promise<Array>} - Array von Duplikat-Terminen
+   */
+  static async checkDuplikate(datum, kundeId, kundeName, excludeId = null) {
+    let query = `
+      SELECT t.*,
+             COALESCE(k.name, t.kunde_name) as kunde_name,
+             COALESCE(k.telefon, t.kunde_telefon) as kunde_telefon
+      FROM termine t
+      LEFT JOIN kunden k ON t.kunde_id = k.id
+      WHERE t.datum = ? 
+        AND t.geloescht_am IS NULL
+        AND t.arbeit != 'Fahrzeug aus Import'
+        AND t.arbeit != 'Fahrzeug hinzugefügt'
+    `;
+    const params = [datum];
+
+    // Prüfung nach Kunde (entweder per ID oder Name)
+    if (kundeId) {
+      query += ' AND t.kunde_id = ?';
+      params.push(kundeId);
+    } else if (kundeName) {
+      // Fallback auf Namensvergleich (case-insensitive)
+      query += ' AND (LOWER(COALESCE(k.name, t.kunde_name)) = LOWER(?))';
+      params.push(kundeName);
+    } else {
+      // Kein Kunde angegeben - keine Duplikate möglich
+      return [];
+    }
+
+    // Optional: Bestimmten Termin ausschließen (z.B. bei Bearbeitung)
+    if (excludeId) {
+      query += ' AND t.id != ?';
+      params.push(excludeId);
+    }
+
+    query += ' ORDER BY t.erstellt_am';
+    return await allAsync(query, params);
+  }
+
   static async getById(id) {
     const query = `
       SELECT t.*,

@@ -196,6 +196,27 @@ class TermineService {
     return ApiService.get(url);
   }
 
+  /**
+   * Prüft ob es bereits Termine für einen Kunden am gleichen Tag gibt
+   * @param {string} datum - Das Datum im Format YYYY-MM-DD
+   * @param {number|null} kundeId - Die Kunden-ID (optional)
+   * @param {string|null} kundeName - Der Kundenname (falls keine ID)
+   * @param {number|null} excludeId - Optional: Termin-ID die ausgeschlossen werden soll
+   * @returns {Promise<{hatDuplikate: boolean, anzahl: number, termine: Array}>}
+   */
+  static async checkDuplikate(datum, kundeId, kundeName, excludeId = null) {
+    let url = `/termine/duplikat-check?datum=${datum}`;
+    if (kundeId) {
+      url += `&kunde_id=${kundeId}`;
+    } else if (kundeName) {
+      url += `&kunde_name=${encodeURIComponent(kundeName)}`;
+    }
+    if (excludeId) {
+      url += `&exclude_id=${excludeId}`;
+    }
+    return ApiService.get(url);
+  }
+
   // Schwebend-Funktionen (Termin noch nicht fest eingeplant)
   static async setSchwebend(id, istSchwebend) {
     return ApiService.post(`/termine/${id}/schwebend`, { ist_schwebend: istSchwebend });
