@@ -4,6 +4,8 @@ const AbwesenheitenModel = require('../models/abwesenheitenModel');
 const ArbeitszeitenModel = require('../models/arbeitszeitenModel');
 const MitarbeiterModel = require('../models/mitarbeiterModel');
 const LehrlingeModel = require('../models/lehrlingeModel');
+const Fahrzeug = require('../models/fahrzeug');
+const openaiService = require('../services/openaiService');
 
 // Cache für Mitarbeiter und Lehrlinge (Performance-Optimierung)
 let mitarbeiterCache = { data: null, timestamp: 0 };
@@ -596,6 +598,30 @@ class TermineController {
       };
 
       const result = await TermineModel.create(payload);
+      
+      // 🚗 AUTO-SPEICHERUNG: Fahrzeugdaten in fahrzeuge-Tabelle speichern
+      if (req.body.vin && req.body.kennzeichen) {
+        try {
+          // Prüfe ob Fahrzeug bereits existiert
+          let fahrzeug = await Fahrzeug.findByVin(req.body.vin.toUpperCase());
+          
+          if (!fahrzeug) {
+            // VIN dekodieren und Fahrzeug speichern
+            const vinData = openaiService.decodeVIN(req.body.vin);
+            if (vinData.success) {
+              await Fahrzeug.saveFromVinDecode(vinData, req.body.kennzeichen, req.body.kunde_id || null);
+              console.log(`🚗 Fahrzeug automatisch gespeichert: ${req.body.kennzeichen} (VIN: ${req.body.vin})`);
+            }
+          } else if (req.body.kunde_id && !fahrzeug.kunde_id) {
+            // Fahrzeug existiert aber ohne Kunde - Kunde verknüpfen
+            await Fahrzeug.update(fahrzeug.id, { kunde_id: req.body.kunde_id });
+          }
+        } catch (fahrzeugErr) {
+          // Fehler beim Fahrzeug-Speichern ignorieren (Termin wurde trotzdem erstellt)
+          console.warn('⚠️ Fahrzeug konnte nicht gespeichert werden:', fahrzeugErr.message);
+        }
+      }
+      
       // Cache invalidierten
       invalidateAuslastungCache(payload.datum);
       res.json({
@@ -679,6 +705,26 @@ class TermineController {
 
       const result = await TermineModel.update(req.params.id, updateData);
       const changes = (result && result.changes) || 0;
+      
+      // 🚗 AUTO-SPEICHERUNG: Fahrzeugdaten in fahrzeuge-Tabelle speichern (bei VIN-Update)
+      const vinUpdate = req.body.vin || updateData.vin;
+      const kennzeichenUpdate = req.body.kennzeichen || updateData.kennzeichen || termin.kennzeichen;
+      if (vinUpdate && kennzeichenUpdate) {
+        try {
+          let fahrzeug = await Fahrzeug.findByVin(vinUpdate.toUpperCase());
+          
+          if (!fahrzeug) {
+            const vinData = openaiService.decodeVIN(vinUpdate);
+            if (vinData.success) {
+              const kundeId = req.body.kunde_id || updateData.kunde_id || termin.kunde_id || null;
+              await Fahrzeug.saveFromVinDecode(vinData, kennzeichenUpdate, kundeId);
+              console.log(`🚗 Fahrzeug automatisch gespeichert (Update): ${kennzeichenUpdate} (VIN: ${vinUpdate})`);
+            }
+          }
+        } catch (fahrzeugErr) {
+          console.warn('⚠️ Fahrzeug konnte nicht gespeichert werden:', fahrzeugErr.message);
+        }
+      }
       
       // Cache invalidierten
       if (termin && termin.datum) {

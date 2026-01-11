@@ -326,6 +326,109 @@ async function fullAnalysis(req, res) {
 }
 
 // =============================================================================
+// WARTUNGSPLAN
+// =============================================================================
+
+/**
+ * POST /api/ai/wartungsplan
+ * Erstellt einen Citroën-Wartungsplan basierend auf km-Stand
+ * 
+ * Body: { fahrzeug: "Citroën C3 PureTech", kmStand: 45000, alter: 3 }
+ */
+async function getWartungsplan(req, res) {
+  try {
+    const { fahrzeug, kmStand, alter } = req.body;
+    
+    if (!fahrzeug || fahrzeug.trim().length < 3) {
+      return res.status(400).json({ 
+        error: 'Fahrzeugtyp ist erforderlich' 
+      });
+    }
+    
+    if (!kmStand || kmStand < 0) {
+      return res.status(400).json({ 
+        error: 'Gültiger Kilometerstand ist erforderlich' 
+      });
+    }
+    
+    const result = await openaiService.getWartungsplan(fahrzeug, kmStand, alter);
+    
+    res.json(result);
+    
+  } catch (error) {
+    console.error('AI Wartungsplan Fehler:', error);
+    res.status(500).json({ 
+      error: 'Wartungsplan-Erstellung fehlgeschlagen',
+      message: error.message 
+    });
+  }
+}
+
+// =============================================================================
+// VIN-DECODER
+// =============================================================================
+
+/**
+ * POST /api/ai/vin-decode
+ * Dekodiert eine Fahrgestellnummer (VIN) und liefert Fahrzeugdaten + Teile-Hinweise
+ */
+async function decodeVIN(req, res) {
+  try {
+    const { vin } = req.body;
+    
+    if (!vin || vin.trim().length === 0) {
+      return res.status(400).json({ 
+        error: 'Fahrgestellnummer (VIN) ist erforderlich' 
+      });
+    }
+    
+    const result = openaiService.decodeVIN(vin);
+    
+    res.json(result);
+    
+  } catch (error) {
+    console.error('VIN-Decode Fehler:', error);
+    res.status(500).json({ 
+      error: 'VIN-Dekodierung fehlgeschlagen',
+      message: error.message 
+    });
+  }
+}
+
+/**
+ * POST /api/ai/vin-teile-check
+ * Prüft Teile-Kompatibilität basierend auf VIN und Arbeit
+ */
+async function checkTeileKompatibilitaet(req, res) {
+  try {
+    const { vin, arbeit } = req.body;
+    
+    if (!vin || vin.trim().length === 0) {
+      return res.status(400).json({ 
+        error: 'Fahrgestellnummer (VIN) ist erforderlich' 
+      });
+    }
+    
+    if (!arbeit || arbeit.trim().length === 0) {
+      return res.status(400).json({ 
+        error: 'Arbeitsbeschreibung ist erforderlich' 
+      });
+    }
+    
+    const result = openaiService.checkTeileKompatibilitaet(vin, arbeit);
+    
+    res.json(result);
+    
+  } catch (error) {
+    console.error('Teile-Kompatibilitätscheck Fehler:', error);
+    res.status(500).json({ 
+      error: 'Teile-Check fehlgeschlagen',
+      message: error.message 
+    });
+  }
+}
+
+// =============================================================================
 // EXPORTS
 // =============================================================================
 
@@ -337,5 +440,8 @@ module.exports = {
   estimateZeit,
   erkenneTeilebedarf,
   checkFremdmarke,
-  fullAnalysis
+  fullAnalysis,
+  getWartungsplan,
+  decodeVIN,
+  checkTeileKompatibilitaet
 };

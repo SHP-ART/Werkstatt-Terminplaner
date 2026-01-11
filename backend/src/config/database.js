@@ -818,6 +818,80 @@ function initializeDatabase() {
       if (err) console.error('Fehler beim Erstellen des Index idx_phasen_datum:', err);
     });
 
+    // Teile-Bestellungen für Termine
+    dbWrapper.connection.run(`CREATE TABLE IF NOT EXISTS teile_bestellungen (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      termin_id INTEGER NOT NULL,
+      teil_name TEXT NOT NULL,
+      teil_oe_nummer TEXT,
+      menge INTEGER DEFAULT 1,
+      fuer_arbeit TEXT,
+      status TEXT DEFAULT 'offen',
+      bestellt_am DATETIME,
+      geliefert_am DATETIME,
+      notiz TEXT,
+      erstellt_am DATETIME DEFAULT CURRENT_TIMESTAMP,
+      aktualisiert_am DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (termin_id) REFERENCES termine(id) ON DELETE CASCADE
+    )`, (err) => {
+      if (err && !err.message.includes('already exists')) {
+        console.error('Fehler beim Erstellen der teile_bestellungen Tabelle:', err);
+      }
+    });
+
+    // Indizes für teile_bestellungen
+    dbWrapper.connection.run(`CREATE INDEX IF NOT EXISTS idx_teile_termin ON teile_bestellungen(termin_id)`, (err) => {
+      if (err) console.error('Fehler beim Erstellen des Index idx_teile_termin:', err);
+    });
+
+    dbWrapper.connection.run(`CREATE INDEX IF NOT EXISTS idx_teile_status ON teile_bestellungen(status)`, (err) => {
+      if (err) console.error('Fehler beim Erstellen des Index idx_teile_status:', err);
+    });
+
+    // Fahrzeuge-Tabelle für detaillierte Fahrzeugdaten
+    dbWrapper.connection.run(`CREATE TABLE IF NOT EXISTS fahrzeuge (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      kunde_id INTEGER,
+      kennzeichen TEXT NOT NULL,
+      vin TEXT UNIQUE,
+      hersteller TEXT,
+      modell TEXT,
+      generation TEXT,
+      baujahr INTEGER,
+      motor_code TEXT,
+      motor_typ TEXT,
+      motor_ps TEXT,
+      getriebe TEXT,
+      werk TEXT,
+      produktionsland TEXT,
+      karosserie TEXT,
+      oel_spezifikation TEXT,
+      oelfilter_oe TEXT,
+      besonderheiten TEXT,
+      hinweise TEXT,
+      vin_roh TEXT,
+      aktualisiert_am DATETIME DEFAULT CURRENT_TIMESTAMP,
+      erstellt_am DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (kunde_id) REFERENCES kunden(id)
+    )`, (err) => {
+      if (err && !err.message.includes('already exists')) {
+        console.error('Fehler beim Erstellen der fahrzeuge Tabelle:', err);
+      }
+    });
+
+    // Indizes für fahrzeuge
+    dbWrapper.connection.run(`CREATE INDEX IF NOT EXISTS idx_fahrzeuge_kunde ON fahrzeuge(kunde_id)`, (err) => {
+      if (err) console.error('Fehler beim Erstellen des Index idx_fahrzeuge_kunde:', err);
+    });
+
+    dbWrapper.connection.run(`CREATE INDEX IF NOT EXISTS idx_fahrzeuge_kennzeichen ON fahrzeuge(kennzeichen)`, (err) => {
+      if (err) console.error('Fehler beim Erstellen des Index idx_fahrzeuge_kennzeichen:', err);
+    });
+
+    dbWrapper.connection.run(`CREATE INDEX IF NOT EXISTS idx_fahrzeuge_vin ON fahrzeuge(vin)`, (err) => {
+      if (err) console.error('Fehler beim Erstellen des Index idx_fahrzeuge_vin:', err);
+    });
+
     // Weitere Performance-Indizes
     dbWrapper.connection.run(`CREATE INDEX IF NOT EXISTS idx_kunden_name ON kunden(name)`, (err) => {
       if (err) console.error('Fehler beim Erstellen des Index idx_kunden_name:', err);

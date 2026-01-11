@@ -14,6 +14,8 @@ const lehrlingeRoutes = require('./lehrlingeRoutes');
 const ersatzautosRoutes = require('./ersatzautosRoutes');
 const phasenRoutes = require('./phasenRoutes');
 const aiRoutes = require('./aiRoutes');
+const teileRoutes = require('./teileRoutes');
+const fahrzeugeRoutes = require('./fahrzeuge');
 
 router.use('/kunden', kundenRoutes);
 router.use('/termine', termineRoutes);
@@ -27,6 +29,8 @@ router.use('/lehrlinge', lehrlingeRoutes);
 router.use('/ersatzautos', ersatzautosRoutes);
 router.use('/phasen', phasenRoutes);
 router.use('/ai', aiRoutes);
+router.use('/teile-bestellungen', teileRoutes);
+router.use('/fahrzeuge', fahrzeugeRoutes);
 
 router.get('/health', (req, res) => {
   res.json({ status: 'OK', timestamp: new Date().toISOString() });

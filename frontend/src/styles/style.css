@@ -936,6 +936,77 @@ textarea {
     transition: border-color 0.3s ease;
 }
 
+/* ===== Arbeiten Label Row mit KI-Toggle ===== */
+.arbeiten-label-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+}
+
+.arbeiten-label-row > label:first-child {
+    margin-bottom: 0;
+}
+
+.ki-analyse-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
+    background: linear-gradient(135deg, #f0f4ff 0%, #e8eeff 100%);
+    border: 1px solid #d0d9f0;
+    border-radius: 20px;
+    cursor: pointer;
+    font-size: 12px;
+    font-weight: 500;
+    color: #5a6a8a;
+    transition: all 0.3s ease;
+    user-select: none;
+}
+
+.ki-analyse-toggle:hover {
+    background: linear-gradient(135deg, #e8eeff 0%, #d8e4ff 100%);
+    border-color: #b0c0e0;
+    transform: translateY(-1px);
+}
+
+.ki-analyse-toggle input[type="checkbox"] {
+    display: none;
+}
+
+.ki-analyse-toggle .ki-toggle-icon {
+    font-size: 14px;
+    opacity: 0.6;
+    transition: all 0.3s ease;
+}
+
+.ki-analyse-toggle .ki-toggle-text {
+    transition: color 0.3s ease;
+}
+
+/* Aktiver Zustand */
+.ki-analyse-toggle:has(input:checked) {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    border-color: #5a6fd6;
+    color: white;
+    box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);
+}
+
+.ki-analyse-toggle:has(input:checked) .ki-toggle-icon {
+    opacity: 1;
+    animation: ki-pulse 2s infinite;
+}
+
+.ki-analyse-toggle:has(input:checked):hover {
+    background: linear-gradient(135deg, #5a6fd6 0%, #6a4092 100%);
+    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+}
+
+@keyframes ki-pulse {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.1); }
+}
+
 /* ===== Spezial-Styling für Arbeiten-Textarea ===== */
 .arbeiten-textarea {
     padding: 0 !important;
@@ -3453,6 +3524,31 @@ tr.schwebend {
 
 .teile-row[data-status="bestellt"] {
     background: #fffcf5;
+}
+
+/* Klickbare Teile-Filter-Karten */
+.teile-filter-card:hover {
+    transform: scale(1.05) !important;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15) !important;
+}
+
+/* Gruppen-Header in der Teile-Tabelle */
+.teile-group-header td {
+    border-bottom: 2px solid #ddd;
+}
+
+.teile-group-header:hover {
+    background: inherit !important;
+}
+
+/* Dringende Teile (Termin heute oder überfällig) */
+.teile-dringend {
+    animation: pulseDringend 2s infinite;
+}
+
+@keyframes pulseDringend {
+    0%, 100% { background: #fff5f5; }
+    50% { background: #ffe0e0; }
 }
 
 /* Teile-Status in Termin-Liste */
@@ -9454,4 +9550,1283 @@ mark.highlight {
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+}
+
+/* ================================================
+   KI-ASSISTENT STYLING (Version 1.2.0)
+   ================================================ */
+
+/* KI-Assistent Banner/Button */
+.ki-assistent-banner {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    padding: 12px 16px;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    border-radius: 12px;
+    margin-bottom: 20px;
+    box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
+}
+
+.ki-assistent-btn {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 20px;
+    background: white;
+    border: none;
+    border-radius: 8px;
+    font-size: 1rem;
+    font-weight: 600;
+    color: #667eea;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.ki-assistent-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.ki-icon {
+    font-size: 1.3em;
+}
+
+.ki-badge {
+    background: #ff6b6b;
+    color: white;
+    font-size: 0.65rem;
+    padding: 2px 6px;
+    border-radius: 10px;
+    font-weight: 700;
+    animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.7; }
+}
+
+.ki-hint {
+    color: white;
+    font-size: 0.9rem;
+    opacity: 0.9;
+}
+
+/* KI-Modal Styling */
+.ki-modal-content {
+    max-width: 700px;
+}
+
+.ki-modal-subtitle {
+    color: #666;
+    margin-bottom: 20px;
+    font-size: 0.95rem;
+}
+
+.ki-eingabe-bereich {
+    margin-bottom: 20px;
+}
+
+.ki-eingabe-bereich label {
+    display: block;
+    font-weight: 600;
+    margin-bottom: 8px;
+    color: #333;
+}
+
+.ki-textarea {
+    width: 100%;
+    padding: 15px;
+    border: 2px solid #e0e0e0;
+    border-radius: 10px;
+    font-size: 1rem;
+    font-family: inherit;
+    resize: vertical;
+    transition: border-color 0.2s;
+}
+
+.ki-textarea:focus {
+    outline: none;
+    border-color: #667eea;
+}
+
+.ki-beispiele {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 10px;
+    flex-wrap: wrap;
+}
+
+.ki-beispiel-label {
+    font-size: 0.85rem;
+    color: #666;
+}
+
+.ki-beispiel-btn {
+    padding: 5px 12px;
+    background: #f0f0f0;
+    border: 1px solid #ddd;
+    border-radius: 15px;
+    font-size: 0.8rem;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.ki-beispiel-btn:hover {
+    background: #667eea;
+    color: white;
+    border-color: #667eea;
+}
+
+/* Action Bereich */
+.ki-action-bereich {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    margin-bottom: 20px;
+}
+
+.ki-analysieren-btn {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 25px;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    border: none;
+    border-radius: 8px;
+    color: white;
+    font-size: 1rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.ki-analysieren-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+}
+
+.ki-analysieren-btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    transform: none;
+}
+
+.ki-loading {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    color: #667eea;
+    font-weight: 500;
+}
+
+.ki-spinner {
+    width: 20px;
+    height: 20px;
+    border: 3px solid #e0e0e0;
+    border-top-color: #667eea;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+/* Ergebnis-Bereich */
+.ki-ergebnis-bereich {
+    padding: 20px;
+    background: #f8f9ff;
+    border-radius: 12px;
+    border: 1px solid #e0e5ff;
+    margin-bottom: 20px;
+}
+
+.ki-ergebnis-bereich h4 {
+    margin-bottom: 15px;
+    color: #333;
+}
+
+.ki-fremdmarken-warnung {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 15px;
+    background: #fff3cd;
+    border: 1px solid #ffc107;
+    border-radius: 8px;
+    margin-bottom: 15px;
+}
+
+.ki-fremdmarken-warnung .warnung-icon {
+    font-size: 1.3em;
+}
+
+.ki-fremdmarken-warnung .warnung-text {
+    flex: 1;
+    color: #856404;
+    font-weight: 500;
+}
+
+.bestandskunde-check {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+    font-size: 0.9rem;
+    color: #856404;
+    width: 100%;
+    margin-top: 5px;
+}
+
+.bestandskunde-check input {
+    width: 18px;
+    height: 18px;
+}
+
+/* Daten-Grid */
+.ki-daten-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+}
+
+.ki-daten-gruppe {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.ki-daten-gruppe-full {
+    grid-column: 1 / -1;
+}
+
+.ki-label {
+    font-size: 0.85rem;
+    color: #666;
+    font-weight: 500;
+}
+
+.ki-wert {
+    font-size: 1rem;
+    color: #333;
+    font-weight: 600;
+}
+
+.ki-arbeiten-liste, .ki-teile-liste {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.ki-arbeiten-liste .arbeit-tag {
+    padding: 4px 10px;
+    background: #667eea;
+    color: white;
+    border-radius: 15px;
+    font-size: 0.85rem;
+}
+
+.ki-teile-liste .teil-tag {
+    padding: 4px 10px;
+    background: #28a745;
+    color: white;
+    border-radius: 15px;
+    font-size: 0.85rem;
+}
+
+/* Confidence-Anzeige */
+.ki-confidence {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-top: 15px;
+    padding-top: 15px;
+    border-top: 1px solid #e0e5ff;
+}
+
+.confidence-label {
+    font-size: 0.85rem;
+    color: #666;
+}
+
+.confidence-bar {
+    flex: 1;
+    height: 8px;
+    background: #e0e0e0;
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+.confidence-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #ffc107 0%, #28a745 100%);
+    border-radius: 4px;
+    transition: width 0.5s ease;
+}
+
+.confidence-value {
+    font-weight: 600;
+    color: #333;
+    min-width: 40px;
+}
+
+/* Modal Footer */
+.ki-modal-footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    padding-top: 15px;
+    border-top: 1px solid #eee;
+}
+
+/* ================================================
+   KI-VORSCHLÄGE IM ARBEITEN-FELD (Inline)
+   ================================================ */
+
+.ki-vorschlaege-bereich {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    background: white;
+    border: 2px solid #667eea;
+    border-radius: 10px;
+    box-shadow: 0 8px 25px rgba(102, 126, 234, 0.25);
+    z-index: 100;
+    margin-top: 5px;
+    animation: slideDown 0.2s ease-out;
+}
+
+@keyframes slideDown {
+    from {
+        opacity: 0;
+        transform: translateY(-10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.ki-vorschlaege-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 15px;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    border-radius: 8px 8px 0 0;
+}
+
+.ki-vorschlaege-icon {
+    font-size: 1.2em;
+}
+
+.ki-vorschlaege-titel {
+    flex: 1;
+    font-weight: 600;
+}
+
+.ki-vorschlaege-close {
+    background: rgba(255,255,255,0.2);
+    border: none;
+    color: white;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    cursor: pointer;
+    font-size: 1.1em;
+    line-height: 1;
+    transition: background 0.2s;
+}
+
+.ki-vorschlaege-close:hover {
+    background: rgba(255,255,255,0.3);
+}
+
+.ki-vorschlaege-liste {
+    padding: 10px;
+    max-height: 200px;
+    overflow-y: auto;
+}
+
+.ki-vorschlag-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 12px;
+    margin-bottom: 6px;
+    background: #f8f9ff;
+    border: 1px solid #e0e5ff;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.ki-vorschlag-item:hover {
+    background: #667eea;
+    color: white;
+    border-color: #667eea;
+    transform: translateX(5px);
+}
+
+.ki-vorschlag-item:last-child {
+    margin-bottom: 0;
+}
+
+.ki-vorschlag-icon {
+    font-size: 1.2em;
+}
+
+.ki-vorschlag-text {
+    flex: 1;
+}
+
+.ki-vorschlag-name {
+    font-weight: 600;
+    display: block;
+}
+
+.ki-vorschlag-zeit {
+    font-size: 0.8em;
+    opacity: 0.7;
+}
+
+.ki-vorschlag-add {
+    font-size: 1.2em;
+    opacity: 0.5;
+}
+
+.ki-vorschlag-item:hover .ki-vorschlag-add {
+    opacity: 1;
+}
+
+.ki-vorschlaege-footer {
+    padding: 8px 15px;
+    background: #f5f5f5;
+    border-radius: 0 0 8px 8px;
+    text-align: center;
+}
+
+.ki-vorschlaege-footer small {
+    color: #666;
+    font-size: 0.8em;
+}
+
+.ki-vorschlaege-loading {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    padding: 20px;
+    color: #667eea;
+}
+
+/* ===== Wartungsplan Styles ===== */
+.ki-wartungsplan-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    border-radius: 8px;
+    color: white;
+    margin-bottom: 12px;
+}
+
+.ki-wartungsplan-icon {
+    font-size: 1.5em;
+}
+
+.ki-wartungsplan-info {
+    display: block;
+    font-size: 0.85em;
+    opacity: 0.9;
+}
+
+.ki-service-badge {
+    margin-left: auto;
+    padding: 4px 10px;
+    background: rgba(255,255,255,0.2);
+    border-radius: 12px;
+    font-size: 0.8em;
+    font-weight: 600;
+}
+
+.ki-wartung-section {
+    margin-bottom: 12px;
+}
+
+.ki-wartung-section-title {
+    font-size: 0.9em;
+    font-weight: 600;
+    margin-bottom: 8px;
+    padding-left: 4px;
+}
+
+.ki-wartung-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 12px;
+    background: #f8f9fa;
+    border-radius: 6px;
+    margin-bottom: 6px;
+    transition: all 0.2s;
+}
+
+.ki-wartung-item:hover {
+    background: #e9ecef;
+}
+
+.ki-wartung-item-jetzt {
+    background: #fff3cd;
+    border-left: 3px solid #ffc107;
+}
+
+.ki-wartung-item-jetzt:hover {
+    background: #ffecb5;
+}
+
+.ki-wartung-item-bald {
+    background: #e8f5e9;
+    border-left: 3px solid #4caf50;
+}
+
+.ki-wartung-name {
+    flex: 1;
+    font-weight: 500;
+}
+
+.ki-wartung-details {
+    font-size: 0.85em;
+    color: #666;
+}
+
+.ki-wartung-add {
+    width: 24px;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #667eea;
+    color: white;
+    border-radius: 50%;
+    cursor: pointer;
+    font-weight: bold;
+    opacity: 0;
+    transition: all 0.2s;
+}
+
+.ki-wartung-item:hover .ki-wartung-add {
+    opacity: 1;
+}
+
+.ki-wartung-add:hover {
+    background: #5a67d8;
+    transform: scale(1.1);
+}
+
+.ki-wartung-hinweise {
+    background: #e3f2fd;
+    border-radius: 8px;
+    padding: 12px;
+    margin-top: 12px;
+}
+
+.ki-wartung-hinweise-title {
+    font-weight: 600;
+    margin-bottom: 8px;
+    font-size: 0.9em;
+}
+
+.ki-wartung-hinweise ul {
+    margin: 0;
+    padding-left: 20px;
+    font-size: 0.85em;
+    color: #1565c0;
+}
+
+.ki-wartung-hinweise li {
+    margin-bottom: 4px;
+}
+
+.ki-wartung-footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px;
+    background: #f1f3f5;
+    border-radius: 8px;
+    margin-top: 12px;
+    font-size: 0.9em;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+/* ===== VIN-Decoder Styles ===== */
+.vin-input-wrapper {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+
+.vin-input-wrapper input {
+    flex: 1;
+}
+
+.vin-decode-btn {
+    padding: 8px 12px;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 1em;
+    transition: all 0.2s;
+    min-width: 42px;
+}
+
+.vin-decode-btn:hover {
+    transform: scale(1.05);
+    box-shadow: 0 2px 8px rgba(102, 126, 234, 0.4);
+}
+
+.vin-decode-btn:disabled {
+    background: #ccc;
+    cursor: not-allowed;
+    transform: none;
+}
+
+.vin-info-bereich {
+    margin-top: 10px;
+    padding: 12px;
+    background: linear-gradient(135deg, #f8f9ff 0%, #f0f4ff 100%);
+    border: 1px solid #d0d7ff;
+    border-radius: 8px;
+    font-size: 0.9em;
+}
+
+.vin-info-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 10px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid #d0d7ff;
+}
+
+.vin-info-header .vin-marke {
+    font-size: 1.2em;
+}
+
+.vin-info-header .vin-fahrzeug {
+    font-weight: 600;
+    color: #333;
+}
+
+.vin-info-header .vin-baujahr {
+    color: #666;
+    font-size: 0.9em;
+}
+
+.vin-info-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 8px;
+}
+
+.vin-info-item {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.vin-info-item .label {
+    font-size: 0.75em;
+    color: #666;
+    text-transform: uppercase;
+}
+
+.vin-info-item .value {
+    font-weight: 500;
+    color: #333;
+}
+
+.vin-teile-hinweise {
+    margin-top: 10px;
+    padding: 10px;
+    background: #fff8e1;
+    border-radius: 6px;
+    border-left: 3px solid #ffc107;
+}
+
+.vin-teile-hinweise-title {
+    font-weight: 600;
+    font-size: 0.85em;
+    margin-bottom: 6px;
+    color: #856404;
+}
+
+.vin-teile-hinweise ul {
+    margin: 0;
+    padding-left: 18px;
+    font-size: 0.85em;
+}
+
+.vin-teile-hinweise li {
+    margin-bottom: 3px;
+}
+
+.vin-warnungen {
+    margin-top: 10px;
+    padding: 10px;
+    background: #ffebee;
+    border-radius: 6px;
+    border-left: 3px solid #f44336;
+}
+
+.vin-warnungen-title {
+    font-weight: 600;
+    font-size: 0.85em;
+    margin-bottom: 6px;
+    color: #c62828;
+}
+
+.vin-warnung-item {
+    padding: 6px 8px;
+    background: white;
+    border-radius: 4px;
+    margin-bottom: 4px;
+    font-size: 0.85em;
+}
+
+.vin-warnung-teil {
+    font-weight: 600;
+    color: #c62828;
+}
+
+.vin-warnung-text {
+    color: #666;
+    display: block;
+    margin-top: 2px;
+}
+
+.vin-auto-fill-btn {
+    margin-top: 10px;
+    padding: 8px 16px;
+    background: #4caf50;
+    color: white;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 0.9em;
+    width: 100%;
+    transition: background 0.2s;
+}
+
+.vin-auto-fill-btn:hover {
+    background: #43a047;
+}
+
+.vin-citroen-badge {
+    display: inline-block;
+    padding: 2px 8px;
+    background: #e10a17;
+    color: white;
+    border-radius: 4px;
+    font-size: 0.75em;
+    font-weight: 600;
+    margin-left: 8px;
+}
+
+.vin-fremdmarke-badge {
+    display: inline-block;
+    padding: 2px 8px;
+    background: #ff9800;
+    color: white;
+    border-radius: 4px;
+    font-size: 0.75em;
+    font-weight: 600;
+    margin-left: 8px;
+}
+
+/* Responsive */
+@media (max-width: 600px) {
+    .ki-assistent-banner {
+        flex-direction: column;
+        text-align: center;
+    }
+    
+    .ki-daten-grid {
+        grid-template-columns: 1fr;
+    }
+    
+    .ki-beispiele {
+        justify-content: center;
+    }
+    
+    .ki-wartung-footer {
+        flex-direction: column;
+        text-align: center;
+    }
+    
+    .vin-info-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+/* ===== TEILE-BESTELLEN TAB STYLES ===== */
+
+/* Statistik-Karten */
+.teile-statistik {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 15px;
+    margin-bottom: 20px;
+}
+
+.teile-stat-card {
+    background: white;
+    border-radius: 10px;
+    padding: 15px;
+    text-align: center;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 5px;
+}
+
+.teile-stat-card .stat-icon {
+    font-size: 1.5em;
+}
+
+.teile-stat-card .stat-zahl {
+    font-size: 2em;
+    font-weight: 700;
+    line-height: 1;
+}
+
+.teile-stat-card .stat-label {
+    font-size: 0.85em;
+    color: #666;
+}
+
+.teile-stat-card.schwebend {
+    border-left: 4px solid #9c27b0;
+}
+
+.teile-stat-card.schwebend .stat-zahl {
+    color: #9c27b0;
+}
+
+.teile-stat-card.dringend {
+    border-left: 4px solid #c62828;
+}
+
+.teile-stat-card.dringend .stat-zahl {
+    color: #c62828;
+}
+
+.teile-stat-card.diese-woche {
+    border-left: 4px solid #f57c00;
+}
+
+.teile-stat-card.diese-woche .stat-zahl {
+    color: #f57c00;
+}
+
+.teile-stat-card.naechste-woche {
+    border-left: 4px solid #388e3c;
+}
+
+.teile-stat-card.naechste-woche .stat-zahl {
+    color: #388e3c;
+}
+
+.teile-stat-card.bestellt {
+    border-left: 4px solid #1976d2;
+}
+
+.teile-stat-card.bestellt .stat-zahl {
+    color: #1976d2;
+}
+
+/* Filter und Aktionen */
+.teile-aktionen {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 15px;
+    margin-bottom: 20px;
+    padding: 15px;
+    background: #f5f5f5;
+    border-radius: 8px;
+}
+
+.teile-filter {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    flex-wrap: wrap;
+}
+
+.teile-filter label {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    cursor: pointer;
+    font-size: 0.9em;
+}
+
+.teile-filter select {
+    padding: 8px 12px;
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    font-size: 0.9em;
+    background: white;
+}
+
+.teile-buttons {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+/* Bestellliste */
+.teile-liste {
+    background: white;
+    border-radius: 10px;
+    padding: 20px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    margin-bottom: 20px;
+}
+
+.teile-loading {
+    text-align: center;
+    padding: 40px;
+    color: #666;
+}
+
+.teile-loading .spinner {
+    display: inline-block;
+    width: 20px;
+    height: 20px;
+    border: 2px solid #ddd;
+    border-top-color: #ac1e44;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+}
+
+.teile-error {
+    text-align: center;
+    padding: 30px;
+    color: #c62828;
+}
+
+.teile-leer {
+    text-align: center;
+    padding: 50px;
+    color: #666;
+}
+
+.teile-leer-icon {
+    font-size: 3em;
+    display: block;
+    margin-bottom: 15px;
+    opacity: 0.5;
+}
+
+/* Gruppen */
+.teile-gruppe {
+    margin-bottom: 25px;
+}
+
+.teile-gruppe-header {
+    font-size: 1.1em;
+    font-weight: 600;
+    padding: 10px 15px;
+    margin-bottom: 10px;
+    border-radius: 6px;
+    background: #f0f0f0;
+}
+
+.teile-gruppe.schwebend .teile-gruppe-header {
+    background: #f3e5f5;
+    color: #7b1fa2;
+    border-left: 4px solid #9c27b0;
+}
+
+.teile-gruppe.dringend .teile-gruppe-header {
+    background: #ffebee;
+    color: #c62828;
+    border-left: 4px solid #c62828;
+}
+
+.teile-gruppe.diese-woche .teile-gruppe-header {
+    background: #fff3e0;
+    color: #e65100;
+    border-left: 4px solid #f57c00;
+}
+
+.teile-gruppe.naechste-woche .teile-gruppe-header {
+    background: #e8f5e9;
+    color: #2e7d32;
+    border-left: 4px solid #388e3c;
+}
+
+/* Termin-Gruppierung */
+.teile-termin-gruppe {
+    background: #fafafa;
+    border: 1px solid #e0e0e0;
+    border-radius: 8px;
+    margin-bottom: 15px;
+    overflow: hidden;
+}
+
+.teile-termin-gruppe.schwebend-termin {
+    border-color: #ce93d8;
+    background: #faf5fc;
+}
+
+.teile-termin-gruppe.schwebend-termin .teile-termin-header {
+    background: #f3e5f5;
+}
+
+.teile-termin-header {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    padding: 10px 15px;
+    background: #f5f5f5;
+    border-bottom: 1px solid #e0e0e0;
+    font-size: 0.9em;
+}
+
+.teile-termin-header .termin-datum {
+    font-weight: 600;
+    color: #ac1e44;
+}
+
+.teile-termin-header .termin-kunde {
+    font-weight: 500;
+}
+
+.teile-termin-header .termin-fahrzeug {
+    color: #666;
+    font-size: 0.9em;
+}
+
+.teile-termin-teile {
+    padding: 10px;
+}
+
+/* Einzelnes Teil */
+.teile-item {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    padding: 10px 15px;
+    border-bottom: 1px solid #eee;
+    transition: background 0.2s;
+}
+
+.teile-item:last-child {
+    border-bottom: none;
+}
+
+.teile-item:hover {
+    background: #f9f9f9;
+}
+
+.teile-item.bestellt {
+    background: #e3f2fd;
+}
+
+.teile-item.geliefert {
+    background: #e8f5e9;
+    opacity: 0.7;
+}
+
+.teile-checkbox {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.teile-checkbox input[type="checkbox"] {
+    width: 18px;
+    height: 18px;
+    cursor: pointer;
+}
+
+.teile-checkbox .status-icon {
+    font-size: 1.2em;
+}
+
+.teile-info {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.teile-info .teil-name {
+    font-weight: 500;
+}
+
+.teile-info .teil-oe {
+    font-size: 0.85em;
+    color: #666;
+    font-family: monospace;
+}
+
+.teile-info .teil-menge {
+    font-size: 0.85em;
+    color: #1976d2;
+    font-weight: 500;
+}
+
+.teile-arbeit {
+    color: #666;
+    font-size: 0.85em;
+    min-width: 120px;
+}
+
+.teile-aktionen-item {
+    display: flex;
+    gap: 5px;
+}
+
+.btn-mini {
+    padding: 4px 8px;
+    font-size: 0.85em;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.btn-mini.btn-primary {
+    background: #1976d2;
+    color: white;
+}
+
+.btn-mini.btn-primary:hover {
+    background: #1565c0;
+}
+
+.btn-mini.btn-success {
+    background: #388e3c;
+    color: white;
+}
+
+.btn-mini.btn-success:hover {
+    background: #2e7d32;
+}
+
+.btn-mini.btn-danger {
+    background: #c62828;
+    color: white;
+}
+
+.btn-mini.btn-danger:hover {
+    background: #b71c1c;
+}
+
+/* Neue Bestellung Formular */
+.teile-neu-bestellung {
+    background: white;
+    border-radius: 10px;
+    padding: 20px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+
+.teile-neu-bestellung h3 {
+    margin: 0 0 15px 0;
+    color: #333;
+    font-size: 1.1em;
+}
+
+.teile-neu-form {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    align-items: flex-end;
+}
+
+.teile-neu-form select,
+.teile-neu-form input {
+    padding: 10px 12px;
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    font-size: 0.9em;
+}
+
+.teile-neu-form select {
+    min-width: 200px;
+}
+
+.teile-neu-form input[type="text"] {
+    min-width: 150px;
+}
+
+.teile-neu-form input[type="number"] {
+    width: 80px;
+}
+
+/* Responsive Teile-Bestellen */
+@media (max-width: 768px) {
+    .teile-aktionen {
+        flex-direction: column;
+        align-items: stretch;
+    }
+    
+    .teile-filter {
+        flex-direction: column;
+        align-items: stretch;
+    }
+    
+    .teile-buttons {
+        justify-content: center;
+    }
+    
+    .teile-termin-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 5px;
+    }
+    
+    .teile-item {
+        flex-wrap: wrap;
+    }
+    
+    .teile-info {
+        order: 1;
+        width: 100%;
+    }
+    
+    .teile-arbeit {
+        order: 2;
+    }
+    
+    .teile-aktionen-item {
+        order: 3;
+    }
+    
+    .teile-neu-form {
+        flex-direction: column;
+    }
+    
+    .teile-neu-form select,
+    .teile-neu-form input {
+        width: 100%;
+    }
 }

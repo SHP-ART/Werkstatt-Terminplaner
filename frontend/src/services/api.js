@@ -514,3 +514,205 @@ class PhasenService {
     return ApiService.put(`/phasen/termin/${terminId}/sync`, { phasen });
   }
 }
+
+// =============================================================================
+// AI-Service für ChatGPT-Integration (Version 1.2.0)
+// =============================================================================
+class AIService {
+  /**
+   * Prüft den Status der KI-Integration
+   * @returns {Promise<Object>} Status mit enabled, configured, costStatus
+   */
+  static async getStatus() {
+    return ApiService.get('/ai/status');
+  }
+
+  /**
+   * Testet die Verbindung zur OpenAI API
+   * @returns {Promise<Object>} Ergebnis des Verbindungstests
+   */
+  static async testConnection() {
+    return ApiService.get('/ai/test');
+  }
+
+  /**
+   * Parst einen Freitext in strukturierte Termin-Daten
+   * @param {string} text - Freitext-Beschreibung des Termins
+   * @returns {Promise<Object>} Strukturierte Termin-Daten
+   */
+  static async parseTermin(text) {
+    return ApiService.post('/ai/parse-termin', { text });
+  }
+
+  /**
+   * Schlägt Arbeiten basierend auf einer Problembeschreibung vor
+   * @param {string} beschreibung - Problembeschreibung
+   * @param {string} fahrzeug - Optional: Fahrzeuginfo
+   * @returns {Promise<Object>} Vorgeschlagene Arbeiten
+   */
+  static async suggestArbeiten(beschreibung, fahrzeug = '') {
+    return ApiService.post('/ai/suggest-arbeiten', { beschreibung, fahrzeug });
+  }
+
+  /**
+   * Schätzt die Zeit für gegebene Arbeiten
+   * @param {Array<string>} arbeiten - Liste der Arbeiten
+   * @param {string} fahrzeug - Optional: Fahrzeuginfo
+   * @returns {Promise<Object>} Zeitschätzungen
+   */
+  static async estimateZeit(arbeiten, fahrzeug = '') {
+    return ApiService.post('/ai/estimate-zeit', { arbeiten, fahrzeug });
+  }
+
+  /**
+   * Erkennt benötigte Teile aus einer Beschreibung
+   * @param {string} beschreibung - Arbeitsbeschreibung
+   * @param {string} fahrzeug - Optional: Fahrzeuginfo
+   * @returns {Promise<Object>} Liste benötigter Teile
+   */
+  static async erkenneTeilebedarf(beschreibung, fahrzeug = '') {
+    return ApiService.post('/ai/teile-bedarf', { beschreibung, fahrzeug });
+  }
+
+  /**
+   * Prüft ob ein Text eine Fremdmarke enthält (KEIN API-Call nötig)
+   * @param {string} text - Text mit Fahrzeuginfo
+   * @returns {Promise<Object>} Fremdmarken-Info mit Warnung
+   */
+  static async checkFremdmarke(text) {
+    return ApiService.post('/ai/check-fremdmarke', { text });
+  }
+
+  /**
+   * Führt eine vollständige Analyse durch
+   * @param {string} text - Freitext-Beschreibung
+   * @param {boolean} includeTeile - Teile-Erkennung einbeziehen
+   * @returns {Promise<Object>} Vollständige Analyse
+   */
+  static async fullAnalysis(text, includeTeile = false) {
+    return ApiService.post('/ai/analyze', { text, includeTeile });
+  }
+
+  /**
+   * Erstellt einen Wartungsplan basierend auf Fahrzeug und km-Stand
+   * @param {string} fahrzeug - Fahrzeugtyp (z.B. "Citroën C3 1.2 PureTech")
+   * @param {number} kmStand - Aktueller Kilometerstand
+   * @param {number} alter - Optional: Fahrzeugalter in Jahren
+   * @returns {Promise<Object>} Wartungsplan mit fälligen und bald fälligen Arbeiten
+   */
+  static async getWartungsplan(fahrzeug, kmStand, alter = null) {
+    return ApiService.post('/ai/wartungsplan', { fahrzeug, kmStand, alter });
+  }
+
+  /**
+   * Dekodiert eine Fahrgestellnummer (VIN) und liefert Fahrzeugdaten
+   * @param {string} vin - 17-stellige VIN/FIN
+   * @returns {Promise<Object>} Fahrzeugdaten inkl. Motor, Öl-Spezifikation, Teile-Hinweise
+   */
+  static async decodeVIN(vin) {
+    return ApiService.post('/ai/vin-decode', { vin });
+  }
+
+  /**
+   * Prüft Teile-Kompatibilität basierend auf VIN
+   * @param {string} vin - Fahrgestellnummer
+   * @param {string} arbeit - Geplante Arbeit
+   * @returns {Promise<Object>} Warnungen und Empfehlungen
+   */
+  static async checkTeileKompatibilitaet(vin, arbeit) {
+    return ApiService.post('/ai/vin-teile-check', { vin, arbeit });
+  }
+}
+
+/**
+ * Service für Teile-Bestellungen
+ */
+class TeileBestellService {
+  
+  /**
+   * Alle Bestellungen abrufen
+   * @param {Object} filter - Optional: status, termin_id, von, bis
+   */
+  static async getAll(filter = {}) {
+    const params = new URLSearchParams();
+    if (filter.status) params.append('status', filter.status);
+    if (filter.termin_id) params.append('termin_id', filter.termin_id);
+    if (filter.von) params.append('von', filter.von);
+    if (filter.bis) params.append('bis', filter.bis);
+    
+    const query = params.toString();
+    return ApiService.get(`/teile-bestellungen${query ? '?' + query : ''}`);
+  }
+
+  /**
+   * Fällige Bestellungen abrufen (gruppiert nach Dringlichkeit)
+   * @param {number} tage - Anzahl Tage voraus (default: 7)
+   */
+  static async getFaellige(tage = 7) {
+    return ApiService.get(`/teile-bestellungen/faellig?tage=${tage}`);
+  }
+
+  /**
+   * Bestellungen für einen Termin abrufen
+   */
+  static async getByTermin(terminId) {
+    return ApiService.get(`/teile-bestellungen/termin/${terminId}`);
+  }
+
+  /**
+   * Einzelne Bestellung abrufen
+   */
+  static async getById(id) {
+    return ApiService.get(`/teile-bestellungen/${id}`);
+  }
+
+  /**
+   * Neue Bestellung anlegen
+   */
+  static async create(data) {
+    return ApiService.post('/teile-bestellungen', data);
+  }
+
+  /**
+   * Mehrere Bestellungen anlegen
+   */
+  static async createBulk(bestellungen) {
+    return ApiService.post('/teile-bestellungen/bulk', { bestellungen });
+  }
+
+  /**
+   * Bestellung aktualisieren
+   */
+  static async update(id, data) {
+    return ApiService.put(`/teile-bestellungen/${id}`, data);
+  }
+
+  /**
+   * Status ändern (offen, bestellt, geliefert, storniert)
+   */
+  static async updateStatus(id, status) {
+    return ApiService.put(`/teile-bestellungen/${id}/status`, { status });
+  }
+
+  /**
+   * Mehrere Bestellungen als "bestellt" markieren
+   */
+  static async markAlsBestellt(ids) {
+    return ApiService.put('/teile-bestellungen/mark-bestellt', { ids });
+  }
+
+  /**
+   * Bestellung löschen
+   */
+  static async delete(id) {
+    return ApiService.delete(`/teile-bestellungen/${id}`);
+  }
+
+  /**
+   * Statistiken abrufen
+   */
+  static async getStatistik() {
+    return ApiService.get('/teile-bestellungen/statistik');
+  }
+}
+

@@ -35,6 +35,7 @@
             <button class="tab-button" data-tab="heute"><span>📅 Heute</span></button>
             <button class="tab-button" data-tab="termine"><span>🗓️ Termine</span></button>
             <button class="tab-button" data-tab="kunden"><span>👥 Kunden</span></button>
+            <button class="tab-button" data-tab="teile-bestellen"><span>🛒 Teile-Bestellen</span></button>
             <button class="tab-button" data-tab="ersatzautos"><span>🚗 Ersatzautos</span></button>
             <button class="tab-button" data-tab="zeitverwaltung"><span>⏱️ Zeitverwaltung</span></button>
             <button class="tab-button" data-tab="auslastung"><span>📈 Auslastung</span></button>
@@ -349,6 +350,17 @@
             <div id="neuerTermin" class="sub-tab-content active">
                 <div class="form-section">
                     <h3>Neuer Termin</h3>
+                    
+                    <!-- KI-Assistent Button -->
+                    <div class="ki-assistent-banner" id="kiAssistentBanner">
+                        <button type="button" class="ki-assistent-btn" id="kiAssistentBtn" title="KI-Assistent für schnelle Terminerstellung">
+                            <span class="ki-icon">🤖</span>
+                            <span class="ki-text">KI-Assistent</span>
+                            <span class="ki-badge">NEU</span>
+                        </button>
+                        <span class="ki-hint">Beschreibe den Termin in eigenen Worten!</span>
+                    </div>
+                    
                     <form id="terminForm">
                     
                     <!-- Verbesserte Kundensuche -->
@@ -491,20 +503,44 @@
                     <div class="form-row">
                         <div class="form-group">
                             <label>VIN/FIN (Fahrzeug-Ident-Nr.):</label>
-                            <input type="text" id="vin" maxlength="17" placeholder="z.B. WVWZZZ3CZWE123456" style="text-transform: uppercase;">
+                            <div class="vin-input-wrapper">
+                                <input type="text" id="vin" maxlength="17" placeholder="z.B. VF7SX5F55GW123456" style="text-transform: uppercase;">
+                                <button type="button" id="vinDecodeBtn" class="vin-decode-btn" title="VIN dekodieren">🔍</button>
+                            </div>
+                            <div id="vinInfoBereich" class="vin-info-bereich" style="display: none;"></div>
                         </div>
                         <div class="form-group">
                             <label>Fahrzeugtyp:</label>
-                            <input type="text" id="fahrzeugtyp" placeholder="z.B. VW Golf 7, BMW 320d">
+                            <input type="text" id="fahrzeugtyp" placeholder="z.B. Citroën C3, Berlingo">
                         </div>
                     </div>
 
                     <div class="form-row">
                         <div class="form-group" style="position: relative;">
-                            <label>Arbeiten (jede Zeile eine Arbeit):</label>
+                            <div class="arbeiten-label-row">
+                                <label>Arbeiten (jede Zeile eine Arbeit):</label>
+                                <label class="ki-analyse-toggle" title="KI analysiert Problembeschreibungen und schlägt passende Arbeiten vor">
+                                    <input type="checkbox" id="kiAnalyseAktiv">
+                                    <span class="ki-toggle-icon">🤖</span>
+                                    <span class="ki-toggle-text">KI-Hilfe</span>
+                                </label>
+                            </div>
                             <textarea id="arbeitEingabe" class="arbeiten-textarea" rows="5" placeholder="z.B.&#10;Ölwechsel&#10;Bremsen vorne&#10;Inspektion" required autocomplete="off"></textarea>
                             <div id="arbeitAutocomplete" class="autocomplete-dropdown"></div>
                             <datalist id="arbeitListe"></datalist>
+                            
+                            <!-- KI-Vorschläge Bereich -->
+                            <div id="kiVorschlaegeBereich" class="ki-vorschlaege-bereich" style="display: none;">
+                                <div class="ki-vorschlaege-header">
+                                    <span class="ki-vorschlaege-icon">🤖</span>
+                                    <span class="ki-vorschlaege-titel">KI-Vorschläge</span>
+                                    <button type="button" class="ki-vorschlaege-close" id="kiVorschlaegeClose">×</button>
+                                </div>
+                                <div id="kiVorschlaegeListe" class="ki-vorschlaege-liste"></div>
+                                <div class="ki-vorschlaege-footer">
+                                    <small>Klicke auf einen Vorschlag um ihn zu übernehmen</small>
+                                </div>
+                            </div>
                             
                             <!-- Geschätzte Zeit Anzeige -->
                             <div id="zeitschaetzungAnzeige" style="margin-top: 10px; padding: 12px; background: linear-gradient(135deg, #e8f4fd 0%, #f0f7ff 100%); border-radius: 8px; border-left: 4px solid #4a90e2; display: none;">
@@ -1393,46 +1429,33 @@
             <div id="teileStatus" class="sub-tab-content">
                 <div class="page-header" style="margin-bottom: 20px;">
                     <h3>📦 Teile-Status Übersicht</h3>
-                    <p class="page-subtitle">Alle Termine mit Teile-Status auf einen Blick</p>
+                    <p class="page-subtitle">Alle Termine mit Teile-Status auf einen Blick – Klicken Sie auf eine Karte zum Filtern</p>
                 </div>
 
-                <!-- Filter-Buttons -->
-                <div class="teile-filter-buttons" style="display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap;">
-                    <button class="btn teile-filter-btn active" data-filter="alle" onclick="app.filterTeileStatus('alle')">
-                        📋 Alle anzeigen
-                    </button>
-                    <button class="btn teile-filter-btn" data-filter="bestellen" onclick="app.filterTeileStatus('bestellen')" style="background: #ffebee; border-color: #f44336; color: #c62828;">
-                        ⚠️ Muss bestellt werden
-                    </button>
-                    <button class="btn teile-filter-btn" data-filter="bestellt" onclick="app.filterTeileStatus('bestellt')" style="background: #fff3e0; border-color: #ff9800; color: #e65100;">
-                        📦 Teile bestellt
-                    </button>
-                    <button class="btn teile-filter-btn" data-filter="eingetroffen" onclick="app.filterTeileStatus('eingetroffen')" style="background: #e8f5e9; border-color: #4caf50; color: #2e7d32;">
-                        🚚 Teile eingetroffen
-                    </button>
-                    <button class="btn teile-filter-btn" data-filter="vorraetig" onclick="app.filterTeileStatus('vorraetig')" style="background: #e3f2fd; border-color: #2196f3; color: #1565c0;">
-                        ✅ Teile vorrätig
-                    </button>
-                </div>
-
-                <!-- Statistik-Karten -->
+                <!-- Statistik-Karten (klickbar zum Filtern) -->
                 <div class="teile-stats" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 15px; margin-bottom: 25px;">
-                    <div class="teile-stat-card" style="background: #ffebee; padding: 15px; border-radius: 8px; text-align: center; border-left: 4px solid #f44336;">
+                    <div class="teile-stat-card teile-filter-card" data-filter="bestellen" onclick="app.filterTeileStatus('bestellen')" style="background: #ffebee; padding: 15px; border-radius: 8px; text-align: center; border-left: 4px solid #f44336; cursor: pointer; transition: transform 0.2s, box-shadow 0.2s;">
                         <div style="font-size: 24px; font-weight: bold; color: #c62828;" id="teileBestellenCount">0</div>
                         <div style="font-size: 12px; color: #666;">⚠️ Muss bestellt werden</div>
                     </div>
-                    <div class="teile-stat-card" style="background: #fff3e0; padding: 15px; border-radius: 8px; text-align: center; border-left: 4px solid #ff9800;">
+                    <div class="teile-stat-card teile-filter-card" data-filter="bestellt" onclick="app.filterTeileStatus('bestellt')" style="background: #fff3e0; padding: 15px; border-radius: 8px; text-align: center; border-left: 4px solid #ff9800; cursor: pointer; transition: transform 0.2s, box-shadow 0.2s;">
                         <div style="font-size: 24px; font-weight: bold; color: #e65100;" id="teileBestelltCount">0</div>
                         <div style="font-size: 12px; color: #666;">📦 Bestellt (wartend)</div>
                     </div>
-                    <div class="teile-stat-card" style="background: #e8f5e9; padding: 15px; border-radius: 8px; text-align: center; border-left: 4px solid #4caf50;">
+                    <div class="teile-stat-card teile-filter-card" data-filter="eingetroffen" onclick="app.filterTeileStatus('eingetroffen')" style="background: #e8f5e9; padding: 15px; border-radius: 8px; text-align: center; border-left: 4px solid #4caf50; cursor: pointer; transition: transform 0.2s, box-shadow 0.2s;">
                         <div style="font-size: 24px; font-weight: bold; color: #2e7d32;" id="teileEingetroffenCount">0</div>
                         <div style="font-size: 12px; color: #666;">🚚 Eingetroffen</div>
                     </div>
-                    <div class="teile-stat-card" style="background: #e3f2fd; padding: 15px; border-radius: 8px; text-align: center; border-left: 4px solid #2196f3;">
+                    <div class="teile-stat-card teile-filter-card" data-filter="vorraetig" onclick="app.filterTeileStatus('vorraetig')" style="background: #e3f2fd; padding: 15px; border-radius: 8px; text-align: center; border-left: 4px solid #2196f3; cursor: pointer; transition: transform 0.2s, box-shadow 0.2s;">
                         <div style="font-size: 24px; font-weight: bold; color: #1565c0;" id="teileVorraetigCount">0</div>
                         <div style="font-size: 12px; color: #666;">✅ Vorrätig</div>
                     </div>
+                </div>
+                
+                <!-- Aktiver Filter Anzeige -->
+                <div id="teileAktiverFilter" style="display: none; margin-bottom: 15px; padding: 10px 15px; background: #f5f5f5; border-radius: 8px; justify-content: space-between; align-items: center;">
+                    <span id="teileFilterLabel">Filter: Alle anzeigen</span>
+                    <button class="btn btn-small" onclick="app.filterTeileStatus('alle')">✕ Filter zurücksetzen</button>
                 </div>
 
                 <!-- Teile-Status Tabelle -->
@@ -2261,6 +2284,105 @@
             </div>
         </div>
 
+        <!-- ============================================================== -->
+        <!-- TEILE-BESTELLEN TAB -->
+        <!-- ============================================================== -->
+        <div id="teile-bestellen" class="tab-content">
+            <div class="page-header">
+                <h2>🛒 Teile-Bestellen</h2>
+                <p class="page-subtitle">Übersicht über benötigte Teile für anstehende Termine</p>
+            </div>
+
+            <!-- Statistik-Karten -->
+            <div class="teile-statistik">
+                <div class="teile-stat-card schwebend">
+                    <span class="stat-icon">⏸️</span>
+                    <span class="stat-zahl" id="teileSchwebendCount">0</span>
+                    <span class="stat-label">Schwebend</span>
+                </div>
+                <div class="teile-stat-card dringend">
+                    <span class="stat-icon">🔴</span>
+                    <span class="stat-zahl" id="teileDringendCount">0</span>
+                    <span class="stat-label">Dringend</span>
+                </div>
+                <div class="teile-stat-card diese-woche">
+                    <span class="stat-icon">🟡</span>
+                    <span class="stat-zahl" id="teileDieseWocheCount">0</span>
+                    <span class="stat-label">Diese Woche</span>
+                </div>
+                <div class="teile-stat-card naechste-woche">
+                    <span class="stat-icon">🟢</span>
+                    <span class="stat-zahl" id="teileNaechsteWocheCount">0</span>
+                    <span class="stat-label">Nächste Woche</span>
+                </div>
+                <div class="teile-stat-card bestellt">
+                    <span class="stat-icon">📦</span>
+                    <span class="stat-zahl" id="teileBestelltCount">0</span>
+                    <span class="stat-label">Bestellt</span>
+                </div>
+            </div>
+
+            <!-- Filter und Aktionen -->
+            <div class="teile-aktionen">
+                <div class="teile-filter">
+                    <label>
+                        <input type="checkbox" id="teileFilterOffen" checked> Offen
+                    </label>
+                    <label>
+                        <input type="checkbox" id="teileFilterBestellt" checked> Bestellt
+                    </label>
+                    <label>
+                        <input type="checkbox" id="teileFilterGeliefert"> Geliefert
+                    </label>
+                    <select id="teileFilterZeitraum">
+                        <option value="7">Nächste 7 Tage</option>
+                        <option value="14">Nächste 14 Tage</option>
+                        <option value="30">Nächste 30 Tage</option>
+                        <option value="alle">Alle anzeigen</option>
+                    </select>
+                </div>
+                <div class="teile-buttons">
+                    <button type="button" class="btn btn-secondary" onclick="app.teileAlleAuswaehlen()">
+                        📋 Alle auswählen
+                    </button>
+                    <button type="button" class="btn btn-primary" onclick="app.teileAlsBestellt()">
+                        ✅ Auswahl als bestellt
+                    </button>
+                    <button type="button" class="btn btn-secondary" onclick="app.teileDrucken()">
+                        🖨️ Drucken
+                    </button>
+                    <button type="button" class="btn btn-secondary" onclick="app.loadTeileBestellungen()">
+                        🔄 Aktualisieren
+                    </button>
+                </div>
+            </div>
+
+            <!-- Bestellliste -->
+            <div class="teile-liste" id="teileBestellListe">
+                <!-- Wird per JavaScript gefüllt -->
+                <div class="teile-loading">
+                    <span class="spinner"></span> Lade Teile-Bestellungen...
+                </div>
+            </div>
+
+            <!-- Neue Bestellung hinzufügen -->
+            <div class="teile-neu-bestellung">
+                <h3>➕ Neue Bestellung hinzufügen</h3>
+                <div class="teile-neu-form">
+                    <select id="teileNeuTermin" required>
+                        <option value="">-- Termin auswählen --</option>
+                    </select>
+                    <input type="text" id="teileNeuName" placeholder="Teilename" required>
+                    <input type="text" id="teileNeuOE" placeholder="OE-Nummer (optional)">
+                    <input type="number" id="teileNeuMenge" value="1" min="1" placeholder="Menge">
+                    <input type="text" id="teileNeuArbeit" placeholder="Für Arbeit (optional)">
+                    <button type="button" class="btn btn-primary" onclick="app.teileNeuHinzufuegen()">
+                        ➕ Hinzufügen
+                    </button>
+                </div>
+            </div>
+        </div>
+
         <div id="papierkorb" class="tab-content">
             <div class="page-header">
                 <h2>🗑️ Papierkorb</h2>
@@ -2284,6 +2406,104 @@
                     </thead>
                     <tbody></tbody>
                 </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- KI-Assistent Modal -->
+    <div id="kiAssistentModal" class="modal">
+        <div class="modal-content ki-modal-content">
+            <span class="close" id="closeKiAssistent">&times;</span>
+            <h3>🤖 KI-Assistent für Terminerfassung</h3>
+            <p class="ki-modal-subtitle">Beschreibe den Termin in eigenen Worten - die KI analysiert und füllt das Formular aus.</p>
+            
+            <!-- Freitext-Eingabe -->
+            <div class="ki-eingabe-bereich">
+                <label for="kiFreitextInput">📝 Termin-Beschreibung:</label>
+                <textarea id="kiFreitextInput" class="ki-textarea" rows="4" 
+                    placeholder="Beispiel: Herr Müller kommt morgen um 10 Uhr mit seinem C3, Kennzeichen OSL-KI 123. Die Bremsen quietschen und er braucht auch einen Ölwechsel."></textarea>
+                <div class="ki-beispiele">
+                    <span class="ki-beispiel-label">Beispiele:</span>
+                    <button type="button" class="ki-beispiel-btn" data-text="Frau Schmidt C4 Inspektion nächste Woche Dienstag">Inspektion</button>
+                    <button type="button" class="ki-beispiel-btn" data-text="Herr Meyer Berlingo - Klimaanlage kühlt nicht mehr, bitte schnellstmöglich">Klimaproblem</button>
+                    <button type="button" class="ki-beispiel-btn" data-text="C3 Aircross Bremsen vorne machen Geräusche">Bremsen</button>
+                </div>
+            </div>
+            
+            <!-- Analyse-Button -->
+            <div class="ki-action-bereich">
+                <button type="button" class="btn btn-primary ki-analysieren-btn" id="kiAnalysierenBtn">
+                    <span class="ki-btn-icon">✨</span>
+                    <span class="ki-btn-text">Mit KI analysieren</span>
+                </button>
+                <div class="ki-loading" id="kiLoading" style="display: none;">
+                    <div class="ki-spinner"></div>
+                    <span>KI analysiert...</span>
+                </div>
+            </div>
+            
+            <!-- Ergebnis-Bereich -->
+            <div class="ki-ergebnis-bereich" id="kiErgebnisBereich" style="display: none;">
+                <h4>📋 Analysierte Daten:</h4>
+                
+                <!-- Fremdmarken-Warnung -->
+                <div class="ki-fremdmarken-warnung" id="kiFremdmarkenWarnung" style="display: none;">
+                    <span class="warnung-icon">⚠️</span>
+                    <span class="warnung-text" id="kiFremdmarkenText"></span>
+                    <label class="bestandskunde-check">
+                        <input type="checkbox" id="kiBestandskundeCheck">
+                        <span>Ist Bestandskunde - trotzdem annehmen</span>
+                    </label>
+                </div>
+                
+                <!-- Erkannte Daten -->
+                <div class="ki-daten-grid">
+                    <div class="ki-daten-gruppe">
+                        <span class="ki-label">👤 Kunde:</span>
+                        <span class="ki-wert" id="kiErgebnisKunde">-</span>
+                    </div>
+                    <div class="ki-daten-gruppe">
+                        <span class="ki-label">🚗 Fahrzeug:</span>
+                        <span class="ki-wert" id="kiErgebnisFahrzeug">-</span>
+                    </div>
+                    <div class="ki-daten-gruppe">
+                        <span class="ki-label">📅 Datum:</span>
+                        <span class="ki-wert" id="kiErgebnisDatum">-</span>
+                    </div>
+                    <div class="ki-daten-gruppe">
+                        <span class="ki-label">🕐 Uhrzeit:</span>
+                        <span class="ki-wert" id="kiErgebnisUhrzeit">-</span>
+                    </div>
+                    <div class="ki-daten-gruppe ki-daten-gruppe-full">
+                        <span class="ki-label">🔧 Arbeiten:</span>
+                        <div class="ki-arbeiten-liste" id="kiErgebnisArbeiten"></div>
+                    </div>
+                    <div class="ki-daten-gruppe ki-daten-gruppe-full">
+                        <span class="ki-label">⏱️ Geschätzte Dauer:</span>
+                        <span class="ki-wert" id="kiErgebnisDauer">-</span>
+                    </div>
+                    <div class="ki-daten-gruppe ki-daten-gruppe-full" id="kiTeileBereich" style="display: none;">
+                        <span class="ki-label">🔩 Vermutete Teile:</span>
+                        <div class="ki-teile-liste" id="kiErgebnisTeile"></div>
+                    </div>
+                </div>
+                
+                <!-- Confidence-Anzeige -->
+                <div class="ki-confidence" id="kiConfidence">
+                    <span class="confidence-label">Erkennungs-Sicherheit:</span>
+                    <div class="confidence-bar">
+                        <div class="confidence-fill" id="kiConfidenceFill"></div>
+                    </div>
+                    <span class="confidence-value" id="kiConfidenceValue">0%</span>
+                </div>
+            </div>
+            
+            <!-- Footer mit Buttons -->
+            <div class="ki-modal-footer">
+                <button type="button" class="btn btn-secondary" id="kiAbbrechen">Abbrechen</button>
+                <button type="button" class="btn btn-success" id="kiUebernehmen" style="display: none;">
+                    ✓ In Formular übernehmen
+                </button>
             </div>
         </div>
     </div>

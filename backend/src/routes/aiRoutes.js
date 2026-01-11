@@ -133,6 +133,60 @@ router.post('/check-fremdmarke', aiController.checkFremdmarke);
 router.post('/analyze', aiController.fullAnalysis);
 
 // =============================================================================
+// WARTUNGSPLAN
+// =============================================================================
+
+/**
+ * POST /api/ai/wartungsplan
+ * Erstellt einen Citroën-Wartungsplan basierend auf km-Stand
+ * 
+ * Body: { fahrzeug: "Fahrzeugtyp", kmStand: 45000, alter: 3 }
+ * 
+ * Beispiel:
+ * {
+ *   "fahrzeug": "Citroën C3 1.2 PureTech",
+ *   "kmStand": 45000,
+ *   "alter": 3
+ * }
+ */
+router.post('/wartungsplan', aiController.getWartungsplan);
+
+// =============================================================================
+// VIN-DECODER (Fahrgestellnummer)
+// =============================================================================
+
+/**
+ * POST /api/ai/vin-decode
+ * Dekodiert eine Fahrgestellnummer (VIN) und liefert Fahrzeugdaten
+ * 
+ * Body: { vin: "17-stellige VIN" }
+ * 
+ * Beispiel:
+ * {
+ *   "vin": "VF7SX5FS5GW123456"
+ * }
+ * 
+ * Liefert: Hersteller, Modell, Motor, Baujahr, Öl-Spezifikation, Teile-Hinweise
+ */
+router.post('/vin-decode', aiController.decodeVIN);
+
+/**
+ * POST /api/ai/vin-teile-check
+ * Prüft Teile-Kompatibilität basierend auf VIN und geplanter Arbeit
+ * 
+ * Body: { vin: "VIN", arbeit: "Arbeitsbeschreibung" }
+ * 
+ * Beispiel:
+ * {
+ *   "vin": "VF7SX5FS5GW123456",
+ *   "arbeit": "Stabilisator-Koppelstangen wechseln"
+ * }
+ * 
+ * Liefert: Warnungen zu verschiedenen Teile-Varianten, OE-Nummern
+ */
+router.post('/vin-teile-check', aiController.checkTeileKompatibilitaet);
+
+// =============================================================================
 // EXPORT
 // =============================================================================
 

@@ -224,9 +224,17 @@ class App {
         this.updateZeitschaetzung();
         this.handleArbeitAutocomplete(e);
         this.validateTerminEchtzeit();
+        this.handleKIAutoSuggest(e); // KI-Vorschläge beim Tippen
       });
       arbeitEingabe.addEventListener('keydown', (e) => this.handleArbeitKeydown(e));
     }
+    
+    // KI-Vorschläge schließen Button
+    const kiVorschlaegeClose = document.getElementById('kiVorschlaegeClose');
+    if (kiVorschlaegeClose) {
+      kiVorschlaegeClose.addEventListener('click', () => this.hideKIVorschlaege());
+    }
+    
     document.getElementById('filterDatum').addEventListener('change', () => {
       this.loadTermine();
       this.updateZeitverwaltungDatumAnzeige();
@@ -285,6 +293,12 @@ class App {
     document.getElementById('krankBisDatum').addEventListener('change', () => this.validateKrankDatum());
     document.getElementById('importBtn').addEventListener('click', () => this.importKunden());
     document.getElementById('testConnectionBtn').addEventListener('click', () => this.testConnection());
+    
+    // KI-Assistent Event-Listener
+    this.setupKIAssistentEventListeners();
+    
+    // Teile-Bestellen Filter Event-Listener
+    this.setupTeileBestellenEventListeners();
     
     // Excel Import Event-Listener
     const excelFileInput = document.getElementById('excelFileInput');
@@ -2287,6 +2301,8 @@ class App {
       this.loadKundenSearch();
     } else if (tabName === 'ersatzautos') {
       this.loadErsatzautos();
+    } else if (tabName === 'teile-bestellen') {
+      this.loadTeileBestellungen();
     }
   }
 
@@ -15742,9 +15758,33 @@ class App {
     }
   }
 
-  renderTeileStatusTable(termine) {
+  renderTeileStatusTable(termine, aktiveFilter = null) {
     const tbody = document.getElementById('teileStatusTableBody');
     if (!tbody) return;
+
+    // Aktualisiere Filter-Anzeige
+    const filterAnzeige = document.getElementById('teileAktiverFilter');
+    const filterLabel = document.getElementById('teileFilterLabel');
+    if (filterAnzeige && filterLabel) {
+      if (aktiveFilter && aktiveFilter !== 'alle') {
+        const filterNames = {
+          'bestellen': '⚠️ Muss bestellt werden',
+          'bestellt': '📦 Bestellt (wartend)',
+          'eingetroffen': '🚚 Eingetroffen',
+          'vorraetig': '✅ Vorrätig'
+        };
+        filterAnzeige.style.display = 'flex';
+        filterLabel.textContent = `Filter: ${filterNames[aktiveFilter] || aktiveFilter}`;
+      } else {
+        filterAnzeige.style.display = 'none';
+      }
+    }
+
+    // Highlight aktive Statistik-Karte
+    document.querySelectorAll('.teile-filter-card').forEach(card => {
+      card.style.transform = card.dataset.filter === aktiveFilter ? 'scale(1.05)' : 'scale(1)';
+      card.style.boxShadow = card.dataset.filter === aktiveFilter ? '0 4px 12px rgba(0,0,0,0.15)' : 'none';
+    });
 
     if (termine.length === 0) {
       tbody.innerHTML = `
@@ -15758,63 +15798,131 @@ class App {
       return;
     }
 
-    // Sortiere nach Datum (neueste zuerst) und dann nach Teile-Status Priorität
-    const statusPriority = { 'bestellen': 1, 'bestellt': 2, 'eingetroffen': 3, 'vorraetig': 4 };
-    termine.sort((a, b) => {
-      const priorityDiff = (statusPriority[a.teile_status] || 99) - (statusPriority[b.teile_status] || 99);
-      if (priorityDiff !== 0) return priorityDiff;
-      return new Date(b.datum) - new Date(a.datum);
+    // Gruppiere Termine nach Status
+    const statusGroups = {
+      'bestellen': { 
+        icon: '⚠️', 
+        title: 'Muss bestellt werden', 
+        color: '#f44336', 
+        bgColor: '#ffebee',
+        termine: [] 
+      },
+      'bestellt': { 
+        icon: '📦', 
+        title: 'Bestellt (wartend)', 
+        color: '#ff9800', 
+        bgColor: '#fff3e0',
+        termine: [] 
+      },
+      'eingetroffen': { 
+        icon: '🚚', 
+        title: 'Eingetroffen', 
+        color: '#4caf50', 
+        bgColor: '#e8f5e9',
+        termine: [] 
+      },
+      'vorraetig': { 
+        icon: '✅', 
+        title: 'Vorrätig', 
+        color: '#2196f3', 
+        bgColor: '#e3f2fd',
+        termine: [] 
+      }
+    };
+
+    // Sortiere Termine in Gruppen
+    termine.forEach(termin => {
+      if (statusGroups[termin.teile_status]) {
+        statusGroups[termin.teile_status].termine.push(termin);
+      }
     });
 
-    tbody.innerHTML = termine.map(termin => {
-      const datum = new Date(termin.datum).toLocaleDateString('de-DE', {
-        weekday: 'short',
-        day: '2-digit',
-        month: '2-digit'
-      });
+    // Sortiere innerhalb jeder Gruppe nach Datum (älteste zuerst - dringender)
+    Object.values(statusGroups).forEach(group => {
+      group.termine.sort((a, b) => new Date(a.datum) - new Date(b.datum));
+    });
 
-      const statusMap = {
-        'bestellen': { icon: '⚠️', text: 'Muss bestellt werden', class: 'teile-bestellen' },
-        'bestellt': { icon: '📦', text: 'Bestellt', class: 'teile-bestellt' },
-        'eingetroffen': { icon: '🚚', text: 'Eingetroffen', class: 'teile-eingetroffen' },
-        'vorraetig': { icon: '✅', text: 'Vorrätig', class: 'teile-vorraetig' }
-      };
+    let html = '';
+    const statusOrder = ['bestellen', 'bestellt', 'eingetroffen', 'vorraetig'];
 
-      const status = statusMap[termin.teile_status] || { icon: '❓', text: termin.teile_status, class: '' };
+    statusOrder.forEach(statusKey => {
+      const group = statusGroups[statusKey];
+      if (group.termine.length === 0) return;
 
-      // Escape den Arbeit-Namen für JavaScript
-      const arbeitNameEscaped = (termin.arbeit_name || '').replace(/'/g, "\\'").replace(/"/g, '\\"');
-
-      return `
-        <tr class="teile-row" data-status="${termin.teile_status}" data-termin-id="${termin.id}">
-          <td>${datum}</td>
-          <td>${this.escapeHtml(termin.kunde_name || 'Unbekannt')}</td>
-          <td><strong>${this.escapeHtml(termin.kennzeichen || '-')}</strong></td>
-          <td>${this.escapeHtml(termin.arbeit_name || termin.arbeiten || '-')}</td>
-          <td>
-            <select class="teile-status-select ${status.class}" 
-                    onchange="app.updateTeileStatusDirekt(${termin.id}, '${arbeitNameEscaped}', this.value)">
-              <option value="bestellen" ${termin.teile_status === 'bestellen' ? 'selected' : ''}>⚠️ Muss bestellt werden</option>
-              <option value="bestellt" ${termin.teile_status === 'bestellt' ? 'selected' : ''}>📦 Bestellt</option>
-              <option value="eingetroffen" ${termin.teile_status === 'eingetroffen' ? 'selected' : ''}>🚚 Eingetroffen</option>
-              <option value="vorraetig" ${termin.teile_status === 'vorraetig' ? 'selected' : ''}>✅ Vorrätig</option>
-              <option value="" ${!termin.teile_status ? 'selected' : ''}>⚪ Keine Teile nötig</option>
-            </select>
-          </td>
-          <td>
-            <button class="btn btn-small" onclick="app.openArbeitszeitenModal(${termin.id})" title="Termin bearbeiten">
-              ✏️ Bearbeiten
-            </button>
+      // Gruppen-Header
+      html += `
+        <tr class="teile-group-header" style="background: ${group.bgColor};">
+          <td colspan="6" style="padding: 12px 15px; border-left: 4px solid ${group.color}; font-weight: bold;">
+            <span style="font-size: 18px; margin-right: 8px;">${group.icon}</span>
+            <span style="color: ${group.color};">${group.title}</span>
+            <span style="float: right; background: ${group.color}; color: white; padding: 2px 10px; border-radius: 12px; font-size: 12px;">
+              ${group.termine.length} ${group.termine.length === 1 ? 'Termin' : 'Termine'}
+            </span>
           </td>
         </tr>
       `;
-    }).join('');
+
+      // Termine in dieser Gruppe
+      group.termine.forEach(termin => {
+        const datum = new Date(termin.datum).toLocaleDateString('de-DE', {
+          weekday: 'short',
+          day: '2-digit',
+          month: '2-digit'
+        });
+
+        const statusMap = {
+          'bestellen': { icon: '⚠️', text: 'Muss bestellt werden', class: 'teile-bestellen' },
+          'bestellt': { icon: '📦', text: 'Bestellt', class: 'teile-bestellt' },
+          'eingetroffen': { icon: '🚚', text: 'Eingetroffen', class: 'teile-eingetroffen' },
+          'vorraetig': { icon: '✅', text: 'Vorrätig', class: 'teile-vorraetig' }
+        };
+
+        const status = statusMap[termin.teile_status] || { icon: '❓', text: termin.teile_status, class: '' };
+
+        // Escape den Arbeit-Namen für JavaScript
+        const arbeitNameEscaped = (termin.arbeit_name || '').replace(/'/g, "\\'").replace(/"/g, '\\"');
+
+        // Berechne ob dringend (Termin in der Vergangenheit oder heute)
+        const heute = new Date();
+        heute.setHours(0, 0, 0, 0);
+        const terminDatum = new Date(termin.datum);
+        terminDatum.setHours(0, 0, 0, 0);
+        const istDringend = terminDatum <= heute && statusKey === 'bestellen';
+
+        html += `
+          <tr class="teile-row ${istDringend ? 'teile-dringend' : ''}" data-status="${termin.teile_status}" data-termin-id="${termin.id}" style="${istDringend ? 'background: #fff5f5;' : ''}">
+            <td style="padding-left: 25px;">${istDringend ? '🔴 ' : ''}${datum}</td>
+            <td>${this.escapeHtml(termin.kunde_name || 'Unbekannt')}</td>
+            <td><strong>${this.escapeHtml(termin.kennzeichen || '-')}</strong></td>
+            <td>${this.escapeHtml(termin.arbeit_name || termin.arbeiten || '-')}</td>
+            <td>
+              <select class="teile-status-select ${status.class}" 
+                      onchange="app.updateTeileStatusDirekt(${termin.id}, '${arbeitNameEscaped}', this.value)">
+                <option value="bestellen" ${termin.teile_status === 'bestellen' ? 'selected' : ''}>⚠️ Muss bestellt werden</option>
+                <option value="bestellt" ${termin.teile_status === 'bestellt' ? 'selected' : ''}>📦 Bestellt</option>
+                <option value="eingetroffen" ${termin.teile_status === 'eingetroffen' ? 'selected' : ''}>🚚 Eingetroffen</option>
+                <option value="vorraetig" ${termin.teile_status === 'vorraetig' ? 'selected' : ''}>✅ Vorrätig</option>
+                <option value="" ${!termin.teile_status ? 'selected' : ''}>⚪ Keine Teile nötig</option>
+              </select>
+            </td>
+            <td>
+              <button class="btn btn-small" onclick="app.openArbeitszeitenModal(${termin.id})" title="Termin bearbeiten">
+                ✏️ Bearbeiten
+              </button>
+            </td>
+          </tr>
+        `;
+      });
+    });
+
+    tbody.innerHTML = html;
   }
 
   filterTeileStatus(filter) {
-    // Buttons aktiv/inaktiv setzen
-    document.querySelectorAll('.teile-filter-btn').forEach(btn => {
-      btn.classList.toggle('active', btn.dataset.filter === filter);
+    // Alle Karten zurücksetzen, dann aktive highlighten
+    document.querySelectorAll('.teile-filter-card').forEach(card => {
+      card.style.transform = 'scale(1)';
+      card.style.boxShadow = 'none';
     });
 
     if (!this.teileStatusData) return;
@@ -15824,7 +15932,7 @@ class App {
       filteredData = this.teileStatusData.filter(t => t.teile_status === filter);
     }
 
-    this.renderTeileStatusTable(filteredData);
+    this.renderTeileStatusTable(filteredData, filter);
   }
 
   async updateTeileStatusDirekt(terminId, arbeitName, neuerStatus) {
@@ -19687,6 +19795,1382 @@ class App {
         }
       });
     });
+  }
+
+  // =============================================================================
+  // KI-ASSISTENT FUNKTIONEN (Version 1.2.0)
+  // =============================================================================
+
+  /**
+   * Initialisiert alle Event-Listener für den KI-Assistenten
+   */
+  setupKIAssistentEventListeners() {
+    // KI-Analyse Checkbox
+    const kiCheckbox = document.getElementById('kiAnalyseAktiv');
+    if (kiCheckbox) {
+      // Gespeicherte Einstellung laden
+      const savedState = localStorage.getItem('kiAnalyseAktiv');
+      if (savedState !== null) {
+        kiCheckbox.checked = savedState === 'true';
+      }
+      
+      // Änderungen speichern
+      kiCheckbox.addEventListener('change', (e) => {
+        localStorage.setItem('kiAnalyseAktiv', e.target.checked);
+        if (!e.target.checked) {
+          this.hideKIVorschlaege();
+        }
+      });
+    }
+
+    // VIN-Decoder Button
+    const vinDecodeBtn = document.getElementById('vinDecodeBtn');
+    if (vinDecodeBtn) {
+      vinDecodeBtn.addEventListener('click', () => this.decodeVIN());
+    }
+    
+    // VIN-Eingabefeld: Auto-Decode bei 17 Zeichen
+    const vinInput = document.getElementById('vin');
+    if (vinInput) {
+      vinInput.addEventListener('input', (e) => {
+        const vin = e.target.value.replace(/[^A-HJ-NPR-Z0-9]/gi, '');
+        e.target.value = vin.toUpperCase();
+        
+        // Auto-Decode wenn 17 Zeichen erreicht
+        if (vin.length === 17) {
+          this.decodeVIN();
+        } else {
+          // Info ausblenden wenn weniger als 17 Zeichen
+          const vinInfo = document.getElementById('vinInfoBereich');
+          if (vinInfo) vinInfo.style.display = 'none';
+        }
+      });
+    }
+
+    // KI-Assistent Banner/Button
+    const kiAssistentBtn = document.getElementById('kiAssistentBtn');
+    if (kiAssistentBtn) {
+      kiAssistentBtn.addEventListener('click', () => this.openKIAssistent());
+    }
+
+    // Modal schließen
+    const closeKiAssistent = document.getElementById('closeKiAssistent');
+    if (closeKiAssistent) {
+      closeKiAssistent.addEventListener('click', () => this.closeKIAssistent());
+    }
+
+    // Abbrechen Button
+    const kiAbbrechen = document.getElementById('kiAbbrechen');
+    if (kiAbbrechen) {
+      kiAbbrechen.addEventListener('click', () => this.closeKIAssistent());
+    }
+
+    // Analysieren Button
+    const kiAnalysierenBtn = document.getElementById('kiAnalysierenBtn');
+    if (kiAnalysierenBtn) {
+      kiAnalysierenBtn.addEventListener('click', () => this.analyzeWithKI());
+    }
+
+    // Übernehmen Button
+    const kiUebernehmen = document.getElementById('kiUebernehmen');
+    if (kiUebernehmen) {
+      kiUebernehmen.addEventListener('click', () => this.applyKIResults());
+    }
+
+    // Beispiel-Buttons
+    document.querySelectorAll('.ki-beispiel-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        const text = e.target.dataset.text;
+        const textarea = document.getElementById('kiFreitextInput');
+        if (textarea && text) {
+          textarea.value = text;
+          textarea.focus();
+        }
+      });
+    });
+
+    // Modal schließen bei Klick außerhalb
+    const kiModal = document.getElementById('kiAssistentModal');
+    if (kiModal) {
+      kiModal.addEventListener('click', (e) => {
+        if (e.target === kiModal) {
+          this.closeKIAssistent();
+        }
+      });
+    }
+
+    // KI-Status beim Start prüfen
+    this.checkKIStatus();
+  }
+
+  /**
+   * Event-Listener für Teile-Bestellen Tab
+   */
+  setupTeileBestellenEventListeners() {
+    // Filter-Checkboxen
+    const filterOffen = document.getElementById('teileFilterOffen');
+    const filterBestellt = document.getElementById('teileFilterBestellt');
+    const filterGeliefert = document.getElementById('teileFilterGeliefert');
+    const filterZeitraum = document.getElementById('teileFilterZeitraum');
+    
+    if (filterOffen) {
+      filterOffen.addEventListener('change', () => this.loadTeileBestellungen());
+    }
+    if (filterBestellt) {
+      filterBestellt.addEventListener('change', () => this.loadTeileBestellungen());
+    }
+    if (filterGeliefert) {
+      filterGeliefert.addEventListener('change', () => this.loadTeileBestellungen());
+    }
+    if (filterZeitraum) {
+      filterZeitraum.addEventListener('change', () => this.loadTeileBestellungen());
+    }
+  }
+
+  /**
+   * Prüft den Status der KI-Integration und passt UI an
+   */
+  async checkKIStatus() {
+    try {
+      const response = await AIService.getStatus();
+      const banner = document.getElementById('kiAssistentBanner');
+      
+      if (!response.enabled || !response.configured) {
+        // KI nicht konfiguriert - Banner verstecken oder anpassen
+        if (banner) {
+          banner.style.opacity = '0.5';
+          banner.title = 'KI-Assistent nicht konfiguriert. Bitte API-Key in Einstellungen hinterlegen.';
+        }
+      }
+    } catch (error) {
+      console.log('KI-Status konnte nicht geprüft werden:', error.message);
+      // Bei Fehler Banner ausblenden
+      const banner = document.getElementById('kiAssistentBanner');
+      if (banner) {
+        banner.style.display = 'none';
+      }
+    }
+  }
+
+  /**
+   * Öffnet das KI-Assistent Modal
+   */
+  openKIAssistent() {
+    const modal = document.getElementById('kiAssistentModal');
+    if (modal) {
+      modal.style.display = 'block';
+      // Reset
+      document.getElementById('kiFreitextInput').value = '';
+      document.getElementById('kiErgebnisBereich').style.display = 'none';
+      document.getElementById('kiUebernehmen').style.display = 'none';
+      document.getElementById('kiFremdmarkenWarnung').style.display = 'none';
+      document.getElementById('kiLoading').style.display = 'none';
+      document.getElementById('kiAnalysierenBtn').disabled = false;
+      
+      // Fokus auf Eingabefeld
+      setTimeout(() => {
+        document.getElementById('kiFreitextInput').focus();
+      }, 100);
+    }
+  }
+
+  /**
+   * Schließt das KI-Assistent Modal
+   */
+  closeKIAssistent() {
+    const modal = document.getElementById('kiAssistentModal');
+    if (modal) {
+      modal.style.display = 'none';
+    }
+  }
+
+  /**
+   * Führt die KI-Analyse durch
+   */
+  async analyzeWithKI() {
+    const textarea = document.getElementById('kiFreitextInput');
+    const text = textarea.value.trim();
+    
+    if (text.length < 5) {
+      this.showToast('Bitte mindestens 5 Zeichen eingeben.', 'warning');
+      return;
+    }
+
+    // UI: Loading anzeigen
+    const btn = document.getElementById('kiAnalysierenBtn');
+    const loading = document.getElementById('kiLoading');
+    btn.disabled = true;
+    loading.style.display = 'flex';
+
+    try {
+      // KI-Analyse durchführen
+      const response = await AIService.fullAnalysis(text, true);
+      
+      if (response.success && response.data) {
+        this.displayKIResults(response.data);
+      } else {
+        throw new Error('Keine Daten von KI erhalten');
+      }
+    } catch (error) {
+      console.error('KI-Analyse Fehler:', error);
+      this.showToast('KI-Analyse fehlgeschlagen: ' + error.message, 'error');
+    } finally {
+      btn.disabled = false;
+      loading.style.display = 'none';
+    }
+  }
+
+  /**
+   * Zeigt die KI-Ergebnisse im Modal an
+   */
+  displayKIResults(data) {
+    const ergebnisBereich = document.getElementById('kiErgebnisBereich');
+    const uebernehmenBtn = document.getElementById('kiUebernehmen');
+    
+    // Speichere Ergebnisse für spätere Übernahme
+    this.kiErgebnisse = data;
+    
+    const termin = data.termin || {};
+    
+    // Kunde
+    const kundeEl = document.getElementById('kiErgebnisKunde');
+    kundeEl.textContent = termin.kunde?.name || '-';
+    
+    // Fahrzeug
+    const fahrzeugEl = document.getElementById('kiErgebnisFahrzeug');
+    const fahrzeugText = [];
+    if (termin.fahrzeug?.marke) fahrzeugText.push(termin.fahrzeug.marke);
+    if (termin.fahrzeug?.modell) fahrzeugText.push(termin.fahrzeug.modell);
+    if (termin.fahrzeug?.kennzeichen) fahrzeugText.push(`(${termin.fahrzeug.kennzeichen})`);
+    fahrzeugEl.textContent = fahrzeugText.length > 0 ? fahrzeugText.join(' ') : '-';
+    
+    // Datum
+    const datumEl = document.getElementById('kiErgebnisDatum');
+    if (termin.termin?.datum) {
+      const d = new Date(termin.termin.datum);
+      datumEl.textContent = d.toLocaleDateString('de-DE', { weekday: 'long', day: '2-digit', month: '2-digit', year: 'numeric' });
+    } else {
+      datumEl.textContent = 'Nicht erkannt';
+    }
+    
+    // Uhrzeit
+    const uhrzeitEl = document.getElementById('kiErgebnisUhrzeit');
+    uhrzeitEl.textContent = termin.termin?.uhrzeit || 'Nicht erkannt';
+    
+    // Arbeiten
+    const arbeitenEl = document.getElementById('kiErgebnisArbeiten');
+    arbeitenEl.innerHTML = '';
+    if (termin.arbeiten && termin.arbeiten.length > 0) {
+      termin.arbeiten.forEach(arbeit => {
+        const tag = document.createElement('span');
+        tag.className = 'arbeit-tag';
+        tag.textContent = arbeit;
+        arbeitenEl.appendChild(tag);
+      });
+    } else {
+      arbeitenEl.textContent = 'Keine erkannt';
+    }
+    
+    // Dauer
+    const dauerEl = document.getElementById('kiErgebnisDauer');
+    if (data.zeitschaetzung?.gesamtdauer) {
+      const stunden = data.zeitschaetzung.gesamtdauer;
+      const h = Math.floor(stunden);
+      const m = Math.round((stunden - h) * 60);
+      dauerEl.textContent = h > 0 ? `${h}h ${m}min` : `${m}min`;
+    } else if (termin.termin?.dauer_stunden) {
+      const stunden = termin.termin.dauer_stunden;
+      const h = Math.floor(stunden);
+      const m = Math.round((stunden - h) * 60);
+      dauerEl.textContent = h > 0 ? `${h}h ${m}min` : `${m}min`;
+    } else {
+      dauerEl.textContent = '-';
+    }
+    
+    // Teile
+    const teileBereich = document.getElementById('kiTeileBereich');
+    const teileEl = document.getElementById('kiErgebnisTeile');
+    teileEl.innerHTML = '';
+    if (data.teile?.teile && data.teile.teile.length > 0) {
+      teileBereich.style.display = 'block';
+      data.teile.teile.forEach(teil => {
+        const tag = document.createElement('span');
+        tag.className = 'teil-tag';
+        tag.textContent = teil.name;
+        teileEl.appendChild(tag);
+      });
+    } else {
+      teileBereich.style.display = 'none';
+    }
+    
+    // Fremdmarken-Warnung
+    const fremdmarkenWarnung = document.getElementById('kiFremdmarkenWarnung');
+    const fremdmarkenText = document.getElementById('kiFremdmarkenText');
+    if (termin.fremdmarke) {
+      fremdmarkenWarnung.style.display = 'flex';
+      fremdmarkenText.textContent = termin.fremdmarke_warnung || 'Achtung: Fremdmarke erkannt!';
+      document.getElementById('kiBestandskundeCheck').checked = false;
+    } else {
+      fremdmarkenWarnung.style.display = 'none';
+    }
+    
+    // Confidence
+    const confidence = termin.confidence || 0.5;
+    const confidenceFill = document.getElementById('kiConfidenceFill');
+    const confidenceValue = document.getElementById('kiConfidenceValue');
+    confidenceFill.style.width = `${confidence * 100}%`;
+    confidenceValue.textContent = `${Math.round(confidence * 100)}%`;
+    
+    // Anzeigen
+    ergebnisBereich.style.display = 'block';
+    uebernehmenBtn.style.display = 'inline-flex';
+  }
+
+  /**
+   * Übernimmt die KI-Ergebnisse in das Termin-Formular
+   */
+  applyKIResults() {
+    if (!this.kiErgebnisse) {
+      this.showToast('Keine KI-Ergebnisse vorhanden.', 'warning');
+      return;
+    }
+
+    const termin = this.kiErgebnisse.termin || {};
+    
+    // Fremdmarken-Prüfung
+    if (termin.fremdmarke) {
+      const bestandskundeCheck = document.getElementById('kiBestandskundeCheck');
+      if (!bestandskundeCheck.checked) {
+        this.showToast('Bitte bestätigen Sie, dass es sich um einen Bestandskunden handelt.', 'warning');
+        return;
+      }
+    }
+
+    // Kunde - versuche zu finden oder Name setzen
+    if (termin.kunde?.name) {
+      const nameInput = document.getElementById('terminNameSuche');
+      if (nameInput) {
+        nameInput.value = termin.kunde.name;
+        // Trigger Suche
+        nameInput.dispatchEvent(new Event('input', { bubbles: true }));
+      }
+    }
+
+    // Datum
+    if (termin.termin?.datum) {
+      const datumInput = document.getElementById('datum');
+      if (datumInput) {
+        datumInput.value = termin.termin.datum;
+        datumInput.dispatchEvent(new Event('change', { bubbles: true }));
+        
+        // Update Kalender-Display
+        const displayEl = document.getElementById('selectedDatumDisplay');
+        if (displayEl) {
+          const d = new Date(termin.termin.datum);
+          displayEl.textContent = d.toLocaleDateString('de-DE', { 
+            weekday: 'long', day: '2-digit', month: '2-digit', year: 'numeric' 
+          });
+        }
+      }
+    }
+
+    // Uhrzeit
+    if (termin.termin?.uhrzeit) {
+      const uhrzeitInput = document.getElementById('startzeit');
+      if (uhrzeitInput) {
+        uhrzeitInput.value = termin.termin.uhrzeit;
+      }
+    }
+
+    // Arbeiten
+    if (termin.arbeiten && termin.arbeiten.length > 0) {
+      const arbeitInput = document.getElementById('arbeitEingabe');
+      if (arbeitInput) {
+        arbeitInput.value = termin.arbeiten.join(', ');
+        // Zeitschätzung aktualisieren
+        this.updateZeitschaetzung();
+      }
+    }
+
+    // Beschreibung
+    if (termin.beschreibung) {
+      const beschreibungInput = document.getElementById('beschreibung');
+      if (beschreibungInput) {
+        beschreibungInput.value = termin.beschreibung;
+      }
+    }
+
+    // Modal schließen
+    this.closeKIAssistent();
+    
+    // Erfolg anzeigen
+    this.showToast('KI-Daten in Formular übernommen!', 'success');
+    
+    // Scroll zum Formular
+    document.getElementById('terminForm').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  // =============================================================================
+  // KI AUTO-SUGGEST (Automatische Vorschläge beim Tippen)
+  // =============================================================================
+
+  /**
+   * Debounce Timer für KI-Vorschläge
+   */
+  kiSuggestTimeout = null;
+  kiSuggestLastText = '';
+  kiSuggestEnabled = true;
+
+  /**
+   * Wird bei jeder Eingabe im Arbeiten-Feld aufgerufen
+   */
+  handleKIAutoSuggest(e) {
+    // Prüfe ob KI-Analyse per Checkbox aktiviert ist
+    const kiCheckbox = document.getElementById('kiAnalyseAktiv');
+    if (!kiCheckbox || !kiCheckbox.checked) {
+      this.hideKIVorschlaege();
+      return;
+    }
+    
+    const text = e.target.value.trim();
+    
+    // Nur wenn sich der Text geändert hat und lang genug ist
+    if (text === this.kiSuggestLastText || text.length < 10) {
+      return;
+    }
+    
+    // Prüfe zuerst ob es eine Wartungsanfrage mit km-Stand ist
+    const wartungInfo = this.detectWartungMitKm(text);
+    
+    // Prüfe ob es wie eine Problembeschreibung aussieht (nicht nur Stichworte)
+    const istProblemBeschreibung = this.lookLikeProblemDescription(text);
+    if (!istProblemBeschreibung && !wartungInfo) {
+      this.hideKIVorschlaege();
+      return;
+    }
+    
+    this.kiSuggestLastText = text;
+    
+    // Debounce: Warte 1.5 Sekunden nach dem letzten Tastendruck
+    if (this.kiSuggestTimeout) {
+      clearTimeout(this.kiSuggestTimeout);
+    }
+    
+    this.kiSuggestTimeout = setTimeout(() => {
+      if (wartungInfo) {
+        // Wartungsplan abrufen
+        this.fetchWartungsplan(wartungInfo.kmStand);
+      } else {
+        // Normale KI-Vorschläge
+        this.fetchKIVorschlaege(text);
+      }
+    }, 1500);
+  }
+
+  /**
+   * Prüft ob der Text wie eine Problembeschreibung aussieht
+   */
+  lookLikeProblemDescription(text) {
+    // Schlüsselwörter die auf Problembeschreibungen hindeuten
+    const problemKeywords = [
+      // Geräusche
+      'quietscht', 'quietschen', 'macht geräusch', 'geräusche',
+      'klappert', 'klapper', 'vibriert', 'vibration', 'ruckelt', 'ruckeln',
+      'schleift', 'kratzt', 'pfeift', 'brummt', 'summt', 'knackt', 'knacken',
+      // Fahrverhalten
+      'zieht', 'bremst schlecht', 'bremse', 'bremsen',
+      'springt nicht an', 'startet nicht', 'läuft nicht', 'funktioniert nicht',
+      'geht nicht', 'macht nicht', 'tut nicht',
+      // Anzeigen/Warnungen
+      'leuchtet', 'lampe', 'licht', 'warnung', 'warnleuchte', 'anzeige', 'fehler',
+      'kontrollleuchte', 'display', 'bordcomputer',
+      // Flüssigkeiten
+      'undicht', 'tropft', 'verliert', 'öl', 'wasser', 'kühlmittel',
+      // Klima/Heizung
+      'kühlt nicht', 'heizt nicht', 'klima', 'klimaanlage', 'heizung', 'lüftung',
+      // Allgemein
+      'problem', 'defekt', 'kaputt', 'prüfen', 'checken', 'schauen',
+      'vorderachse', 'hinterachse', 'achse', 'fahrwerk', 'stoßdämpfer',
+      'motor', 'getriebe', 'kupplung', 'auspuff',
+      // Wartung/Service
+      'wartung', 'inspektion', 'service', 'durchsicht'
+    ];
+    
+    const lowerText = text.toLowerCase();
+    return problemKeywords.some(keyword => lowerText.includes(keyword));
+  }
+
+  /**
+   * Prüft ob der Text eine Wartungsanfrage mit km-Stand enthält
+   * @returns {Object|null} { kmStand: number } oder null
+   */
+  detectWartungMitKm(text) {
+    const lowerText = text.toLowerCase();
+    
+    // Prüfe auf Wartungs-Keywords
+    const wartungsKeywords = ['wartung', 'inspektion', 'service', 'durchsicht', 'check'];
+    const hatWartung = wartungsKeywords.some(kw => lowerText.includes(kw));
+    
+    if (!hatWartung) return null;
+    
+    // Suche nach km-Stand (verschiedene Formate)
+    // z.B. "45000km", "45.000 km", "45000 kilometer", "km-stand 45000", "bei 45000"
+    const kmPatterns = [
+      /(\d{1,3}(?:[.,]\d{3})*)\s*(?:km|kilometer)/i,
+      /(?:km[\-\s]?stand|kilometerstand)[:\s]*(\d{1,3}(?:[.,]\d{3})*)/i,
+      /(?:bei|aktuell|stand)[:\s]*(\d{4,6})(?:\s|$)/i
+    ];
+    
+    for (const pattern of kmPatterns) {
+      const match = text.match(pattern);
+      if (match) {
+        // Extrahiere und normalisiere km-Zahl
+        let kmStr = match[1];
+        // Entferne Tausendertrennzeichen
+        kmStr = kmStr.replace(/[.,]/g, '');
+        const km = parseInt(kmStr, 10);
+        
+        // Validiere: km sollte realistisch sein (1000-500000)
+        if (km >= 1000 && km <= 500000) {
+          return { kmStand: km };
+        }
+      }
+    }
+    
+    return null;
+  }
+
+  /**
+   * Holt Wartungsplan vom Backend basierend auf km-Stand
+   */
+  async fetchWartungsplan(kmStand) {
+    const bereich = document.getElementById('kiVorschlaegeBereich');
+    const liste = document.getElementById('kiVorschlaegeListe');
+    
+    if (!bereich || !liste) return;
+    
+    // Zeige Loading
+    bereich.style.display = 'block';
+    liste.innerHTML = `
+      <div class="ki-vorschlaege-loading">
+        <div class="ki-spinner"></div>
+        <span>Wartungsplan wird erstellt...</span>
+      </div>
+    `;
+    
+    try {
+      // Fahrzeuginfo aus Formular holen
+      const fahrzeugtyp = document.getElementById('fahrzeugtyp')?.value || 'Citroën';
+      
+      const response = await AIService.getWartungsplan(fahrzeugtyp, kmStand);
+      
+      if (response.success && response.data) {
+        this.displayWartungsplan(response.data);
+      } else {
+        this.hideKIVorschlaege();
+        this.showToast('Wartungsplan konnte nicht erstellt werden', 'error');
+      }
+    } catch (error) {
+      console.error('Wartungsplan Fehler:', error);
+      this.hideKIVorschlaege();
+      this.showToast('Fehler beim Abrufen des Wartungsplans', 'error');
+    }
+  }
+
+  /**
+   * Zeigt den Wartungsplan an
+   */
+  displayWartungsplan(data) {
+    const bereich = document.getElementById('kiVorschlaegeBereich');
+    const liste = document.getElementById('kiVorschlaegeListe');
+    
+    if (!data) {
+      this.hideKIVorschlaege();
+      return;
+    }
+    
+    liste.innerHTML = '';
+    
+    // Header mit km-Stand
+    const header = document.createElement('div');
+    header.className = 'ki-wartungsplan-header';
+    header.innerHTML = `
+      <span class="ki-wartungsplan-icon">🔧</span>
+      <div>
+        <strong>Wartungsplan</strong>
+        <span class="ki-wartungsplan-info">${data.fahrzeug || 'Citroën'} • ${(data.kmStand || 0).toLocaleString('de-DE')} km</span>
+      </div>
+      ${data.service_empfehlung ? `<span class="ki-service-badge">${data.service_empfehlung}</span>` : ''}
+    `;
+    liste.appendChild(header);
+    
+    // Jetzt fällige Arbeiten
+    if (data.jetzt_faellig && data.jetzt_faellig.length > 0) {
+      const nowSection = document.createElement('div');
+      nowSection.className = 'ki-wartung-section ki-wartung-jetzt';
+      nowSection.innerHTML = '<div class="ki-wartung-section-title">⚠️ Jetzt fällig:</div>';
+      
+      data.jetzt_faellig.forEach(item => {
+        const arbeitDiv = document.createElement('div');
+        arbeitDiv.className = 'ki-wartung-item ki-wartung-item-jetzt';
+        arbeitDiv.innerHTML = `
+          <span class="ki-wartung-name">${item.arbeit}</span>
+          <span class="ki-wartung-details">${item.dauer_stunden}h ${item.grund ? '• ' + item.grund : ''}</span>
+          <span class="ki-wartung-add" title="Zur Arbeitsliste hinzufügen">+</span>
+        `;
+        
+        arbeitDiv.querySelector('.ki-wartung-add').addEventListener('click', () => {
+          this.addKIVorschlagToArbeiten(item.arbeit);
+        });
+        
+        nowSection.appendChild(arbeitDiv);
+      });
+      
+      liste.appendChild(nowSection);
+    }
+    
+    // Bald fällige Arbeiten
+    if (data.bald_faellig && data.bald_faellig.length > 0) {
+      const soonSection = document.createElement('div');
+      soonSection.className = 'ki-wartung-section ki-wartung-bald';
+      soonSection.innerHTML = '<div class="ki-wartung-section-title">📅 Bald fällig:</div>';
+      
+      data.bald_faellig.forEach(item => {
+        const arbeitDiv = document.createElement('div');
+        arbeitDiv.className = 'ki-wartung-item ki-wartung-item-bald';
+        arbeitDiv.innerHTML = `
+          <span class="ki-wartung-name">${item.arbeit}</span>
+          <span class="ki-wartung-details">bei ${(item.faellig_bei_km || 0).toLocaleString('de-DE')} km</span>
+        `;
+        soonSection.appendChild(arbeitDiv);
+      });
+      
+      liste.appendChild(soonSection);
+    }
+    
+    // Citroën-Hinweise
+    if (data.citroen_hinweise && data.citroen_hinweise.length > 0) {
+      const hinweisDiv = document.createElement('div');
+      hinweisDiv.className = 'ki-wartung-hinweise';
+      hinweisDiv.innerHTML = `
+        <div class="ki-wartung-hinweise-title">💡 Citroën-Hinweise:</div>
+        <ul>${data.citroen_hinweise.map(h => `<li>${h}</li>`).join('')}</ul>
+      `;
+      liste.appendChild(hinweisDiv);
+    }
+    
+    // Footer mit Gesamtzeit
+    if (data.geschaetzte_gesamtzeit) {
+      const footer = document.createElement('div');
+      footer.className = 'ki-wartung-footer';
+      footer.innerHTML = `
+        <span>⏱️ Geschätzte Gesamtzeit: <strong>${data.geschaetzte_gesamtzeit}h</strong></span>
+        ${data.naechste_inspektion_km ? `<span>📍 Nächste Inspektion: ${data.naechste_inspektion_km.toLocaleString('de-DE')} km</span>` : ''}
+      `;
+      liste.appendChild(footer);
+    }
+    
+    bereich.style.display = 'block';
+  }
+
+  /**
+   * Holt KI-Vorschläge vom Backend
+   */
+  async fetchKIVorschlaege(beschreibung) {
+    const bereich = document.getElementById('kiVorschlaegeBereich');
+    const liste = document.getElementById('kiVorschlaegeListe');
+    
+    if (!bereich || !liste) return;
+    
+    // Zeige Loading
+    bereich.style.display = 'block';
+    liste.innerHTML = `
+      <div class="ki-vorschlaege-loading">
+        <div class="ki-spinner"></div>
+        <span>KI analysiert...</span>
+      </div>
+    `;
+    
+    try {
+      // Fahrzeuginfo aus Formular holen
+      const fahrzeugtyp = document.getElementById('fahrzeugtyp')?.value || '';
+      
+      const response = await AIService.suggestArbeiten(beschreibung, fahrzeugtyp);
+      
+      if (response.success && response.data?.arbeiten) {
+        this.displayKIVorschlaege(response.data);
+      } else {
+        this.hideKIVorschlaege();
+      }
+    } catch (error) {
+      console.error('KI-Vorschläge Fehler:', error);
+      this.hideKIVorschlaege();
+    }
+  }
+
+  /**
+   * Zeigt die KI-Vorschläge an
+   */
+  displayKIVorschlaege(data) {
+    const bereich = document.getElementById('kiVorschlaegeBereich');
+    const liste = document.getElementById('kiVorschlaegeListe');
+    
+    if (!data.arbeiten || data.arbeiten.length === 0) {
+      this.hideKIVorschlaege();
+      return;
+    }
+    
+    liste.innerHTML = '';
+    
+    data.arbeiten.forEach(arbeit => {
+      const item = document.createElement('div');
+      item.className = 'ki-vorschlag-item';
+      item.innerHTML = `
+        <span class="ki-vorschlag-icon">🔧</span>
+        <div class="ki-vorschlag-text">
+          <span class="ki-vorschlag-name">${arbeit.name}</span>
+          <span class="ki-vorschlag-zeit">${arbeit.dauer_stunden}h - ${arbeit.kategorie || ''}</span>
+        </div>
+        <span class="ki-vorschlag-add">+</span>
+      `;
+      
+      item.addEventListener('click', () => {
+        this.addKIVorschlagToArbeiten(arbeit.name);
+      });
+      
+      liste.appendChild(item);
+    });
+    
+    // Empfehlung anzeigen
+    if (data.empfehlung) {
+      const empfehlung = document.createElement('div');
+      empfehlung.style.cssText = 'padding: 10px; background: #e8f5e9; border-radius: 6px; margin-top: 8px; font-size: 0.85em; color: #2e7d32;';
+      empfehlung.innerHTML = `💡 ${data.empfehlung}`;
+      liste.appendChild(empfehlung);
+    }
+    
+    bereich.style.display = 'block';
+  }
+
+  /**
+   * Fügt einen KI-Vorschlag zum Arbeiten-Feld hinzu
+   */
+  addKIVorschlagToArbeiten(arbeitName) {
+    const textarea = document.getElementById('arbeitEingabe');
+    if (!textarea) return;
+    
+    const currentValue = textarea.value.trim();
+    const lines = currentValue.split('\n').map(l => l.trim()).filter(l => l);
+    
+    // Prüfe ob schon vorhanden
+    if (!lines.includes(arbeitName)) {
+      lines.push(arbeitName);
+      textarea.value = lines.join('\n');
+      
+      // Zeitschätzung aktualisieren
+      this.updateZeitschaetzung();
+      
+      this.showToast(`"${arbeitName}" hinzugefügt`, 'success');
+    } else {
+      this.showToast('Arbeit bereits vorhanden', 'info');
+    }
+  }
+
+  /**
+   * Versteckt die KI-Vorschläge
+   */
+  hideKIVorschlaege() {
+    const bereich = document.getElementById('kiVorschlaegeBereich');
+    if (bereich) {
+      bereich.style.display = 'none';
+    }
+  }
+
+  // =============================================================================
+  // VIN-DECODER FUNKTIONEN
+  // =============================================================================
+
+  /**
+   * Dekodiert die eingegebene VIN und zeigt Fahrzeuginfos an
+   */
+  async decodeVIN() {
+    const vinInput = document.getElementById('vin');
+    const vinInfoBereich = document.getElementById('vinInfoBereich');
+    const vinDecodeBtn = document.getElementById('vinDecodeBtn');
+    
+    if (!vinInput || !vinInfoBereich) return;
+    
+    const vin = vinInput.value.trim().toUpperCase();
+    
+    // Validierung
+    if (vin.length !== 17) {
+      this.showToast('VIN muss 17 Zeichen haben', 'warning');
+      return;
+    }
+    
+    // Button deaktivieren während Laden
+    if (vinDecodeBtn) {
+      vinDecodeBtn.disabled = true;
+      vinDecodeBtn.textContent = '⏳';
+    }
+    
+    try {
+      const response = await AIService.decodeVIN(vin);
+      
+      if (response.success) {
+        this.displayVINInfo(response, vinInfoBereich);
+      } else {
+        vinInfoBereich.innerHTML = `
+          <div style="color: #c62828; padding: 10px;">
+            ❌ ${response.error || 'VIN konnte nicht dekodiert werden'}
+          </div>
+        `;
+        vinInfoBereich.style.display = 'block';
+      }
+      
+    } catch (error) {
+      console.error('VIN-Decode Fehler:', error);
+      vinInfoBereich.innerHTML = `
+        <div style="color: #c62828; padding: 10px;">
+          ❌ Fehler beim Dekodieren: ${error.message}
+        </div>
+      `;
+      vinInfoBereich.style.display = 'block';
+    } finally {
+      if (vinDecodeBtn) {
+        vinDecodeBtn.disabled = false;
+        vinDecodeBtn.textContent = '🔍';
+      }
+    }
+  }
+
+  /**
+   * Zeigt die dekodierten VIN-Informationen an
+   */
+  displayVINInfo(data, container) {
+    const istCitroen = data.istCitroen;
+    const markenBadge = istCitroen 
+      ? '<span class="vin-citroen-badge">✓ Citroën</span>'
+      : '<span class="vin-fremdmarke-badge">⚠ Fremdmarke</span>';
+    
+    let html = `
+      <div class="vin-info-header">
+        <span class="vin-marke">${istCitroen ? '🚗' : '🚙'}</span>
+        <div>
+          <span class="vin-fahrzeug">${data.hersteller} ${data.modell}</span>
+          ${markenBadge}
+          <span class="vin-baujahr">${data.generation || ''} ${data.baujahr ? '• ' + data.baujahr : ''}</span>
+        </div>
+      </div>
+      
+      <div class="vin-info-grid">
+        <div class="vin-info-item">
+          <span class="label">Motor</span>
+          <span class="value">${data.motor?.typ || 'Unbekannt'} ${data.motor?.ps ? '(' + data.motor.ps + ' PS)' : ''}</span>
+        </div>
+        <div class="vin-info-item">
+          <span class="label">Motorcode</span>
+          <span class="value">${data.motor?.code || 'n/a'}</span>
+        </div>
+        <div class="vin-info-item">
+          <span class="label">Getriebe</span>
+          <span class="value">${data.getriebe || 'n/a'}</span>
+        </div>
+        <div class="vin-info-item">
+          <span class="label">Werk</span>
+          <span class="value">${data.werk || 'n/a'}</span>
+        </div>
+      </div>
+    `;
+    
+    // Teile-Hinweise (Öl, Filter)
+    if (data.teile && data.teile.hinweise && data.teile.hinweise.length > 0) {
+      html += `
+        <div class="vin-teile-hinweise">
+          <div class="vin-teile-hinweise-title">📋 Teile-Info für dieses Fahrzeug:</div>
+          <ul>
+            ${data.teile.hinweise.map(h => `<li>${h}</li>`).join('')}
+          </ul>
+        </div>
+      `;
+    }
+    
+    // Warnungen (Stabi, Bremsen, etc.)
+    if (data.teile && data.teile.warnungen && data.teile.warnungen.length > 0) {
+      html += `
+        <div class="vin-warnungen">
+          <div class="vin-warnungen-title">⚠️ Beachten bei Teilebestellung:</div>
+          ${data.teile.warnungen.map(w => `
+            <div class="vin-warnung-item">
+              <span class="vin-warnung-teil">${w.teil}:</span>
+              <span class="vin-warnung-text">${w.warnung}</span>
+            </div>
+          `).join('')}
+        </div>
+      `;
+    }
+    
+    // Motor-Hinweise
+    if (data.motor && data.motor.hinweise && data.motor.hinweise.length > 0) {
+      html += `
+        <div style="margin-top: 10px; padding: 10px; background: #e3f2fd; border-radius: 6px; font-size: 0.85em;">
+          <strong>💡 Motor-Hinweise:</strong>
+          <ul style="margin: 5px 0 0 20px; padding: 0;">
+            ${data.motor.hinweise.map(h => `<li>${h}</li>`).join('')}
+          </ul>
+        </div>
+      `;
+    }
+    
+    // Auto-Fill Button
+    html += `
+      <button type="button" class="vin-auto-fill-btn" onclick="app.autoFillFromVIN('${data.hersteller}', '${data.modell}', '${data.motor?.typ || ''}', ${data.baujahr || 0})">
+        ✨ Fahrzeugtyp automatisch eintragen
+      </button>
+    `;
+    
+    // Fremdmarken-Warnung
+    if (!istCitroen) {
+      html += `
+        <div style="margin-top: 10px; padding: 10px; background: #fff3e0; border-radius: 6px; border-left: 3px solid #ff9800; font-size: 0.85em;">
+          <strong>⚠️ Fremdmarke erkannt!</strong><br>
+          Als Citroën-Markenwerkstatt nehmen wir Fremdmarken nur von <strong>Bestandskunden</strong> an.
+        </div>
+      `;
+    }
+    
+    container.innerHTML = html;
+    container.style.display = 'block';
+  }
+
+  /**
+   * Füllt den Fahrzeugtyp automatisch aus den VIN-Daten
+   */
+  autoFillFromVIN(hersteller, modell, motor, baujahr) {
+    const fahrzeugtypInput = document.getElementById('fahrzeugtyp');
+    if (!fahrzeugtypInput) return;
+    
+    let fahrzeugtyp = `${hersteller} ${modell}`;
+    if (motor && motor !== 'Unbekannt') {
+      fahrzeugtyp += ` ${motor}`;
+    }
+    if (baujahr && baujahr > 0) {
+      fahrzeugtyp += ` (${baujahr})`;
+    }
+    
+    fahrzeugtypInput.value = fahrzeugtyp;
+    this.showToast('Fahrzeugtyp eingetragen', 'success');
+  }
+
+  // =============================================================================
+  // TEILE-BESTELLEN FUNKTIONEN
+  // =============================================================================
+
+  /**
+   * Lädt die Teile-Bestellungen und zeigt sie gruppiert an
+   */
+  async loadTeileBestellungen() {
+    const container = document.getElementById('teileBestellListe');
+    if (!container) return;
+    
+    container.innerHTML = '<div class="teile-loading"><span class="spinner"></span> Lade Teile-Bestellungen...</div>';
+    
+    try {
+      // Filter aus UI lesen
+      const zeitraum = document.getElementById('teileFilterZeitraum')?.value || '7';
+      const tage = zeitraum === 'alle' ? 365 : parseInt(zeitraum);
+      
+      const response = await TeileBestellService.getFaellige(tage);
+      
+      // Statistik aktualisieren
+      if (response.statistik) {
+        const schwebendEl = document.getElementById('teileSchwebendCount');
+        if (schwebendEl) schwebendEl.textContent = response.statistik.schwebend || 0;
+        document.getElementById('teileDringendCount').textContent = response.statistik.dringend || 0;
+        document.getElementById('teileDieseWocheCount').textContent = response.statistik.dieseWoche || 0;
+        document.getElementById('teileNaechsteWocheCount').textContent = response.statistik.naechsteWoche || 0;
+      }
+      
+      // Bestellt-Count separat laden
+      const statistik = await TeileBestellService.getStatistik();
+      document.getElementById('teileBestelltCount').textContent = statistik.bestellt || 0;
+      
+      // Bestellungen gruppiert anzeigen
+      this.renderTeileBestellungen(response.gruppiert, container);
+      
+      // Termine für Dropdown laden
+      this.loadTermineFuerTeileDropdown();
+      
+    } catch (error) {
+      console.error('Fehler beim Laden der Teile-Bestellungen:', error);
+      container.innerHTML = `
+        <div class="teile-error">
+          ❌ Fehler beim Laden: ${error.message}
+          <button onclick="app.loadTeileBestellungen()" class="btn btn-secondary">🔄 Erneut versuchen</button>
+        </div>
+      `;
+    }
+  }
+
+  /**
+   * Rendert die Teile-Bestellungen gruppiert nach Dringlichkeit
+   */
+  renderTeileBestellungen(gruppiert, container) {
+    const filterOffen = document.getElementById('teileFilterOffen')?.checked !== false;
+    const filterBestellt = document.getElementById('teileFilterBestellt')?.checked !== false;
+    const filterGeliefert = document.getElementById('teileFilterGeliefert')?.checked === true;
+    
+    let html = '';
+    
+    // Funktion zum Filtern
+    const filterBestellung = (b) => {
+      if (b.status === 'offen' && !filterOffen) return false;
+      if (b.status === 'bestellt' && !filterBestellt) return false;
+      if (b.status === 'geliefert' && !filterGeliefert) return false;
+      return true;
+    };
+    
+    // Schwebende Termine (ohne festes Datum)
+    const schwebendGefiltert = (gruppiert.schwebend || []).filter(filterBestellung);
+    if (schwebendGefiltert.length > 0) {
+      html += this.renderTeileGruppe('⏸️ SCHWEBENDE TERMINE', 'schwebend', schwebendGefiltert, true);
+    }
+    
+    // Dringende Bestellungen (Termin heute/morgen)
+    const dringendGefiltert = (gruppiert.dringend || []).filter(filterBestellung);
+    if (dringendGefiltert.length > 0) {
+      html += this.renderTeileGruppe('🔴 DRINGEND', 'dringend', dringendGefiltert);
+    }
+    
+    // Diese Woche
+    const dieseWocheGefiltert = (gruppiert.dieseWoche || []).filter(filterBestellung);
+    if (dieseWocheGefiltert.length > 0) {
+      html += this.renderTeileGruppe('🟡 Diese Woche', 'diese-woche', dieseWocheGefiltert);
+    }
+    
+    // Nächste Woche
+    const naechsteWocheGefiltert = (gruppiert.naechsteWoche || []).filter(filterBestellung);
+    if (naechsteWocheGefiltert.length > 0) {
+      html += this.renderTeileGruppe('🟢 Nächste Woche', 'naechste-woche', naechsteWocheGefiltert);
+    }
+    
+    // Keine Bestellungen?
+    if (html === '') {
+      html = `
+        <div class="teile-leer">
+          <span class="teile-leer-icon">📦</span>
+          <p>Keine Teile-Bestellungen für den ausgewählten Zeitraum</p>
+        </div>
+      `;
+    }
+    
+    container.innerHTML = html;
+  }
+
+  /**
+   * Rendert eine Gruppe von Bestellungen
+   * @param {string} titel - Gruppentitel
+   * @param {string} klasse - CSS-Klasse
+   * @param {Array} bestellungen - Bestellungen in der Gruppe
+   * @param {boolean} istSchwebend - Ob es schwebende Termine sind
+   */
+  renderTeileGruppe(titel, klasse, bestellungen, istSchwebend = false) {
+    // Gruppiere nach Termin
+    const nachTermin = {};
+    bestellungen.forEach(b => {
+      const key = b.termin_id;
+      if (!nachTermin[key]) {
+        nachTermin[key] = {
+          termin: {
+            id: b.termin_id,
+            datum: b.termin_datum,
+            kunde: b.kunde_name,
+            kennzeichen: b.kunde_kennzeichen || b.termin_kennzeichen,
+            fahrzeug: b.termin_fahrzeug,
+            arbeiten: b.termin_arbeiten,
+            istSchwebend: b.ist_schwebend,
+            prioritaet: b.schwebend_prioritaet || 'mittel'
+          },
+          teile: []
+        };
+      }
+      nachTermin[key].teile.push(b);
+    });
+    
+    let html = `
+      <div class="teile-gruppe ${klasse}">
+        <div class="teile-gruppe-header">${titel}</div>
+    `;
+    
+    Object.values(nachTermin).forEach(gruppe => {
+      const t = gruppe.termin;
+      
+      // Für schwebende Termine: Priorität anzeigen statt Datum
+      let datumOderPrio;
+      if (istSchwebend || t.istSchwebend) {
+        const prioIcons = { hoch: '🔴', mittel: '🟡', niedrig: '🟢' };
+        const prioLabels = { hoch: 'Hoch', mittel: 'Mittel', niedrig: 'Niedrig' };
+        datumOderPrio = `${prioIcons[t.prioritaet] || '🟡'} Prio: ${prioLabels[t.prioritaet] || 'Mittel'}`;
+      } else {
+        datumOderPrio = t.datum ? new Date(t.datum).toLocaleDateString('de-DE', { 
+          weekday: 'short', day: '2-digit', month: '2-digit' 
+        }) : 'Unbekannt';
+        datumOderPrio = `📅 ${datumOderPrio}`;
+      }
+      
+      const datumFormatiert = t.datum ? new Date(t.datum).toLocaleDateString('de-DE', { 
+        weekday: 'short', day: '2-digit', month: '2-digit' 
+      }) : 'Unbekannt';
+      
+      html += `
+        <div class="teile-termin-gruppe ${istSchwebend ? 'schwebend-termin' : ''}">
+          <div class="teile-termin-header">
+            <span class="termin-datum">${datumOderPrio}</span>
+            <span class="termin-kunde">${t.kunde || 'Unbekannt'}</span>
+            <span class="termin-fahrzeug">${t.fahrzeug || ''} ${t.kennzeichen || ''}</span>
+          </div>
+          <div class="teile-termin-teile">
+      `;
+      
+      gruppe.teile.forEach(teil => {
+        const statusClass = teil.status === 'bestellt' ? 'bestellt' : teil.status === 'geliefert' ? 'geliefert' : 'offen';
+        const statusIcon = teil.status === 'bestellt' ? '📦' : teil.status === 'geliefert' ? '✅' : '⬜';
+        
+        html += `
+          <div class="teile-item ${statusClass}" data-id="${teil.id}">
+            <label class="teile-checkbox">
+              <input type="checkbox" class="teil-select" data-id="${teil.id}" ${teil.status !== 'offen' ? 'disabled' : ''}>
+              <span class="status-icon">${statusIcon}</span>
+            </label>
+            <div class="teile-info">
+              <span class="teil-name">${teil.teil_name}</span>
+              ${teil.teil_oe_nummer ? `<span class="teil-oe">OE: ${teil.teil_oe_nummer}</span>` : ''}
+              ${teil.menge > 1 ? `<span class="teil-menge">x${teil.menge}</span>` : ''}
+            </div>
+            <div class="teile-arbeit">${teil.fuer_arbeit || ''}</div>
+            <div class="teile-aktionen-item">
+              ${teil.status === 'offen' ? `
+                <button class="btn-mini btn-primary" onclick="app.teileStatusAendern(${teil.id}, 'bestellt')" title="Als bestellt markieren">📦</button>
+              ` : ''}
+              ${teil.status === 'bestellt' ? `
+                <button class="btn-mini btn-success" onclick="app.teileStatusAendern(${teil.id}, 'geliefert')" title="Als geliefert markieren">✅</button>
+              ` : ''}
+              <button class="btn-mini btn-danger" onclick="app.teileLoeschen(${teil.id})" title="Löschen">🗑️</button>
+            </div>
+          </div>
+        `;
+      });
+      
+      html += `
+          </div>
+        </div>
+      `;
+    });
+    
+    html += '</div>';
+    return html;
+  }
+
+  /**
+   * Lädt Termine für das Dropdown bei neuer Bestellung
+   */
+  async loadTermineFuerTeileDropdown() {
+    const select = document.getElementById('teileNeuTermin');
+    if (!select) return;
+    
+    try {
+      // Lade anstehende Termine (inkl. schwebende)
+      const heute = new Date().toISOString().split('T')[0];
+      const response = await ApiService.get(`/termine?von=${heute}&limit=50`);
+      const termine = response.termine || response || [];
+      
+      // Lade auch schwebende Termine
+      let schwebende = [];
+      try {
+        const schwebendResponse = await ApiService.get('/termine/schwebend');
+        schwebende = schwebendResponse.termine || schwebendResponse || [];
+      } catch (e) {
+        console.log('Keine schwebenden Termine gefunden');
+      }
+      
+      select.innerHTML = '<option value="">-- Termin auswählen --</option>';
+      
+      // Schwebende Termine zuerst (mit Optgroup)
+      if (schwebende.length > 0) {
+        select.innerHTML += '<optgroup label="⏸️ Schwebende Termine">';
+        schwebende.forEach(t => {
+          if (t.status !== 'abgeschlossen' && !t.geloescht_am) {
+            const kunde = t.kunde_name || t.name || 'Unbekannt';
+            const prioIcon = { hoch: '🔴', mittel: '🟡', niedrig: '🟢' }[t.schwebend_prioritaet] || '🟡';
+            select.innerHTML += `<option value="${t.id}">${prioIcon} ${kunde} (${t.fahrzeugtyp || t.kennzeichen || 'Fahrzeug'})</option>`;
+          }
+        });
+        select.innerHTML += '</optgroup>';
+      }
+      
+      // Normale Termine
+      const normaleTermine = termine.filter(t => !t.ist_schwebend);
+      if (normaleTermine.length > 0) {
+        select.innerHTML += '<optgroup label="📅 Geplante Termine">';
+        normaleTermine.forEach(t => {
+          if (t.status !== 'abgeschlossen' && !t.geloescht_am) {
+            const datum = new Date(t.datum).toLocaleDateString('de-DE');
+            const kunde = t.kunde_name || t.name || 'Unbekannt';
+            select.innerHTML += `<option value="${t.id}">${datum} - ${kunde} (${t.fahrzeugtyp || 'Fahrzeug'})</option>`;
+          }
+        });
+        select.innerHTML += '</optgroup>';
+      }
+    } catch (error) {
+      console.error('Fehler beim Laden der Termine:', error);
+    }
+  }
+
+  /**
+   * Alle Teile-Checkboxen auswählen/abwählen
+   */
+  teileAlleAuswaehlen() {
+    const checkboxen = document.querySelectorAll('.teil-select:not(:disabled)');
+    const alleAusgewaehlt = Array.from(checkboxen).every(cb => cb.checked);
+    
+    checkboxen.forEach(cb => {
+      cb.checked = !alleAusgewaehlt;
+    });
+    
+    this.showToast(alleAusgewaehlt ? 'Auswahl aufgehoben' : 'Alle ausgewählt', 'info');
+  }
+
+  /**
+   * Ausgewählte Teile als bestellt markieren
+   */
+  async teileAlsBestellt() {
+    const ausgewaehlt = Array.from(document.querySelectorAll('.teil-select:checked'))
+      .map(cb => parseInt(cb.dataset.id));
+    
+    if (ausgewaehlt.length === 0) {
+      this.showToast('Bitte wählen Sie Teile aus', 'warning');
+      return;
+    }
+    
+    try {
+      await TeileBestellService.markAlsBestellt(ausgewaehlt);
+      this.showToast(`${ausgewaehlt.length} Teile als bestellt markiert`, 'success');
+      this.loadTeileBestellungen();
+    } catch (error) {
+      console.error('Fehler beim Markieren:', error);
+      this.showToast('Fehler: ' + error.message, 'error');
+    }
+  }
+
+  /**
+   * Status einer einzelnen Bestellung ändern
+   */
+  async teileStatusAendern(id, status) {
+    try {
+      await TeileBestellService.updateStatus(id, status);
+      this.showToast(`Status geändert: ${status}`, 'success');
+      this.loadTeileBestellungen();
+    } catch (error) {
+      console.error('Fehler beim Status-Update:', error);
+      this.showToast('Fehler: ' + error.message, 'error');
+    }
+  }
+
+  /**
+   * Bestellung löschen
+   */
+  async teileLoeschen(id) {
+    if (!confirm('Bestellung wirklich löschen?')) return;
+    
+    try {
+      await TeileBestellService.delete(id);
+      this.showToast('Bestellung gelöscht', 'success');
+      this.loadTeileBestellungen();
+    } catch (error) {
+      console.error('Fehler beim Löschen:', error);
+      this.showToast('Fehler: ' + error.message, 'error');
+    }
+  }
+
+  /**
+   * Neue Bestellung hinzufügen
+   */
+  async teileNeuHinzufuegen() {
+    const terminId = document.getElementById('teileNeuTermin')?.value;
+    const name = document.getElementById('teileNeuName')?.value?.trim();
+    const oe = document.getElementById('teileNeuOE')?.value?.trim();
+    const menge = parseInt(document.getElementById('teileNeuMenge')?.value) || 1;
+    const arbeit = document.getElementById('teileNeuArbeit')?.value?.trim();
+    
+    if (!terminId || !name) {
+      this.showToast('Bitte Termin und Teilename angeben', 'warning');
+      return;
+    }
+    
+    try {
+      await TeileBestellService.create({
+        termin_id: parseInt(terminId),
+        teil_name: name,
+        teil_oe_nummer: oe || null,
+        menge: menge,
+        fuer_arbeit: arbeit || null
+      });
+      
+      this.showToast('Bestellung hinzugefügt', 'success');
+      
+      // Felder leeren
+      document.getElementById('teileNeuName').value = '';
+      document.getElementById('teileNeuOE').value = '';
+      document.getElementById('teileNeuMenge').value = '1';
+      document.getElementById('teileNeuArbeit').value = '';
+      
+      this.loadTeileBestellungen();
+    } catch (error) {
+      console.error('Fehler beim Hinzufügen:', error);
+      this.showToast('Fehler: ' + error.message, 'error');
+    }
+  }
+
+  /**
+   * Druckt die aktuelle Teile-Bestellliste
+   */
+  teileDrucken() {
+    const liste = document.getElementById('teileBestellListe');
+    if (!liste) return;
+    
+    const printWindow = window.open('', '_blank');
+    printWindow.document.write(`
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>Teile-Bestellliste</title>
+        <style>
+          body { font-family: Arial, sans-serif; padding: 20px; }
+          h1 { color: #333; border-bottom: 2px solid #ac1e44; padding-bottom: 10px; }
+          .teile-gruppe { margin: 20px 0; }
+          .teile-gruppe-header { font-weight: bold; font-size: 1.2em; margin-bottom: 10px; }
+          .teile-termin-gruppe { border: 1px solid #ddd; margin: 10px 0; padding: 10px; }
+          .teile-termin-header { background: #f5f5f5; padding: 8px; margin: -10px -10px 10px -10px; }
+          .teile-item { padding: 5px 0; border-bottom: 1px dotted #eee; display: flex; gap: 10px; }
+          .teil-name { font-weight: bold; }
+          .teil-oe { color: #666; }
+          .status-icon { margin-right: 5px; }
+          .dringend .teile-gruppe-header { color: #c62828; }
+          .diese-woche .teile-gruppe-header { color: #f57c00; }
+          .naechste-woche .teile-gruppe-header { color: #388e3c; }
+          .teile-aktionen-item, .teile-checkbox input { display: none; }
+          @media print { .no-print { display: none; } }
+        </style>
+      </head>
+      <body>
+        <h1>🛒 Teile-Bestellliste</h1>
+        <p>Stand: ${new Date().toLocaleString('de-DE')}</p>
+        ${liste.innerHTML}
+      </body>
+      </html>
+    `);
+    printWindow.document.close();
+    printWindow.print();
   }
 }
 
