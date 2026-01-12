@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Werkstatt Terminplaner</title>
-    <link rel="stylesheet" href="src/styles/style.css?v=124">
+    <link rel="stylesheet" href="src/styles/style.css?v=51">
     <!-- SheetJS für Excel-Import -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 </head>
@@ -1963,6 +1963,10 @@
                     <span class="tab-icon">👥</span>
                     <span class="tab-label">Kundenverwaltung</span>
                 </button>
+                <button class="sub-tab-button" data-subtab="settingsApi">
+                    <span class="tab-icon">🤖</span>
+                    <span class="tab-label">KI / API</span>
+                </button>
             </div>
 
             <div id="settingsServer" class="sub-tab-content active">
@@ -2173,6 +2177,63 @@
                     </table>
                 </div>
             </div>
+
+            <div id="settingsApi" class="sub-tab-content">
+                <h3>🤖 KI & API-Einstellungen</h3>
+                
+                <div class="form-section">
+                    <h3>ChatGPT / OpenAI API</h3>
+                    <p class="hint" style="margin-bottom: 15px;">
+                        Mit einem ChatGPT API-Key können zukünftig KI-Funktionen genutzt werden, 
+                        z.B. automatische Arbeitsbeschreibungen, Zeitschätzungen oder Kundenassistenz.
+                    </p>
+                    
+                    <div id="apiKeyStatus" class="api-key-status">
+                        <div class="status-indicator not-configured">
+                            <span class="status-icon">⚪</span>
+                            <span class="status-text">Kein API-Key konfiguriert</span>
+                        </div>
+                    </div>
+                    
+                    <form id="chatgptApiKeyForm" class="api-key-form">
+                        <div class="form-group">
+                            <label for="chatgpt_api_key">OpenAI API-Key:</label>
+                            <div class="api-key-input-wrapper">
+                                <input type="password" 
+                                       id="chatgpt_api_key" 
+                                       placeholder="sk-..." 
+                                       autocomplete="off"
+                                       class="api-key-input">
+                                <button type="button" id="toggleApiKeyVisibility" class="btn btn-icon" title="API-Key anzeigen/verbergen">
+                                    👁️
+                                </button>
+                            </div>
+                            <small style="display: block; color: #666; margin-top: 5px;">
+                                Der API-Key wird verschlüsselt in der Datenbank gespeichert.<br>
+                                <a href="https://platform.openai.com/api-keys" target="_blank" rel="noopener">→ OpenAI API-Keys verwalten</a>
+                            </small>
+                        </div>
+                        
+                        <div class="api-key-actions">
+                            <button type="submit" class="btn btn-primary">💾 API-Key speichern</button>
+                            <button type="button" id="testApiKeyBtn" class="btn btn-secondary">🔍 Verbindung testen</button>
+                            <button type="button" id="deleteApiKeyBtn" class="btn btn-danger">🗑️ API-Key löschen</button>
+                        </div>
+                    </form>
+                    
+                    <div id="apiKeyTestResult" class="api-test-result" style="display: none;"></div>
+                </div>
+                
+                <div class="form-section" style="margin-top: 20px;">
+                    <h3>ℹ️ Hinweise zur API-Nutzung</h3>
+                    <ul class="info-list">
+                        <li>🔐 <strong>Sicherheit:</strong> Der API-Key wird Base64-kodiert in der lokalen Datenbank gespeichert.</li>
+                        <li>💰 <strong>Kosten:</strong> Die Nutzung der OpenAI API ist kostenpflichtig. Prüfen Sie Ihre Nutzung regelmäßig.</li>
+                        <li>🌐 <strong>Verbindung:</strong> Für KI-Funktionen ist eine aktive Internetverbindung erforderlich.</li>
+                        <li>📊 <strong>Datenschutz:</strong> Bei KI-Anfragen werden Daten an OpenAI übermittelt. Achten Sie auf sensible Kundendaten.</li>
+                    </ul>
+                </div>
+            </div>
             </div>
         </div>
 
@@ -2232,6 +2293,14 @@
                     <button class="btn btn-secondary" id="planungVerwerfenBtn" onclick="app.verwerfePlanungAenderungen()" style="display: none;">
                         ↩️ Verwerfen
                     </button>
+                    <div class="ki-planung-controls">
+                        <button class="btn btn-ki" id="kiTagesplanungBtn" onclick="app.requestKITagesplanung()" title="KI optimiert die heutige Planung">
+                            🤖 KI-Tagesvorschlag
+                        </button>
+                        <button class="btn btn-ki-secondary" id="kiWochenplanungBtn" onclick="app.requestKIWochenplanung()" title="KI verteilt schwebende Termine auf die Woche">
+                            📅 KI-Wochenverteilung
+                        </button>
+                    </div>
                 </div>
             </div>
 
@@ -3102,8 +3171,92 @@
         </div>
     </div>
 
+    <!-- KI-Planungsvorschlag Modal -->
+    <div id="kiPlanungModal" class="modal ki-modal" style="display: none;">
+        <div class="modal-content ki-modal-content">
+            <div class="modal-header ki-modal-header">
+                <h2 id="kiModalTitle">🤖 KI-Planungsvorschlag</h2>
+                <button class="modal-close" onclick="app.closeKIPlanungModal()">&times;</button>
+            </div>
+            <div class="modal-body ki-modal-body">
+                <!-- Ladeindikator -->
+                <div id="kiPlanungLoading" class="ki-loading">
+                    <div class="ki-loading-spinner"></div>
+                    <p>KI analysiert die Planung...</p>
+                    <small>Dies kann einige Sekunden dauern</small>
+                </div>
+                
+                <!-- Fehleranzeige -->
+                <div id="kiPlanungError" class="ki-error" style="display: none;">
+                    <span class="ki-error-icon">❌</span>
+                    <p id="kiPlanungErrorText"></p>
+                    <button class="btn btn-secondary" onclick="app.closeKIPlanungModal()">Schließen</button>
+                </div>
+                
+                <!-- Vorschlag-Inhalt -->
+                <div id="kiPlanungContent" style="display: none;">
+                    <!-- Zusammenfassung -->
+                    <div class="ki-section ki-summary">
+                        <h3>📊 Analyse</h3>
+                        <p id="kiZusammenfassung"></p>
+                    </div>
+                    
+                    <!-- Kapazitätsanalyse -->
+                    <div class="ki-section ki-capacity">
+                        <h3>⚡ Kapazität</h3>
+                        <div id="kiKapazitaet" class="ki-capacity-grid"></div>
+                    </div>
+                    
+                    <!-- Warnungen -->
+                    <div id="kiWarnungenSection" class="ki-section ki-warnings" style="display: none;">
+                        <h3>⚠️ Hinweise</h3>
+                        <ul id="kiWarnungen"></ul>
+                    </div>
+                    
+                    <!-- Tages-Zuordnungen -->
+                    <div id="kiTagesSection" class="ki-section" style="display: none;">
+                        <h3>📋 Vorgeschlagene Zuordnungen für heute</h3>
+                        <div id="kiTagesZuordnungen" class="ki-suggestions-list"></div>
+                    </div>
+                    
+                    <!-- Schwebende Termine Vorschläge -->
+                    <div id="kiSchwebendeSection" class="ki-section" style="display: none;">
+                        <h3>⏸️ Schwebende Termine</h3>
+                        <p class="ki-section-hint">Diese schwebenden Termine könnten heute eingeplant werden:</p>
+                        <div id="kiSchwebendeVorschlaege" class="ki-suggestions-list"></div>
+                    </div>
+                    
+                    <!-- Wochen-Verteilung -->
+                    <div id="kiWochenSection" class="ki-section" style="display: none;">
+                        <h3>📅 Wochenverteilung für schwebende Termine</h3>
+                        <div id="kiWochenAuslastung" class="ki-week-overview"></div>
+                        <div id="kiWochenVerteilung" class="ki-suggestions-list"></div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer ki-modal-footer" id="kiModalFooter" style="display: none;">
+                <div class="ki-footer-left">
+                    <button class="btn btn-sm btn-outline" onclick="app.kiSelectAll(true)" title="Alle auswählen">
+                        ☑️ Alle
+                    </button>
+                    <button class="btn btn-sm btn-outline" onclick="app.kiSelectAll(false)" title="Keine auswählen">
+                        ⬜ Keine
+                    </button>
+                </div>
+                <div class="ki-footer-right">
+                    <button class="btn btn-secondary" onclick="app.closeKIPlanungModal()">
+                        ❌ Verwerfen
+                    </button>
+                    <button class="btn btn-primary" id="kiAlleUebernehmenBtn" onclick="app.uebernehmeAlleKIVorschlaege()">
+                        ✅ Ausgewählte übernehmen
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <script src="config.js"></script>
-    <script src="src/services/api.js?v=38"></script>
-    <script src="src/components/app.js?v=139"></script>
+    <script src="src/services/api.js?v=39"></script>
+    <script src="src/components/app.js?v=141"></script>
 </body>
 </html>

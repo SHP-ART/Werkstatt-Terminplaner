@@ -694,6 +694,13 @@ function initializeDatabase() {
       }
     });
 
+    // Füge ChatGPT API-Key Spalte hinzu (verschlüsselt gespeichert)
+    dbWrapper.connection.run(`ALTER TABLE werkstatt_einstellungen ADD COLUMN chatgpt_api_key TEXT DEFAULT NULL`, (err) => {
+      if (err && !err.message.includes('duplicate column')) {
+        console.error('Fehler beim Hinzufügen von chatgpt_api_key:', err);
+      }
+    });
+
     // Ersatzautos-Tabelle
     dbWrapper.connection.run(`CREATE TABLE IF NOT EXISTS ersatzautos (
       id INTEGER PRIMARY KEY AUTOINCREMENT,

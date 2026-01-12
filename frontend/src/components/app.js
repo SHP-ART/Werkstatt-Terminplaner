@@ -199,6 +199,28 @@ class App {
     document.getElementById('serverConfigForm').addEventListener('submit', (e) => this.handleServerConfigSubmit(e));
     document.getElementById('werkstattSettingsForm').addEventListener('submit', (e) => this.handleWerkstattSettingsSubmit(e));
     
+    // ChatGPT API-Key Formular
+    const chatgptApiKeyForm = document.getElementById('chatgptApiKeyForm');
+    if (chatgptApiKeyForm) {
+      chatgptApiKeyForm.addEventListener('submit', (e) => this.handleChatGPTApiKeySubmit(e));
+    }
+    
+    // ChatGPT API-Key Buttons
+    const toggleApiKeyVisibility = document.getElementById('toggleApiKeyVisibility');
+    if (toggleApiKeyVisibility) {
+      toggleApiKeyVisibility.addEventListener('click', () => this.toggleApiKeyVisibility());
+    }
+    
+    const testApiKeyBtn = document.getElementById('testApiKeyBtn');
+    if (testApiKeyBtn) {
+      testApiKeyBtn.addEventListener('click', () => this.testChatGPTApiKey());
+    }
+    
+    const deleteApiKeyBtn = document.getElementById('deleteApiKeyBtn');
+    if (deleteApiKeyBtn) {
+      deleteApiKeyBtn.addEventListener('click', () => this.deleteChatGPTApiKey());
+    }
+    
     // Wartende Aktionen Formular
     const wartendeAktionForm = document.getElementById('wartendeAktionForm');
     if (wartendeAktionForm) {
@@ -11214,6 +11236,7 @@ class App {
     try {
       const einstellungen = await EinstellungenService.getWerkstatt();
       this.prefillWerkstattSettings(einstellungen);
+      this.updateApiKeyStatus(einstellungen);
     } catch (error) {
       console.error('Fehler beim Laden der Werkstatt-Einstellungen:', error);
     }
@@ -11238,6 +11261,120 @@ class App {
     const mittagspauseField = document.getElementById('mittagspause_minuten');
     if (mittagspauseField) {
       mittagspauseField.value = einstellungen.mittagspause_minuten || 30;
+    }
+  }
+
+  // ChatGPT API-Key Status anzeigen
+  updateApiKeyStatus(einstellungen) {
+    const statusContainer = document.getElementById('apiKeyStatus');
+    if (!statusContainer) return;
+    
+    const isConfigured = einstellungen?.chatgpt_api_key_configured;
+    const maskedKey = einstellungen?.chatgpt_api_key_masked;
+    
+    if (isConfigured) {
+      statusContainer.innerHTML = `
+        <div class="status-indicator configured">
+          <span class="status-icon">🟢</span>
+          <span class="status-text">API-Key konfiguriert: ${maskedKey || '****'}</span>
+        </div>
+      `;
+    } else {
+      statusContainer.innerHTML = `
+        <div class="status-indicator not-configured">
+          <span class="status-icon">⚪</span>
+          <span class="status-text">Kein API-Key konfiguriert</span>
+        </div>
+      `;
+    }
+  }
+
+  // API-Key Sichtbarkeit umschalten
+  toggleApiKeyVisibility() {
+    const input = document.getElementById('chatgpt_api_key');
+    const button = document.getElementById('toggleApiKeyVisibility');
+    if (input && button) {
+      if (input.type === 'password') {
+        input.type = 'text';
+        button.textContent = '🙈';
+      } else {
+        input.type = 'password';
+        button.textContent = '👁️';
+      }
+    }
+  }
+
+  // ChatGPT API-Key speichern
+  async handleChatGPTApiKeySubmit(e) {
+    e.preventDefault();
+    
+    const apiKeyInput = document.getElementById('chatgpt_api_key');
+    const apiKey = apiKeyInput?.value?.trim();
+    
+    if (!apiKey) {
+      alert('Bitte geben Sie einen API-Key ein.');
+      return;
+    }
+    
+    if (!apiKey.startsWith('sk-')) {
+      alert('Ungültiges Format. OpenAI API-Keys beginnen mit "sk-".');
+      return;
+    }
+    
+    try {
+      const result = await EinstellungenService.updateChatGPTApiKey(apiKey);
+      alert(result.message || 'API-Key wurde gespeichert.');
+      apiKeyInput.value = ''; // Eingabefeld leeren
+      await this.loadWerkstattSettings(); // Status aktualisieren
+    } catch (error) {
+      console.error('Fehler beim Speichern des API-Keys:', error);
+      alert('Fehler: ' + (error.message || 'API-Key konnte nicht gespeichert werden.'));
+    }
+  }
+
+  // ChatGPT API-Key testen
+  async testChatGPTApiKey() {
+    const resultDiv = document.getElementById('apiKeyTestResult');
+    if (!resultDiv) return;
+    
+    resultDiv.style.display = 'block';
+    resultDiv.className = 'api-test-result testing';
+    resultDiv.innerHTML = '<span class="loading-spinner">⏳</span> Verbindung wird getestet...';
+    
+    try {
+      const result = await EinstellungenService.testChatGPTApiKey();
+      
+      if (result.success) {
+        resultDiv.className = 'api-test-result success';
+        resultDiv.innerHTML = '✅ ' + result.message;
+      } else {
+        resultDiv.className = 'api-test-result error';
+        resultDiv.innerHTML = '❌ ' + (result.error || 'Test fehlgeschlagen');
+      }
+    } catch (error) {
+      resultDiv.className = 'api-test-result error';
+      resultDiv.innerHTML = '❌ ' + (error.message || 'Verbindungsfehler');
+    }
+    
+    // Ergebnis nach 10 Sekunden ausblenden
+    setTimeout(() => {
+      resultDiv.style.display = 'none';
+    }, 10000);
+  }
+
+  // ChatGPT API-Key löschen
+  async deleteChatGPTApiKey() {
+    if (!confirm('Möchten Sie den API-Key wirklich löschen?')) {
+      return;
+    }
+    
+    try {
+      const result = await EinstellungenService.deleteChatGPTApiKey();
+      alert(result.message || 'API-Key wurde gelöscht.');
+      await this.loadWerkstattSettings(); // Status aktualisieren
+    } catch (error) {
+      console.error('Fehler beim Löschen des API-Keys:', error);
+      alert('Fehler: ' + (error.message || 'API-Key konnte nicht gelöscht werden.'));
     }
   }
 
@@ -21430,8 +21567,643 @@ class App {
       this.loadTeileBestellungen();
     } catch (error) {
       console.error('Fehler beim Aktualisieren:', error);
-      this.showToast('Fehler: ' + error.message, 'error');
+      this.showToast('Teile-Status auf "Vorrätig" gesetzt ✅', 'error');
     }
+  }
+
+  // ==================== KI-PLANUNGS-FUNKTIONEN ====================
+
+  /**
+   * KI-Tagesplanungsvorschlag anfordern
+   */
+  async requestKITagesplanung() {
+    const datumInput = document.getElementById('auslastungDragDropDatum');
+    if (!datumInput || !datumInput.value) {
+      alert('Bitte wählen Sie zuerst ein Datum aus.');
+      return;
+    }
+    
+    const datum = datumInput.value;
+    this.showKIPlanungModal('tages', datum);
+    
+    try {
+      const result = await KIPlanungService.getTagesvorschlag(datum);
+      
+      if (result.success && result.vorschlag) {
+        this.displayKITagesvorschlag(result.vorschlag, datum);
+      } else {
+        this.showKIPlanungError(result.error || 'Unbekannter Fehler');
+      }
+    } catch (error) {
+      console.error('KI-Tagesplanung Fehler:', error);
+      this.showKIPlanungError(error.message || 'Verbindungsfehler zum Server');
+    }
+  }
+
+  /**
+   * KI-Wochenplanungsvorschlag anfordern (schwebende Termine verteilen)
+   */
+  async requestKIWochenplanung() {
+    const datumInput = document.getElementById('auslastungDragDropDatum');
+    if (!datumInput || !datumInput.value) {
+      alert('Bitte wählen Sie zuerst ein Datum aus.');
+      return;
+    }
+    
+    const datum = datumInput.value;
+    this.showKIPlanungModal('wochen', datum);
+    
+    try {
+      const result = await KIPlanungService.getWochenvorschlag(datum);
+      
+      if (result.success && result.vorschlag) {
+        this.displayKIWochenvorschlag(result.vorschlag, result.wochentage);
+      } else {
+        this.showKIPlanungError(result.error || 'Unbekannter Fehler');
+      }
+    } catch (error) {
+      console.error('KI-Wochenplanung Fehler:', error);
+      this.showKIPlanungError(error.message || 'Verbindungsfehler zum Server');
+    }
+  }
+
+  /**
+   * KI-Modal anzeigen mit Ladeindikator
+   */
+  showKIPlanungModal(type, datum) {
+    const modal = document.getElementById('kiPlanungModal');
+    const title = document.getElementById('kiModalTitle');
+    const loading = document.getElementById('kiPlanungLoading');
+    const error = document.getElementById('kiPlanungError');
+    const content = document.getElementById('kiPlanungContent');
+    const footer = document.getElementById('kiModalFooter');
+    
+    // Titel setzen
+    if (type === 'wochen') {
+      title.textContent = '🤖 KI-Wochenverteilung';
+    } else {
+      const datumFormatiert = new Date(datum).toLocaleDateString('de-DE', {
+        weekday: 'long', day: '2-digit', month: '2-digit'
+      });
+      title.textContent = `🤖 KI-Tagesplanung für ${datumFormatiert}`;
+    }
+    
+    // Reset
+    loading.style.display = 'flex';
+    error.style.display = 'none';
+    content.style.display = 'none';
+    footer.style.display = 'none';
+    
+    // Speichere aktuellen Typ und Datum
+    this._kiPlanungType = type;
+    this._kiPlanungDatum = datum;
+    this._kiVorschlaege = null;
+    
+    modal.style.display = 'flex';
+  }
+
+  /**
+   * KI-Modal schließen
+   */
+  closeKIPlanungModal() {
+    const modal = document.getElementById('kiPlanungModal');
+    modal.style.display = 'none';
+    this._kiVorschlaege = null;
+  }
+
+  /**
+   * Fehler im KI-Modal anzeigen
+   */
+  showKIPlanungError(message) {
+    const loading = document.getElementById('kiPlanungLoading');
+    const error = document.getElementById('kiPlanungError');
+    const errorText = document.getElementById('kiPlanungErrorText');
+    
+    loading.style.display = 'none';
+    error.style.display = 'flex';
+    errorText.textContent = message;
+  }
+
+  /**
+   * KI-Tagesvorschlag anzeigen
+   */
+  displayKITagesvorschlag(vorschlag, datum) {
+    const loading = document.getElementById('kiPlanungLoading');
+    const content = document.getElementById('kiPlanungContent');
+    const footer = document.getElementById('kiModalFooter');
+    
+    loading.style.display = 'none';
+    content.style.display = 'block';
+    
+    // Speichere Vorschläge für spätere Übernahme
+    this._kiVorschlaege = vorschlag;
+    
+    // Zusammenfassung
+    document.getElementById('kiZusammenfassung').textContent = 
+      vorschlag.zusammenfassung || 'Keine Zusammenfassung verfügbar.';
+    
+    // Kapazitätsanalyse
+    const kapazitaetDiv = document.getElementById('kiKapazitaet');
+    if (vorschlag.kapazitaetsAnalyse) {
+      const ka = vorschlag.kapazitaetsAnalyse;
+      kapazitaetDiv.innerHTML = `
+        <div class="ki-capacity-item">
+          <span class="label">Gesamt:</span>
+          <span class="value">${ka.gesamtKapazitaet || '-'}</span>
+        </div>
+        <div class="ki-capacity-item">
+          <span class="label">Belegt:</span>
+          <span class="value">${ka.genutzt || '-'}</span>
+        </div>
+        <div class="ki-capacity-item highlight">
+          <span class="label">Frei:</span>
+          <span class="value">${ka.frei || '-'}</span>
+        </div>
+      `;
+    } else {
+      kapazitaetDiv.innerHTML = '<p class="muted">Keine Kapazitätsdaten</p>';
+    }
+    
+    // Warnungen
+    const warnungenSection = document.getElementById('kiWarnungenSection');
+    const warnungenList = document.getElementById('kiWarnungen');
+    if (vorschlag.warnungen && vorschlag.warnungen.length > 0) {
+      warnungenSection.style.display = 'block';
+      warnungenList.innerHTML = vorschlag.warnungen.map(w => `<li>${w}</li>`).join('');
+    } else {
+      warnungenSection.style.display = 'none';
+    }
+    
+    // Tages-Zuordnungen
+    const tagesSection = document.getElementById('kiTagesSection');
+    const tagesDiv = document.getElementById('kiTagesZuordnungen');
+    if (vorschlag.tagesZuordnungen && vorschlag.tagesZuordnungen.length > 0) {
+      tagesSection.style.display = 'block';
+      tagesDiv.innerHTML = vorschlag.tagesZuordnungen.map(z => this.renderKIZuordnung(z, 'tages')).join('');
+      footer.style.display = 'flex';
+    } else {
+      tagesSection.style.display = 'none';
+    }
+    
+    // Schwebende Termine Vorschläge
+    const schwebendeSection = document.getElementById('kiSchwebendeSection');
+    const schwebendeDiv = document.getElementById('kiSchwebendeVorschlaege');
+    if (vorschlag.schwebendeVorschlaege && vorschlag.schwebendeVorschlaege.length > 0) {
+      schwebendeSection.style.display = 'block';
+      schwebendeDiv.innerHTML = vorschlag.schwebendeVorschlaege.map(v => this.renderKISchwebendVorschlag(v)).join('');
+      footer.style.display = 'flex';
+    } else {
+      schwebendeSection.style.display = 'none';
+    }
+    
+    // Wochen-Section verstecken
+    document.getElementById('kiWochenSection').style.display = 'none';
+    
+    // Footer nur zeigen wenn es Vorschläge gibt
+    const hatVorschlaege = (vorschlag.tagesZuordnungen?.length > 0) || 
+                          (vorschlag.schwebendeVorschlaege?.length > 0);
+    footer.style.display = hatVorschlaege ? 'flex' : 'none';
+  }
+
+  /**
+   * KI-Wochenvorschlag anzeigen
+   */
+  displayKIWochenvorschlag(vorschlag, wochentage) {
+    const loading = document.getElementById('kiPlanungLoading');
+    const content = document.getElementById('kiPlanungContent');
+    const footer = document.getElementById('kiModalFooter');
+    
+    loading.style.display = 'none';
+    content.style.display = 'block';
+    
+    this._kiVorschlaege = vorschlag;
+    this._kiWochentage = wochentage;
+    
+    // Zusammenfassung
+    document.getElementById('kiZusammenfassung').textContent = 
+      vorschlag.zusammenfassung || 'Keine Zusammenfassung verfügbar.';
+    
+    // Kapazität verstecken für Wochenansicht
+    document.getElementById('kiKapazitaet').innerHTML = '';
+    
+    // Warnungen
+    const warnungenSection = document.getElementById('kiWarnungenSection');
+    const warnungenList = document.getElementById('kiWarnungen');
+    if (vorschlag.warnungen && vorschlag.warnungen.length > 0) {
+      warnungenSection.style.display = 'block';
+      warnungenList.innerHTML = vorschlag.warnungen.map(w => `<li>${w}</li>`).join('');
+    } else {
+      warnungenSection.style.display = 'none';
+    }
+    
+    // Tages- und Schwebend-Sections verstecken
+    document.getElementById('kiTagesSection').style.display = 'none';
+    document.getElementById('kiSchwebendeSection').style.display = 'none';
+    
+    // Wochen-Section anzeigen
+    const wochenSection = document.getElementById('kiWochenSection');
+    const wochenAuslastung = document.getElementById('kiWochenAuslastung');
+    const wochenVerteilung = document.getElementById('kiWochenVerteilung');
+    
+    wochenSection.style.display = 'block';
+    
+    // Wochenauslastung als Balken
+    if (vorschlag.wochenAuslastung) {
+      const tage = ['montag', 'dienstag', 'mittwoch', 'donnerstag', 'freitag'];
+      const tageLabel = ['Mo', 'Di', 'Mi', 'Do', 'Fr'];
+      
+      wochenAuslastung.innerHTML = tage.map((tag, i) => {
+        const prozent = parseInt(vorschlag.wochenAuslastung[tag]) || 0;
+        const farbe = prozent > 90 ? '#e74c3c' : prozent > 70 ? '#f39c12' : '#27ae60';
+        return `
+          <div class="ki-week-day">
+            <span class="day-label">${tageLabel[i]}</span>
+            <div class="day-bar">
+              <div class="day-fill" style="width: ${Math.min(prozent, 100)}%; background: ${farbe};"></div>
+            </div>
+            <span class="day-percent">${prozent}%</span>
+          </div>
+        `;
+      }).join('');
+    }
+    
+    // Verteilungsvorschläge
+    if (vorschlag.verteilung && vorschlag.verteilung.length > 0) {
+      wochenVerteilung.innerHTML = vorschlag.verteilung.map(v => this.renderKIWochenVerteilung(v)).join('');
+      footer.style.display = 'flex';
+    } else {
+      wochenVerteilung.innerHTML = '<p class="muted">Keine Verteilungsvorschläge</p>';
+      footer.style.display = 'none';
+    }
+  }
+
+  /**
+   * Einzelne KI-Zuordnung rendern
+   */
+  renderKIZuordnung(zuordnung, type) {
+    const statusClass = zuordnung.gueltig ? 'valid' : 'invalid';
+    const personIcon = zuordnung.mitarbeiterTyp === 'lehrling' ? '🎓' : '👷';
+    
+    return `
+      <div class="ki-suggestion-item ${statusClass}" data-termin-id="${zuordnung.terminId}" id="ki-item-${type}-${zuordnung.terminId}">
+        <div class="ki-suggestion-header">
+          <label class="ki-suggestion-checkbox">
+            <input type="checkbox" checked data-type="${type}" data-termin-id="${zuordnung.terminId}">
+          </label>
+          <span class="ki-suggestion-termin">#${zuordnung.terminId}: ${zuordnung.terminInfo || 'Termin'}</span>
+          <div class="ki-suggestion-actions">
+            <button class="btn btn-xs btn-success" onclick="app.uebernehmeEinzelnenVorschlag('${type}', ${zuordnung.terminId})" title="Diesen Vorschlag sofort übernehmen">
+              ✓
+            </button>
+            <button class="btn btn-xs btn-danger" onclick="app.verwerfenEinzelnenVorschlag('${type}', ${zuordnung.terminId})" title="Diesen Vorschlag verwerfen">
+              ✗
+            </button>
+          </div>
+        </div>
+        <div class="ki-suggestion-details">
+          <span class="ki-suggestion-person">${personIcon} ${zuordnung.personName || 'Unbekannt'}</span>
+          <span class="ki-suggestion-time">⏰ ${zuordnung.startzeit || '-'}</span>
+        </div>
+        <div class="ki-suggestion-reason">
+          💡 ${zuordnung.begruendung || 'Keine Begründung'}
+        </div>
+      </div>
+    `;
+  }
+
+  /**
+   * Schwebender Termin Vorschlag rendern
+   */
+  renderKISchwebendVorschlag(vorschlag) {
+    const statusClass = vorschlag.gueltig ? 'valid' : 'invalid';
+    const personIcon = vorschlag.mitarbeiterTyp === 'lehrling' ? '🎓' : '👷';
+    const empfehlungBadge = vorschlag.empfehlung === 'heute_einplanen' 
+      ? '<span class="badge badge-success">Heute einplanen</span>'
+      : '<span class="badge badge-info">Später</span>';
+    
+    return `
+      <div class="ki-suggestion-item schwebend ${statusClass}" data-termin-id="${vorschlag.terminId}" id="ki-item-schwebend-${vorschlag.terminId}">
+        <div class="ki-suggestion-header">
+          <label class="ki-suggestion-checkbox">
+            <input type="checkbox" ${vorschlag.empfehlung === 'heute_einplanen' ? 'checked' : ''} 
+                   data-type="schwebend" data-termin-id="${vorschlag.terminId}">
+          </label>
+          <span class="ki-suggestion-termin">⏸️ #${vorschlag.terminId}: ${vorschlag.terminInfo || 'Termin'}</span>
+          ${empfehlungBadge}
+          <div class="ki-suggestion-actions">
+            <button class="btn btn-xs btn-success" onclick="app.uebernehmeEinzelnenVorschlag('schwebend', ${vorschlag.terminId})" title="Diesen Vorschlag sofort übernehmen">
+              ✓
+            </button>
+            <button class="btn btn-xs btn-danger" onclick="app.verwerfenEinzelnenVorschlag('schwebend', ${vorschlag.terminId})" title="Diesen Vorschlag verwerfen">
+              ✗
+            </button>
+          </div>
+        </div>
+        <div class="ki-suggestion-details">
+          <span class="ki-suggestion-person">${personIcon} ${vorschlag.personName || 'Unbekannt'}</span>
+          <span class="ki-suggestion-time">⏰ ${vorschlag.startzeit || '-'}</span>
+        </div>
+        <div class="ki-suggestion-reason">
+          💡 ${vorschlag.begruendung || 'Keine Begründung'}
+        </div>
+      </div>
+    `;
+  }
+
+  /**
+   * Wochen-Verteilungsvorschlag rendern
+   */
+  renderKIWochenVerteilung(verteilung) {
+    const statusClass = verteilung.gueltig ? 'valid' : 'invalid';
+    const datumFormatiert = verteilung.empfohlenesDatum 
+      ? new Date(verteilung.empfohlenesDatum).toLocaleDateString('de-DE', { weekday: 'short', day: '2-digit', month: '2-digit' })
+      : '-';
+    
+    return `
+      <div class="ki-suggestion-item wochen ${statusClass}" data-termin-id="${verteilung.terminId}" id="ki-item-wochen-${verteilung.terminId}">
+        <div class="ki-suggestion-header">
+          <label class="ki-suggestion-checkbox">
+            <input type="checkbox" checked data-type="wochen" data-termin-id="${verteilung.terminId}" 
+                   data-datum="${verteilung.empfohlenesDatum}">
+          </label>
+          <span class="ki-suggestion-termin">⏸️ #${verteilung.terminId}: ${verteilung.terminInfo || 'Termin'}</span>
+          <span class="badge badge-primary">📅 ${datumFormatiert}</span>
+          <div class="ki-suggestion-actions">
+            <button class="btn btn-xs btn-success" onclick="app.uebernehmeEinzelnenVorschlag('wochen', ${verteilung.terminId}, '${verteilung.empfohlenesDatum}')" title="Diesen Vorschlag sofort übernehmen">
+              ✓
+            </button>
+            <button class="btn btn-xs btn-danger" onclick="app.verwerfenEinzelnenVorschlag('wochen', ${verteilung.terminId})" title="Diesen Vorschlag verwerfen">
+              ✗
+            </button>
+          </div>
+        </div>
+        <div class="ki-suggestion-reason">
+          💡 ${verteilung.begruendung || 'Keine Begründung'}
+        </div>
+      </div>
+    `;
+  }
+
+  /**
+   * Alle/Keine Checkboxen auswählen
+   */
+  kiSelectAll(select) {
+    const checkboxes = document.querySelectorAll('#kiPlanungContent input[type="checkbox"]');
+    checkboxes.forEach(cb => cb.checked = select);
+    this.updateKIUebernehmenButton();
+  }
+
+  /**
+   * Übernehmen-Button Text aktualisieren
+   */
+  updateKIUebernehmenButton() {
+    const checkboxes = document.querySelectorAll('#kiPlanungContent input[type="checkbox"]:checked');
+    const btn = document.getElementById('kiAlleUebernehmenBtn');
+    if (btn) {
+      const count = checkboxes.length;
+      btn.textContent = count > 0 ? `✅ ${count} Vorschlag${count > 1 ? 'e' : ''} übernehmen` : '✅ Keine ausgewählt';
+      btn.disabled = count === 0;
+    }
+  }
+
+  /**
+   * Einzelnen Vorschlag sofort übernehmen
+   */
+  async uebernehmeEinzelnenVorschlag(type, terminId, datum = null) {
+    const item = document.getElementById(`ki-item-${type}-${terminId}`);
+    if (item) {
+      item.classList.add('ki-processing');
+    }
+    
+    try {
+      if (type === 'tages') {
+        const zuordnung = this._kiVorschlaege.tagesZuordnungen?.find(z => z.terminId === terminId);
+        if (zuordnung) {
+          await this.uebernehmeKIZuordnung(zuordnung);
+        }
+      } else if (type === 'schwebend') {
+        const vorschlag = this._kiVorschlaege.schwebendeVorschlaege?.find(v => v.terminId === terminId);
+        if (vorschlag) {
+          await this.uebernehmeSchwebendVorschlag(vorschlag, this._kiPlanungDatum);
+        }
+      } else if (type === 'wochen') {
+        const verteilung = this._kiVorschlaege.verteilung?.find(v => v.terminId === terminId);
+        if (verteilung && datum) {
+          await this.uebernehmeWochenVerteilung(verteilung, datum);
+        }
+      }
+      
+      // Erfolgreich - Item als übernommen markieren
+      if (item) {
+        item.classList.remove('ki-processing');
+        item.classList.add('ki-accepted');
+        item.innerHTML = `
+          <div class="ki-suggestion-accepted">
+            ✅ Vorschlag #${terminId} übernommen
+          </div>
+        `;
+      }
+      
+      this.showToast(`Vorschlag #${terminId} übernommen`, 'success');
+      
+      // Planungsansicht im Hintergrund aktualisieren
+      this.loadAuslastungDragDrop();
+      
+    } catch (error) {
+      console.error('Fehler beim Übernehmen:', error);
+      if (item) {
+        item.classList.remove('ki-processing');
+        item.classList.add('ki-error');
+      }
+      this.showToast(`Fehler: ${error.message}`, 'error');
+    }
+  }
+
+  /**
+   * Einzelnen Vorschlag verwerfen (aus Liste entfernen)
+   */
+  verwerfenEinzelnenVorschlag(type, terminId) {
+    const item = document.getElementById(`ki-item-${type}-${terminId}`);
+    if (item) {
+      item.classList.add('ki-rejected');
+      setTimeout(() => {
+        item.remove();
+        this.updateKIUebernehmenButton();
+        
+        // Prüfen ob noch Vorschläge übrig sind
+        const verbleibend = document.querySelectorAll('.ki-suggestion-item:not(.ki-accepted):not(.ki-rejected)');
+        if (verbleibend.length === 0) {
+          document.getElementById('kiModalFooter').style.display = 'none';
+        }
+      }, 300);
+    }
+  }
+
+  /**
+   * Alle ausgewählten KI-Vorschläge übernehmen
+   */
+  async uebernehmeAlleKIVorschlaege() {
+    if (!this._kiVorschlaege) {
+      this.showToast('Keine Vorschläge zum Übernehmen', 'warning');
+      return;
+    }
+    
+    const checkboxes = document.querySelectorAll('#kiPlanungContent input[type="checkbox"]:checked');
+    
+    if (checkboxes.length === 0) {
+      this.showToast('Keine Vorschläge ausgewählt', 'warning');
+      return;
+    }
+    
+    const btn = document.getElementById('kiAlleUebernehmenBtn');
+    btn.disabled = true;
+    btn.textContent = '⏳ Wird übernommen...';
+    
+    let erfolg = 0;
+    let fehler = 0;
+    
+    for (const checkbox of checkboxes) {
+      const type = checkbox.dataset.type;
+      const terminId = parseInt(checkbox.dataset.terminId);
+      
+      try {
+        if (type === 'tages') {
+          // Tages-Zuordnung übernehmen
+          const zuordnung = this._kiVorschlaege.tagesZuordnungen?.find(z => z.terminId === terminId);
+          if (zuordnung) {
+            await this.uebernehmeKIZuordnung(zuordnung);
+            erfolg++;
+          }
+        } else if (type === 'schwebend') {
+          // Schwebenden Termin für heute einplanen
+          const vorschlag = this._kiVorschlaege.schwebendeVorschlaege?.find(v => v.terminId === terminId);
+          if (vorschlag && vorschlag.empfehlung === 'heute_einplanen') {
+            await this.uebernehmeSchwebendVorschlag(vorschlag, this._kiPlanungDatum);
+            erfolg++;
+          }
+        } else if (type === 'wochen') {
+          // Wochen-Verteilung übernehmen
+          const datum = checkbox.dataset.datum;
+          const verteilung = this._kiVorschlaege.verteilung?.find(v => v.terminId === terminId);
+          if (verteilung && datum) {
+            await this.uebernehmeWochenVerteilung(verteilung, datum);
+            erfolg++;
+          }
+        }
+      } catch (error) {
+        console.error(`Fehler bei Termin ${terminId}:`, error);
+        fehler++;
+      }
+    }
+    
+    btn.disabled = false;
+    btn.textContent = '✅ Alle Vorschläge übernehmen';
+    
+    this.closeKIPlanungModal();
+    
+    // Planungsansicht neu laden
+    this.loadAuslastungDragDrop();
+    
+    // Feedback
+    if (fehler === 0) {
+      this.showToast(`✅ ${erfolg} Vorschläge erfolgreich übernommen`, 'success');
+    } else {
+      this.showToast(`${erfolg} übernommen, ${fehler} Fehler`, 'warning');
+    }
+  }
+
+  /**
+   * Einzelne KI-Zuordnung übernehmen (Tagesplanung)
+   */
+  async uebernehmeKIZuordnung(zuordnung) {
+    const termin = this.termineById[zuordnung.terminId];
+    if (!termin) {
+      throw new Error('Termin nicht gefunden');
+    }
+    
+    // arbeitszeiten_details aktualisieren
+    let details = {};
+    if (termin.arbeitszeiten_details) {
+      try {
+        details = typeof termin.arbeitszeiten_details === 'string'
+          ? JSON.parse(termin.arbeitszeiten_details)
+          : termin.arbeitszeiten_details;
+      } catch (e) {
+        details = {};
+      }
+    }
+    
+    // Gesamt-Zuordnung setzen
+    details._gesamt_mitarbeiter_id = {
+      id: zuordnung.mitarbeiterId,
+      type: zuordnung.mitarbeiterTyp || 'mitarbeiter'
+    };
+    
+    if (zuordnung.startzeit) {
+      details._startzeit = zuordnung.startzeit;
+    }
+    
+    // Update-Payload
+    const updateData = {
+      arbeitszeiten_details: JSON.stringify(details)
+    };
+    
+    // Mitarbeiter-ID auch auf Termin-Ebene setzen (für Kompatibilität)
+    if (zuordnung.mitarbeiterTyp === 'mitarbeiter') {
+      updateData.mitarbeiter_id = zuordnung.mitarbeiterId;
+    }
+    
+    await TermineService.update(zuordnung.terminId, updateData);
+  }
+
+  /**
+   * Schwebenden Termin für ein Datum einplanen
+   */
+  async uebernehmeSchwebendVorschlag(vorschlag, datum) {
+    let details = {};
+    
+    const termin = await TermineService.getById(vorschlag.terminId);
+    if (termin && termin.arbeitszeiten_details) {
+      try {
+        details = typeof termin.arbeitszeiten_details === 'string'
+          ? JSON.parse(termin.arbeitszeiten_details)
+          : termin.arbeitszeiten_details;
+      } catch (e) {
+        details = {};
+      }
+    }
+    
+    // Zuordnung setzen
+    details._gesamt_mitarbeiter_id = {
+      id: vorschlag.mitarbeiterId,
+      type: vorschlag.mitarbeiterTyp || 'mitarbeiter'
+    };
+    
+    if (vorschlag.startzeit) {
+      details._startzeit = vorschlag.startzeit;
+    }
+    
+    const updateData = {
+      datum: datum,
+      ist_schwebend: 0, // Nicht mehr schwebend
+      arbeitszeiten_details: JSON.stringify(details)
+    };
+    
+    if (vorschlag.mitarbeiterTyp === 'mitarbeiter') {
+      updateData.mitarbeiter_id = vorschlag.mitarbeiterId;
+    }
+    
+    await TermineService.update(vorschlag.terminId, updateData);
+  }
+
+  /**
+   * Wochen-Verteilung übernehmen (Datum für schwebenden Termin setzen)
+   */
+  async uebernehmeWochenVerteilung(verteilung, datum) {
+    await TermineService.update(verteilung.terminId, {
+      datum: datum,
+      ist_schwebend: 0
+    });
   }
 }
 

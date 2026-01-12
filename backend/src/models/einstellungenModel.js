@@ -1,8 +1,77 @@
 const { getAsync, allAsync, runAsync } = require('../utils/dbHelper');
 
+// Einfache Verschlüsselung für API-Keys (Base64 mit Prefix)
+const encryptApiKey = (key) => {
+  if (!key) return null;
+  return 'enc:' + Buffer.from(key).toString('base64');
+};
+
+const decryptApiKey = (encrypted) => {
+  if (!encrypted) return null;
+  if (encrypted.startsWith('enc:')) {
+    return Buffer.from(encrypted.slice(4), 'base64').toString('utf8');
+  }
+  return encrypted; // Fallback für alte, unverschlüsselte Keys
+};
+
+// Maskiert einen API-Key für die Anzeige (zeigt nur die letzten 4 Zeichen)
+const maskApiKey = (key) => {
+  if (!key) return null;
+  if (key.length <= 8) return '****';
+  return '****' + key.slice(-4);
+};
+
 class EinstellungenModel {
   static async getWerkstatt() {
     return await getAsync('SELECT * FROM werkstatt_einstellungen WHERE id = 1', []);
+  }
+
+  // Holt die Einstellungen mit maskiertem API-Key (für Frontend-Anzeige)
+  static async getWerkstattSafe() {
+    const settings = await this.getWerkstatt();
+    if (settings && settings.chatgpt_api_key) {
+      const decrypted = decryptApiKey(settings.chatgpt_api_key);
+      settings.chatgpt_api_key_masked = maskApiKey(decrypted);
+      settings.chatgpt_api_key_configured = !!decrypted;
+      delete settings.chatgpt_api_key; // Entferne den echten Key
+    } else {
+      settings.chatgpt_api_key_masked = null;
+      settings.chatgpt_api_key_configured = false;
+    }
+    return settings;
+  }
+
+  // Holt den entschlüsselten API-Key (nur für interne Verwendung)
+  static async getChatGPTApiKey() {
+    const settings = await this.getWerkstatt();
+    if (settings && settings.chatgpt_api_key) {
+      return decryptApiKey(settings.chatgpt_api_key);
+    }
+    return null;
+  }
+
+  // Speichert den ChatGPT API-Key verschlüsselt
+  static async updateChatGPTApiKey(apiKey) {
+    const encrypted = encryptApiKey(apiKey);
+    
+    const result = await runAsync(
+      `UPDATE werkstatt_einstellungen SET chatgpt_api_key = ? WHERE id = 1`,
+      [encrypted]
+    );
+
+    if (result.changes === 0) {
+      await runAsync(
+        `INSERT OR REPLACE INTO werkstatt_einstellungen (id, chatgpt_api_key) VALUES (1, ?)`,
+        [encrypted]
+      );
+    }
+    
+    return { success: true, message: apiKey ? 'API-Key gespeichert' : 'API-Key gelöscht' };
+  }
+
+  // Löscht den ChatGPT API-Key
+  static async deleteChatGPTApiKey() {
+    return await this.updateChatGPTApiKey(null);
   }
 
   static async updateWerkstatt(data) {

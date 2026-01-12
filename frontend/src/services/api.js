@@ -312,6 +312,19 @@ class EinstellungenService {
     return ApiService.get(`/einstellungen/ersatzauto/${datum}`);
   }
 
+  // ChatGPT API-Key Methoden
+  static async updateChatGPTApiKey(apiKey) {
+    return ApiService.put('/einstellungen/chatgpt-api-key', { api_key: apiKey });
+  }
+
+  static async deleteChatGPTApiKey() {
+    return ApiService.delete('/einstellungen/chatgpt-api-key');
+  }
+
+  static async testChatGPTApiKey() {
+    return ApiService.get('/einstellungen/chatgpt-api-key/test');
+  }
+
   static async getAbwesenheit(datum) {
     return ApiService.get(`/abwesenheiten/${datum}`);
   }
@@ -713,6 +726,25 @@ class TeileBestellService {
    */
   static async getStatistik() {
     return ApiService.get('/teile-bestellungen/statistik');
+  }
+}
+
+/**
+ * KI-Planungs-Service für intelligente Terminoptimierung
+ */
+class KIPlanungService {
+  /**
+   * KI-Vorschlag für Tagesplanung abrufen
+   */
+  static async getTagesvorschlag(datum) {
+    return ApiService.get(`/ki-planung/tagesplanung/${datum}`);
+  }
+
+  /**
+   * KI-Vorschlag für Wochenplanung abrufen (schwebende Termine verteilen)
+   */
+  static async getWochenvorschlag(startDatum) {
+    return ApiService.get(`/ki-planung/wochenplanung/${startDatum}`);
   }
 }
 
