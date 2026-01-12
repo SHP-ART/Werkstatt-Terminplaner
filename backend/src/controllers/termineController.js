@@ -1533,6 +1533,16 @@ class TermineController {
     }
   }
 
+  // Alle schwebenden Termine abrufen
+  static async getSchwebend(req, res) {
+    try {
+      const termine = await TermineModel.getSchwebendeTermine();
+      res.json({ termine, anzahl: termine.length });
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  }
+
   // Termin aufteilen (Split)
   static async splitTermin(req, res) {
     try {

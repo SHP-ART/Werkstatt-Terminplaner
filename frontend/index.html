@@ -2369,9 +2369,18 @@
             <div class="teile-neu-bestellung">
                 <h3>➕ Neue Bestellung hinzufügen</h3>
                 <div class="teile-neu-form">
-                    <select id="teileNeuTermin" required>
-                        <option value="">-- Termin auswählen --</option>
-                    </select>
+                    <div class="teile-zuordnung-wrapper">
+                        <select id="teileNeuZuordnung" onchange="app.teileZuordnungGeaendert()">
+                            <option value="termin">📅 Termin</option>
+                            <option value="kunde">👤 Nur Kunde (ohne Termin)</option>
+                        </select>
+                        <select id="teileNeuTermin" required>
+                            <option value="">-- Termin auswählen --</option>
+                        </select>
+                        <select id="teileNeuKunde" style="display: none;">
+                            <option value="">-- Kunde auswählen --</option>
+                        </select>
+                    </div>
                     <input type="text" id="teileNeuName" placeholder="Teilename" required>
                     <input type="text" id="teileNeuOE" placeholder="OE-Nummer (optional)">
                     <input type="number" id="teileNeuMenge" value="1" min="1" placeholder="Menge">

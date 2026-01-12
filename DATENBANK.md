@@ -8,16 +8,19 @@
 
 | Tabelle | Beschreibung |
 |---------|--------------|
-| `kunden` | Kundenstammdaten |
 | `termine` | Alle Werkstatt-Termine |
+| `kunden` | Kundenstammdaten |
+| `fahrzeuge` | Fahrzeugdaten mit VIN-Dekodierung |
+| `teile_bestellungen` | Teile-Bestellungen für Termine |
 | `mitarbeiter` | Mitarbeiter der Werkstatt |
 | `lehrlinge` | Auszubildende/Lehrlinge |
 | `arbeitszeiten` | Vordefinierte Arbeitsschritte mit Zeitschätzungen |
 | `werkstatt_einstellungen` | Globale Einstellungen |
 | `ersatzautos` | Ersatzfahrzeuge für Kunden |
-| `abwesenheiten` | (veraltet) Globale Abwesenheiten |
 | `mitarbeiter_abwesenheiten` | Urlaub/Krankheit pro Mitarbeiter/Lehrling |
 | `termin_phasen` | Mehrtägige Termin-Phasen |
+| `abwesenheiten` | (veraltet) Globale Abwesenheiten |
+| `_schema_meta` | Interne Schema-Versionierung |
 
 ---
 
@@ -43,8 +46,9 @@ Die Haupttabelle für alle Werkstatt-Termine.
 | `status` | TEXT | Status: `geplant`, `wartend`, `in Bearbeitung`, `abgeschlossen`, `storniert` |
 | `startzeit` | TEXT | **Startzeit** im Format "HH:MM" (für Planung) |
 | `endzeit_berechnet` | TEXT | Berechnete Endzeit |
+| `fertigstellung_zeit` | TEXT | Geplante Fertigstellungszeit |
 | `mitarbeiter_id` | INTEGER | FK → mitarbeiter.id (zugewiesener Mitarbeiter) |
-| `arbeitszeiten_details` | TEXT | JSON mit Details pro Arbeit (Zeit, Mitarbeiter, Startzeit) |
+| `arbeitszeiten_details` | TEXT | JSON mit Details pro Arbeit (Zeit, Mitarbeiter, Startzeit, teile_status) |
 | `abholung_typ` | TEXT | `abholung`, `selbst`, `zustell`, `intern`, `stilllegung` |
 | `abholung_details` | TEXT | Zusatzinfos zur Abholung |
 | `abholung_zeit` | TEXT | Abholzeit |
@@ -60,13 +64,14 @@ Die Haupttabelle für alle Werkstatt-Termine.
 | `vin` | TEXT | Fahrzeug-Identnummer |
 | `fahrzeugtyp` | TEXT | Typ des Fahrzeugs |
 | `ist_schwebend` | INTEGER | 0/1 - Schwebender Termin (ohne feste Zeit) |
+| `schwebend_prioritaet` | TEXT | Priorität bei schwebenden Terminen: `hoch`, `mittel`, `niedrig` |
 | `parent_termin_id` | INTEGER | FK für geteilte Termine |
 | `split_teil` | INTEGER | Teil-Nr. bei geteilten Terminen |
 | `muss_bearbeitet_werden` | INTEGER | 0/1 - Markierung für Nacharbeit |
 | `erweiterung_von_id` | INTEGER | FK bei erweiterten Terminen |
 | `ist_erweiterung` | INTEGER | 0/1 - Ist eine Erweiterung? |
 | `erweiterung_typ` | TEXT | Art der Erweiterung |
-| `teile_status` | TEXT | `vorraetig`, `bestellt`, `fehlt` |
+| `teile_status` | TEXT | `vorraetig`, `bestellt`, `bestellen`, `eingetroffen` |
 | `interne_auftragsnummer` | TEXT | Interne Auftragsnummer |
 | `geloescht_am` | DATETIME | Soft-Delete Zeitstempel |
 | `erstellt_am` | DATETIME | Erstellungszeitpunkt |
@@ -76,8 +81,18 @@ Die Haupttabelle für alle Werkstatt-Termine.
 {
   "_gesamt_mitarbeiter_id": { "type": "mitarbeiter", "id": 1 },
   "_startzeit": "08:30",
-  "Ölwechsel": { "zeit": 30, "mitarbeiter_id": 1, "startzeit": "08:30" },
-  "Bremsen prüfen": { "zeit": 45, "mitarbeiter_id": 2, "startzeit": "09:00" }
+  "Ölwechsel": { 
+    "zeit": 30, 
+    "mitarbeiter_id": 1, 
+    "startzeit": "08:30",
+    "teile_status": "bestellen"
+  },
+  "Bremsen prüfen": { 
+    "zeit": 45, 
+    "mitarbeiter_id": 2, 
+    "startzeit": "09:00",
+    "teile_status": "vorraetig"
+  }
 }
 ```
 
@@ -130,9 +145,69 @@ Auszubildende.
 | `arbeitsstunden_pro_tag` | INTEGER | Arbeitszeit pro Tag (Standard: 8) |
 | `nebenzeit_prozent` | REAL | Individuelle Nebenzeit in % |
 | `aufgabenbewaeltigung_prozent` | REAL | Leistungsfähigkeit in % (Standard: 100) |
-| `mittagspause_start` | TEXT | Beginn der Mittagspause |
+| `mittagspause_start` | TEXT | Beginn der Mittagspause (z.B. "12:00") |
+| `berufsschul_wochen` | TEXT | JSON-Array mit Kalenderwochen für Berufsschule (z.B. "[1,3,5,7]") |
 | `aktiv` | INTEGER | 0/1 - Aktiver Lehrling? |
 | `erstellt_am` | DATETIME | Erstellungszeitpunkt |
+
+---
+
+### 🚗 `fahrzeuge`
+
+Fahrzeugdaten mit VIN-Dekodierung und Wartungsinformationen.
+
+| Feld | Typ | Beschreibung |
+|------|-----|--------------|
+| `id` | INTEGER | Primärschlüssel (auto) |
+| `kunde_id` | INTEGER | FK → kunden.id (optional) |
+| `kennzeichen` | TEXT | Fahrzeug-Kennzeichen (**Pflicht**) |
+| `vin` | TEXT | Fahrzeug-Identnummer (VIN) |
+| `vin_roh` | TEXT | Original-VIN vor Normalisierung |
+| `hersteller` | TEXT | Fahrzeughersteller (z.B. "Citroën") |
+| `modell` | TEXT | Modellbezeichnung (z.B. "C4") |
+| `generation` | TEXT | Generation/Baureihe |
+| `baujahr` | INTEGER | Baujahr |
+| `motor_code` | TEXT | Motorcode (z.B. "EB2", "DV6") |
+| `motor_typ` | TEXT | Motortyp (z.B. "1.2 PureTech 130") |
+| `motor_ps` | TEXT | Motorleistung |
+| `getriebe` | TEXT | Getriebetyp (Automatik/Manuell) |
+| `werk` | TEXT | Produktionswerk |
+| `produktionsland` | TEXT | Produktionsland |
+| `karosserie` | TEXT | Karosserieform |
+| `oel_spezifikation` | TEXT | Erforderliche Öl-Spezifikation (z.B. "PSA B71 2290") |
+| `oelfilter_oe` | TEXT | Ölfilter OE-Nummer (z.B. "OE 1109.CK") |
+| `besonderheiten` | TEXT | Fahrzeugspezifische Besonderheiten |
+| `hinweise` | TEXT | Zusätzliche Hinweise für Werkstatt |
+| `erstellt_am` | DATETIME | Erstellungszeitpunkt |
+| `aktualisiert_am` | DATETIME | Letztes Update |
+
+**Hinweis:** Die Fahrzeugdaten werden automatisch per OpenAI VIN-Dekodierung befüllt.
+
+---
+
+### 📦 `teile_bestellungen`
+
+Teile-Bestellungen für Werkstatt-Termine.
+
+| Feld | Typ | Beschreibung |
+|------|-----|--------------|
+| `id` | INTEGER | Primärschlüssel (auto) |
+| `termin_id` | INTEGER | FK → termine.id (**Pflicht**) |
+| `teil_name` | TEXT | Name des Teils (**Pflicht**) |
+| `teil_oe_nummer` | TEXT | OE-Nummer des Teils (optional) |
+| `menge` | INTEGER | Bestellmenge (Standard: 1) |
+| `fuer_arbeit` | TEXT | Für welche Arbeit benötigt |
+| `status` | TEXT | Status: `offen`, `bestellt`, `geliefert` |
+| `bestellt_am` | DATETIME | Wann bestellt |
+| `geliefert_am` | DATETIME | Wann geliefert |
+| `notiz` | TEXT | Zusätzliche Notizen |
+| `erstellt_am` | DATETIME | Erstellungszeitpunkt |
+| `aktualisiert_am` | DATETIME | Letztes Update |
+
+**Teile-Status Workflow:**
+```
+offen → bestellt → geliefert
+```
 
 ---
 
@@ -239,6 +314,23 @@ Für Performance optimiert:
 | `idx_ma_abw_mitarbeiter` | mitarbeiter_abwesenheiten | mitarbeiter_id |
 | `idx_ma_abw_lehrling` | mitarbeiter_abwesenheiten | lehrling_id |
 | `idx_ma_abw_datum` | mitarbeiter_abwesenheiten | von_datum, bis_datum |
+| `idx_teile_termin` | teile_bestellungen | termin_id |
+| `idx_teile_status` | teile_bestellungen | status |
+| `idx_fahrzeuge_kennzeichen` | fahrzeuge | kennzeichen |
+| `idx_fahrzeuge_vin` | fahrzeuge | vin |
+| `idx_fahrzeuge_kunde` | fahrzeuge | kunde_id |
+
+---
+
+## Schema-Versionierung
+
+Die Tabelle `_schema_meta` speichert die aktuelle Schema-Version:
+
+| Key | Value |
+|-----|-------|
+| `schema_version` | `2` |
+
+Bei jedem Server-Start wird geprüft, ob Migrationen nötig sind.
 
 ---
 
@@ -260,8 +352,29 @@ Für Performance optimiert:
 
 ### Teile-Status
 - `vorraetig` - Teile vorhanden
-- `bestellt` - Teile bestellt
-- `fehlt` - Teile fehlen noch
+- `bestellen` - Teile müssen bestellt werden ⚠️
+- `bestellt` - Teile bestellt, warten auf Lieferung 📦
+- `eingetroffen` - Teile eingetroffen/geliefert 🚚
+
+### Teile-Bestellungen Status
+- `offen` - Bestellung noch nicht aufgegeben
+- `bestellt` - Bestellung aufgegeben
+- `geliefert` - Teile geliefert
+
+### Schwebende Termine Priorität
+- `hoch` - Hohe Priorität 🔴
+- `mittel` - Mittlere Priorität 🟡
+- `niedrig` - Niedrige Priorität 🟢
+
+---
+
+## Datenquellen für Teile-Bestellen Tab
+
+Der **🛒 Teile-Bestellen** Tab aggregiert Daten aus mehreren Quellen:
+
+1. **`teile_bestellungen` Tabelle** - Konkrete Teile-Bestellungen
+2. **`termine.teile_status`** - Termine mit `teile_status = 'bestellen'`
+3. **`termine.arbeitszeiten_details`** - Einzelne Arbeiten im JSON mit `teile_status: 'bestellen'`
 
 ---
 
@@ -271,6 +384,36 @@ SQLite-Datenbank sichern:
 ```bash
 cp backend/database/werkstatt.db backup_$(date +%Y%m%d).db
 ```
+
+---
+
+## API-Endpunkte für Teile-Bestellungen
+
+| Methode | Endpunkt | Beschreibung |
+|---------|----------|--------------|
+| GET | `/api/teile-bestellungen` | Alle Bestellungen (mit Filter) |
+| GET | `/api/teile-bestellungen/statistik` | Statistiken (offen/bestellt/geliefert) |
+| GET | `/api/teile-bestellungen/faellig` | Fällige Bestellungen (gruppiert nach Dringlichkeit) |
+| GET | `/api/teile-bestellungen/termin/:id` | Bestellungen für einen Termin |
+| POST | `/api/teile-bestellungen` | Neue Bestellung anlegen |
+| POST | `/api/teile-bestellungen/bulk` | Mehrere Bestellungen |
+| PUT | `/api/teile-bestellungen/:id/status` | Status ändern |
+| PUT | `/api/teile-bestellungen/mark-bestellt` | Mehrere als bestellt markieren |
+| DELETE | `/api/teile-bestellungen/:id` | Bestellung löschen |
+
+---
+
+## API-Endpunkte für Fahrzeuge
+
+| Methode | Endpunkt | Beschreibung |
+|---------|----------|--------------|
+| GET | `/api/fahrzeuge` | Alle Fahrzeuge |
+| GET | `/api/fahrzeuge/:id` | Einzelnes Fahrzeug |
+| GET | `/api/fahrzeuge/kennzeichen/:kennzeichen` | Fahrzeug nach Kennzeichen |
+| POST | `/api/fahrzeuge` | Neues Fahrzeug anlegen |
+| POST | `/api/fahrzeuge/decode` | VIN dekodieren (OpenAI) |
+| PUT | `/api/fahrzeuge/:id` | Fahrzeug aktualisieren |
+| DELETE | `/api/fahrzeuge/:id` | Fahrzeug löschen |
 
 ---
 

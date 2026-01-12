@@ -453,6 +453,32 @@ class TermineModel {
     return await getAsync(query, []);
   }
 
+  // Schwebende Termine als vollständige Liste abrufen
+  static async getSchwebendeTermine() {
+    const query = `
+      SELECT t.*,
+             COALESCE(k.name, t.kunde_name) as kunde_name,
+             COALESCE(k.telefon, t.kunde_telefon) as kunde_telefon,
+             m.name as mitarbeiter_name
+      FROM termine t
+      LEFT JOIN kunden k ON t.kunde_id = k.id
+      LEFT JOIN mitarbeiter m ON t.mitarbeiter_id = m.id
+      WHERE t.geloescht_am IS NULL 
+        AND COALESCE(t.ist_schwebend, 0) = 1
+        AND t.arbeit != 'Fahrzeug aus Import'
+        AND t.arbeit != 'Fahrzeug hinzugefügt'
+      ORDER BY 
+        CASE t.schwebend_prioritaet 
+          WHEN 'hoch' THEN 1 
+          WHEN 'mittel' THEN 2 
+          WHEN 'niedrig' THEN 3 
+          ELSE 2 
+        END,
+        t.erstellt_am DESC
+    `;
+    return await allAsync(query, []);
+  }
+
   // Auslastung inklusive schwebender Termine (für Übersicht)
   static async getAuslastungMitSchwebend(datum) {
     const query = `

@@ -38,15 +38,57 @@ const getFaellige = async (req, res) => {
     const bestellungen = await TeileBestellung.getFaellige(tage);
     const schwebende = await TeileBestellung.getSchwebende();
     
+    // Termine mit teile_status = 'bestellen' im Termin-Feld (ohne konkrete Teile-Einträge)
+    const termineMitTeileStatus = await TeileBestellung.getTermineMitTeileStatusBestellen(tage);
+    const schwebendeTermineMitTeileStatus = await TeileBestellung.getSchwbendeTermineMitTeileStatusBestellen();
+    
+    // NEU: Termine mit teile_status = 'bestellen' im arbeitszeiten_details JSON
+    const termineMitArbeitenTeileStatus = await TeileBestellung.getTermineMitArbeitenTeileStatusBestellen(tage);
+    
     // Gruppiere nach Dringlichkeit
     const heute = new Date();
     heute.setHours(0, 0, 0, 0);
     
     const gruppiert = {
+      kundenDirekt: [], // Bestellungen direkt einem Kunden zugeordnet (ohne Termin)
       schwebend: [], // Schwebende Termine (ohne festes Datum)
       dringend: [], // Termin heute oder morgen
       dieseWoche: [], // 2-5 Tage
       naechsteWoche: [] // 6+ Tage
+    };
+    
+    // Hilfsfunktion zum Gruppieren
+    const gruppiereNachDringlichkeit = (b) => {
+      // Bestellungen ohne Termin, nur mit Kunde
+      if (!b.termin_id && b.kunde_id) {
+        b.dringlichkeit = 'kundenDirekt';
+        gruppiert.kundenDirekt.push(b);
+        return;
+      }
+      
+      if (b.ist_schwebend) {
+        b.dringlichkeit = 'schwebend';
+        b.schwebend_prioritaet = b.schwebend_prioritaet || 'mittel';
+        gruppiert.schwebend.push(b);
+        return;
+      }
+      
+      const terminDatum = new Date(b.termin_datum);
+      terminDatum.setHours(0, 0, 0, 0);
+      const diffTage = Math.ceil((terminDatum - heute) / (1000 * 60 * 60 * 24));
+      
+      // Überfällige (Vergangenheit) oder heute/morgen = dringend
+      if (diffTage <= 1) {
+        b.dringlichkeit = 'dringend';
+        b.istUeberfaellig = diffTage < 0;
+        gruppiert.dringend.push(b);
+      } else if (diffTage <= 5) {
+        b.dringlichkeit = 'dieseWoche';
+        gruppiert.dieseWoche.push(b);
+      } else {
+        b.dringlichkeit = 'naechsteWoche';
+        gruppiert.naechsteWoche.push(b);
+      }
     };
     
     // Schwebende Bestellungen hinzufügen (nach Priorität sortiert)
@@ -56,30 +98,35 @@ const getFaellige = async (req, res) => {
       gruppiert.schwebend.push(b);
     });
     
-    // Normale Termine gruppieren
-    bestellungen.forEach(b => {
-      const terminDatum = new Date(b.termin_datum);
-      terminDatum.setHours(0, 0, 0, 0);
-      const diffTage = Math.ceil((terminDatum - heute) / (1000 * 60 * 60 * 24));
-      
-      if (diffTage <= 1) {
-        b.dringlichkeit = 'dringend';
-        gruppiert.dringend.push(b);
-      } else if (diffTage <= 5) {
-        b.dringlichkeit = 'dieseWoche';
-        gruppiert.dieseWoche.push(b);
-      } else {
-        b.dringlichkeit = 'naechsteWoche';
-        gruppiert.naechsteWoche.push(b);
-      }
+    // Schwebende Termine mit teile_status = 'bestellen' hinzufügen
+    schwebendeTermineMitTeileStatus.forEach(b => {
+      b.dringlichkeit = 'schwebend';
+      b.schwebend_prioritaet = b.schwebend_prioritaet || 'mittel';
+      gruppiert.schwebend.push(b);
     });
     
-    const alleBestellungen = [...schwebende, ...bestellungen];
+    // Normale Bestellungen gruppieren
+    bestellungen.forEach(gruppiereNachDringlichkeit);
+    
+    // Termine mit teile_status = 'bestellen' (nicht schwebend) gruppieren
+    termineMitTeileStatus.filter(b => !b.ist_schwebend).forEach(gruppiereNachDringlichkeit);
+    
+    // NEU: Termine mit arbeitszeiten_details teile_status = 'bestellen' gruppieren
+    termineMitArbeitenTeileStatus.forEach(gruppiereNachDringlichkeit);
+    
+    const alleBestellungen = [
+      ...schwebende, 
+      ...bestellungen, 
+      ...termineMitTeileStatus.filter(b => !b.ist_schwebend),
+      ...schwebendeTermineMitTeileStatus,
+      ...termineMitArbeitenTeileStatus
+    ];
     
     res.json({
       gruppiert,
       alle: alleBestellungen,
       statistik: {
+        kundenDirekt: gruppiert.kundenDirekt.length,
         schwebend: gruppiert.schwebend.length,
         dringend: gruppiert.dringend.length,
         dieseWoche: gruppiert.dieseWoche.length,
@@ -131,17 +178,23 @@ const getById = async (req, res) => {
 /**
  * Neue Bestellung anlegen
  * POST /api/teile-bestellungen
+ * Kann entweder mit termin_id ODER kunde_id angelegt werden (mindestens eins erforderlich)
  */
 const create = async (req, res) => {
   try {
-    const { termin_id, teil_name, teil_oe_nummer, menge, fuer_arbeit, notiz } = req.body;
+    const { termin_id, kunde_id, teil_name, teil_oe_nummer, menge, fuer_arbeit, notiz } = req.body;
     
-    if (!termin_id || !teil_name) {
-      return res.status(400).json({ error: 'termin_id und teil_name sind erforderlich' });
+    if (!teil_name) {
+      return res.status(400).json({ error: 'teil_name ist erforderlich' });
+    }
+    
+    if (!termin_id && !kunde_id) {
+      return res.status(400).json({ error: 'Entweder termin_id oder kunde_id muss angegeben werden' });
     }
     
     const result = await TeileBestellung.create({
-      termin_id,
+      termin_id: termin_id || null,
+      kunde_id: kunde_id || null,
       teil_name,
       teil_oe_nummer,
       menge,
@@ -168,10 +221,13 @@ const createBulk = async (req, res) => {
       return res.status(400).json({ error: 'bestellungen Array ist erforderlich' });
     }
     
-    // Validierung
+    // Validierung: teil_name erforderlich, und entweder termin_id oder kunde_id
     for (const b of bestellungen) {
-      if (!b.termin_id || !b.teil_name) {
-        return res.status(400).json({ error: 'Alle Bestellungen benötigen termin_id und teil_name' });
+      if (!b.teil_name) {
+        return res.status(400).json({ error: 'Alle Bestellungen benötigen teil_name' });
+      }
+      if (!b.termin_id && !b.kunde_id) {
+        return res.status(400).json({ error: 'Alle Bestellungen benötigen entweder termin_id oder kunde_id' });
       }
     }
     

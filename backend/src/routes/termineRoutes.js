@@ -9,7 +9,8 @@ router.get('/papierkorb', TermineController.getDeleted);
 router.post('/:id/restore', TermineController.restore);
 router.delete('/:id/permanent', TermineController.permanentDelete);
 
-// Termin-Split und Schwebend Routes
+// Schwebende Termine Route (GET für Liste, POST für einzelnen Termin setzen)
+router.get('/schwebend', TermineController.getSchwebend);
 router.post('/:id/schwebend', TermineController.setSchwebend);
 router.post('/:id/split', TermineController.splitTermin);
 router.get('/:id/split-termine', TermineController.getSplitTermine);

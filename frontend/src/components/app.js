@@ -17695,7 +17695,38 @@ class App {
     
     // Doppelklick zum Bearbeiten
     bar.addEventListener('dblclick', () => {
-      this.showTab('termin-formular');
+      // Wechsle zum Termine-Tab und öffne das Formular
+      document.querySelectorAll('.tab-content').forEach(content => {
+        content.classList.remove('active');
+      });
+      document.querySelectorAll('.tab-button').forEach(button => {
+        button.classList.remove('active');
+      });
+      
+      const termineTab = document.getElementById('termine');
+      const termineTabButton = document.querySelector('.tab-button[data-tab="termine"]');
+      
+      if (termineTab && termineTabButton) {
+        termineTab.classList.add('active');
+        termineTabButton.classList.add('active');
+        
+        // Zum "Neuer Termin" Sub-Tab wechseln
+        termineTab.querySelectorAll('.sub-tab-content').forEach(content => {
+          content.classList.remove('active');
+        });
+        termineTab.querySelectorAll('.sub-tab-button').forEach(btn => {
+          btn.classList.remove('active');
+        });
+        
+        const neuerTerminContent = document.getElementById('neuerTermin');
+        const neuerTerminButton = termineTab.querySelector('.sub-tab-button[data-subtab="neuerTermin"]');
+        
+        if (neuerTerminContent && neuerTerminButton) {
+          neuerTerminContent.classList.add('active');
+          neuerTerminButton.classList.add('active');
+        }
+      }
+      
       this.loadTerminInForm(termin.id);
     });
 
@@ -19907,23 +19938,30 @@ class App {
    * Event-Listener für Teile-Bestellen Tab
    */
   setupTeileBestellenEventListeners() {
-    // Filter-Checkboxen
+    // Filter-Checkboxen mit Debounce
     const filterOffen = document.getElementById('teileFilterOffen');
     const filterBestellt = document.getElementById('teileFilterBestellt');
     const filterGeliefert = document.getElementById('teileFilterGeliefert');
     const filterZeitraum = document.getElementById('teileFilterZeitraum');
     
+    // Debounce-Funktion um zu schnelle Aufrufe zu vermeiden
+    let teileFilterTimeout = null;
+    const debouncedLoad = () => {
+      if (teileFilterTimeout) clearTimeout(teileFilterTimeout);
+      teileFilterTimeout = setTimeout(() => this.loadTeileBestellungen(), 300);
+    };
+    
     if (filterOffen) {
-      filterOffen.addEventListener('change', () => this.loadTeileBestellungen());
+      filterOffen.addEventListener('change', debouncedLoad);
     }
     if (filterBestellt) {
-      filterBestellt.addEventListener('change', () => this.loadTeileBestellungen());
+      filterBestellt.addEventListener('change', debouncedLoad);
     }
     if (filterGeliefert) {
-      filterGeliefert.addEventListener('change', () => this.loadTeileBestellungen());
+      filterGeliefert.addEventListener('change', debouncedLoad);
     }
     if (filterZeitraum) {
-      filterZeitraum.addEventListener('change', () => this.loadTeileBestellungen());
+      filterZeitraum.addEventListener('change', debouncedLoad);
     }
   }
 
@@ -20773,6 +20811,13 @@ class App {
     const container = document.getElementById('teileBestellListe');
     if (!container) return;
     
+    // Verhindere gleichzeitige Aufrufe
+    if (this._loadingTeile) {
+      console.log('Teile-Bestellungen werden bereits geladen, überspringe...');
+      return;
+    }
+    this._loadingTeile = true;
+    
     container.innerHTML = '<div class="teile-loading"><span class="spinner"></span> Lade Teile-Bestellungen...</div>';
     
     try {
@@ -20809,6 +20854,8 @@ class App {
           <button onclick="app.loadTeileBestellungen()" class="btn btn-secondary">🔄 Erneut versuchen</button>
         </div>
       `;
+    } finally {
+      this._loadingTeile = false;
     }
   }
 
@@ -20829,6 +20876,12 @@ class App {
       if (b.status === 'geliefert' && !filterGeliefert) return false;
       return true;
     };
+    
+    // Kunden-Direkt (ohne Termin)
+    const kundenDirektGefiltert = (gruppiert.kundenDirekt || []).filter(filterBestellung);
+    if (kundenDirektGefiltert.length > 0) {
+      html += this.renderTeileGruppe('👤 NUR KUNDE (ohne Termin)', 'kunden-direkt', kundenDirektGefiltert, false, true);
+    }
     
     // Schwebende Termine (ohne festes Datum)
     const schwebendGefiltert = (gruppiert.schwebend || []).filter(filterBestellung);
@@ -20873,23 +20926,27 @@ class App {
    * @param {string} klasse - CSS-Klasse
    * @param {Array} bestellungen - Bestellungen in der Gruppe
    * @param {boolean} istSchwebend - Ob es schwebende Termine sind
+   * @param {boolean} istKundenDirekt - Ob es Kunden-direkt Bestellungen sind (ohne Termin)
    */
-  renderTeileGruppe(titel, klasse, bestellungen, istSchwebend = false) {
-    // Gruppiere nach Termin
+  renderTeileGruppe(titel, klasse, bestellungen, istSchwebend = false, istKundenDirekt = false) {
+    // Gruppiere nach Termin oder Kunde
     const nachTermin = {};
     bestellungen.forEach(b => {
-      const key = b.termin_id;
+      // Bei Kunden-direkt: gruppiere nach kunde_id statt termin_id
+      const key = istKundenDirekt ? `kunde_${b.kunde_id}` : b.termin_id;
       if (!nachTermin[key]) {
         nachTermin[key] = {
           termin: {
-            id: b.termin_id,
+            id: istKundenDirekt ? null : b.termin_id,
+            kundeId: b.kunde_id || b.direkt_kunde_id,
             datum: b.termin_datum,
-            kunde: b.kunde_name,
+            kunde: b.kunde_name || b.direkt_kunde_name,
             kennzeichen: b.kunde_kennzeichen || b.termin_kennzeichen,
             fahrzeug: b.termin_fahrzeug,
             arbeiten: b.termin_arbeiten,
             istSchwebend: b.ist_schwebend,
-            prioritaet: b.schwebend_prioritaet || 'mittel'
+            prioritaet: b.schwebend_prioritaet || 'mittel',
+            istKundenDirekt: istKundenDirekt
           },
           teile: []
         };
@@ -20905,9 +20962,11 @@ class App {
     Object.values(nachTermin).forEach(gruppe => {
       const t = gruppe.termin;
       
-      // Für schwebende Termine: Priorität anzeigen statt Datum
+      // Für Kunden-direkt: Keine Datum-Anzeige
       let datumOderPrio;
-      if (istSchwebend || t.istSchwebend) {
+      if (t.istKundenDirekt) {
+        datumOderPrio = '👤 Ohne Termin';
+      } else if (istSchwebend || t.istSchwebend) {
         const prioIcons = { hoch: '🔴', mittel: '🟡', niedrig: '🟢' };
         const prioLabels = { hoch: 'Hoch', mittel: 'Mittel', niedrig: 'Niedrig' };
         datumOderPrio = `${prioIcons[t.prioritaet] || '🟡'} Prio: ${prioLabels[t.prioritaet] || 'Mittel'}`;
@@ -20923,7 +20982,7 @@ class App {
       }) : 'Unbekannt';
       
       html += `
-        <div class="teile-termin-gruppe ${istSchwebend ? 'schwebend-termin' : ''}">
+        <div class="teile-termin-gruppe ${istSchwebend ? 'schwebend-termin' : ''} ${t.istKundenDirekt ? 'kunden-direkt-termin' : ''}">
           <div class="teile-termin-header">
             <span class="termin-datum">${datumOderPrio}</span>
             <span class="termin-kunde">${t.kunde || 'Unbekannt'}</span>
@@ -20933,32 +20992,57 @@ class App {
       `;
       
       gruppe.teile.forEach(teil => {
+        // Prüfen ob es eine Teile-Status-Markierung vom Termin ist (kein echter Eintrag in teile_bestellungen)
+        const istTeileStatusMarkierung = teil.ist_teile_status_markierung === true;
+        // Prüfen ob es eine Arbeiten-Teile-Status-Markierung ist (aus arbeitszeiten_details JSON)
+        const istArbeitenTeileStatus = teil.ist_arbeiten_teile_status === true;
+        
         const statusClass = teil.status === 'bestellt' ? 'bestellt' : teil.status === 'geliefert' ? 'geliefert' : 'offen';
         const statusIcon = teil.status === 'bestellt' ? '📦' : teil.status === 'geliefert' ? '✅' : '⬜';
         
-        html += `
-          <div class="teile-item ${statusClass}" data-id="${teil.id}">
-            <label class="teile-checkbox">
-              <input type="checkbox" class="teil-select" data-id="${teil.id}" ${teil.status !== 'offen' ? 'disabled' : ''}>
-              <span class="status-icon">${statusIcon}</span>
-            </label>
-            <div class="teile-info">
-              <span class="teil-name">${teil.teil_name}</span>
-              ${teil.teil_oe_nummer ? `<span class="teil-oe">OE: ${teil.teil_oe_nummer}</span>` : ''}
-              ${teil.menge > 1 ? `<span class="teil-menge">x${teil.menge}</span>` : ''}
+        if (istTeileStatusMarkierung || istArbeitenTeileStatus) {
+          // Spezielle Anzeige für Termine mit teile_status = 'bestellen'
+          const arbeitName = istArbeitenTeileStatus ? teil.fuer_arbeit : '';
+          html += `
+            <div class="teile-item teile-status-markierung ${statusClass}" data-termin-id="${teil.termin_id}">
+              <div class="teile-status-icon">⚠️</div>
+              <div class="teile-info">
+                <span class="teil-name teil-name-warnung">${istArbeitenTeileStatus ? `Teile für: ${arbeitName}` : 'Teile müssen bestellt werden'}</span>
+                <span class="teil-hinweis">Klicke auf "Bearbeiten", um konkrete Teile hinzuzufügen</span>
+              </div>
+              <div class="teile-arbeit">${teil.fuer_arbeit || ''}</div>
+              <div class="teile-aktionen-item">
+                <button class="btn-mini btn-primary" onclick="app.terminBearbeitenAusTeile(${teil.termin_id})" title="Termin bearbeiten">✏️ Bearbeiten</button>
+                <button class="btn-mini btn-success" onclick="app.arbeitenTeileStatusAufLoesen(${teil.termin_id}, '${(teil.fuer_arbeit || '').replace(/'/g, "\\'")}')" title="Als erledigt markieren">✅ Erledigt</button>
+              </div>
             </div>
-            <div class="teile-arbeit">${teil.fuer_arbeit || ''}</div>
-            <div class="teile-aktionen-item">
-              ${teil.status === 'offen' ? `
-                <button class="btn-mini btn-primary" onclick="app.teileStatusAendern(${teil.id}, 'bestellt')" title="Als bestellt markieren">📦</button>
-              ` : ''}
-              ${teil.status === 'bestellt' ? `
-                <button class="btn-mini btn-success" onclick="app.teileStatusAendern(${teil.id}, 'geliefert')" title="Als geliefert markieren">✅</button>
-              ` : ''}
-              <button class="btn-mini btn-danger" onclick="app.teileLoeschen(${teil.id})" title="Löschen">🗑️</button>
+          `;
+        } else {
+          // Normale Teile-Bestellung
+          html += `
+            <div class="teile-item ${statusClass}" data-id="${teil.id}">
+              <label class="teile-checkbox">
+                <input type="checkbox" class="teil-select" data-id="${teil.id}" ${teil.status !== 'offen' ? 'disabled' : ''}>
+                <span class="status-icon">${statusIcon}</span>
+              </label>
+              <div class="teile-info">
+                <span class="teil-name">${teil.teil_name}</span>
+                ${teil.teil_oe_nummer ? `<span class="teil-oe">OE: ${teil.teil_oe_nummer}</span>` : ''}
+                ${teil.menge > 1 ? `<span class="teil-menge">x${teil.menge}</span>` : ''}
+              </div>
+              <div class="teile-arbeit">${teil.fuer_arbeit || ''}</div>
+              <div class="teile-aktionen-item">
+                ${teil.status === 'offen' ? `
+                  <button class="btn-mini btn-primary" onclick="app.teileStatusAendern(${teil.id}, 'bestellt')" title="Als bestellt markieren">📦</button>
+                ` : ''}
+                ${teil.status === 'bestellt' ? `
+                  <button class="btn-mini btn-success" onclick="app.teileStatusAendern(${teil.id}, 'geliefert')" title="Als geliefert markieren">✅</button>
+                ` : ''}
+                <button class="btn-mini btn-danger" onclick="app.teileLoeschen(${teil.id})" title="Löschen">🗑️</button>
+              </div>
             </div>
-          </div>
-        `;
+          `;
+        }
       });
       
       html += `
@@ -21023,6 +21107,53 @@ class App {
       }
     } catch (error) {
       console.error('Fehler beim Laden der Termine:', error);
+    }
+    
+    // Lade auch Kunden für das Kunden-Dropdown
+    this.loadKundenFuerTeileDropdown();
+  }
+
+  /**
+   * Lädt Kunden für das Dropdown bei neuer Bestellung (ohne Termin)
+   */
+  async loadKundenFuerTeileDropdown() {
+    const select = document.getElementById('teileNeuKunde');
+    if (!select) return;
+    
+    try {
+      const response = await ApiService.get('/kunden');
+      const kunden = response.kunden || response || [];
+      
+      select.innerHTML = '<option value="">-- Kunde auswählen --</option>';
+      
+      kunden.forEach(k => {
+        const name = k.name || 'Unbekannt';
+        const kennzeichen = k.kennzeichen ? ` (${k.kennzeichen})` : '';
+        select.innerHTML += `<option value="${k.id}">👤 ${name}${kennzeichen}</option>`;
+      });
+    } catch (error) {
+      console.error('Fehler beim Laden der Kunden:', error);
+    }
+  }
+
+  /**
+   * Wechselt zwischen Termin- und Kunden-Zuordnung
+   */
+  teileZuordnungGeaendert() {
+    const zuordnung = document.getElementById('teileNeuZuordnung')?.value || 'termin';
+    const terminSelect = document.getElementById('teileNeuTermin');
+    const kundeSelect = document.getElementById('teileNeuKunde');
+    
+    if (zuordnung === 'termin') {
+      terminSelect.style.display = '';
+      kundeSelect.style.display = 'none';
+      terminSelect.required = true;
+      kundeSelect.required = false;
+    } else {
+      terminSelect.style.display = 'none';
+      kundeSelect.style.display = '';
+      terminSelect.required = false;
+      kundeSelect.required = true;
     }
   }
 
@@ -21094,27 +21225,47 @@ class App {
 
   /**
    * Neue Bestellung hinzufügen
+   * Unterstützt sowohl Termin- als auch Kunden-Zuordnung
    */
   async teileNeuHinzufuegen() {
+    const zuordnung = document.getElementById('teileNeuZuordnung')?.value || 'termin';
     const terminId = document.getElementById('teileNeuTermin')?.value;
+    const kundeId = document.getElementById('teileNeuKunde')?.value;
     const name = document.getElementById('teileNeuName')?.value?.trim();
     const oe = document.getElementById('teileNeuOE')?.value?.trim();
     const menge = parseInt(document.getElementById('teileNeuMenge')?.value) || 1;
     const arbeit = document.getElementById('teileNeuArbeit')?.value?.trim();
     
-    if (!terminId || !name) {
-      this.showToast('Bitte Termin und Teilename angeben', 'warning');
+    if (!name) {
+      this.showToast('Bitte Teilename angeben', 'warning');
+      return;
+    }
+    
+    if (zuordnung === 'termin' && !terminId) {
+      this.showToast('Bitte Termin auswählen', 'warning');
+      return;
+    }
+    
+    if (zuordnung === 'kunde' && !kundeId) {
+      this.showToast('Bitte Kunde auswählen', 'warning');
       return;
     }
     
     try {
-      await TeileBestellService.create({
-        termin_id: parseInt(terminId),
+      const bestellDaten = {
         teil_name: name,
         teil_oe_nummer: oe || null,
         menge: menge,
         fuer_arbeit: arbeit || null
-      });
+      };
+      
+      if (zuordnung === 'termin') {
+        bestellDaten.termin_id = parseInt(terminId);
+      } else {
+        bestellDaten.kunde_id = parseInt(kundeId);
+      }
+      
+      await TeileBestellService.create(bestellDaten);
       
       this.showToast('Bestellung hinzugefügt', 'success');
       
@@ -21171,6 +21322,116 @@ class App {
     `);
     printWindow.document.close();
     printWindow.print();
+  }
+
+  /**
+   * Öffnet den Termin zur Bearbeitung aus dem Teile-Bestellen Tab
+   * @param {number} terminId - ID des Termins
+   */
+  async terminBearbeitenAusTeile(terminId) {
+    try {
+      // Lade den Termin zuerst
+      const termin = await ApiService.get(`/termine/${terminId}`);
+      
+      if (!termin) {
+        this.showToast('Termin nicht gefunden', 'error');
+        return;
+      }
+      
+      // Speichere Termin im Cache
+      this.termineById[terminId] = termin;
+      
+      // Öffne Termin-Details-Modal direkt
+      await this.showTerminDetails(terminId);
+      
+      this.showToast('Termin geladen - hier können Sie Teile hinzufügen', 'info');
+    } catch (error) {
+      console.error('Fehler beim Laden des Termins:', error);
+      this.showToast('Fehler beim Laden des Termins', 'error');
+    }
+  }
+
+  /**
+   * Setzt den teile_status eines Termins auf 'vorraetig' (als erledigt markieren)
+   * @param {number} terminId - ID des Termins
+   */
+  async teileStatusAufLoesen(terminId) {
+    try {
+      // Bestätigung anfordern
+      if (!confirm('Soll der Teile-Status auf "Vorrätig" gesetzt werden?')) {
+        return;
+      }
+      
+      // Termin laden
+      const termin = await ApiService.get(`/termine/${terminId}`);
+      
+      if (!termin) {
+        this.showToast('Termin nicht gefunden', 'error');
+        return;
+      }
+      
+      // Teile-Status auf vorrätig setzen
+      await ApiService.put(`/termine/${terminId}`, {
+        ...termin,
+        teile_status: 'vorraetig'
+      });
+      
+      this.showToast('Teile-Status aktualisiert', 'success');
+      this.loadTeileBestellungen();
+    } catch (error) {
+      console.error('Fehler beim Aktualisieren:', error);
+      this.showToast('Fehler: ' + error.message, 'error');
+    }
+  }
+
+  /**
+   * Setzt den teile_status einer Arbeit im arbeitszeiten_details JSON auf 'vorraetig'
+   * @param {number} terminId - ID des Termins
+   * @param {string} arbeitName - Name der Arbeit
+   */
+  async arbeitenTeileStatusAufLoesen(terminId, arbeitName) {
+    try {
+      // Bestätigung anfordern
+      if (!confirm(`Soll der Teile-Status für "${arbeitName}" auf "Vorrätig" gesetzt werden?`)) {
+        return;
+      }
+      
+      // Termin laden
+      const termin = await ApiService.get(`/termine/${terminId}`);
+      
+      if (!termin) {
+        this.showToast('Termin nicht gefunden', 'error');
+        return;
+      }
+      
+      // arbeitszeiten_details parsen und aktualisieren
+      let details = {};
+      try {
+        details = typeof termin.arbeitszeiten_details === 'string' 
+          ? JSON.parse(termin.arbeitszeiten_details || '{}')
+          : (termin.arbeitszeiten_details || {});
+      } catch (e) {
+        console.error('Fehler beim Parsen von arbeitszeiten_details:', e);
+        details = {};
+      }
+      
+      // Teile-Status für die spezifische Arbeit auf 'vorraetig' setzen
+      if (details[arbeitName] && typeof details[arbeitName] === 'object') {
+        details[arbeitName].teile_status = 'vorraetig';
+      }
+      
+      // Termin aktualisieren
+      await ApiService.put(`/termine/${terminId}`, {
+        ...termin,
+        arbeitszeiten_details: JSON.stringify(details)
+      });
+      
+      this.showToast('Teile-Status auf "Vorrätig" gesetzt ✅', 'success');
+      this.loadTeileBestellungen();
+    } catch (error) {
+      console.error('Fehler beim Aktualisieren:', error);
+      this.showToast('Fehler: ' + error.message, 'error');
+    }
   }
 }
 

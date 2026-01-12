@@ -18,11 +18,14 @@ class TeileBestellung {
           t.datum as termin_datum,
           t.arbeit as termin_arbeiten,
           t.fahrzeugtyp as termin_fahrzeug,
-          k.name as kunde_name,
-          k.kennzeichen as kunde_kennzeichen
+          COALESCE(k.name, k_direkt.name) as kunde_name,
+          COALESCE(k.kennzeichen, k_direkt.kennzeichen) as kunde_kennzeichen,
+          k_direkt.id as direkt_kunde_id,
+          k_direkt.name as direkt_kunde_name
         FROM teile_bestellungen tb
         LEFT JOIN termine t ON tb.termin_id = t.id
         LEFT JOIN kunden k ON t.kunde_id = k.id
+        LEFT JOIN kunden k_direkt ON tb.kunde_id = k_direkt.id
         WHERE 1=1
       `;
       const params = [];
@@ -67,7 +70,7 @@ class TeileBestellung {
   }
 
   /**
-   * Fällige Bestellungen abrufen (Termine in den nächsten X Tagen)
+   * Fällige Bestellungen abrufen (Termine in den nächsten X Tagen + offene aus der Vergangenheit + Kunden-direkt)
    */
   static getFaellige(tage = 7) {
     return new Promise((resolve, reject) => {
@@ -84,19 +87,29 @@ class TeileBestellung {
           t.fahrzeugtyp as termin_fahrzeug,
           t.ist_schwebend as ist_schwebend,
           t.schwebend_prioritaet as schwebend_prioritaet,
-          k.name as kunde_name,
-          k.kennzeichen as kunde_kennzeichen,
+          COALESCE(k.name, k_direkt.name) as kunde_name,
+          COALESCE(k.kennzeichen, k_direkt.kennzeichen) as kunde_kennzeichen,
+          k_direkt.id as direkt_kunde_id,
+          k_direkt.name as direkt_kunde_name,
           julianday(t.datum) - julianday('now') as tage_bis_termin
         FROM teile_bestellungen tb
         LEFT JOIN termine t ON tb.termin_id = t.id
         LEFT JOIN kunden k ON t.kunde_id = k.id
+        LEFT JOIN kunden k_direkt ON tb.kunde_id = k_direkt.id
         WHERE tb.status IN ('offen', 'bestellt')
-          AND t.datum >= ?
-          AND t.datum <= ?
-          AND (t.geloescht_am IS NULL OR t.geloescht_am = '')
-          AND t.status != 'abgeschlossen'
-          AND (t.ist_schwebend IS NULL OR t.ist_schwebend = 0)
-        ORDER BY t.datum ASC, tb.status DESC
+          AND (
+            -- Termine ab heute bis zum Zeitraum
+            (t.datum >= ? AND t.datum <= ?)
+            OR
+            -- Bestellungen direkt einem Kunden zugeordnet (ohne Termin)
+            (tb.termin_id IS NULL AND tb.kunde_id IS NOT NULL AND tb.status = 'offen')
+          )
+          AND (t.geloescht_am IS NULL OR t.geloescht_am = '' OR t.id IS NULL)
+          AND (t.ist_schwebend IS NULL OR t.ist_schwebend = 0 OR t.id IS NULL)
+        ORDER BY 
+          CASE WHEN tb.termin_id IS NULL THEN 2 ELSE 1 END,
+          t.datum ASC, 
+          tb.status DESC
       `;
       
       db.all(sql, [heute, bisStr], (err, rows) => {
@@ -183,10 +196,14 @@ class TeileBestellung {
           tb.*,
           t.datum as termin_datum,
           t.arbeit as termin_arbeiten,
-          k.name as kunde_name
+          COALESCE(k.name, k_direkt.name) as kunde_name,
+          COALESCE(k.kennzeichen, k_direkt.kennzeichen) as kunde_kennzeichen,
+          k_direkt.id as direkt_kunde_id,
+          k_direkt.name as direkt_kunde_name
         FROM teile_bestellungen tb
         LEFT JOIN termine t ON tb.termin_id = t.id
         LEFT JOIN kunden k ON t.kunde_id = k.id
+        LEFT JOIN kunden k_direkt ON tb.kunde_id = k_direkt.id
         WHERE tb.id = ?
       `;
       
@@ -202,17 +219,19 @@ class TeileBestellung {
 
   /**
    * Neue Bestellung anlegen
+   * Kann entweder einem Termin (termin_id) oder direkt einem Kunden (kunde_id) zugeordnet werden
    */
   static create(data) {
     return new Promise((resolve, reject) => {
       const sql = `
         INSERT INTO teile_bestellungen 
-        (termin_id, teil_name, teil_oe_nummer, menge, fuer_arbeit, status, notiz)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
+        (termin_id, kunde_id, teil_name, teil_oe_nummer, menge, fuer_arbeit, status, notiz)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
       `;
       
       const params = [
-        data.termin_id,
+        data.termin_id || null,
+        data.kunde_id || null,
         data.teil_name,
         data.teil_oe_nummer || null,
         data.menge || 1,
@@ -446,6 +465,223 @@ class TeileBestellung {
           reject(err);
         } else {
           resolve(row?.anzahl || 0);
+        }
+      });
+    });
+  }
+
+  /**
+   * Termine abrufen, die teile_status = 'bestellen' haben (ohne konkrete Teile-Einträge)
+   * Diese Termine werden als "generelle Bestellanforderung" angezeigt
+   */
+  static getTermineMitTeileStatusBestellen(tage = 7) {
+    return new Promise((resolve, reject) => {
+      const heute = new Date().toISOString().split('T')[0];
+      const bis = new Date();
+      bis.setDate(bis.getDate() + tage);
+      const bisStr = bis.toISOString().split('T')[0];
+      
+      // Hole Termine mit teile_status = 'bestellen', die KEINE Einträge in teile_bestellungen haben
+      const sql = `
+        SELECT 
+          t.id as termin_id,
+          t.datum as termin_datum,
+          t.arbeit as termin_arbeiten,
+          t.fahrzeugtyp as termin_fahrzeug,
+          t.ist_schwebend as ist_schwebend,
+          t.schwebend_prioritaet as schwebend_prioritaet,
+          t.kennzeichen as termin_kennzeichen,
+          t.teile_status,
+          k.name as kunde_name,
+          k.kennzeichen as kunde_kennzeichen,
+          julianday(t.datum) - julianday('now') as tage_bis_termin,
+          'teile_bestellen' as quelle
+        FROM termine t
+        LEFT JOIN kunden k ON t.kunde_id = k.id
+        LEFT JOIN teile_bestellungen tb ON t.id = tb.termin_id
+        WHERE t.teile_status = 'bestellen'
+          AND ((t.datum >= ? AND t.datum <= ?) OR t.ist_schwebend = 1)
+          AND (t.geloescht_am IS NULL OR t.geloescht_am = '')
+          AND t.status != 'abgeschlossen'
+          AND tb.id IS NULL
+        ORDER BY 
+          t.ist_schwebend DESC,
+          t.datum ASC
+      `;
+      
+      db.all(sql, [heute, bisStr], (err, rows) => {
+        if (err) {
+          reject(err);
+        } else {
+          // Formatiere die Ergebnisse so, dass sie wie Teile-Bestellungen aussehen
+          const formattiert = (rows || []).map(row => ({
+            id: `termin_${row.termin_id}`, // Pseudo-ID für Frontend
+            termin_id: row.termin_id,
+            teil_name: '⚠️ Teile müssen bestellt werden',
+            teil_oe_nummer: null,
+            menge: 1,
+            fuer_arbeit: row.termin_arbeiten,
+            status: 'offen',
+            termin_datum: row.termin_datum,
+            termin_arbeiten: row.termin_arbeiten,
+            termin_fahrzeug: row.termin_fahrzeug,
+            ist_schwebend: row.ist_schwebend,
+            schwebend_prioritaet: row.schwebend_prioritaet,
+            termin_kennzeichen: row.termin_kennzeichen,
+            kunde_name: row.kunde_name,
+            kunde_kennzeichen: row.kunde_kennzeichen,
+            tage_bis_termin: row.tage_bis_termin,
+            ist_teile_status_markierung: true // Marker für Frontend
+          }));
+          resolve(formattiert);
+        }
+      });
+    });
+  }
+
+  /**
+   * Schwebende Termine mit teile_status = 'bestellen' (ohne konkrete Teile-Einträge)
+   */
+  static getSchwbendeTermineMitTeileStatusBestellen() {
+    return new Promise((resolve, reject) => {
+      const sql = `
+        SELECT 
+          t.id as termin_id,
+          t.datum as termin_datum,
+          t.arbeit as termin_arbeiten,
+          t.fahrzeugtyp as termin_fahrzeug,
+          t.ist_schwebend as ist_schwebend,
+          t.schwebend_prioritaet as schwebend_prioritaet,
+          t.kennzeichen as termin_kennzeichen,
+          t.teile_status,
+          k.name as kunde_name,
+          k.kennzeichen as kunde_kennzeichen,
+          'teile_bestellen' as quelle
+        FROM termine t
+        LEFT JOIN kunden k ON t.kunde_id = k.id
+        LEFT JOIN teile_bestellungen tb ON t.id = tb.termin_id
+        WHERE t.teile_status = 'bestellen'
+          AND t.ist_schwebend = 1
+          AND (t.geloescht_am IS NULL OR t.geloescht_am = '')
+          AND t.status != 'abgeschlossen'
+          AND tb.id IS NULL
+        ORDER BY 
+          CASE t.schwebend_prioritaet 
+            WHEN 'hoch' THEN 1 
+            WHEN 'mittel' THEN 2 
+            WHEN 'niedrig' THEN 3 
+            ELSE 2 
+          END
+      `;
+      
+      db.all(sql, [], (err, rows) => {
+        if (err) {
+          reject(err);
+        } else {
+          const formattiert = (rows || []).map(row => ({
+            id: `termin_${row.termin_id}`,
+            termin_id: row.termin_id,
+            teil_name: '⚠️ Teile müssen bestellt werden',
+            teil_oe_nummer: null,
+            menge: 1,
+            fuer_arbeit: row.termin_arbeiten,
+            status: 'offen',
+            termin_datum: row.termin_datum,
+            termin_arbeiten: row.termin_arbeiten,
+            termin_fahrzeug: row.termin_fahrzeug,
+            ist_schwebend: row.ist_schwebend,
+            schwebend_prioritaet: row.schwebend_prioritaet,
+            termin_kennzeichen: row.termin_kennzeichen,
+            kunde_name: row.kunde_name,
+            kunde_kennzeichen: row.kunde_kennzeichen,
+            ist_teile_status_markierung: true
+          }));
+          resolve(formattiert);
+        }
+      });
+    });
+  }
+
+  /**
+   * Termine mit teile_status = 'bestellen' im arbeitszeiten_details JSON-Feld
+   * Diese werden pro Arbeit als separate Einträge zurückgegeben
+   */
+  static getTermineMitArbeitenTeileStatusBestellen(tage = 7) {
+    return new Promise((resolve, reject) => {
+      const heute = new Date().toISOString().split('T')[0];
+      const bis = new Date();
+      bis.setDate(bis.getDate() + tage);
+      const bisStr = bis.toISOString().split('T')[0];
+      
+      const sql = `
+        SELECT 
+          t.id as termin_id,
+          t.datum as termin_datum,
+          t.arbeit as termin_arbeiten,
+          t.fahrzeugtyp as termin_fahrzeug,
+          t.ist_schwebend as ist_schwebend,
+          t.schwebend_prioritaet as schwebend_prioritaet,
+          t.kennzeichen as termin_kennzeichen,
+          t.arbeitszeiten_details,
+          k.name as kunde_name,
+          k.kennzeichen as kunde_kennzeichen,
+          julianday(t.datum) - julianday('now') as tage_bis_termin
+        FROM termine t
+        LEFT JOIN kunden k ON t.kunde_id = k.id
+        WHERE t.arbeitszeiten_details LIKE '%"teile_status":"bestellen"%'
+          AND (
+            (t.datum >= ? AND t.datum <= ?)
+            OR t.ist_schwebend = 1
+          )
+          AND (t.geloescht_am IS NULL OR t.geloescht_am = '')
+          AND t.status != 'abgeschlossen'
+        ORDER BY 
+          t.ist_schwebend DESC,
+          t.datum ASC
+      `;
+      
+      db.all(sql, [heute, bisStr], (err, rows) => {
+        if (err) {
+          reject(err);
+        } else {
+          const ergebnisse = [];
+          
+          (rows || []).forEach(row => {
+            try {
+              const details = JSON.parse(row.arbeitszeiten_details || '{}');
+              
+              // Durchsuche alle Arbeiten nach teile_status = 'bestellen'
+              for (const [arbeitName, arbeitData] of Object.entries(details)) {
+                if (arbeitName.startsWith('_')) continue; // Interne Felder überspringen
+                
+                if (typeof arbeitData === 'object' && arbeitData.teile_status === 'bestellen') {
+                  ergebnisse.push({
+                    id: `arbeit_${row.termin_id}_${arbeitName.replace(/[^a-zA-Z0-9]/g, '_')}`,
+                    termin_id: row.termin_id,
+                    teil_name: `⚠️ ${arbeitName}`,
+                    teil_oe_nummer: null,
+                    menge: 1,
+                    fuer_arbeit: arbeitName,
+                    status: 'offen',
+                    termin_datum: row.termin_datum,
+                    termin_arbeiten: row.termin_arbeiten,
+                    termin_fahrzeug: row.termin_fahrzeug,
+                    ist_schwebend: row.ist_schwebend,
+                    schwebend_prioritaet: row.schwebend_prioritaet,
+                    termin_kennzeichen: row.termin_kennzeichen,
+                    kunde_name: row.kunde_name,
+                    kunde_kennzeichen: row.kunde_kennzeichen,
+                    tage_bis_termin: row.tage_bis_termin,
+                    ist_arbeiten_teile_status: true // Marker für Frontend
+                  });
+                }
+              }
+            } catch (e) {
+              console.error('Fehler beim Parsen von arbeitszeiten_details:', e);
+            }
+          });
+          
+          resolve(ergebnisse);
         }
       });
     });
