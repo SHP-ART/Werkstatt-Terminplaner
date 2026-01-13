@@ -28,6 +28,8 @@ router.post('/validate', TermineController.validate);
 router.get('/vorschlaege', TermineController.getVorschlaege);
 router.get('/bringzeit-ueberschneidungen', TermineController.getBringzeitUeberschneidungen);
 router.get('/duplikat-check', TermineController.checkDuplikate);
+router.get('/teile-status', TermineController.getTeileStatus);
+router.get('/dropdown', TermineController.getDropdownData);
 
 // Standard CRUD-Routes (müssen NACH spezifischen Routes stehen)
 router.get('/', TermineController.getAll);

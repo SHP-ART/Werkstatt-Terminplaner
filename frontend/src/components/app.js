@@ -11381,9 +11381,11 @@ class App {
   // Ersatzautos laden und anzeigen
   async loadErsatzautos() {
     try {
-      const [autos, heuteVerfuegbarkeit] = await Promise.all([
+      const heute = this.formatDateLocal(new Date());
+      const [autos, heuteVerfuegbarkeit, aktuelleBuchungen] = await Promise.all([
         ErsatzautosService.getAll(),
-        ErsatzautosService.getVerfuegbarkeit(this.formatDateLocal(new Date()))
+        ErsatzautosService.getVerfuegbarkeit(heute),
+        ErsatzautosService.getAktuelleBuchungen()
       ]);
       
       // Dashboard-Karten aktualisieren
@@ -11397,8 +11399,8 @@ class App {
       if (vergebenEl) vergebenEl.textContent = heuteVerfuegbarkeit.vergeben;
       if (gesperrtEl) gesperrtEl.textContent = heuteVerfuegbarkeit.gesperrt || 0;
       
-      // Schnellzugriff-Kacheln rendern
-      this.renderErsatzautoKacheln(autos.filter(a => a.aktiv));
+      // Schnellzugriff-Kacheln rendern mit Buchungs-Info
+      this.renderErsatzautoKacheln(autos.filter(a => a.aktiv), heuteVerfuegbarkeit.vergeben, aktuelleBuchungen);
       
       // Liste rendern
       this.renderErsatzautoListe(autos);
@@ -11414,7 +11416,7 @@ class App {
   }
 
   // Schnellzugriff-Kacheln für Ersatzautos rendern
-  renderErsatzautoKacheln(autos) {
+  renderErsatzautoKacheln(autos, anzahlVergeben = 0, aktuelleBuchungen = []) {
     const container = document.getElementById('ersatzautoKacheln');
     if (!container) return;
     
@@ -11429,6 +11431,16 @@ class App {
     
     const heute = this.formatDateLocal(new Date());
     
+    // Zähle nicht-gesperrte Autos
+    const nichtGesperrteAutos = autos.filter(auto => {
+      const gesperrtBis = auto.gesperrt_bis;
+      const istAbgelaufen = gesperrtBis && gesperrtBis < heute;
+      return !(auto.manuell_gesperrt === 1 && !istAbgelaufen);
+    });
+    
+    // Markiere X Autos als "vergeben" (die nicht-gesperrten, von oben nach unten)
+    let vergebeneCount = 0;
+    
     container.innerHTML = autos.map(auto => {
       // Prüfen ob Sperrung abgelaufen ist
       const gesperrtBis = auto.gesperrt_bis;
@@ -11437,14 +11449,38 @@ class App {
       const sperrgrund = auto.sperrgrund || null;
       const gesperrtSeit = auto.gesperrt_seit || null;
       
-      const statusClass = istGesperrt ? 'gesperrt' : 'verfuegbar';
-      let statusText = istGesperrt 
-        ? (gesperrtBis ? `Gesperrt bis ${new Date(gesperrtBis).toLocaleDateString('de-DE')}` : 'Gesperrt') 
-        : 'Verfügbar';
-      const icon = istGesperrt ? '🔴' : '🟢';
-      const hinweisText = istGesperrt 
-        ? '🔓 Klicken zum Freigeben' 
-        : '🔒 Klicken zum Sperren';
+      // Prüfe ob dieses Auto als "vergeben" markiert werden soll
+      // (nicht manuell gesperrt, aber durch Termine belegt)
+      let istVergeben = false;
+      let vergebenBuchung = null;
+      if (!istGesperrt && vergebeneCount < anzahlVergeben) {
+        istVergeben = true;
+        vergebeneCount++;
+        // Finde passende Buchung zur Anzeige (erste verfügbare)
+        if (aktuelleBuchungen && aktuelleBuchungen.length >= vergebeneCount) {
+          vergebenBuchung = aktuelleBuchungen[vergebeneCount - 1];
+        }
+      }
+      
+      // Status-Klasse und Texte bestimmen
+      let statusClass, statusText, icon, hinweisText;
+      
+      if (istGesperrt) {
+        statusClass = 'gesperrt';
+        statusText = gesperrtBis ? `Gesperrt bis ${new Date(gesperrtBis).toLocaleDateString('de-DE')}` : 'Gesperrt';
+        icon = '🔴';
+        hinweisText = '🔓 Klicken zum Freigeben';
+      } else if (istVergeben) {
+        statusClass = 'vergeben';
+        statusText = 'Vergeben';
+        icon = '🟠';
+        hinweisText = '📋 Durch Termin belegt';
+      } else {
+        statusClass = 'verfuegbar';
+        statusText = 'Verfügbar';
+        icon = '🟢';
+        hinweisText = '🔒 Klicken zum Sperren';
+      }
       
       // Sperrgrund-Anzeige
       let sperrgrundHtml = '';
@@ -11458,13 +11494,51 @@ class App {
         gesperrtSeitHtml = `<div class="kachel-gesperrt-seit">📅 Seit: ${new Date(gesperrtSeit).toLocaleDateString('de-DE')}</div>`;
       }
       
+      // Vergeben-Info anzeigen
+      let vergebenInfoHtml = '';
+      let vergebenKunde = '';
+      let vergebenKennzeichen = '';
+      let vergebenTerminId = null;
+      if (istVergeben && vergebenBuchung) {
+        vergebenKunde = vergebenBuchung.kunde_name || 'Kunde';
+        vergebenKennzeichen = vergebenBuchung.kennzeichen || '';
+        vergebenTerminId = vergebenBuchung.id;
+        vergebenInfoHtml = `
+          <div class="kachel-vergeben-info">
+            <div>👤 ${vergebenKunde}</div>
+            <div>🚗 ${vergebenKennzeichen}</div>
+          </div>`;
+      }
+      
+      // Klick-Handler - auch für vergebene Autos (zum Freigeben wenn Kunde früher zurückbringt)
+      let onclickHandler;
+      if (istVergeben && vergebenTerminId) {
+        // Escape Sonderzeichen für onclick
+        const safeAutoName = (auto.name || '').replace(/'/g, "\\'");
+        const safeKunde = (vergebenKunde || '').replace(/'/g, "\\'");
+        const safeKennzeichen = vergebenKennzeichen || '';
+        onclickHandler = `onclick="app.handleVergebenesAutoKlick(${auto.id}, '${safeAutoName}', '${auto.kennzeichen}', '${safeKunde}', '${safeKennzeichen}', ${vergebenTerminId})"`;
+      } else if (istVergeben) {
+        // Vergeben aber keine Buchung gefunden - kein Klick-Handler
+        onclickHandler = '';
+      } else {
+        const safeAutoName = (auto.name || '').replace(/'/g, "\\'");
+        onclickHandler = `onclick="app.toggleErsatzautoVerfuegbarkeit(${auto.id}, '${safeAutoName}', '${auto.kennzeichen}', ${istGesperrt})"`;
+      }
+      
+      // Hinweistext anpassen
+      if (istVergeben) {
+        hinweisText = vergebenTerminId ? '🔓 Klicken für frühere Rückgabe' : '📋 Durch Termin belegt';
+      }
+      
       return `
         <div class="ersatzauto-kachel ${statusClass}" 
              data-id="${auto.id}" 
              data-name="${auto.name}"
              data-kennzeichen="${auto.kennzeichen}"
              data-gesperrt="${istGesperrt ? '1' : '0'}"
-             onclick="app.toggleErsatzautoVerfuegbarkeit(${auto.id}, '${auto.name}', '${auto.kennzeichen}', ${istGesperrt})">
+             data-vergeben="${istVergeben ? '1' : '0'}"
+             ${onclickHandler}>
           <div class="kachel-header">
             <span class="kachel-icon">${icon}</span>
             <span class="kachel-status">${statusText}</span>
@@ -11474,12 +11548,38 @@ class App {
           ${auto.typ ? `<div class="kachel-typ">📋 ${auto.typ}</div>` : ''}
           ${sperrgrundHtml}
           ${gesperrtSeitHtml}
+          ${vergebenInfoHtml}
           <div class="kachel-hinweis">
             <span>${hinweisText}</span>
           </div>
         </div>
       `;
     }).join('');
+  }
+
+  // Handler für Klick auf vergebenes Ersatzauto
+  async handleVergebenesAutoKlick(autoId, autoName, autoKennzeichen, kundeName, kundeKennzeichen, terminId) {
+    const bestaetigung = confirm(
+      `🚗 Ersatzauto früher zurückgegeben?\n\n` +
+      `Das Fahrzeug "${autoName}" (${autoKennzeichen}) ist aktuell vergeben an:\n` +
+      `👤 ${kundeName}\n` +
+      `🚗 ${kundeKennzeichen}\n\n` +
+      `Wenn der Kunde das Auto früher zurückgebracht hat, können Sie es hier als verfügbar markieren.\n\n` +
+      `Möchten Sie das Auto als VERFÜGBAR markieren?`
+    );
+    
+    if (!bestaetigung) return;
+    
+    try {
+      // Buchung im Termin als zurückgegeben markieren (setzt ersatzauto_bis_datum auf gestern)
+      await ErsatzautosService.markiereAlsZurueckgegeben(terminId);
+      alert(`✅ ${autoName} (${autoKennzeichen}) ist jetzt wieder verfügbar.`);
+      this.loadErsatzautos();
+      this.loadDashboard();
+    } catch (error) {
+      console.error('Fehler beim Freigeben:', error);
+      alert('❌ Fehler beim Freigeben. Bitte versuchen Sie es erneut.');
+    }
   }
 
   // Ersatzauto-Verfügbarkeit umschalten mit Popup für Sperrung
@@ -12260,27 +12360,87 @@ class App {
     }
   }
 
-  // Aktuelle Buchungen laden und anzeigen
+  // Aktuelle Buchungen laden und anzeigen (inkl. manuell gesperrte Autos)
   async loadErsatzautoBuchungen() {
     const container = document.getElementById('ersatzautoBuchungen');
     if (!container) return;
     
     try {
-      const buchungen = await ErsatzautosService.getAktuelleBuchungen();
+      const heute = this.formatDateLocal(new Date());
       
-      if (!buchungen || buchungen.length === 0) {
+      // Lade Buchungen UND alle Ersatzautos parallel
+      const [buchungen, alleAutos] = await Promise.all([
+        ErsatzautosService.getAktuelleBuchungen(),
+        ErsatzautosService.getAll()
+      ]);
+      
+      // Finde manuell gesperrte Autos (aktive Sperrung)
+      const gesperrteAutos = alleAutos.filter(auto => {
+        if (!auto.aktiv) return false;
+        if (auto.manuell_gesperrt !== 1) return false;
+        // Prüfe ob Sperrung abgelaufen
+        if (auto.gesperrt_bis && auto.gesperrt_bis < heute) return false;
+        return true;
+      });
+      
+      const hatBuchungen = buchungen && buchungen.length > 0;
+      const hatGesperrte = gesperrteAutos && gesperrteAutos.length > 0;
+      
+      if (!hatBuchungen && !hatGesperrte) {
         container.innerHTML = `
           <div class="ersatzauto-empty" style="padding: 20px; text-align: center; background: #f0fdf4; border-radius: 8px; border: 1px solid #bbf7d0;">
             <div style="font-size: 2rem; margin-bottom: 10px;">✅</div>
-            <p style="margin: 0; color: #166534;">Aktuell sind keine Ersatzautos vergeben.</p>
+            <p style="margin: 0; color: #166534;">Aktuell sind keine Ersatzautos vergeben oder gesperrt.</p>
           </div>
         `;
         return;
       }
       
-      const heute = this.formatDateLocal(new Date());
+      let html = '';
       
-      container.innerHTML = buchungen.map(buchung => {
+      // Zuerst manuell gesperrte Autos anzeigen
+      if (hatGesperrte) {
+        html += gesperrteAutos.map(auto => {
+          const gesperrtBis = auto.gesperrt_bis 
+            ? new Date(auto.gesperrt_bis).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' })
+            : 'Unbefristet';
+          const gesperrtSeit = auto.gesperrt_seit
+            ? new Date(auto.gesperrt_seit).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' })
+            : heute;
+          
+          return `
+            <div class="buchung-card gesperrt" style="display: flex; gap: 15px; padding: 15px; background: #fef2f2; border-radius: 8px; margin-bottom: 10px; border-left: 4px solid #ef4444;">
+              <div class="buchung-icon" style="font-size: 2rem;">🔒</div>
+              <div class="buchung-info" style="flex: 1;">
+                <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px;">
+                  <div>
+                    <strong style="font-size: 1.1rem; color: #b91c1c;">${auto.name}</strong>
+                    <span style="margin-left: 10px; color: #6b7280; font-size: 0.85rem;">${auto.kennzeichen}</span>
+                  </div>
+                  <span style="background: #ef4444; color: white; padding: 2px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: 600;">GESPERRT</span>
+                </div>
+                ${auto.sperrgrund ? `
+                <div style="font-size: 0.9rem; color: #b91c1c; margin-bottom: 8px;">
+                  <span style="color: #9ca3af;">⛔ Grund:</span>
+                  <strong>${auto.sperrgrund}</strong>
+                </div>` : ''}
+                <div style="display: flex; flex-wrap: wrap; gap: 15px; font-size: 0.85rem; color: #6b7280;">
+                  <div>
+                    <span style="color: #9ca3af;">📅 Seit:</span> ${gesperrtSeit}
+                  </div>
+                  <div>
+                    <span style="color: #9ca3af;">📅 Bis:</span> ${gesperrtBis}
+                  </div>
+                </div>
+              </div>
+            </div>
+          `;
+        }).join('');
+      }
+      
+      // Dann Buchungen durch Termine anzeigen
+      if (hatBuchungen) {
+        html += buchungen.map(buchung => {
         const vonDatum = new Date(buchung.datum);
         const bisDatum = buchung.bis_datum ? new Date(buchung.bis_datum) : vonDatum;
         
@@ -12342,6 +12502,9 @@ class App {
           </div>
         `;
       }).join('');
+      }
+      
+      container.innerHTML = html;
     } catch (error) {
       console.error('Fehler beim Laden der Buchungen:', error);
       container.innerHTML = '<div class="loading" style="color: #ef4444;">Fehler beim Laden der Buchungen</div>';
@@ -15818,47 +15981,11 @@ class App {
     `;
 
     try {
-      const termine = await TermineService.getAll();
+      // OPTIMIERT: Nutze den neuen Backend-Endpoint der bereits gefiltert und geparst ist
+      const response = await TermineService.getTeileStatus();
       
-      // Filtere Termine mit Teile-Status
-      const termineWithTeile = [];
-      
-      for (const termin of termine) {
-        if (termin.arbeitszeiten_details) {
-          try {
-            const details = typeof termin.arbeitszeiten_details === 'string' 
-              ? JSON.parse(termin.arbeitszeiten_details) 
-              : termin.arbeitszeiten_details;
-            
-            // Prüfe jeden Arbeitsschritt auf Teile-Status
-            for (const [arbeit, data] of Object.entries(details)) {
-              if (arbeit.startsWith('_')) continue; // Interne Felder überspringen
-              
-              const teileStatus = typeof data === 'object' && data.teile_status 
-                ? data.teile_status 
-                : null;
-              
-              if (teileStatus && teileStatus !== '') {
-                termineWithTeile.push({
-                  ...termin,
-                  arbeit_name: arbeit,
-                  teile_status: teileStatus
-                });
-              }
-            }
-          } catch (e) {
-            console.error('JSON Parse Fehler für Termin', termin.termin_nr, e);
-          }
-        }
-      }
-
-      // Statistiken berechnen
-      const stats = {
-        bestellen: termineWithTeile.filter(t => t.teile_status === 'bestellen').length,
-        bestellt: termineWithTeile.filter(t => t.teile_status === 'bestellt').length,
-        eingetroffen: termineWithTeile.filter(t => t.teile_status === 'eingetroffen').length,
-        vorraetig: termineWithTeile.filter(t => t.teile_status === 'vorraetig').length
-      };
+      const termineWithTeile = response.termine || [];
+      const stats = response.stats || { bestellen: 0, bestellt: 0, eingetroffen: 0, vorraetig: 0 };
 
       // Statistik-Karten aktualisieren
       const bestellenEl = document.getElementById('teileBestellenCount');
@@ -15873,11 +16000,6 @@ class App {
 
       // Speichern für Filter
       this.teileStatusData = termineWithTeile;
-
-      // Bug 2 Fix: Befülle termineById-Cache für Modal-Zugriff
-      for (const termin of termine) {
-        this.termineById[termin.id] = termin;
-      }
 
       // Tabelle rendern
       this.renderTeileStatusTable(termineWithTeile);
@@ -20964,24 +21086,25 @@ class App {
       
       const response = await TeileBestellService.getFaellige(tage);
       
-      // Statistik aktualisieren
+      // Statistik aktualisieren (alles aus einer Response)
       if (response.statistik) {
         const schwebendEl = document.getElementById('teileSchwebendCount');
         if (schwebendEl) schwebendEl.textContent = response.statistik.schwebend || 0;
-        document.getElementById('teileDringendCount').textContent = response.statistik.dringend || 0;
-        document.getElementById('teileDieseWocheCount').textContent = response.statistik.dieseWoche || 0;
-        document.getElementById('teileNaechsteWocheCount').textContent = response.statistik.naechsteWoche || 0;
+        const dringendEl = document.getElementById('teileDringendCount');
+        if (dringendEl) dringendEl.textContent = response.statistik.dringend || 0;
+        const dieseWocheEl = document.getElementById('teileDieseWocheCount');
+        if (dieseWocheEl) dieseWocheEl.textContent = response.statistik.dieseWoche || 0;
+        const naechsteWocheEl = document.getElementById('teileNaechsteWocheCount');
+        if (naechsteWocheEl) naechsteWocheEl.textContent = response.statistik.naechsteWoche || 0;
+        const bestelltEl = document.getElementById('teileBestelltCount');
+        if (bestelltEl) bestelltEl.textContent = response.statistik.bestellt || 0;
       }
-      
-      // Bestellt-Count separat laden
-      const statistik = await TeileBestellService.getStatistik();
-      document.getElementById('teileBestelltCount').textContent = statistik.bestellt || 0;
       
       // Bestellungen gruppiert anzeigen
       this.renderTeileBestellungen(response.gruppiert, container);
       
-      // Termine für Dropdown laden
-      this.loadTermineFuerTeileDropdown();
+      // Dropdowns werden LAZY geladen - erst wenn "Neue Bestellung" geklickt wird
+      // this.loadTermineFuerTeileDropdown(); // Entfernt für Performance
       
     } catch (error) {
       console.error('Fehler beim Laden der Teile-Bestellungen:', error);
@@ -21193,6 +21316,36 @@ class App {
   }
 
   /**
+   * Lazy-Loading für Termine-Dropdown (nur beim ersten Klick)
+   */
+  async loadTermineFuerTeileDropdownLazy() {
+    const select = document.getElementById('teileNeuTermin');
+    if (!select) return;
+    
+    // Nur laden wenn noch nicht geladen
+    if (this._termineDropdownGeladen) return;
+    this._termineDropdownGeladen = true;
+    
+    select.innerHTML = '<option value="">⏳ Lade Termine...</option>';
+    await this.loadTermineFuerTeileDropdown();
+  }
+
+  /**
+   * Lazy-Loading für Kunden-Dropdown (nur beim ersten Klick)
+   */
+  async loadKundenFuerTeileDropdownLazy() {
+    const select = document.getElementById('teileNeuKunde');
+    if (!select) return;
+    
+    // Nur laden wenn noch nicht geladen
+    if (this._kundenDropdownGeladen) return;
+    this._kundenDropdownGeladen = true;
+    
+    select.innerHTML = '<option value="">⏳ Lade Kunden...</option>';
+    await this.loadKundenFuerTeileDropdown();
+  }
+
+  /**
    * Lädt Termine für das Dropdown bei neuer Bestellung
    */
   async loadTermineFuerTeileDropdown() {
@@ -21200,19 +21353,10 @@ class App {
     if (!select) return;
     
     try {
-      // Lade anstehende Termine (inkl. schwebende)
-      const heute = new Date().toISOString().split('T')[0];
-      const response = await ApiService.get(`/termine?von=${heute}&limit=50`);
-      const termine = response.termine || response || [];
-      
-      // Lade auch schwebende Termine
-      let schwebende = [];
-      try {
-        const schwebendResponse = await ApiService.get('/termine/schwebend');
-        schwebende = schwebendResponse.termine || schwebendResponse || [];
-      } catch (e) {
-        console.log('Keine schwebenden Termine gefunden');
-      }
+      // OPTIMIERT: Nutze kompakten Dropdown-Endpoint (nur ID, Name, Datum)
+      const response = await ApiService.get('/termine/dropdown');
+      const termine = response.termine || [];
+      const schwebende = response.schwebende || [];
       
       select.innerHTML = '<option value="">-- Termin auswählen --</option>';
       
@@ -21220,34 +21364,27 @@ class App {
       if (schwebende.length > 0) {
         select.innerHTML += '<optgroup label="⏸️ Schwebende Termine">';
         schwebende.forEach(t => {
-          if (t.status !== 'abgeschlossen' && !t.geloescht_am) {
-            const kunde = t.kunde_name || t.name || 'Unbekannt';
-            const prioIcon = { hoch: '🔴', mittel: '🟡', niedrig: '🟢' }[t.schwebend_prioritaet] || '🟡';
-            select.innerHTML += `<option value="${t.id}">${prioIcon} ${kunde} (${t.fahrzeugtyp || t.kennzeichen || 'Fahrzeug'})</option>`;
-          }
+          const kunde = t.kunde_name || 'Unbekannt';
+          const prioIcon = { hoch: '🔴', mittel: '🟡', niedrig: '🟢' }[t.schwebend_prioritaet] || '🟡';
+          select.innerHTML += `<option value="${t.id}">${prioIcon} ${kunde} (${t.fahrzeugtyp || t.kennzeichen || 'Fahrzeug'})</option>`;
         });
         select.innerHTML += '</optgroup>';
       }
       
       // Normale Termine
-      const normaleTermine = termine.filter(t => !t.ist_schwebend);
-      if (normaleTermine.length > 0) {
+      if (termine.length > 0) {
         select.innerHTML += '<optgroup label="📅 Geplante Termine">';
-        normaleTermine.forEach(t => {
-          if (t.status !== 'abgeschlossen' && !t.geloescht_am) {
-            const datum = new Date(t.datum).toLocaleDateString('de-DE');
-            const kunde = t.kunde_name || t.name || 'Unbekannt';
-            select.innerHTML += `<option value="${t.id}">${datum} - ${kunde} (${t.fahrzeugtyp || 'Fahrzeug'})</option>`;
-          }
+        termine.forEach(t => {
+          const datum = new Date(t.datum).toLocaleDateString('de-DE');
+          const kunde = t.kunde_name || 'Unbekannt';
+          select.innerHTML += `<option value="${t.id}">${datum} - ${kunde} (${t.fahrzeugtyp || t.kennzeichen || 'Fahrzeug'})</option>`;
         });
         select.innerHTML += '</optgroup>';
       }
     } catch (error) {
       console.error('Fehler beim Laden der Termine:', error);
+      select.innerHTML = '<option value="">Fehler beim Laden</option>';
     }
-    
-    // Lade auch Kunden für das Kunden-Dropdown
-    this.loadKundenFuerTeileDropdown();
   }
 
   /**
@@ -21258,12 +21395,12 @@ class App {
     if (!select) return;
     
     try {
-      const response = await ApiService.get('/kunden');
-      const kunden = response.kunden || response || [];
+      // OPTIMIERT: Nutze kompakten Dropdown-Endpoint (nur ID, Name, Kennzeichen)
+      const kunden = await ApiService.get('/kunden/dropdown');
       
       select.innerHTML = '<option value="">-- Kunde auswählen --</option>';
       
-      kunden.forEach(k => {
+      (kunden || []).forEach(k => {
         const name = k.name || 'Unbekannt';
         const kennzeichen = k.kennzeichen ? ` (${k.kennzeichen})` : '';
         select.innerHTML += `<option value="${k.id}">👤 ${name}${kennzeichen}</option>`;

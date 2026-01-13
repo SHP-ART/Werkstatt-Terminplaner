@@ -35,15 +35,21 @@ const getAll = async (req, res) => {
 const getFaellige = async (req, res) => {
   try {
     const tage = parseInt(req.query.tage) || 7;
-    const bestellungen = await TeileBestellung.getFaellige(tage);
-    const schwebende = await TeileBestellung.getSchwebende();
     
-    // Termine mit teile_status = 'bestellen' im Termin-Feld (ohne konkrete Teile-Einträge)
-    const termineMitTeileStatus = await TeileBestellung.getTermineMitTeileStatusBestellen(tage);
-    const schwebendeTermineMitTeileStatus = await TeileBestellung.getSchwbendeTermineMitTeileStatusBestellen();
-    
-    // NEU: Termine mit teile_status = 'bestellen' im arbeitszeiten_details JSON
-    const termineMitArbeitenTeileStatus = await TeileBestellung.getTermineMitArbeitenTeileStatusBestellen(tage);
+    // OPTIMIERT: Alle DB-Queries parallel ausführen statt sequentiell
+    const [
+      bestellungen,
+      schwebende,
+      termineMitTeileStatus,
+      schwebendeTermineMitTeileStatus,
+      termineMitArbeitenTeileStatus
+    ] = await Promise.all([
+      TeileBestellung.getFaellige(tage),
+      TeileBestellung.getSchwebende(),
+      TeileBestellung.getTermineMitTeileStatusBestellen(tage),
+      TeileBestellung.getSchwbendeTermineMitTeileStatusBestellen(),
+      TeileBestellung.getTermineMitArbeitenTeileStatusBestellen(tage)
+    ]);
     
     // Gruppiere nach Dringlichkeit
     const heute = new Date();
@@ -122,6 +128,9 @@ const getFaellige = async (req, res) => {
       ...termineMitArbeitenTeileStatus
     ];
     
+    // Zähle Bestellungen mit Status "bestellt" für die Statistik
+    const bestelltCount = alleBestellungen.filter(b => b.status === 'bestellt').length;
+    
     res.json({
       gruppiert,
       alle: alleBestellungen,
@@ -131,6 +140,7 @@ const getFaellige = async (req, res) => {
         dringend: gruppiert.dringend.length,
         dieseWoche: gruppiert.dieseWoche.length,
         naechsteWoche: gruppiert.naechsteWoche.length,
+        bestellt: bestelltCount,
         gesamt: alleBestellungen.length
       }
     });

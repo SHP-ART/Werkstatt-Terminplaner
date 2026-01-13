@@ -182,6 +182,34 @@ class KundenController {
       res.status(500).json({ error: err.message });
     }
   }
+
+  /**
+   * Kompakte Dropdown-Daten für Kundenauswahl
+   * GET /kunden/dropdown
+   * Gibt nur ID, Name, Kennzeichen zurück (minimal für Dropdown)
+   */
+  static async getDropdownData(req, res) {
+    try {
+      const { db } = require('../config/database');
+      
+      const kunden = await new Promise((resolve, reject) => {
+        db.all(`
+          SELECT id, name, kennzeichen
+          FROM kunden
+          ORDER BY name ASC
+          LIMIT 200
+        `, [], (err, rows) => {
+          if (err) reject(err);
+          else resolve(rows || []);
+        });
+      });
+      
+      res.json(kunden);
+    } catch (err) {
+      console.error('Fehler bei getDropdownData:', err);
+      res.status(500).json({ error: err.message });
+    }
+  }
 }
 
 module.exports = KundenController;

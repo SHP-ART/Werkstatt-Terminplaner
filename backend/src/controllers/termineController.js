@@ -1752,6 +1752,71 @@ class TermineController {
   }
 
   /**
+   * Optimierter Endpoint für Teile-Status-Übersicht
+   * Gibt nur Termine mit Teile-Status zurück (bereits geparst)
+   * GET /termine/teile-status
+   */
+  static async getTeileStatus(req, res) {
+    try {
+      const rows = await TermineModel.getAll();
+      
+      // Filtere und parse im Backend - viel schneller als alle zum Frontend zu senden
+      const termineWithTeile = [];
+      
+      for (const termin of rows) {
+        if (!termin.arbeitszeiten_details) continue;
+        
+        let details;
+        try {
+          details = typeof termin.arbeitszeiten_details === 'string' 
+            ? JSON.parse(termin.arbeitszeiten_details) 
+            : termin.arbeitszeiten_details;
+        } catch (e) {
+          continue;
+        }
+        
+        // Prüfe jeden Arbeitsschritt auf Teile-Status
+        for (const [arbeit, data] of Object.entries(details)) {
+          if (arbeit.startsWith('_')) continue; // Interne Felder überspringen
+          
+          const teileStatus = typeof data === 'object' && data.teile_status 
+            ? data.teile_status 
+            : null;
+          
+          if (teileStatus && teileStatus !== '') {
+            termineWithTeile.push({
+              id: termin.id,
+              termin_nr: termin.termin_nr,
+              datum: termin.datum,
+              kunde_name: termin.kunde_name,
+              kennzeichen: termin.kennzeichen,
+              arbeiten: termin.arbeiten,
+              arbeit_name: arbeit,
+              teile_status: teileStatus
+            });
+          }
+        }
+      }
+      
+      // Berechne Statistiken
+      const stats = {
+        bestellen: termineWithTeile.filter(t => t.teile_status === 'bestellen').length,
+        bestellt: termineWithTeile.filter(t => t.teile_status === 'bestellt').length,
+        eingetroffen: termineWithTeile.filter(t => t.teile_status === 'eingetroffen').length,
+        vorraetig: termineWithTeile.filter(t => t.teile_status === 'vorraetig').length
+      };
+      
+      res.json({
+        termine: termineWithTeile,
+        stats: stats
+      });
+    } catch (err) {
+      console.error('Fehler bei getTeileStatus:', err);
+      res.status(500).json({ error: err.message });
+    }
+  }
+
+  /**
    * Prüft auf Duplikat-Termine (gleicher Kunde am gleichen Tag)
    * GET /termine/duplikat-check?datum=YYYY-MM-DD&kunde_id=X oder &kunde_name=Name
    */
@@ -1790,6 +1855,57 @@ class TermineController {
       });
     } catch (err) {
       console.error('Fehler bei checkDuplikate:', err);
+      res.status(500).json({ error: err.message });
+    }
+  }
+
+  /**
+   * Kompakte Dropdown-Daten für Terminauswahl
+   * GET /termine/dropdown
+   * Gibt nur ID, Datum, Kunde, Kennzeichen zurück (minimal für Dropdown)
+   */
+  static async getDropdownData(req, res) {
+    try {
+      const heute = new Date().toISOString().split('T')[0];
+      
+      // Kompakte Query - nur benötigte Felder
+      const { allAsync } = require('../utils/dbHelper');
+      
+      const [termine, schwebende] = await Promise.all([
+        allAsync(`
+          SELECT t.id, t.datum, t.kennzeichen, t.fahrzeugtyp,
+                 COALESCE(k.name, t.kunde_name) as kunde_name
+          FROM termine t
+          LEFT JOIN kunden k ON t.kunde_id = k.id
+          WHERE t.geloescht_am IS NULL
+            AND t.status != 'abgeschlossen'
+            AND t.datum >= ?
+            AND (t.ist_schwebend IS NULL OR t.ist_schwebend = 0)
+          ORDER BY t.datum ASC
+          LIMIT 50
+        `, [heute]),
+        allAsync(`
+          SELECT t.id, t.datum, t.kennzeichen, t.fahrzeugtyp,
+                 t.schwebend_prioritaet,
+                 COALESCE(k.name, t.kunde_name) as kunde_name
+          FROM termine t
+          LEFT JOIN kunden k ON t.kunde_id = k.id
+          WHERE t.geloescht_am IS NULL
+            AND t.status != 'abgeschlossen'
+            AND t.ist_schwebend = 1
+          ORDER BY 
+            CASE t.schwebend_prioritaet 
+              WHEN 'hoch' THEN 1 
+              WHEN 'mittel' THEN 2 
+              ELSE 3 
+            END
+          LIMIT 30
+        `, [])
+      ]);
+      
+      res.json({ termine, schwebende });
+    } catch (err) {
+      console.error('Fehler bei getDropdownData:', err);
       res.status(500).json({ error: err.message });
     }
   }

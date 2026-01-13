@@ -3,6 +3,7 @@ const router = express.Router();
 const KundenController = require('../controllers/kundenController');
 
 router.get('/', KundenController.getAll);
+router.get('/dropdown', KundenController.getDropdownData);
 router.get('/search', KundenController.search);
 router.get('/stats/fahrzeuge', KundenController.countFahrzeuge);
 router.get('/:id', KundenController.getById);

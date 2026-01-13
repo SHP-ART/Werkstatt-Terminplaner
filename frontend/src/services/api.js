@@ -143,6 +143,14 @@ class TermineService {
     return ApiService.get(`/termine${query}`);
   }
 
+  /**
+   * Optimierter Endpoint für Teile-Status-Übersicht
+   * Gibt nur Termine mit Teile-Status zurück (bereits serverseitig gefiltert)
+   */
+  static async getTeileStatus() {
+    return ApiService.get('/termine/teile-status');
+  }
+
   static async getById(id) {
     return ApiService.get(`/termine/${id}`);
   }
@@ -494,6 +502,11 @@ class ErsatzautosService {
   // Sperrung aufheben
   static async entsperren(id) {
     return ApiService.post(`/ersatzautos/${id}/entsperren`);
+  }
+
+  // Buchung als früh zurückgegeben markieren
+  static async markiereAlsZurueckgegeben(terminId) {
+    return ApiService.post(`/ersatzautos/buchung/${terminId}/zurueckgegeben`);
   }
 }
 

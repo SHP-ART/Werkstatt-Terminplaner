@@ -1826,6 +1826,51 @@ select option {
     box-shadow: 0 8px 25px rgba(248, 113, 113, 0.4);
 }
 
+/* Vergeben-Status (durch Termin belegt) */
+.ersatzauto-kachel.vergeben {
+    background: linear-gradient(135deg, #fff7ed 0%, #fed7aa 100%);
+    border-color: #fb923c;
+    box-shadow: 0 4px 15px rgba(251, 146, 60, 0.3);
+    cursor: pointer;
+}
+
+.ersatzauto-kachel.vergeben::before {
+    background: linear-gradient(90deg, #f97316, #fb923c);
+}
+
+.ersatzauto-kachel.vergeben:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 8px 25px rgba(251, 146, 60, 0.4);
+}
+
+.ersatzauto-kachel.vergeben .kachel-status {
+    background: #f97316;
+    color: white;
+}
+
+.ersatzauto-kachel.vergeben .kachel-hinweis {
+    color: #ea580c;
+}
+
+/* Vergeben-Info innerhalb der Kachel */
+.ersatzauto-kachel .kachel-vergeben-info {
+    margin-top: 10px;
+    padding: 10px 12px;
+    background: linear-gradient(135deg, #fff7ed 0%, #ffedd5 100%);
+    border: 1px solid #fed7aa;
+    border-radius: 8px;
+    font-size: 0.85rem;
+    color: #9a3412;
+}
+
+.ersatzauto-kachel .kachel-vergeben-info div {
+    margin-bottom: 4px;
+}
+
+.ersatzauto-kachel .kachel-vergeben-info div:last-child {
+    margin-bottom: 0;
+}
+
 .ersatzauto-kachel .kachel-header {
     display: flex;
     justify-content: space-between;

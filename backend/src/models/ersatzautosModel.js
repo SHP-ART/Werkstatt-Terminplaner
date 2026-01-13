@@ -127,24 +127,24 @@ class ErsatzautosModel {
     const gesperrt = await ErsatzautosModel.getAnzahlGesperrt(datum);
 
     // Zähle wie viele Ersatzautos an diesem Tag vergeben sind
+    // ersatzauto_bis_datum hat PRIORITÄT vor ersatzauto_tage!
     const query = `
       SELECT COUNT(*) as vergeben FROM termine 
       WHERE ersatzauto = 1 
       AND status != 'storniert'
       AND geloescht_am IS NULL
+      AND datum <= ?
       AND (
-        -- Eintägige Termine am gewählten Datum
-        (datum = ? AND ersatzauto_bis_datum IS NULL AND abholung_datum IS NULL)
-        -- Oder mehrtägige Termine, die das Datum einschließen
-        OR (datum <= ? AND (
-          ersatzauto_bis_datum >= ?
-          OR abholung_datum >= ?
-          OR (ersatzauto_tage IS NOT NULL AND date(datum, '+' || (ersatzauto_tage - 1) || ' days') >= ?)
-        ))
+        CASE 
+          WHEN ersatzauto_bis_datum IS NOT NULL THEN ersatzauto_bis_datum
+          WHEN abholung_datum IS NOT NULL THEN abholung_datum
+          WHEN ersatzauto_tage IS NOT NULL THEN date(datum, '+' || (ersatzauto_tage - 1) || ' days')
+          ELSE datum
+        END >= ?
       )
     `;
     
-    const row = await getAsync(query, [datum, datum, datum, datum, datum]);
+    const row = await getAsync(query, [datum, datum]);
     const vergeben = row?.vergeben || 0;
     // Verfügbar = nicht gesperrte Autos - vergebene Autos
     return {
@@ -160,6 +160,7 @@ class ErsatzautosModel {
     const alleAutos = await ErsatzautosModel.getActive();
     
     // Hole alle Termine mit Ersatzauto an diesem Tag (inkl. mehrtägige)
+    // ersatzauto_bis_datum hat PRIORITÄT!
     const query = `
         SELECT t.*, 
                COALESCE(k.name, t.kunde_name) as kunde_name,
@@ -169,20 +170,19 @@ class ErsatzautosModel {
         WHERE t.ersatzauto = 1 
         AND t.status != 'storniert'
         AND t.geloescht_am IS NULL
+        AND t.datum <= ?
         AND (
-          -- Eintägige Termine am gewählten Datum
-          (t.datum = ? AND t.ersatzauto_bis_datum IS NULL AND t.abholung_datum IS NULL)
-          -- Oder mehrtägige Termine, die das Datum einschließen
-          OR (t.datum <= ? AND (
-            t.ersatzauto_bis_datum >= ?
-            OR t.abholung_datum >= ?
-            OR (t.ersatzauto_tage IS NOT NULL AND date(t.datum, '+' || (t.ersatzauto_tage - 1) || ' days') >= ?)
-          ))
+          CASE 
+            WHEN t.ersatzauto_bis_datum IS NOT NULL THEN t.ersatzauto_bis_datum
+            WHEN t.abholung_datum IS NOT NULL THEN t.abholung_datum
+            WHEN t.ersatzauto_tage IS NOT NULL THEN date(t.datum, '+' || (t.ersatzauto_tage - 1) || ' days')
+            ELSE t.datum
+          END >= ?
         )
         ORDER BY t.datum ASC
       `;
     
-    const termineAmTag = await allAsync(query, [datum, datum, datum, datum, datum]);
+    const termineAmTag = await allAsync(query, [datum, datum]);
     
     return {
       autos: alleAutos,
@@ -202,7 +202,7 @@ class ErsatzautosModel {
              t.abholung_datum, t.abholung_zeit, t.bring_zeit, t.status,
              COALESCE(k.name, t.kunde_name) as kunde_name,
              COALESCE(k.telefon, t.kunde_telefon) as kunde_telefon,
-             -- Berechne End-Datum
+             -- Berechne End-Datum (ersatzauto_bis_datum hat Priorität!)
              CASE 
                WHEN t.ersatzauto_bis_datum IS NOT NULL THEN t.ersatzauto_bis_datum
                WHEN t.abholung_datum IS NOT NULL THEN t.abholung_datum
@@ -214,21 +214,20 @@ class ErsatzautosModel {
       WHERE t.ersatzauto = 1 
       AND t.status NOT IN ('storniert', 'erledigt')
       AND t.geloescht_am IS NULL
+      AND t.datum <= ?
+      -- End-Datum muss heute oder später sein (ersatzauto_bis_datum hat PRIORITÄT!)
       AND (
-        -- Start-Datum ist heute oder früher
-        t.datum <= ?
-        -- UND End-Datum ist heute oder später
-        AND (
-          t.ersatzauto_bis_datum >= ?
-          OR t.abholung_datum >= ?
-          OR (t.ersatzauto_tage IS NOT NULL AND date(t.datum, '+' || (t.ersatzauto_tage - 1) || ' days') >= ?)
-          OR (t.ersatzauto_bis_datum IS NULL AND t.abholung_datum IS NULL AND t.ersatzauto_tage IS NULL AND t.datum >= ?)
-        )
+        CASE 
+          WHEN t.ersatzauto_bis_datum IS NOT NULL THEN t.ersatzauto_bis_datum
+          WHEN t.abholung_datum IS NOT NULL THEN t.abholung_datum
+          WHEN t.ersatzauto_tage IS NOT NULL THEN date(t.datum, '+' || (t.ersatzauto_tage - 1) || ' days')
+          ELSE t.datum
+        END >= ?
       )
       ORDER BY t.datum ASC
     `;
     
-    return await allAsync(query, [heute, heute, heute, heute, heute]);
+    return await allAsync(query, [heute, heute]);
   }
 
   // Heute fällige Rückgaben holen
@@ -306,6 +305,20 @@ class ErsatzautosModel {
     `;
     
     return await allAsync(query, [bisDatum, vonDatum, vonDatum, vonDatum, vonDatum]);
+  }
+
+  // Ersatzauto-Buchung als früh zurückgegeben markieren (setzt ersatzauto_bis_datum auf gestern)
+  static async markiereAlsZurueckgegeben(terminId) {
+    const gestern = new Date();
+    gestern.setDate(gestern.getDate() - 1);
+    const gesternStr = gestern.toISOString().split('T')[0];
+    
+    await runAsync(
+      `UPDATE termine SET ersatzauto_bis_datum = ? WHERE id = ? AND ersatzauto = 1`,
+      [gesternStr, terminId]
+    );
+    
+    return await getAsync('SELECT * FROM termine WHERE id = ?', [terminId]);
   }
 }
 module.exports = ErsatzautosModel;

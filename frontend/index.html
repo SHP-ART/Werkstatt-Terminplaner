@@ -516,7 +516,7 @@
                     </div>
 
                     <div class="form-row">
-                        <div class="form-group" style="position: relative;">
+                        <div class="form-group" style="position: relative; flex: 2;">
                             <div class="arbeiten-label-row">
                                 <label>Arbeiten (jede Zeile eine Arbeit):</label>
                                 <label class="ki-analyse-toggle" title="KI analysiert Problembeschreibungen und schlägt passende Arbeiten vor">
@@ -551,15 +551,32 @@
                                 <div id="zeitschaetzungDetails" style="margin-top: 8px; font-size: 0.9em; color: #666;"></div>
                             </div>
                         </div>
-                        <div class="form-group checkbox-group">
-                            <label>Ersatzauto gewünscht?</label>
-                            <label class="checkbox-inline">
-                                <input type="checkbox" id="ersatzauto"> Ja
-                            </label>
-                            <span id="ersatzautoStatus" class="ersatzauto-status" style="display: none;">
-                                <span class="status-indicator"></span>
-                                <span class="status-text"></span>
-                            </span>
+                        
+                        <!-- Ersatzauto Bereich rechts neben Arbeiten -->
+                        <div class="form-group" style="flex: 1; display: flex; flex-direction: column; gap: 10px;">
+                            <div class="checkbox-group">
+                                <label>Ersatzauto gewünscht?</label>
+                                <label class="checkbox-inline">
+                                    <input type="checkbox" id="ersatzauto"> Ja
+                                </label>
+                                <span id="ersatzautoStatus" class="ersatzauto-status" style="display: none;">
+                                    <span class="status-indicator"></span>
+                                    <span class="status-text"></span>
+                                </span>
+                            </div>
+                            
+                            <!-- Ersatzauto Dauer-Felder -->
+                            <div id="ersatzautoDauerGroup" class="ersatzauto-dauer-section" style="display: none; padding: 12px; background: #fff8e1; border-radius: 8px; border-left: 4px solid #ffc107;">
+                                <h4 style="margin: 0 0 8px 0; font-size: 0.9rem; color: #856404;">🚗 Ersatzauto-Zeitraum</h4>
+                                <div style="margin: 0;">
+                                    <label style="font-size: 0.85rem;">Dauer (Tage):</label>
+                                    <input type="number" id="ersatzauto_tage" min="1" max="30" placeholder="z.B. 1, 2, 3..." style="width: 100%; margin-top: 4px;">
+                                    <small style="color: #666; display: block; margin-top: 4px; font-size: 0.8rem;">Ersatzwagen wird blockiert</small>
+                                </div>
+                                <p id="ersatzautoDauerHinweis" style="margin: 8px 0 0 0; font-size: 0.75rem; color: #856404;">
+                                    💡 Bei tel. Rücksprache Tage angeben, sonst Abholdatum.
+                                </p>
+                            </div>
                         </div>
                     </div>
                     
@@ -572,20 +589,6 @@
                         <p style="margin: 10px 0 0 30px; font-size: 0.85em; color: #bf360c;">
                             📦 Markiert alle Arbeiten mit "Muss bestellt werden" → erscheint in der Teile-Status Übersicht
                         </p>
-                    </div>
-                        
-                        <!-- Ersatzauto Dauer-Felder -->
-                        <div id="ersatzautoDauerGroup" class="form-section ersatzauto-dauer-section" style="display: none; margin-top: 15px; padding: 15px; background: #fff8e1; border-radius: 8px; border-left: 4px solid #ffc107;">
-                            <h4 style="margin: 0 0 10px 0; font-size: 0.95rem; color: #856404;">🚗 Ersatzauto-Zeitraum</h4>
-                            <div class="form-group" style="margin: 0;">
-                                <label>Geschätzte Dauer (Tage):</label>
-                                <input type="number" id="ersatzauto_tage" min="1" max="30" placeholder="z.B. 1, 2, 3..." style="max-width: 150px;">
-                                <small style="color: #666; display: block; margin-top: 5px;">Ersatzwagen wird für diese Anzahl Tage blockiert</small>
-                            </div>
-                            <p id="ersatzautoDauerHinweis" style="margin: 12px 0 0 0; font-size: 0.85rem; color: #856404;">
-                                💡 <strong>Hinweis:</strong> Bei tel. Rücksprache Anzahl Tage angeben. Sonst wird das Abholdatum unten verwendet.
-                            </p>
-                        </div>
                     </div>
 
                     <div class="form-group">
@@ -2443,11 +2446,11 @@
                             <option value="termin">📅 Termin</option>
                             <option value="kunde">👤 Nur Kunde (ohne Termin)</option>
                         </select>
-                        <select id="teileNeuTermin" required>
-                            <option value="">-- Termin auswählen --</option>
+                        <select id="teileNeuTermin" onfocus="app.loadTermineFuerTeileDropdownLazy()" required>
+                            <option value="">-- Termin auswählen (klicken zum Laden) --</option>
                         </select>
-                        <select id="teileNeuKunde" style="display: none;">
-                            <option value="">-- Kunde auswählen --</option>
+                        <select id="teileNeuKunde" onfocus="app.loadKundenFuerTeileDropdownLazy()" style="display: none;">
+                            <option value="">-- Kunde auswählen (klicken zum Laden) --</option>
                         </select>
                     </div>
                     <input type="text" id="teileNeuName" placeholder="Teilename" required>

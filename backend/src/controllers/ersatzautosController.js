@@ -222,6 +222,21 @@ const ersatzautosController = {
       console.error('Fehler beim Aufheben der Sperrung:', err);
       res.status(500).json({ error: 'Interner Serverfehler' });
     }
+  },
+
+  // Buchung als früh zurückgegeben markieren
+  markiereAlsZurueckgegeben: async (req, res) => {
+    try {
+      const terminId = req.params.terminId;
+      const termin = await ErsatzautosModel.markiereAlsZurueckgegeben(terminId);
+      if (!termin) {
+        return res.status(404).json({ error: 'Termin nicht gefunden' });
+      }
+      res.json({ success: true, termin });
+    } catch (err) {
+      console.error('Fehler beim Markieren als zurückgegeben:', err);
+      res.status(500).json({ error: 'Interner Serverfehler' });
+    }
   }
 };
 

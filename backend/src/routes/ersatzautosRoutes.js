@@ -35,6 +35,9 @@ router.post('/:id/sperren-bis', ersatzautosController.sperrenBis);
 // Sperrung aufheben
 router.post('/:id/entsperren', ersatzautosController.entsperren);
 
+// Buchung (Termin) als früh zurückgegeben markieren
+router.post('/buchung/:terminId/zurueckgegeben', ersatzautosController.markiereAlsZurueckgegeben);
+
 // Einzelnes Ersatzauto abrufen
 router.get('/:id', ersatzautosController.getById);
 
