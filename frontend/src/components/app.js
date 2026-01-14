@@ -9978,7 +9978,10 @@ class App {
           <span class="vorschlag-name">${this.highlightMatch(kunde.name, eingabe)}</span>
           ${kunde.telefon ? `<span class="vorschlag-telefon"> · ${kunde.telefon}</span>` : ''}
         </div>
-        ${kunde.kennzeichen ? `<span class="vorschlag-kennzeichen">${kunde.kennzeichen}</span>` : ''}
+        <div class="vorschlag-details">
+          ${kunde.kennzeichen ? `<span class="vorschlag-kennzeichen">${kunde.kennzeichen}</span>` : ''}
+          ${kunde.fahrzeugtyp ? `<span class="vorschlag-fahrzeugtyp">🚗 ${kunde.fahrzeugtyp}</span>` : ''}
+        </div>
       </div>
     `).join('');
     
