@@ -17392,9 +17392,12 @@ class App {
       // 1. Termine für das Datum laden
       const termine = await TermineService.getAll(datum);
 
-      // 1b. Schwebende Termine laden (ohne festes Datum)
+      // 1b. Schwebende Termine laden (alle Termine, dann filtern)
       const alleTermine = await TermineService.getAll(null);
-      const schwebendeTermine = alleTermine.filter(t => t.ist_schwebend === 1);
+      // Robuste Filterung: ist_schwebend kann 1, "1", true sein
+      const schwebendeTermine = alleTermine.filter(t => 
+        t.ist_schwebend === 1 || t.ist_schwebend === '1' || t.ist_schwebend === true
+      );
       
       // Schwebende Termine markieren und zu den Terminen hinzufügen (ohne Duplikate)
       schwebendeTermine.forEach(st => {
@@ -18510,27 +18513,24 @@ class App {
       return;
     }
     
-    const alsSchwebendBelassen = document.getElementById('schwebendEinplanenAlsSchwebend').checked;
+    const inNichtZugeordnet = document.getElementById('schwebendEinplanenAlsSchwebend').checked;
     
     try {
       const updateData = {
-        datum: datum
+        datum: datum,
+        ist_schwebend: 0  // Termin ist nicht mehr schwebend
       };
       
-      if (alsSchwebendBelassen) {
-        // Checkbox aktiviert: Termin bleibt in "Nicht zugeordnet" (ist_schwebend = 1)
-        // ist_schwebend muss nicht explizit gesetzt werden, da es schon 1 ist
-        // Nur Datum wird aktualisiert
-      } else {
-        // Checkbox nicht aktiviert: Termin wird fest eingeplant (ist_schwebend = 0)
-        updateData.ist_schwebend = 0;
+      if (inNichtZugeordnet) {
+        // Checkbox aktiviert: Termin in "Nicht zugeordnet" (ohne Mitarbeiter)
+        updateData.mitarbeiter_id = null;
       }
+      // Wenn Checkbox nicht aktiviert, bleibt der vorhandene mitarbeiter_id
       
-      console.log('Update Termin:', terminId, updateData);
       await TermineService.update(terminId, updateData);
       
-      if (alsSchwebendBelassen) {
-        this.showToast(`Termin für ${this.formatDatum(datum)} vorgemerkt (Nicht zugeordnet)`, 'success');
+      if (inNichtZugeordnet) {
+        this.showToast(`Termin für ${this.formatDatum(datum)} in "Nicht zugeordnet" eingeplant`, 'success');
       } else {
         this.showToast(`Termin wurde für ${this.formatDatum(datum)} eingeplant`, 'success');
       }
