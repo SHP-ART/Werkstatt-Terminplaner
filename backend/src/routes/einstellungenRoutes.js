@@ -12,4 +12,7 @@ router.put('/chatgpt-api-key', EinstellungenController.updateChatGPTApiKey);
 router.delete('/chatgpt-api-key', EinstellungenController.deleteChatGPTApiKey);
 router.get('/chatgpt-api-key/test', EinstellungenController.testChatGPTApiKey);
 
+// KI-Funktionen aktivieren/deaktivieren
+router.put('/ki-enabled', EinstellungenController.updateKIEnabled);
+
 module.exports = router;

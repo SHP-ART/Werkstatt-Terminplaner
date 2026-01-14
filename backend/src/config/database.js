@@ -513,6 +513,20 @@ function initializeDatabase() {
       }
     });
 
+    // Fertigstellungszeit (wann der Termin fertig sein soll)
+    dbWrapper.connection.run(`ALTER TABLE termine ADD COLUMN fertigstellung_zeit TEXT`, (err) => {
+      if (err && !err.message.includes('duplicate column')) {
+        console.error('Fehler beim Hinzufügen von fertigstellung_zeit:', err);
+      }
+    });
+
+    // Notizen zum Termin
+    dbWrapper.connection.run(`ALTER TABLE termine ADD COLUMN notizen TEXT`, (err) => {
+      if (err && !err.message.includes('duplicate column')) {
+        console.error('Fehler beim Hinzufügen von notizen:', err);
+      }
+    });
+
     // Mitarbeiter-Tabelle
     dbWrapper.connection.run(`CREATE TABLE IF NOT EXISTS mitarbeiter (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -698,6 +712,13 @@ function initializeDatabase() {
     dbWrapper.connection.run(`ALTER TABLE werkstatt_einstellungen ADD COLUMN chatgpt_api_key TEXT DEFAULT NULL`, (err) => {
       if (err && !err.message.includes('duplicate column')) {
         console.error('Fehler beim Hinzufügen von chatgpt_api_key:', err);
+      }
+    });
+
+    // Füge KI-Funktionen aktiviert/deaktiviert Spalte hinzu (1 = aktiviert, 0 = deaktiviert)
+    dbWrapper.connection.run(`ALTER TABLE werkstatt_einstellungen ADD COLUMN ki_enabled INTEGER DEFAULT 1`, (err) => {
+      if (err && !err.message.includes('duplicate column')) {
+        console.error('Fehler beim Hinzufügen von ki_enabled:', err);
       }
     });
 

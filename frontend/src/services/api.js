@@ -333,6 +333,11 @@ class EinstellungenService {
     return ApiService.get('/einstellungen/chatgpt-api-key/test');
   }
 
+  // KI-Funktionen aktivieren/deaktivieren
+  static async updateKIEnabled(enabled) {
+    return ApiService.put('/einstellungen/ki-enabled', { enabled });
+  }
+
   static async getAbwesenheit(datum) {
     return ApiService.get(`/abwesenheiten/${datum}`);
   }

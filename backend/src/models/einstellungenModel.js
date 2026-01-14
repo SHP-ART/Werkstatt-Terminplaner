@@ -38,7 +38,30 @@ class EinstellungenModel {
       settings.chatgpt_api_key_masked = null;
       settings.chatgpt_api_key_configured = false;
     }
+    // KI-Funktionen Status (Standard: aktiviert)
+    if (settings) {
+      settings.ki_enabled = settings.ki_enabled !== undefined ? !!settings.ki_enabled : true;
+    }
     return settings;
+  }
+
+  // KI-Funktionen aktivieren/deaktivieren
+  static async updateKIEnabled(enabled) {
+    const kiEnabled = enabled ? 1 : 0;
+    
+    const result = await runAsync(
+      `UPDATE werkstatt_einstellungen SET ki_enabled = ? WHERE id = 1`,
+      [kiEnabled]
+    );
+
+    if (result.changes === 0) {
+      await runAsync(
+        `INSERT OR REPLACE INTO werkstatt_einstellungen (id, ki_enabled) VALUES (1, ?)`,
+        [kiEnabled]
+      );
+    }
+    
+    return { success: true, ki_enabled: !!enabled, message: enabled ? 'KI-Funktionen aktiviert' : 'KI-Funktionen deaktiviert' };
   }
 
   // Holt den entschlüsselten API-Key (nur für interne Verwendung)

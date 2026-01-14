@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Werkstatt Terminplaner</title>
-    <link rel="stylesheet" href="src/styles/style.css?v=51">
+    <link rel="stylesheet" href="src/styles/style.css?v=56">
     <!-- SheetJS für Excel-Import -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 </head>
@@ -519,7 +519,7 @@
                         <div class="form-group" style="position: relative; flex: 2;">
                             <div class="arbeiten-label-row">
                                 <label>Arbeiten (jede Zeile eine Arbeit):</label>
-                                <label class="ki-analyse-toggle" title="KI analysiert Problembeschreibungen und schlägt passende Arbeiten vor">
+                                <label class="ki-analyse-toggle ki-element" title="KI analysiert Problembeschreibungen und schlägt passende Arbeiten vor">
                                     <input type="checkbox" id="kiAnalyseAktiv">
                                     <span class="ki-toggle-icon">🤖</span>
                                     <span class="ki-toggle-text">KI-Hilfe</span>
@@ -530,7 +530,7 @@
                             <datalist id="arbeitListe"></datalist>
                             
                             <!-- KI-Vorschläge Bereich -->
-                            <div id="kiVorschlaegeBereich" class="ki-vorschlaege-bereich" style="display: none;">
+                            <div id="kiVorschlaegeBereich" class="ki-vorschlaege-bereich ki-element" style="display: none;">
                                 <div class="ki-vorschlaege-header">
                                     <span class="ki-vorschlaege-icon">🤖</span>
                                     <span class="ki-vorschlaege-titel">KI-Vorschläge</span>
@@ -1141,7 +1141,9 @@
                 </div>
             </div>
         </div>
+        </div>
 
+        <!-- Kunden Tab -->
         <div id="kunden" class="tab-content">
             <div class="page-header">
                 <h2>👥 Kundenverwaltung</h2>
@@ -2184,7 +2186,28 @@
             <div id="settingsApi" class="sub-tab-content">
                 <h3>🤖 KI & API-Einstellungen</h3>
                 
-                <div class="form-section">
+                <!-- KI-Funktionen Ein/Aus Schalter -->
+                <div class="form-section ki-toggle-section" style="margin-bottom: 20px;">
+                    <div class="ki-master-toggle">
+                        <div class="ki-toggle-header">
+                            <h3 style="margin: 0;">🔌 KI-Funktionen</h3>
+                            <label class="switch-toggle">
+                                <input type="checkbox" id="kiEnabledToggle" checked>
+                                <span class="slider round"></span>
+                            </label>
+                        </div>
+                        <p class="hint" style="margin: 10px 0 0 0;">
+                            Aktiviert oder deaktiviert alle KI-bezogenen Funktionen in der Anwendung.<br>
+                            Bei Deaktivierung werden folgende Elemente ausgeblendet:
+                        </p>
+                        <ul class="ki-features-list" style="margin: 10px 0 0 20px; font-size: 0.9em; color: #666;">
+                            <li>🤖 <strong>KI-Tagesvorschlag</strong> und <strong>KI-Wochenverteilung</strong> Buttons (in Planung & Zuweisung)</li>
+                            <li>🤖 <strong>KI-Hilfe</strong> Checkbox beim Erstellen von Terminen</li>
+                        </ul>
+                    </div>
+                </div>
+                
+                <div class="form-section" id="kiApiKeySection">
                     <h3>ChatGPT / OpenAI API</h3>
                     <p class="hint" style="margin-bottom: 15px;">
                         Mit einem ChatGPT API-Key können zukünftig KI-Funktionen genutzt werden, 
@@ -2236,7 +2259,6 @@
                         <li>📊 <strong>Datenschutz:</strong> Bei KI-Anfragen werden Daten an OpenAI übermittelt. Achten Sie auf sensible Kundendaten.</li>
                     </ul>
                 </div>
-            </div>
             </div>
         </div>
 
@@ -2296,7 +2318,7 @@
                     <button class="btn btn-secondary" id="planungVerwerfenBtn" onclick="app.verwerfePlanungAenderungen()" style="display: none;">
                         ↩️ Verwerfen
                     </button>
-                    <div class="ki-planung-controls">
+                    <div class="ki-planung-controls ki-element">
                         <button class="btn btn-ki" id="kiTagesplanungBtn" onclick="app.requestKITagesplanung()" title="KI optimiert die heutige Planung">
                             🤖 KI-Tagesvorschlag
                         </button>
@@ -2351,6 +2373,24 @@
                     </div>
                     <div id="schwebendeTermineContainer" class="schwebende-container">
                         <!-- Schwebende Termine als Balken werden hier eingefügt -->
+                    </div>
+                </div>
+
+                <!-- Überfällige Termine (aus Vortagen, nicht abgeschlossen) -->
+                <div class="ueberfaellige-panel">
+                    <div class="ueberfaellige-header">
+                        <h3>⚠️ Überfällige Termine</h3>
+                        <div class="ueberfaellige-controls">
+                            <span id="ueberfaelligeCount" class="ueberfaellige-count">0 Termine</span>
+                            <button class="btn btn-sm btn-secondary" onclick="app.loadUeberfaelligeTermine()" title="Aktualisieren">
+                                🔄
+                            </button>
+                        </div>
+                    </div>
+                    <p class="ueberfaellige-hint">Termine aus vergangenen Tagen, die noch nicht abgeschlossen wurden.</p>
+                    <div id="ueberfaelligeTermineContainer" class="ueberfaellige-container">
+                        <!-- Überfällige Termine werden hier eingefügt -->
+                        <div class="empty-state">Keine überfälligen Termine</div>
                     </div>
                 </div>
             </div>
@@ -3258,8 +3298,155 @@
         </div>
     </div>
 
+    <!-- Neu-Einplanen Modal für überfällige Termine -->
+    <div id="neuEinplanenModal" class="modal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 99999; overflow-y: auto; padding: 20px; box-sizing: border-box;">
+        <div class="modal-content" style="max-width: 450px; width: 95%; margin: 20px auto; background: white; border-radius: 12px; box-shadow: 0 10px 50px rgba(0,0,0,0.3);">
+            <div class="modal-header" style="background: linear-gradient(135deg, #2196f3 0%, #1976d2 100%); color: white; border-radius: 12px 12px 0 0; padding: 15px 20px; display: flex; justify-content: space-between; align-items: center;">
+                <h2 style="margin: 0; font-size: 1.2em;">
+                    📅 Termin neu einplanen
+                </h2>
+                <button onclick="app.closeNeuEinplanenModal()" style="background: rgba(255,255,255,0.2); border: none; color: white; width: 32px; height: 32px; border-radius: 50%; font-size: 20px; cursor: pointer;">&times;</button>
+            </div>
+            <div class="modal-body" style="padding: 20px;">
+                <!-- Termin-Info -->
+                <div style="background: #f5f5f5; border-radius: 8px; padding: 12px; margin-bottom: 15px;">
+                    <div style="font-weight: 600; color: #333; margin-bottom: 5px;">
+                        <span id="neuEinplanenKunde">Kunde</span>
+                    </div>
+                    <div style="font-size: 0.85em; color: #666;">
+                        <span style="color: #1565c0; font-weight: 500;" id="neuEinplanenKennzeichen">K-XX 1234</span>
+                        <span style="margin-left: 8px;" id="neuEinplanenArbeiten">Arbeiten...</span>
+                    </div>
+                    <div style="margin-top: 8px; font-size: 0.8em; color: #c62828;">
+                        ⚠️ Alt: <span id="neuEinplanenAltDatum">--</span>
+                    </div>
+                </div>
+                
+                <!-- Neues Datum -->
+                <div style="margin-bottom: 15px;">
+                    <label style="font-weight: 600; color: #333; display: block; margin-bottom: 5px; font-size: 0.9em;">
+                        Neues Datum:
+                    </label>
+                    <input type="date" id="neuEinplanenDatum" style="width: 100%; padding: 10px; font-size: 1em; border: 2px solid #2196f3; border-radius: 8px; box-sizing: border-box;">
+                </div>
+                
+                <!-- Schnellauswahl -->
+                <div style="display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 15px;">
+                    <button type="button" onclick="app.setNeuEinplanenDatum('heute')" 
+                            style="background: #e3f2fd; color: #1976d2; border: 1px solid #2196f3; padding: 8px 12px; border-radius: 6px; cursor: pointer; font-size: 0.85em;">
+                        📅 Heute
+                    </button>
+                    <button type="button" onclick="app.setNeuEinplanenDatum('morgen')"
+                            style="background: #e8f5e9; color: #388e3c; border: 1px solid #4caf50; padding: 8px 12px; border-radius: 6px; cursor: pointer; font-size: 0.85em;">
+                        ➡️ Morgen
+                    </button>
+                    <button type="button" onclick="app.setNeuEinplanenDatum('naechsteWoche')"
+                            style="background: #fff3e0; color: #f57c00; border: 1px solid #ff9800; padding: 8px 12px; border-radius: 6px; cursor: pointer; font-size: 0.85em;">
+                        📆 Nächste Wo.
+                    </button>
+                </div>
+                
+                <!-- Status zurücksetzen -->
+                <div style="background: #e8f5e9; border-radius: 8px; padding: 10px; margin-bottom: 10px;">
+                    <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 0.9em;">
+                        <input type="checkbox" id="neuEinplanenStatusReset" checked style="width: 18px; height: 18px;">
+                        <span style="color: #2e7d32;">Status auf "Offen" zurücksetzen</span>
+                    </label>
+                </div>
+                
+                <!-- Als "Nicht zugeordnet" einsortieren -->
+                <div style="background: #e3f2fd; border-radius: 8px; padding: 10px; margin-bottom: 15px;">
+                    <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 0.9em;">
+                        <input type="checkbox" id="neuEinplanenAlsSchwebend" checked style="width: 18px; height: 18px;">
+                        <span style="color: #1565c0;">📋 In "Nicht zugeordnet" einsortieren</span>
+                    </label>
+                </div>
+                
+                <!-- BUTTONS -->
+                <div style="display: flex; gap: 10px; margin-top: 20px;">
+                    <button type="button" onclick="app.closeNeuEinplanenModal()" 
+                            style="flex: 1; background: #9e9e9e; color: white; border: none; padding: 14px 10px; border-radius: 8px; cursor: pointer; font-size: 1em;">
+                        ❌ Abbrechen
+                    </button>
+                    <button type="button" onclick="app.confirmNeuEinplanen()" 
+                            style="flex: 1; background: #4caf50; color: white; border: none; padding: 14px 10px; border-radius: 8px; cursor: pointer; font-size: 1em; font-weight: 600;">
+                        ✅ Übernehmen
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal für Einplanen schwebender Termine -->
+    <div id="schwebendEinplanenModal" class="modal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 99999; overflow-y: auto; padding: 20px; box-sizing: border-box; justify-content: center; align-items: flex-start;">
+        <div class="modal-content" style="max-width: 450px; width: 95%; margin: 20px auto; background: white; border-radius: 12px; box-shadow: 0 10px 50px rgba(0,0,0,0.3);">
+            <div class="modal-header" style="background: linear-gradient(135deg, #ff9800 0%, #f57c00 100%); color: white; border-radius: 12px 12px 0 0; padding: 15px 20px; display: flex; justify-content: space-between; align-items: center;">
+                <h2 style="margin: 0; font-size: 1.2em;">
+                    📅 Schwebenden Termin einplanen
+                </h2>
+                <button onclick="app.closeSchwebendEinplanenModal()" style="background: rgba(255,255,255,0.2); border: none; color: white; width: 32px; height: 32px; border-radius: 50%; font-size: 20px; cursor: pointer;">&times;</button>
+            </div>
+            <div class="modal-body" style="padding: 20px;">
+                <!-- Termin-Info -->
+                <div style="background: #f5f5f5; border-radius: 8px; padding: 12px; margin-bottom: 15px;">
+                    <div style="font-weight: 600; color: #333; margin-bottom: 5px;">
+                        <span id="schwebendEinplanenKunde">Kunde</span>
+                    </div>
+                    <div style="font-size: 0.85em; color: #666;">
+                        <span style="color: #1565c0; font-weight: 500;" id="schwebendEinplanenKennzeichen">K-XX 1234</span>
+                        <span style="margin-left: 8px;" id="schwebendEinplanenArbeiten">Arbeiten...</span>
+                    </div>
+                </div>
+                
+                <!-- Datum -->
+                <div style="margin-bottom: 15px;">
+                    <label style="font-weight: 600; color: #333; display: block; margin-bottom: 5px; font-size: 0.9em;">
+                        Datum:
+                    </label>
+                    <input type="date" id="schwebendEinplanenDatum" style="width: 100%; padding: 10px; font-size: 1em; border: 2px solid #ff9800; border-radius: 8px; box-sizing: border-box;">
+                </div>
+                
+                <!-- Schnellauswahl -->
+                <div style="display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 15px;">
+                    <button type="button" onclick="app.setSchwebendEinplanenDatum('heute')" 
+                            style="background: #e3f2fd; color: #1976d2; border: 1px solid #2196f3; padding: 8px 12px; border-radius: 6px; cursor: pointer; font-size: 0.85em;">
+                        📅 Heute
+                    </button>
+                    <button type="button" onclick="app.setSchwebendEinplanenDatum('morgen')"
+                            style="background: #e8f5e9; color: #388e3c; border: 1px solid #4caf50; padding: 8px 12px; border-radius: 6px; cursor: pointer; font-size: 0.85em;">
+                        ➡️ Morgen
+                    </button>
+                    <button type="button" onclick="app.setSchwebendEinplanenDatum('naechsteWoche')"
+                            style="background: #fff3e0; color: #f57c00; border: 1px solid #ff9800; padding: 8px 12px; border-radius: 6px; cursor: pointer; font-size: 0.85em;">
+                        📆 Nächste Wo.
+                    </button>
+                </div>
+                
+                <!-- Option: Als "Nicht zugeordnet" belassen -->
+                <div style="background: #fff3e0; border-radius: 8px; padding: 10px; margin-bottom: 15px;">
+                    <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 0.9em;">
+                        <input type="checkbox" id="schwebendEinplanenAlsSchwebend" style="width: 18px; height: 18px;">
+                        <span style="color: #e65100;">📋 Als "Nicht zugeordnet" belassen (nur Datum setzen)</span>
+                    </label>
+                </div>
+                
+                <!-- BUTTONS -->
+                <div style="display: flex; gap: 10px; margin-top: 20px;">
+                    <button type="button" onclick="app.closeSchwebendEinplanenModal()" 
+                            style="flex: 1; background: #9e9e9e; color: white; border: none; padding: 14px 10px; border-radius: 8px; cursor: pointer; font-size: 1em;">
+                        ❌ Abbrechen
+                    </button>
+                    <button type="button" onclick="app.confirmSchwebendEinplanen()" 
+                            style="flex: 1; background: #ff9800; color: white; border: none; padding: 14px 10px; border-radius: 8px; cursor: pointer; font-size: 1em; font-weight: 600;">
+                        ✅ Einplanen
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <script src="config.js"></script>
-    <script src="src/services/api.js?v=39"></script>
-    <script src="src/components/app.js?v=141"></script>
+    <script src="src/services/api.js?v=46"></script>
+    <script src="src/components/app.js?v=154"></script>
 </body>
 </html>

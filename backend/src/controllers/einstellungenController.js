@@ -149,6 +149,22 @@ class EinstellungenController {
       res.status(500).json({ error: err.message });
     }
   }
+
+  // KI-Funktionen aktivieren/deaktivieren
+  static async updateKIEnabled(req, res) {
+    try {
+      const { enabled } = req.body;
+      
+      if (typeof enabled !== 'boolean') {
+        return res.status(400).json({ error: 'enabled muss ein Boolean sein' });
+      }
+      
+      const result = await EinstellungenModel.updateKIEnabled(enabled);
+      res.json(result);
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  }
 }
 
 module.exports = EinstellungenController;

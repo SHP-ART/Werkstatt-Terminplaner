@@ -7,6 +7,9 @@ class App {
     this.autocompleteSelectedIndex = -1;
     this.uhrzeitInterval = null;
     
+    // KI-Funktionen Status (wird beim Laden der Einstellungen aktualisiert)
+    this.kiEnabled = true; // Standard: aktiviert
+    
     // Test-Datum Override: Setze auf null für echtes Datum, oder z.B. '2026-01-04' für Tests
     // Kann auch über Browser-Konsole gesetzt werden: app.testDatum = '2026-01-05'
     this.testDatum = null; // null = echtes Systemdatum verwenden
@@ -219,6 +222,12 @@ class App {
     const deleteApiKeyBtn = document.getElementById('deleteApiKeyBtn');
     if (deleteApiKeyBtn) {
       deleteApiKeyBtn.addEventListener('click', () => this.deleteChatGPTApiKey());
+    }
+    
+    // KI-Funktionen Toggle
+    const kiEnabledToggle = document.getElementById('kiEnabledToggle');
+    if (kiEnabledToggle) {
+      kiEnabledToggle.addEventListener('change', (e) => this.handleKIEnabledToggle(e));
     }
     
     // Wartende Aktionen Formular
@@ -602,6 +611,16 @@ class App {
     const closeErweiterungModal = document.getElementById('closeErweiterungModal');
     if (closeErweiterungModal) {
       closeErweiterungModal.addEventListener('click', () => this.closeErweiterungModal());
+    }
+
+    // Neu-Einplanen Modal - Klick außerhalb schließt Modal
+    const neuEinplanenModal = document.getElementById('neuEinplanenModal');
+    if (neuEinplanenModal) {
+      neuEinplanenModal.addEventListener('click', (e) => {
+        if (e.target === neuEinplanenModal) {
+          this.closeNeuEinplanenModal();
+        }
+      });
     }
 
     // Erweiterungs-Typ Radio-Buttons
@@ -11242,10 +11261,18 @@ class App {
     }
 
     // Server-Konfiguration laden
-    const serverConfig = CONFIG.getServerConfig();
-    document.getElementById('server_ip').value = serverConfig.ip;
-    document.getElementById('server_port').value = serverConfig.port;
-    document.getElementById('currentServerUrl').textContent = serverConfig.url;
+    try {
+      const serverConfig = CONFIG.getServerConfig();
+      const serverIpField = document.getElementById('server_ip');
+      const serverPortField = document.getElementById('server_port');
+      const currentServerUrlField = document.getElementById('currentServerUrl');
+      
+      if (serverIpField) serverIpField.value = serverConfig.ip;
+      if (serverPortField) serverPortField.value = serverConfig.port;
+      if (currentServerUrlField) currentServerUrlField.textContent = serverConfig.url;
+    } catch (error) {
+      console.error('Fehler beim Laden der Server-Konfiguration:', error);
+    }
   }
 
   prefillWerkstattSettings(einstellungen) {
@@ -11286,6 +11313,58 @@ class App {
           <span class="status-text">Kein API-Key konfiguriert</span>
         </div>
       `;
+    }
+    
+    // KI-Enabled Status aktualisieren
+    this.updateKIEnabledStatus(einstellungen?.ki_enabled !== false);
+  }
+
+  // KI-Funktionen Status aktualisieren (UI ein-/ausblenden)
+  updateKIEnabledStatus(enabled) {
+    const toggle = document.getElementById('kiEnabledToggle');
+    if (toggle) {
+      toggle.checked = enabled;
+    }
+    
+    // Body-Klasse setzen für CSS-basiertes Ein-/Ausblenden
+    if (enabled) {
+      document.body.classList.remove('ki-disabled');
+    } else {
+      document.body.classList.add('ki-disabled');
+    }
+    
+    // KI-Analyse Checkbox deaktivieren wenn KI aus
+    const kiAnalyseCheckbox = document.getElementById('kiAnalyseAktiv');
+    if (kiAnalyseCheckbox && !enabled) {
+      kiAnalyseCheckbox.checked = false;
+    }
+    
+    // Speichere den Status für spätere Verwendung
+    this.kiEnabled = enabled;
+  }
+
+  // KI-Funktionen aktivieren/deaktivieren (Toggle-Handler)
+  async handleKIEnabledToggle(e) {
+    const enabled = e.target.checked;
+    
+    try {
+      const result = await EinstellungenService.updateKIEnabled(enabled);
+      
+      if (result.success) {
+        this.updateKIEnabledStatus(enabled);
+        this.showToast(
+          enabled ? '🤖 KI-Funktionen aktiviert' : '🔌 KI-Funktionen deaktiviert', 
+          'success'
+        );
+      } else {
+        // Fehler - Toggle zurücksetzen
+        e.target.checked = !enabled;
+        this.showToast('Fehler beim Speichern der Einstellung', 'error');
+      }
+    } catch (error) {
+      console.error('Fehler beim Aktualisieren der KI-Einstellung:', error);
+      e.target.checked = !enabled;
+      this.showToast('Fehler beim Speichern der Einstellung', 'error');
     }
   }
 
@@ -17613,6 +17692,9 @@ class App {
       // 8. Schwebende Termine separat im eigenen Panel rendern
       this.renderSchwebendeTermine(schwebendeTermine, schwebendeContainer);
 
+      // 9. Überfällige Termine laden und rendern
+      this.loadUeberfaelligeTermine();
+
       // Kapazitäten einfärben - Mitarbeiter
       mitarbeiterListe.forEach(ma => {
         const maxMinuten = (ma.arbeitsstunden_pro_tag || 8) * 60;
@@ -17707,6 +17789,11 @@ class App {
       countElement.textContent = `${sortierteTermine.length} Termin${sortierteTermine.length !== 1 ? 'e' : ''}`;
     }
     
+    // Alle schwebenden Termine im Cache speichern, damit sie bei allen Clients verfügbar sind
+    sortierteTermine.forEach(termin => {
+      this.termineById[termin.id] = termin;
+    });
+    
     // Balken erstellen
     sortierteTermine.forEach(termin => {
       const bar = this.createSchwebenderTerminBar(termin);
@@ -17715,6 +17802,56 @@ class App {
     
     // Speichere Referenz für Sortierung
     this._schwebendeTermineCache = schwebendeTermine;
+    
+    // Drop-Zone für "Nicht zugeordnet" Container einrichten (um Termine hierher zu ziehen)
+    this.setupSchwebendDropZone(container);
+  }
+
+  /**
+   * Richtet Drop-Zone für schwebende Termine ein (zum Verschieben von Terminen in "Nicht zugeordnet")
+   */
+  setupSchwebendDropZone(container) {
+    if (!container || container._dropZoneSetup) return;
+    container._dropZoneSetup = true;
+    
+    container.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      container.classList.add('drag-over-schwebend');
+    });
+    
+    container.addEventListener('dragleave', (e) => {
+      // Nur entfernen wenn wir wirklich den Container verlassen
+      if (!container.contains(e.relatedTarget)) {
+        container.classList.remove('drag-over-schwebend');
+      }
+    });
+    
+    container.addEventListener('drop', async (e) => {
+      e.preventDefault();
+      container.classList.remove('drag-over-schwebend');
+      
+      const terminId = e.dataTransfer.getData('text/plain');
+      
+      if (terminId) {
+        try {
+          // Termin als schwebend markieren und Mitarbeiter-Zuweisung entfernen
+          await TermineService.update(terminId, { 
+            ist_schwebend: 1, 
+            mitarbeiter_id: null,
+            startzeit: null
+          });
+          
+          this.showToast('📋 Termin in "Nicht zugeordnet" verschoben', 'success');
+          
+          // Ansicht neu laden
+          this.loadAuslastungDragDrop();
+        } catch (error) {
+          console.error('Fehler beim Verschieben:', error);
+          this.showToast('Fehler beim Verschieben', 'error');
+        }
+      }
+    });
   }
 
   /**
@@ -17770,6 +17907,274 @@ class App {
     
     container.innerHTML = '';
     this.renderSchwebendeTermine(this._schwebendeTermineCache, container);
+  }
+
+  // =============================================================================
+  // ÜBERFÄLLIGE TERMINE (aus Vortagen, nicht abgeschlossen)
+  // =============================================================================
+
+  /**
+   * Lädt überfällige Termine (aus vergangenen Tagen, die noch nicht abgeschlossen sind)
+   */
+  async loadUeberfaelligeTermine() {
+    const container = document.getElementById('ueberfaelligeTermineContainer');
+    const countBadge = document.getElementById('ueberfaelligeCount');
+    
+    if (!container) return;
+    
+    try {
+      // Aktuelles Datum (heute)
+      const heute = this.formatDateLocal(this.getToday());
+      
+      // Alle Termine laden
+      const termine = await ApiService.get('/termine');
+      
+      // Filtere überfällige Termine:
+      // - Datum liegt vor heute
+      // - Status ist NICHT abgeschlossen, abgeholt oder storniert
+      // - Nicht gelöscht
+      const ueberfaellig = termine.filter(t => {
+        const terminDatum = t.datum;
+        const istVergangen = terminDatum < heute;
+        const nichtAbgeschlossen = !['abgeschlossen', 'abgeholt', 'storniert'].includes(t.status);
+        const nichtGeloescht = !t.geloescht;
+        
+        return istVergangen && nichtAbgeschlossen && nichtGeloescht;
+      });
+      
+      // Nach Datum sortieren (älteste zuerst)
+      ueberfaellig.sort((a, b) => a.datum.localeCompare(b.datum));
+      
+      // Cache für spätere Verwendung
+      this._ueberfaelligeTermineCache = ueberfaellig;
+      
+      // Counter aktualisieren
+      if (countBadge) {
+        countBadge.textContent = `${ueberfaellig.length} Termin${ueberfaellig.length !== 1 ? 'e' : ''}`;
+      }
+      
+      // Rendern
+      this.renderUeberfaelligeTermine(ueberfaellig, container);
+      
+    } catch (error) {
+      console.error('Fehler beim Laden überfälliger Termine:', error);
+      container.innerHTML = '<div class="empty-state">Fehler beim Laden</div>';
+    }
+  }
+
+  /**
+   * Rendert die überfälligen Termine
+   */
+  renderUeberfaelligeTermine(termine, container) {
+    if (!container) return;
+    
+    container.innerHTML = '';
+    
+    if (!termine || termine.length === 0) {
+      container.innerHTML = '<div class="empty-state">✅ Keine überfälligen Termine</div>';
+      return;
+    }
+    
+    const heute = this.getToday();
+    
+    termine.forEach(termin => {
+      const card = document.createElement('div');
+      card.className = 'ueberfaelliger-termin';
+      card.dataset.terminId = termin.id;
+      
+      // Tage überfällig berechnen
+      const terminDatum = new Date(termin.datum + 'T12:00:00');
+      const diffTime = heute - terminDatum;
+      const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+      
+      // Arbeiten kürzen
+      const arbeiten = termin.arbeiten ? 
+        (termin.arbeiten.length > 50 ? termin.arbeiten.substring(0, 50) + '...' : termin.arbeiten) : 
+        'Keine Arbeiten';
+      
+      // Datum formatieren
+      const datumFormatiert = new Date(termin.datum + 'T12:00:00').toLocaleDateString('de-DE', {
+        weekday: 'short', day: '2-digit', month: '2-digit'
+      });
+      
+      card.innerHTML = `
+        <div class="ueberfaelliger-termin-info">
+          <div class="ueberfaelliger-termin-header">
+            <span class="ueberfaelliger-termin-kunde">${termin.kunde_name || 'Unbekannt'}</span>
+            <span class="ueberfaelliger-termin-datum">📅 ${datumFormatiert} (${diffDays} Tag${diffDays !== 1 ? 'e' : ''} überfällig)</span>
+          </div>
+          <div class="ueberfaelliger-termin-details">
+            <span class="ueberfaelliger-termin-kennzeichen">${termin.kennzeichen || ''}</span>
+            <span class="ueberfaelliger-termin-arbeiten">${arbeiten}</span>
+          </div>
+        </div>
+        <div class="ueberfaelliger-termin-actions">
+          <button class="btn btn-abschliessen" onclick="app.abschliessenUeberfaelligenTermin(${termin.id})" title="Als abgeschlossen markieren">
+            ✅ Abschließen
+          </button>
+          <button class="btn btn-einplanen" onclick="app.neuEinplanenUeberfaelligenTermin(${termin.id})" title="Auf heute oder anderes Datum neu einplanen">
+            📅 Neu einplanen
+          </button>
+          <button class="btn btn-details" onclick="app.showTerminDetails(${termin.id})" title="Details anzeigen">
+            🔍
+          </button>
+        </div>
+      `;
+      
+      container.appendChild(card);
+    });
+  }
+
+  /**
+   * Markiert einen überfälligen Termin als abgeschlossen
+   */
+  async abschliessenUeberfaelligenTermin(terminId) {
+    if (!confirm('Termin als abgeschlossen markieren?')) return;
+    
+    try {
+      await ApiService.put(`/termine/${terminId}`, { status: 'abgeschlossen' });
+      
+      this.showToast('✅ Termin abgeschlossen', 'success');
+      
+      // Überfällige Termine neu laden
+      this.loadUeberfaelligeTermine();
+      
+      // Auch andere Listen aktualisieren
+      this.loadTermine();
+      
+    } catch (error) {
+      console.error('Fehler beim Abschließen:', error);
+      this.showToast('Fehler beim Abschließen: ' + (error.message || 'Unbekannt'), 'error');
+    }
+  }
+
+  /**
+   * Plant einen überfälligen Termin auf ein neues Datum - öffnet Modal
+   */
+  neuEinplanenUeberfaelligenTermin(terminId) {
+    // Termin aus Cache holen
+    const termin = this._ueberfaelligeTermineCache?.find(t => t.id === terminId);
+    if (!termin) {
+      this.showToast('Termin nicht gefunden', 'error');
+      return;
+    }
+    
+    // Termin-ID merken für späteren Zugriff
+    this._neuEinplanenTerminId = terminId;
+    
+    // Modal-Felder füllen
+    document.getElementById('neuEinplanenKunde').textContent = termin.kunde_name || 'Unbekannt';
+    document.getElementById('neuEinplanenKennzeichen').textContent = termin.kennzeichen || '';
+    document.getElementById('neuEinplanenArbeiten').textContent = termin.arbeiten ? 
+      (termin.arbeiten.length > 40 ? termin.arbeiten.substring(0, 40) + '...' : termin.arbeiten) : 
+      'Keine Arbeiten';
+    document.getElementById('neuEinplanenAltDatum').textContent = 
+      new Date(termin.datum + 'T12:00:00').toLocaleDateString('de-DE', {
+        weekday: 'long', day: '2-digit', month: '2-digit', year: 'numeric'
+      });
+    
+    // Datum auf heute setzen
+    const heute = this.formatDateLocal(this.getToday());
+    document.getElementById('neuEinplanenDatum').value = heute;
+    document.getElementById('neuEinplanenDatum').min = heute;
+    document.getElementById('neuEinplanenStatusReset').checked = true;
+    
+    // Modal anzeigen
+    document.getElementById('neuEinplanenModal').style.display = 'flex';
+  }
+
+  /**
+   * Schließt das Neu-Einplanen Modal
+   */
+  closeNeuEinplanenModal() {
+    document.getElementById('neuEinplanenModal').style.display = 'none';
+    this._neuEinplanenTerminId = null;
+  }
+
+  /**
+   * Setzt das Datum im Neu-Einplanen Modal (Schnellauswahl)
+   */
+  setNeuEinplanenDatum(auswahl) {
+    const datumInput = document.getElementById('neuEinplanenDatum');
+    const heute = this.getToday();
+    
+    let neuesDatum;
+    switch (auswahl) {
+      case 'heute':
+        neuesDatum = heute;
+        break;
+      case 'morgen':
+        neuesDatum = new Date(heute);
+        neuesDatum.setDate(neuesDatum.getDate() + 1);
+        break;
+      case 'naechsteWoche':
+        neuesDatum = new Date(heute);
+        // Zum nächsten Montag
+        const tagBisMonatg = (8 - neuesDatum.getDay()) % 7 || 7;
+        neuesDatum.setDate(neuesDatum.getDate() + tagBisMonatg);
+        break;
+      default:
+        return;
+    }
+    
+    datumInput.value = this.formatDateLocal(neuesDatum);
+  }
+
+  /**
+   * Bestätigt das Neu-Einplanen und führt es aus
+   */
+  async confirmNeuEinplanen() {
+    const terminId = this._neuEinplanenTerminId;
+    if (!terminId) {
+      this.showToast('Kein Termin ausgewählt', 'error');
+      return;
+    }
+    
+    const neuesDatum = document.getElementById('neuEinplanenDatum').value;
+    const statusReset = document.getElementById('neuEinplanenStatusReset').checked;
+    const alsSchwebend = document.getElementById('neuEinplanenAlsSchwebend')?.checked ?? true;
+    
+    if (!neuesDatum) {
+      this.showToast('Bitte ein Datum auswählen', 'warning');
+      return;
+    }
+    
+    try {
+      const updateData = { 
+        datum: neuesDatum,
+        ist_schwebend: alsSchwebend ? 1 : 0,  // Als "Nicht zugeordnet" markieren
+        mitarbeiter_id: alsSchwebend ? null : undefined  // Mitarbeiter-Zuweisung entfernen wenn schwebend
+      };
+      if (statusReset) {
+        updateData.status = 'offen';
+      }
+      
+      await ApiService.put(`/termine/${terminId}`, updateData);
+      
+      const datumFormatiert = new Date(neuesDatum + 'T12:00:00').toLocaleDateString('de-DE', {
+        weekday: 'short', day: '2-digit', month: '2-digit'
+      });
+      
+      const zielText = alsSchwebend ? ' → Nicht zugeordnet' : '';
+      this.showToast(`📅 Termin auf ${datumFormatiert} verschoben${zielText}`, 'success');
+      
+      // Modal schließen
+      this.closeNeuEinplanenModal();
+      
+      // Listen aktualisieren
+      this.loadUeberfaelligeTermine();
+      this.loadTermine();
+      
+      // Falls Drag&Drop-Ansicht aktiv, auch dort aktualisieren
+      const datumInput = document.getElementById('auslastungDragDropDatum');
+      if (datumInput && datumInput.value === neuesDatum) {
+        this.loadAuslastungDragDrop();
+      }
+      
+    } catch (error) {
+      console.error('Fehler beim Neu-Einplanen:', error);
+      this.showToast('Fehler beim Neu-Einplanen: ' + (error.message || 'Unbekannt'), 'error');
+    }
   }
 
   /**
@@ -17989,14 +18394,23 @@ class App {
       this.loadTerminInForm(termin.id);
     });
 
-    // Shift+Click für schnellen Status-Wechsel
+    // Shift+Click für schnellen Status-Wechsel, normaler Click für Details
     bar.addEventListener('click', (e) => {
+      // Ignoriere Klicks auf den Einplanen-Button
+      if (e.target.closest('.btn-einplanen')) {
+        return;
+      }
+      
       if (e.shiftKey) {
         e.preventDefault();
         e.stopPropagation();
         const aktuellerTermin = this.termineById[termin.id] || termin;
         const startzeit = termin.startzeit || termin.bring_zeit || '08:00';
         this.showSchnellStatusDialog(aktuellerTermin, bar, startzeit, dauer);
+      } else {
+        // Normaler Klick - Details anzeigen
+        e.stopPropagation();
+        this.showTerminDetails(termin.id);
       }
     });
 
@@ -18004,26 +18418,125 @@ class App {
   }
 
   /**
-   * Schwebenden Termin in den aktuell gewählten Tag einplanen
+   * Schwebenden Termin in den aktuell gewählten Tag einplanen - Modal öffnen
    */
   async einplanenSchwebenderTermin(terminId) {
-    // Datum aus dem Datumsfeld holen
-    const datumInput = document.getElementById('auslastungDragDropDatum');
-    if (!datumInput || !datumInput.value) {
-      alert('Bitte wählen Sie zuerst ein Datum aus.');
+    // Termin-Daten laden - erst aus Cache, dann vom Server
+    let termin = this.termineById[terminId];
+    
+    if (!termin) {
+      // Termin nicht im Cache - direkt vom Server laden
+      try {
+        termin = await TermineService.getById(terminId);
+        if (termin) {
+          // In Cache speichern
+          this.termineById[terminId] = termin;
+        }
+      } catch (error) {
+        console.error('Fehler beim Laden des Termins:', error);
+      }
+    }
+    
+    if (!termin) {
+      console.error('Termin nicht gefunden:', terminId);
+      alert('Termin konnte nicht geladen werden. Bitte Seite neu laden.');
       return;
     }
     
-    const datum = datumInput.value;
+    // Termin-ID speichern
+    this.schwebendEinplanenTerminId = terminId;
+    
+    // Modal-Felder befüllen
+    document.getElementById('schwebendEinplanenKunde').textContent = termin.kunde_name || 'Unbekannt';
+    document.getElementById('schwebendEinplanenKennzeichen').textContent = termin.kennzeichen || '-';
+    document.getElementById('schwebendEinplanenArbeiten').textContent = termin.arbeit || this.getTerminArbeitenText(termin) || '-';
+    
+    // Datum aus dem aktuellen Datumsfeld übernehmen
+    const datumInput = document.getElementById('auslastungDragDropDatum');
+    const datum = datumInput?.value || new Date().toISOString().split('T')[0];
+    document.getElementById('schwebendEinplanenDatum').value = datum;
+    
+    // Checkbox standardmäßig aktiviert = Termin bleibt in "Nicht zugeordnet"
+    document.getElementById('schwebendEinplanenAlsSchwebend').checked = true;
+    
+    // Modal anzeigen
+    document.getElementById('schwebendEinplanenModal').style.display = 'flex';
+  }
+  
+  /**
+   * Modal für schwebende Termine schließen
+   */
+  closeSchwebendEinplanenModal() {
+    document.getElementById('schwebendEinplanenModal').style.display = 'none';
+    this.schwebendEinplanenTerminId = null;
+  }
+  
+  /**
+   * Schnellauswahl-Datum für schwebende Termine setzen
+   */
+  setSchwebendEinplanenDatum(option) {
+    const heute = new Date();
+    let datum;
+    
+    switch(option) {
+      case 'heute':
+        datum = heute;
+        break;
+      case 'morgen':
+        datum = new Date(heute);
+        datum.setDate(datum.getDate() + 1);
+        break;
+      case 'naechsteWoche':
+        datum = new Date(heute);
+        datum.setDate(datum.getDate() + 7);
+        break;
+      default:
+        datum = heute;
+    }
+    
+    document.getElementById('schwebendEinplanenDatum').value = datum.toISOString().split('T')[0];
+  }
+  
+  /**
+   * Schwebenden Termin einplanen bestätigen
+   */
+  async confirmSchwebendEinplanen() {
+    const terminId = this.schwebendEinplanenTerminId;
+    if (!terminId) return;
+    
+    const datum = document.getElementById('schwebendEinplanenDatum').value;
+    if (!datum) {
+      alert('Bitte wählen Sie ein Datum aus.');
+      return;
+    }
+    
+    const alsSchwebendBelassen = document.getElementById('schwebendEinplanenAlsSchwebend').checked;
     
     try {
-      // Termin aktualisieren: ist_schwebend = 0 und Datum setzen
-      await TermineService.update(terminId, {
-        ist_schwebend: 0,
+      const updateData = {
         datum: datum
-      });
+      };
       
-      this.showToast(`Termin wurde für ${this.formatDatum(datum)} eingeplant`, 'success');
+      if (alsSchwebendBelassen) {
+        // Checkbox aktiviert: Termin bleibt in "Nicht zugeordnet" (ist_schwebend = 1)
+        // ist_schwebend muss nicht explizit gesetzt werden, da es schon 1 ist
+        // Nur Datum wird aktualisiert
+      } else {
+        // Checkbox nicht aktiviert: Termin wird fest eingeplant (ist_schwebend = 0)
+        updateData.ist_schwebend = 0;
+      }
+      
+      console.log('Update Termin:', terminId, updateData);
+      await TermineService.update(terminId, updateData);
+      
+      if (alsSchwebendBelassen) {
+        this.showToast(`Termin für ${this.formatDatum(datum)} vorgemerkt (Nicht zugeordnet)`, 'success');
+      } else {
+        this.showToast(`Termin wurde für ${this.formatDatum(datum)} eingeplant`, 'success');
+      }
+      
+      // Modal schließen
+      this.closeSchwebendEinplanenModal();
       
       // Ansicht neu laden
       this.loadAuslastungDragDrop();
@@ -20522,6 +21035,12 @@ class App {
    * Wird bei jeder Eingabe im Arbeiten-Feld aufgerufen
    */
   handleKIAutoSuggest(e) {
+    // Prüfe ob KI global aktiviert ist
+    if (this.kiEnabled === false) {
+      this.hideKIVorschlaege();
+      return;
+    }
+    
     // Prüfe ob KI-Analyse per Checkbox aktiviert ist
     const kiCheckbox = document.getElementById('kiAnalyseAktiv');
     if (!kiCheckbox || !kiCheckbox.checked) {
@@ -21714,6 +22233,12 @@ class App {
    * KI-Tagesplanungsvorschlag anfordern
    */
   async requestKITagesplanung() {
+    // Prüfe ob KI global aktiviert ist
+    if (this.kiEnabled === false) {
+      this.showToast('🔌 KI-Funktionen sind deaktiviert. Aktivieren Sie diese unter Einstellungen → KI / API', 'warning');
+      return;
+    }
+    
     const datumInput = document.getElementById('auslastungDragDropDatum');
     if (!datumInput || !datumInput.value) {
       alert('Bitte wählen Sie zuerst ein Datum aus.');
@@ -21741,6 +22266,12 @@ class App {
    * KI-Wochenplanungsvorschlag anfordern (schwebende Termine verteilen)
    */
   async requestKIWochenplanung() {
+    // Prüfe ob KI global aktiviert ist
+    if (this.kiEnabled === false) {
+      this.showToast('🔌 KI-Funktionen sind deaktiviert. Aktivieren Sie diese unter Einstellungen → KI / API', 'warning');
+      return;
+    }
+    
     const datumInput = document.getElementById('auslastungDragDropDatum');
     if (!datumInput || !datumInput.value) {
       alert('Bitte wählen Sie zuerst ein Datum aus.');
