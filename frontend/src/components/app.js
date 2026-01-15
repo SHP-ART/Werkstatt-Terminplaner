@@ -22898,16 +22898,68 @@ class App {
       refreshBtn.onclick = () => this.loadInternTeamUebersicht();
     }
 
+    // Tablet-Modus Button
+    const tabletModeBtn = document.getElementById('internTabletModeBtn');
+    if (tabletModeBtn) {
+      tabletModeBtn.onclick = () => this.toggleInternTabletMode(true);
+    }
+
+    // Tablet-Modus Exit Button
+    const tabletExitBtn = document.getElementById('internTabletExitBtn');
+    if (tabletExitBtn) {
+      tabletExitBtn.onclick = () => this.toggleInternTabletMode(false);
+    }
+
+    // Tablet-Modus Refresh Button
+    const tabletRefreshBtn = document.getElementById('internTabletRefresh');
+    if (tabletRefreshBtn) {
+      tabletRefreshBtn.onclick = () => this.loadInternTeamUebersicht();
+    }
+
     // Lade Team-Übersicht
     await this.loadInternTeamUebersicht();
 
     // Auto-Refresh alle 60 Sekunden
     this.internRefreshInterval = setInterval(() => {
       const internTab = document.getElementById('intern');
-      if (internTab && internTab.classList.contains('active')) {
+      if (internTab && (internTab.classList.contains('active') || internTab.classList.contains('intern-tablet-mode'))) {
         this.loadInternTeamUebersicht();
       }
     }, 60000);
+  }
+
+  /**
+   * Schaltet den Tablet-Modus ein/aus
+   */
+  toggleInternTabletMode(enable) {
+    const internTab = document.getElementById('intern');
+    const body = document.body;
+    
+    if (enable) {
+      // Tablet-Modus aktivieren
+      internTab.classList.add('intern-tablet-mode');
+      body.classList.add('intern-tablet-mode-active');
+      
+      // Optional: Vollbild anfordern (funktioniert nicht auf allen Geräten)
+      if (document.documentElement.requestFullscreen) {
+        document.documentElement.requestFullscreen().catch(() => {
+          // Ignoriere Fehler wenn Vollbild nicht möglich
+        });
+      }
+      
+      this.showToast('Tablet-Modus aktiviert 📱', 'info');
+    } else {
+      // Tablet-Modus deaktivieren
+      internTab.classList.remove('intern-tablet-mode');
+      body.classList.remove('intern-tablet-mode-active');
+      
+      // Vollbild beenden
+      if (document.exitFullscreen && document.fullscreenElement) {
+        document.exitFullscreen().catch(() => {});
+      }
+      
+      this.showToast('Tablet-Modus beendet', 'info');
+    }
   }
 
   /**
