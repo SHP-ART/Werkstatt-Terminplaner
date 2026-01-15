@@ -2344,6 +2344,8 @@ class App {
       this.loadErsatzautos();
     } else if (tabName === 'teile-bestellen') {
       this.loadTeileBestellungen();
+    } else if (tabName === 'intern') {
+      this.initInternTab();
     }
   }
 
@@ -22876,6 +22878,392 @@ class App {
       ist_schwebend: 0
     });
   }
+
+  // ================================================
+  // INTERN TAB - Team Arbeitsübersicht
+  // ================================================
+
+  /**
+   * Initialisiert den Intern-Tab
+   */
+  async initInternTab() {
+    // Stoppe eventuell laufende Auto-Refresh
+    if (this.internRefreshInterval) {
+      clearInterval(this.internRefreshInterval);
+    }
+
+    // Refresh-Button
+    const refreshBtn = document.getElementById('internRefreshBtn');
+    if (refreshBtn) {
+      refreshBtn.onclick = () => this.loadInternTeamUebersicht();
+    }
+
+    // Lade Team-Übersicht
+    await this.loadInternTeamUebersicht();
+
+    // Auto-Refresh alle 60 Sekunden
+    this.internRefreshInterval = setInterval(() => {
+      const internTab = document.getElementById('intern');
+      if (internTab && internTab.classList.contains('active')) {
+        this.loadInternTeamUebersicht();
+      }
+    }, 60000);
+  }
+
+  /**
+   * Lädt die komplette Team-Übersicht (alle Mitarbeiter + Lehrlinge)
+   */
+  async loadInternTeamUebersicht() {
+    const mitarbeiterContainer = document.getElementById('internMitarbeiterKacheln');
+    const lehrlingeContainer = document.getElementById('internLehrlingeKacheln');
+    const keineLehrlingeEl = document.getElementById('internKeineLehrlinge');
+
+    // Loading State
+    if (mitarbeiterContainer) {
+      mitarbeiterContainer.innerHTML = `
+        <div class="intern-loading">
+          <span class="loading-spinner"></span>
+          <span>Lade Team-Übersicht...</span>
+        </div>
+      `;
+    }
+
+    try {
+      // Hole alle Daten parallel
+      const heute = this.formatDateLocal(this.getToday());
+      const [mitarbeiter, lehrlinge, termineHeute] = await Promise.all([
+        ApiService.get('/mitarbeiter'),
+        ApiService.get('/lehrlinge'),
+        ApiService.get(`/termine?datum=${heute}`)
+      ]);
+
+      // Filtere aktive Mitarbeiter und Lehrlinge
+      const aktiveMitarbeiter = mitarbeiter.filter(m => m.aktiv === 1);
+      const aktiveLehrlinge = lehrlinge.filter(l => l.aktiv === 1);
+
+      // Filtere relevante Termine
+      const relevanteTermine = termineHeute.filter(t => 
+        t.arbeit !== 'Fahrzeug aus Import' && 
+        t.arbeit !== 'Fahrzeug hinzugefügt'
+      );
+
+      // Render Mitarbeiter-Kacheln
+      if (mitarbeiterContainer) {
+        mitarbeiterContainer.innerHTML = aktiveMitarbeiter.map(m => 
+          this.renderInternPersonKachel(m, relevanteTermine, 'mitarbeiter')
+        ).join('');
+      }
+
+      // Render Lehrlinge-Kacheln
+      if (lehrlingeContainer) {
+        if (aktiveLehrlinge.length > 0) {
+          if (keineLehrlingeEl) keineLehrlingeEl.style.display = 'none';
+          lehrlingeContainer.innerHTML = aktiveLehrlinge.map(l => 
+            this.renderInternPersonKachel(l, relevanteTermine, 'lehrling')
+          ).join('');
+        } else {
+          lehrlingeContainer.innerHTML = '';
+          if (keineLehrlingeEl) keineLehrlingeEl.style.display = 'flex';
+        }
+      }
+
+    } catch (error) {
+      console.error('Fehler beim Laden der Team-Übersicht:', error);
+      if (mitarbeiterContainer) {
+        mitarbeiterContainer.innerHTML = `
+          <div class="intern-keine-auftraege">
+            <span>⚠️</span> Fehler beim Laden der Team-Übersicht
+          </div>
+        `;
+      }
+    }
+  }
+
+  /**
+   * Rendert eine Kachel für einen Mitarbeiter oder Lehrling
+   */
+  renderInternPersonKachel(person, alleTermine, typ = 'mitarbeiter') {
+    const personId = person.id;
+    const personName = person.name;
+    const isLehrling = typ === 'lehrling';
+
+    // Finde Termine für diese Person
+    let personTermine;
+    if (isLehrling) {
+      // Lehrlinge haben lehrling_id
+      personTermine = alleTermine.filter(t => t.lehrling_id == personId);
+    } else {
+      // Mitarbeiter haben mitarbeiter_id
+      personTermine = alleTermine.filter(t => t.mitarbeiter_id == personId);
+    }
+
+    // Sortiere nach Zeit
+    personTermine.sort((a, b) => {
+      const zeitA = a.startzeit || a.bring_zeit || '23:59';
+      const zeitB = b.startzeit || b.bring_zeit || '23:59';
+      return zeitA.localeCompare(zeitB);
+    });
+
+    // Finde aktuellen Auftrag (in_arbeit)
+    const aktuellerAuftrag = personTermine.find(t => t.status === 'in_arbeit');
+    
+    // Finde nächsten Auftrag (geplant)
+    const naechsterAuftrag = personTermine.find(t => 
+      t.status !== 'in_arbeit' && 
+      t.status !== 'abgeschlossen' && 
+      t.status !== 'storniert'
+    );
+
+    // Prüfe ob Lehrling in Berufsschule ist
+    let inBerufsschule = false;
+    if (isLehrling && person.berufsschul_wochen) {
+      const schulCheck = this.isLehrlingInBerufsschule(person, this.getToday());
+      inBerufsschule = schulCheck.inSchule;
+    }
+
+    // Status Badge bestimmen
+    let badgeClass = 'frei';
+    let badgeText = 'Frei';
+    if (inBerufsschule) {
+      badgeClass = 'pause';
+      badgeText = 'Berufsschule';
+    } else if (aktuellerAuftrag) {
+      badgeClass = 'in-arbeit';
+      badgeText = 'In Arbeit';
+    }
+
+    // Body Content
+    let bodyContent = '';
+    
+    if (inBerufsschule) {
+      bodyContent = `
+        <div class="intern-person-schule">
+          <div class="schule-icon">📚</div>
+          <div class="schule-text">Heute in der Berufsschule</div>
+        </div>
+      `;
+    } else if (aktuellerAuftrag) {
+      // Berechne Fortschritt
+      const fortschritt = this.berechneAuftragFortschritt(aktuellerAuftrag);
+      const restzeit = this.berechneRestzeit(aktuellerAuftrag);
+      const isUeberzogen = fortschritt > 100;
+
+      bodyContent = `
+        <div class="intern-person-auftrag">
+          <div class="auftrag-label">🔧 Aktueller Auftrag</div>
+          <div class="auftrag-nr">${aktuellerAuftrag.termin_nr || '-'}</div>
+          <div class="auftrag-kunde">${this.escapeHtml(aktuellerAuftrag.kunde_name || '-')}</div>
+          <div class="auftrag-kennzeichen">${this.escapeHtml(aktuellerAuftrag.kennzeichen || '-')}</div>
+          <div class="auftrag-arbeit">${this.escapeHtml(aktuellerAuftrag.arbeit || '-')}</div>
+        </div>
+        
+        <div class="intern-person-zeit">
+          <div class="intern-person-zeit-item">
+            <div class="zeit-label">Beginn</div>
+            <div class="zeit-value">${aktuellerAuftrag.startzeit || aktuellerAuftrag.bring_zeit || '--:--'}</div>
+          </div>
+          <div class="intern-person-zeit-item">
+            <div class="zeit-label">Fertig ca.</div>
+            <div class="zeit-value">${this.berechneEndzeit(aktuellerAuftrag)}</div>
+          </div>
+          <div class="intern-person-zeit-item">
+            <div class="zeit-label">Rest</div>
+            <div class="zeit-value" style="color: ${isUeberzogen ? '#dc3545' : 'var(--accent)'}">${restzeit}</div>
+          </div>
+        </div>
+        
+        <div class="intern-person-fortschritt">
+          <div class="intern-person-fortschritt-bar">
+            <div class="intern-person-fortschritt-fill ${isUeberzogen ? 'ueberzogen' : ''}" 
+                 style="width: ${Math.min(fortschritt, 100)}%"></div>
+          </div>
+          <div class="intern-person-fortschritt-text">
+            <span>Fortschritt</span>
+            <span>${Math.min(fortschritt, 150)}%</span>
+          </div>
+        </div>
+        
+        ${naechsterAuftrag ? `
+          <div class="intern-person-naechster">
+            <div class="naechster-label">📋 Danach:</div>
+            <div class="naechster-info">
+              <span class="naechster-kunde">${this.escapeHtml(naechsterAuftrag.kunde_name || '-')} • ${this.escapeHtml(naechsterAuftrag.kennzeichen || '-')}</span>
+              <span class="naechster-zeit">${naechsterAuftrag.startzeit || naechsterAuftrag.bring_zeit || '--:--'}</span>
+            </div>
+          </div>
+        ` : ''}
+      `;
+    } else if (naechsterAuftrag) {
+      // Kein aktueller Auftrag, aber nächster geplant
+      bodyContent = `
+        <div class="intern-person-leer">
+          <div class="leer-icon">☕</div>
+          <div class="leer-text">Aktuell kein Auftrag</div>
+        </div>
+        
+        <div class="intern-person-naechster">
+          <div class="naechster-label">⏰ Nächster Auftrag:</div>
+          <div class="intern-person-auftrag" style="border-left-color: #28a745;">
+            <div class="auftrag-nr">${naechsterAuftrag.termin_nr || '-'}</div>
+            <div class="auftrag-kunde">${this.escapeHtml(naechsterAuftrag.kunde_name || '-')}</div>
+            <div class="auftrag-kennzeichen">${this.escapeHtml(naechsterAuftrag.kennzeichen || '-')}</div>
+            <div class="auftrag-arbeit">${this.escapeHtml(naechsterAuftrag.arbeit || '-')}</div>
+          </div>
+          <div class="intern-person-zeit" style="margin-top: 10px;">
+            <div class="intern-person-zeit-item">
+              <div class="zeit-label">Start</div>
+              <div class="zeit-value">${naechsterAuftrag.startzeit || naechsterAuftrag.bring_zeit || '--:--'}</div>
+            </div>
+            <div class="intern-person-zeit-item">
+              <div class="zeit-label">Dauer</div>
+              <div class="zeit-value">${this.formatMinutesToHours(naechsterAuftrag.geschaetzte_zeit || 0)}</div>
+            </div>
+            <div class="intern-person-zeit-item">
+              <div class="zeit-label">Wartezeit</div>
+              <div class="zeit-value">${this.berechneWartezeitBis(naechsterAuftrag)}</div>
+            </div>
+          </div>
+        </div>
+      `;
+    } else {
+      // Keine Aufträge heute
+      bodyContent = `
+        <div class="intern-person-leer">
+          <div class="leer-icon">🎉</div>
+          <div class="leer-text">Keine Aufträge für heute</div>
+        </div>
+      `;
+    }
+
+    return `
+      <div class="intern-person-kachel ${isLehrling ? 'lehrling' : ''}">
+        <div class="intern-person-header">
+          <div class="intern-person-name">
+            <span class="person-icon">${isLehrling ? '🎓' : '👷'}</span>
+            <span>${this.escapeHtml(personName)}</span>
+          </div>
+          <div class="intern-person-badge ${badgeClass}">${badgeText}</div>
+        </div>
+        <div class="intern-person-body">
+          ${bodyContent}
+        </div>
+      </div>
+    `;
+  }
+
+  /**
+   * Berechnet den Fortschritt basierend auf der verstrichenen Zeit
+   */
+  berechneAuftragFortschritt(termin) {
+    if (!termin.startzeit && !termin.bring_zeit) return 0;
+    
+    const startzeit = termin.startzeit || termin.bring_zeit;
+    const geschaetzteZeit = termin.geschaetzte_zeit || 60; // Default 60 Min
+    
+    const jetzt = this.getToday();
+    const [stunden, minuten] = startzeit.split(':').map(Number);
+    const startDate = new Date(jetzt);
+    startDate.setHours(stunden, minuten, 0, 0);
+    
+    const verstricheneMinuten = (jetzt - startDate) / 1000 / 60;
+    const fortschritt = (verstricheneMinuten / geschaetzteZeit) * 100;
+    
+    return Math.round(Math.max(0, fortschritt));
+  }
+
+  /**
+   * Berechnet die verbleibende Zeit
+   */
+  berechneRestzeit(termin) {
+    const startzeit = termin.startzeit || termin.bring_zeit;
+    if (!startzeit) return '--:--';
+    
+    const geschaetzteZeit = termin.geschaetzte_zeit || 60;
+    
+    const jetzt = this.getToday();
+    const [stunden, minuten] = startzeit.split(':').map(Number);
+    const startDate = new Date(jetzt);
+    startDate.setHours(stunden, minuten, 0, 0);
+    
+    const verstricheneMinuten = (jetzt - startDate) / 1000 / 60;
+    const restMinuten = geschaetzteZeit - verstricheneMinuten;
+    
+    if (restMinuten <= 0) {
+      const ueberzogen = Math.abs(Math.round(restMinuten));
+      return `+${this.formatMinutesToHours(ueberzogen)}`;
+    }
+    
+    return `~${this.formatMinutesToHours(Math.round(restMinuten))}`;
+  }
+
+  /**
+   * Berechnet die geplante Endzeit
+   */
+  berechneEndzeit(termin) {
+    const startzeit = termin.startzeit || termin.bring_zeit;
+    if (!startzeit) return '--:--';
+    
+    const geschaetzteZeit = termin.geschaetzte_zeit || 60;
+    const [stunden, minuten] = startzeit.split(':').map(Number);
+    
+    const endMinuten = stunden * 60 + minuten + geschaetzteZeit;
+    const endStunden = Math.floor(endMinuten / 60);
+    const endMin = endMinuten % 60;
+    
+    return `${String(endStunden).padStart(2, '0')}:${String(endMin).padStart(2, '0')}`;
+  }
+
+  /**
+   * Berechnet die Wartezeit bis zu einem Termin
+   */
+  berechneWartezeitBis(termin) {
+    const zeit = termin.startzeit || termin.bring_zeit;
+    if (!zeit) return '--:--';
+
+    const jetzt = this.getToday();
+    const [stunden, minuten] = zeit.split(':').map(Number);
+    const terminDate = new Date(jetzt);
+    terminDate.setHours(stunden, minuten, 0, 0);
+    
+    const diffMs = terminDate - jetzt;
+    if (diffMs < 0) return 'Jetzt';
+    
+    const diffMinuten = Math.round(diffMs / 1000 / 60);
+    
+    if (diffMinuten < 60) {
+      return `${diffMinuten} min`;
+    } else {
+      const std = Math.floor(diffMinuten / 60);
+      const min = diffMinuten % 60;
+      return `${std}h ${min}m`;
+    }
+  }
+
+  /**
+   * Öffnet Termin-Details vom Intern-Tab aus
+   */
+  openTerminDetailFromIntern(terminId) {
+    // Wechsle zum Termine-Tab und öffne Details
+    const termineTab = document.getElementById('termine');
+    const termineTabButton = document.querySelector('.tab-button[data-tab="termine"]');
+    
+    // Alle Tabs deaktivieren
+    document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+    document.querySelectorAll('.tab-button').forEach(b => b.classList.remove('active'));
+    
+    // Termine-Tab aktivieren
+    if (termineTab && termineTabButton) {
+      termineTab.classList.add('active');
+      termineTabButton.classList.add('active');
+      
+      // Lade und zeige die Termin-Details
+      setTimeout(() => {
+        this.showTerminDetails(terminId);
+      }, 100);
+    }
+  }
+
+  // === ENDE INTERN TAB METHODEN ===
 }
 
 

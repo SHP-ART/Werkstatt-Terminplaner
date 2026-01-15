@@ -40,6 +40,7 @@
             <button class="tab-button" data-tab="zeitverwaltung"><span>⏱️ Zeitverwaltung</span></button>
             <button class="tab-button" data-tab="auslastung"><span>📈 Auslastung</span></button>
             <button class="tab-button" data-tab="auslastung-dragdrop"><span>🏗️ Planung (Beta)</span></button>
+            <button class="tab-button" data-tab="intern"><span>👷 Intern</span></button>
             <button class="tab-button" data-tab="papierkorb"><span>🗑️ Papierkorb</span></button>
             <button class="tab-button" data-tab="einstellungen"><span>⚙️ Einstellungen</span></button>
         </div>
@@ -2500,6 +2501,46 @@
                     <button type="button" class="btn btn-primary" onclick="app.teileNeuHinzufuegen()">
                         ➕ Hinzufügen
                     </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- ================================================
+             INTERN TAB - Mitarbeiter Arbeitsübersicht
+             ================================================ -->
+        <div id="intern" class="tab-content">
+            <div class="page-header intern-header">
+                <div class="intern-header-left">
+                    <h2>👷 Intern – Team-Übersicht</h2>
+                    <p class="page-subtitle">Aktuelle Arbeiten aller Mitarbeiter und Lehrlinge auf einen Blick</p>
+                </div>
+                <div class="intern-header-right">
+                    <button type="button" class="btn btn-secondary btn-sm" id="internRefreshBtn" title="Aktualisieren">
+                        🔄 Aktualisieren
+                    </button>
+                </div>
+            </div>
+
+            <!-- Alle Mitarbeiter Kacheln -->
+            <div id="internMitarbeiterSection">
+                <h3 class="intern-section-title">👷 Mitarbeiter</h3>
+                <div id="internMitarbeiterKacheln" class="intern-team-grid">
+                    <!-- Dynamisch befüllt -->
+                    <div class="intern-loading">
+                        <span class="loading-spinner"></span>
+                        <span>Lade Team-Übersicht...</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Alle Lehrlinge Kacheln -->
+            <div id="internLehrlingeSection" style="margin-top: 30px;">
+                <h3 class="intern-section-title">🎓 Lehrlinge</h3>
+                <div id="internLehrlingeKacheln" class="intern-team-grid">
+                    <!-- Dynamisch befüllt -->
+                </div>
+                <div id="internKeineLehrlinge" class="intern-keine-auftraege" style="display: none;">
+                    <span>📭</span> Keine aktiven Lehrlinge
                 </div>
             </div>
         </div>

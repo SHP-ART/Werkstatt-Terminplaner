@@ -12051,3 +12051,921 @@ mark.highlight {
     padding: 6px 12px;
     font-size: 0.85rem;
 }
+
+/* ================================================
+   INTERN TAB - Mitarbeiter Arbeitsübersicht
+   ================================================ */
+
+/* Header Styling */
+.intern-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    flex-wrap: wrap;
+    gap: 20px;
+}
+
+.intern-header-left {
+    flex: 1;
+}
+
+.intern-header-right {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    background: white;
+    padding: 12px 20px;
+    border-radius: 12px;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.08);
+}
+
+.intern-header-right label {
+    font-weight: 600;
+    color: #64748b;
+    font-size: 0.9rem;
+}
+
+.intern-select {
+    padding: 10px 16px;
+    border: 2px solid #e2e8f0;
+    border-radius: 8px;
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--steel);
+    background: white;
+    min-width: 200px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.intern-select:hover {
+    border-color: var(--accent);
+}
+
+.intern-select:focus {
+    outline: none;
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px rgba(210, 20, 44, 0.1);
+}
+
+#internRefreshBtn {
+    padding: 10px 14px;
+    font-size: 1.1rem;
+    border-radius: 8px;
+    transition: all 0.2s ease;
+}
+
+#internRefreshBtn:hover {
+    transform: rotate(180deg);
+}
+
+/* Section Titles */
+.intern-section-title {
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: var(--steel);
+    margin: 25px 0 15px 0;
+    padding-bottom: 10px;
+    border-bottom: 2px solid #e2e8f0;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+/* Loading State */
+.intern-loading {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 15px;
+    padding: 60px 20px;
+    color: #64748b;
+    font-size: 1rem;
+}
+
+.loading-spinner {
+    width: 24px;
+    height: 24px;
+    border: 3px solid #e2e8f0;
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+/* ========================================
+   AKTUELLE ARBEIT - Große Hauptkachel
+   ======================================== */
+
+.intern-aktuell-container {
+    background: white;
+    border-radius: 16px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+    overflow: hidden;
+}
+
+.intern-aktuell-kachel {
+    padding: 30px;
+    position: relative;
+    border-left: 6px solid #007bff;
+    background: linear-gradient(135deg, #f0f7ff 0%, #ffffff 100%);
+    animation: pulseGlow 2s ease-in-out infinite;
+}
+
+@keyframes pulseGlow {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(0, 123, 255, 0.2); }
+    50% { box-shadow: 0 0 20px 5px rgba(0, 123, 255, 0.15); }
+}
+
+.intern-aktuell-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 20px;
+}
+
+.intern-aktuell-status {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 16px;
+    background: linear-gradient(135deg, #007bff, #0056b3);
+    color: white;
+    border-radius: 20px;
+    font-weight: 700;
+    font-size: 0.9rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    animation: statusPulse 1.5s ease-in-out infinite;
+}
+
+@keyframes statusPulse {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.05); }
+}
+
+.intern-aktuell-restzeit {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 18px;
+    background: #fff3cd;
+    border: 2px solid #ffc107;
+    border-radius: 12px;
+    font-weight: 700;
+    color: #856404;
+    font-size: 1.1rem;
+}
+
+.intern-aktuell-restzeit.ueberzogen {
+    background: #f8d7da;
+    border-color: #dc3545;
+    color: #721c24;
+    animation: warningBlink 1s ease-in-out infinite;
+}
+
+@keyframes warningBlink {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.7; }
+}
+
+.intern-aktuell-body {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 25px;
+}
+
+.intern-aktuell-info {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.intern-info-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.intern-info-icon {
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #f1f5f9;
+    border-radius: 8px;
+    font-size: 1rem;
+}
+
+.intern-info-label {
+    font-size: 0.8rem;
+    color: #64748b;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.intern-info-value {
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: var(--steel);
+}
+
+.intern-info-value.kennzeichen {
+    font-size: 1.4rem;
+    font-weight: 700;
+    letter-spacing: 2px;
+    color: var(--accent);
+}
+
+.intern-info-value.arbeit {
+    font-size: 1rem;
+    line-height: 1.5;
+    max-width: 400px;
+}
+
+.intern-aktuell-timing {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    padding: 20px;
+    background: #f8fafc;
+    border-radius: 12px;
+}
+
+.intern-timing-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.intern-timing-label {
+    font-size: 0.85rem;
+    color: #64748b;
+}
+
+.intern-timing-value {
+    font-size: 1.2rem;
+    font-weight: 700;
+    color: var(--steel);
+}
+
+/* Fortschrittsbalken */
+.intern-fortschritt-container {
+    margin-top: 25px;
+}
+
+.intern-fortschritt-header {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 8px;
+}
+
+.intern-fortschritt-label {
+    font-size: 0.85rem;
+    color: #64748b;
+}
+
+.intern-fortschritt-prozent {
+    font-weight: 700;
+    color: var(--accent);
+}
+
+.intern-fortschritt-bar {
+    height: 12px;
+    background: #e2e8f0;
+    border-radius: 6px;
+    overflow: hidden;
+}
+
+.intern-fortschritt-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #007bff, #00bcd4);
+    border-radius: 6px;
+    transition: width 0.5s ease;
+}
+
+.intern-fortschritt-fill.ueberzogen {
+    background: linear-gradient(90deg, #dc3545, #ff6b6b);
+}
+
+/* Schnell-Aktionen */
+.intern-aktuell-actions {
+    display: flex;
+    gap: 12px;
+    margin-top: 25px;
+    padding-top: 20px;
+    border-top: 1px solid #e2e8f0;
+}
+
+.btn-intern-fertig {
+    flex: 1;
+    padding: 14px 24px;
+    background: linear-gradient(135deg, #28a745, #20c997);
+    color: white;
+    border: none;
+    border-radius: 10px;
+    font-size: 1rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+}
+
+.btn-intern-fertig:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(40, 167, 69, 0.4);
+}
+
+.btn-intern-details {
+    padding: 14px 24px;
+    background: white;
+    color: var(--steel);
+    border: 2px solid #e2e8f0;
+    border-radius: 10px;
+    font-size: 1rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.btn-intern-details:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+}
+
+/* ========================================
+   LEERLAUF - Keine aktive Arbeit
+   ======================================== */
+
+.intern-leerlauf-section {
+    margin: 20px 0;
+}
+
+.intern-leerlauf-kachel {
+    background: linear-gradient(135deg, #f5f7fa 0%, #e4e9f0 100%);
+    border: 2px dashed #cbd5e1;
+    border-radius: 16px;
+    padding: 40px;
+    display: flex;
+    align-items: center;
+    gap: 30px;
+    text-align: left;
+}
+
+.leerlauf-icon {
+    font-size: 4rem;
+    opacity: 0.8;
+}
+
+.leerlauf-text h3 {
+    font-size: 1.3rem;
+    color: var(--steel);
+    margin-bottom: 8px;
+}
+
+.leerlauf-text p {
+    color: #64748b;
+    font-size: 1rem;
+    margin: 0;
+}
+
+.leerlauf-countdown {
+    margin-left: auto;
+    padding: 20px 30px;
+    background: white;
+    border-radius: 12px;
+    text-align: center;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.08);
+}
+
+.leerlauf-countdown .countdown-label {
+    font-size: 0.8rem;
+    color: #64748b;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 5px;
+}
+
+.leerlauf-countdown .countdown-value {
+    font-size: 2rem;
+    font-weight: 700;
+    color: var(--accent);
+}
+
+/* ========================================
+   ANSTEHENDE AUFTRÄGE - Kachel Grid
+   ======================================== */
+
+.intern-kachel-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 20px;
+}
+
+.intern-morgen-grid .intern-kachel {
+    opacity: 0.85;
+    border-style: dashed;
+}
+
+.intern-kachel {
+    background: white;
+    border: 2px solid #e2e8f0;
+    border-radius: 14px;
+    padding: 20px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    position: relative;
+    overflow: hidden;
+}
+
+.intern-kachel::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 5px;
+    height: 100%;
+    background: #28a745;
+}
+
+.intern-kachel:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.12);
+    border-color: var(--accent);
+}
+
+.intern-kachel.status-geplant::before {
+    background: #28a745;
+}
+
+.intern-kachel.status-warten::before {
+    background: #ff9800;
+}
+
+.intern-kachel.status-morgen::before {
+    background: #17a2b8;
+}
+
+.intern-kachel.status-dringend::before {
+    background: #dc3545;
+    animation: urgentPulse 1s ease-in-out infinite;
+}
+
+@keyframes urgentPulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+}
+
+.intern-kachel-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 15px;
+}
+
+.intern-kachel-nr {
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: #64748b;
+    background: #f1f5f9;
+    padding: 4px 10px;
+    border-radius: 6px;
+}
+
+.intern-kachel-status {
+    font-size: 0.75rem;
+    font-weight: 700;
+    padding: 4px 10px;
+    border-radius: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.intern-kachel-status.geplant {
+    background: #d4edda;
+    color: #155724;
+}
+
+.intern-kachel-status.warten {
+    background: #fff3cd;
+    color: #856404;
+}
+
+.intern-kachel-status.morgen {
+    background: #d1ecf1;
+    color: #0c5460;
+}
+
+.intern-kachel-status.dringend {
+    background: #f8d7da;
+    color: #721c24;
+}
+
+.intern-kachel-kunde {
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: var(--steel);
+    margin-bottom: 5px;
+}
+
+.intern-kachel-kennzeichen {
+    font-size: 1.2rem;
+    font-weight: 700;
+    color: var(--accent);
+    letter-spacing: 1px;
+    margin-bottom: 12px;
+}
+
+.intern-kachel-arbeit {
+    font-size: 0.9rem;
+    color: #64748b;
+    line-height: 1.4;
+    margin-bottom: 15px;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+.intern-kachel-footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding-top: 12px;
+    border-top: 1px solid #f1f5f9;
+}
+
+.intern-kachel-zeit {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.9rem;
+    color: var(--steel);
+    font-weight: 600;
+}
+
+.intern-kachel-dauer {
+    font-size: 0.85rem;
+    color: #64748b;
+    background: #f1f5f9;
+    padding: 4px 10px;
+    border-radius: 6px;
+}
+
+/* Keine Aufträge Anzeige */
+.intern-keine-auftraege {
+    background: #f8fafc;
+    border: 2px dashed #e2e8f0;
+    border-radius: 12px;
+    padding: 30px;
+    text-align: center;
+    color: #64748b;
+    font-size: 1rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+}
+
+.intern-keine-auftraege span {
+    font-size: 1.5rem;
+}
+
+/* ========================================
+   TEAM GRID - Mitarbeiter/Lehrlinge Kacheln
+   ======================================== */
+
+.intern-team-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(380px, 1fr));
+    gap: 24px;
+}
+
+.intern-person-kachel {
+    background: white;
+    border-radius: 16px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+    overflow: hidden;
+    transition: all 0.3s ease;
+    border: 2px solid transparent;
+}
+
+.intern-person-kachel:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.12);
+}
+
+/* Kachel-Header mit Name */
+.intern-person-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 18px 20px;
+    background: linear-gradient(135deg, var(--steel) 0%, #1a3a5c 100%);
+    color: white;
+}
+
+.intern-person-name {
+    font-size: 1.2rem;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.intern-person-name .person-icon {
+    font-size: 1.4rem;
+}
+
+.intern-person-badge {
+    padding: 6px 14px;
+    border-radius: 20px;
+    font-size: 0.8rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.intern-person-badge.in-arbeit {
+    background: #007bff;
+    color: white;
+    animation: badgePulse 2s ease-in-out infinite;
+}
+
+.intern-person-badge.frei {
+    background: rgba(255, 255, 255, 0.2);
+    color: rgba(255, 255, 255, 0.9);
+}
+
+.intern-person-badge.pause {
+    background: #ffc107;
+    color: #333;
+}
+
+@keyframes badgePulse {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.05); }
+}
+
+/* Kachel-Body mit Auftragsinfo */
+.intern-person-body {
+    padding: 20px;
+}
+
+/* Aktiver Auftrag */
+.intern-person-auftrag {
+    border-left: 4px solid #007bff;
+    padding-left: 15px;
+    margin-bottom: 15px;
+}
+
+.intern-person-auftrag.kein-auftrag {
+    border-left-color: #e2e8f0;
+    text-align: center;
+    padding: 20px;
+    color: #64748b;
+}
+
+.intern-person-auftrag .auftrag-label {
+    font-size: 0.75rem;
+    color: #64748b;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 8px;
+}
+
+.intern-person-auftrag .auftrag-nr {
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: var(--steel);
+    margin-bottom: 5px;
+}
+
+.intern-person-auftrag .auftrag-kunde {
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: var(--steel);
+    margin-bottom: 3px;
+}
+
+.intern-person-auftrag .auftrag-kennzeichen {
+    font-size: 1.3rem;
+    font-weight: 700;
+    color: var(--accent);
+    letter-spacing: 1px;
+    margin-bottom: 8px;
+}
+
+.intern-person-auftrag .auftrag-arbeit {
+    font-size: 0.9rem;
+    color: #64748b;
+    line-height: 1.4;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+/* Zeitinfo */
+.intern-person-zeit {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 15px;
+    background: #f8fafc;
+    border-radius: 10px;
+    margin-top: 12px;
+}
+
+.intern-person-zeit-item {
+    text-align: center;
+}
+
+.intern-person-zeit-item .zeit-label {
+    font-size: 0.7rem;
+    color: #94a3b8;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+}
+
+.intern-person-zeit-item .zeit-value {
+    font-size: 1rem;
+    font-weight: 700;
+    color: var(--steel);
+}
+
+/* Fortschrittsbalken in Person-Kachel */
+.intern-person-fortschritt {
+    margin-top: 15px;
+}
+
+.intern-person-fortschritt-bar {
+    height: 8px;
+    background: #e2e8f0;
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+.intern-person-fortschritt-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #007bff, #00bcd4);
+    border-radius: 4px;
+    transition: width 0.5s ease;
+}
+
+.intern-person-fortschritt-fill.ueberzogen {
+    background: linear-gradient(90deg, #dc3545, #ff6b6b);
+}
+
+.intern-person-fortschritt-text {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 6px;
+    font-size: 0.8rem;
+    color: #64748b;
+}
+
+/* Nächster Auftrag */
+.intern-person-naechster {
+    margin-top: 15px;
+    padding-top: 15px;
+    border-top: 1px dashed #e2e8f0;
+}
+
+.intern-person-naechster .naechster-label {
+    font-size: 0.75rem;
+    color: #94a3b8;
+    text-transform: uppercase;
+    margin-bottom: 8px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.intern-person-naechster .naechster-info {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.intern-person-naechster .naechster-kunde {
+    font-weight: 600;
+    color: var(--steel);
+}
+
+.intern-person-naechster .naechster-zeit {
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: var(--accent);
+}
+
+/* Kein Auftrag Anzeige */
+.intern-person-leer {
+    text-align: center;
+    padding: 30px 20px;
+    color: #94a3b8;
+}
+
+.intern-person-leer .leer-icon {
+    font-size: 2.5rem;
+    margin-bottom: 10px;
+    opacity: 0.6;
+}
+
+.intern-person-leer .leer-text {
+    font-size: 0.95rem;
+}
+
+/* Lehrling-spezifisch */
+.intern-person-kachel.lehrling .intern-person-header {
+    background: linear-gradient(135deg, #059669 0%, #10b981 100%);
+}
+
+/* Berufsschul-Hinweis */
+.intern-person-schule {
+    background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+    border: 2px solid #f59e0b;
+    padding: 15px;
+    border-radius: 10px;
+    text-align: center;
+}
+
+.intern-person-schule .schule-icon {
+    font-size: 2rem;
+    margin-bottom: 8px;
+}
+
+.intern-person-schule .schule-text {
+    font-weight: 600;
+    color: #92400e;
+}
+
+/* ========================================
+   RESPONSIVE DESIGN
+   ======================================== */
+
+@media (max-width: 1200px) {
+    .intern-kachel-grid {
+        grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    }
+    
+    .intern-team-grid {
+        grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+    }
+}
+
+@media (max-width: 900px) {
+    .intern-header {
+        flex-direction: column;
+    }
+    
+    .intern-header-right {
+        width: 100%;
+        justify-content: flex-start;
+    }
+    
+    .intern-aktuell-body {
+        grid-template-columns: 1fr;
+    }
+    
+    .intern-leerlauf-kachel {
+        flex-direction: column;
+        text-align: center;
+    }
+    
+    .leerlauf-countdown {
+        margin-left: 0;
+        margin-top: 20px;
+    }
+    
+    .intern-team-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+@media (max-width: 600px) {
+    .intern-kachel-grid {
+        grid-template-columns: 1fr;
+    }
+    
+    .intern-aktuell-kachel {
+        padding: 20px;
+    }
+    
+    .intern-aktuell-header {
+        flex-direction: column;
+        gap: 15px;
+    }
+    
+    .intern-person-zeit {
+        flex-direction: column;
+        gap: 10px;
+    }
+}
