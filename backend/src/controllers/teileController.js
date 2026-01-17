@@ -146,7 +146,8 @@ const getFaellige = async (req, res) => {
     });
   } catch (error) {
     console.error('Fehler beim Abrufen der fälligen Bestellungen:', error);
-    res.status(500).json({ error: 'Fehler beim Abrufen der fälligen Bestellungen' });
+    console.error('Error Stack:', error.stack);
+    res.status(500).json({ error: 'Fehler beim Abrufen der fälligen Bestellungen', details: error.message });
   }
 };
 

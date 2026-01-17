@@ -184,7 +184,10 @@ class App {
       button.addEventListener('click', (e) => this.handleTabChange(e));
     });
 
-    document.querySelectorAll('.sub-tab-button').forEach(button => {
+    const subTabButtons = document.querySelectorAll('.sub-tab-button');
+    console.log('Anzahl Sub-Tab-Buttons gefunden:', subTabButtons.length);
+    subTabButtons.forEach(button => {
+      console.log('Registriere Event-Listener für:', button.dataset.subtab);
       button.addEventListener('click', (e) => this.handleSubTabChange(e));
     });
 
@@ -1511,8 +1514,11 @@ class App {
     document.getElementById('edit_vin').value = termin.vin || '';
     document.getElementById('edit_fahrzeugtyp').value = termin.fahrzeugtyp || '';
     
-    // Arbeiten als mehrzeiligen Text
-    const arbeitText = (termin.arbeit || '').split(',').map(a => a.trim()).join('\n');
+    // Arbeiten als mehrzeiligen Text - unterstützt neues ' || ' und altes ', ' Format
+    const arbeitRaw = termin.arbeit || '';
+    const arbeitText = arbeitRaw.includes(' || ') 
+      ? arbeitRaw.split(' || ').map(a => a.trim()).join('\n')
+      : arbeitRaw.split(',').map(a => a.trim()).join('\n');
     document.getElementById('edit_arbeitEingabe').value = arbeitText;
     
     document.getElementById('edit_umfang').value = termin.umfang || '';
@@ -1599,8 +1605,11 @@ class App {
       document.getElementById('edit_vin').value = termin.vin || '';
       document.getElementById('edit_fahrzeugtyp').value = termin.fahrzeugtyp || '';
       
-      // Arbeiten als mehrzeiligen Text
-      const arbeitText = (termin.arbeit || '').split(',').map(a => a.trim()).join('\n');
+      // Arbeiten als mehrzeiligen Text - unterstützt neues ' || ' und altes ', ' Format
+      const arbeitRaw = termin.arbeit || '';
+      const arbeitText = arbeitRaw.includes(' || ') 
+        ? arbeitRaw.split(' || ').map(a => a.trim()).join('\n')
+        : arbeitRaw.split(',').map(a => a.trim()).join('\n');
       document.getElementById('edit_arbeitEingabe').value = arbeitText;
       
       document.getElementById('edit_umfang').value = termin.umfang || '';
@@ -1984,7 +1993,7 @@ class App {
     
     const terminData = {
       kennzeichen: document.getElementById('edit_kennzeichen').value.trim(),
-      arbeit: arbeitenListe.join(', '),
+      arbeit: arbeitenListe.join(' || '),
       umfang: document.getElementById('edit_umfang').value.trim(),
       geschaetzte_zeit: geschaetzteZeit,
       datum: document.getElementById('edit_datum').value,
@@ -2350,21 +2359,46 @@ class App {
   }
 
   async handleSubTabChange(e) {
+    e.preventDefault();
+    e.stopPropagation();
+    
     // Finde den Button, auch wenn auf ein inneres Element geklickt wurde
     const button = e.target.closest('.sub-tab-button');
-    if (!button) return;
+    if (!button) {
+      console.log('Sub-Tab: Kein Button gefunden');
+      return;
+    }
     
     const subTabName = button.dataset.subtab;
-    if (!subTabName) return;
+    console.log('Sub-Tab Wechsel zu:', subTabName);
+    if (!subTabName) {
+      console.log('Sub-Tab: Kein subtab dataset');
+      return;
+    }
 
     // Finde den direkten Parent-Container der sub-tabs
     const subTabsContainer = button.closest('.sub-tabs');
-    const parentContainer = subTabsContainer.parentElement;
+    if (!subTabsContainer) {
+      console.log('Sub-Tab: Kein .sub-tabs Container gefunden');
+      return;
+    }
 
-    // Entferne active und verstecke alle Sub-Tab-Contents im Parent-Container
-    parentContainer.querySelectorAll('.sub-tab-content').forEach(content => {
-      content.classList.remove('active');
-      content.style.display = 'none';
+    // Hole alle Subtab-Namen aus den Buttons
+    const allSubTabNames = Array.from(subTabsContainer.querySelectorAll('.sub-tab-button'))
+      .map(btn => btn.dataset.subtab)
+      .filter(name => name);
+    console.log('Alle Sub-Tabs:', allSubTabNames);
+
+    // Verstecke alle zugehörigen Sub-Tab-Contents
+    allSubTabNames.forEach(name => {
+      const content = document.getElementById(name);
+      if (content) {
+        content.classList.remove('active');
+        content.style.display = 'none';
+        console.log('Verstecke Tab:', name);
+      } else {
+        console.log('Tab Content nicht gefunden:', name);
+      }
     });
 
     // Deaktiviere alle Sub-Tab-Buttons
@@ -2372,10 +2406,14 @@ class App {
       btn.classList.remove('active');
     });
 
+    // Aktiviere den ausgewählten Tab
     const targetContent = document.getElementById(subTabName);
     if (targetContent) {
       targetContent.classList.add('active');
       targetContent.style.display = 'block';
+      console.log('Zeige Tab:', subTabName, 'Element:', targetContent);
+    } else {
+      console.error('FEHLER: Tab Content nicht gefunden für:', subTabName);
     }
     button.classList.add('active');
 
@@ -2431,6 +2469,12 @@ class App {
 
     if (subTabName === 'wartendeAktionen') {
       this.loadWartendeAktionen();
+    }
+
+    if (subTabName === 'internerTermin') {
+      this.setInternerTerminTodayDate();
+      this.loadInternerTerminMitarbeiter();
+      this.loadInterneTermineImSubTab(); // Lade Liste der internen Termine
     }
   }
 
@@ -3828,7 +3872,7 @@ class App {
 
     const termin = {
       kennzeichen: document.getElementById('kennzeichen').value.trim(),
-      arbeit: arbeitenListe.join(', '),
+      arbeit: arbeitenListe.join(' || '),
       umfang: document.getElementById('umfang').value.trim(),
       geschaetzte_zeit: geschaetzteZeit,
       datum: datumValue,
@@ -4282,10 +4326,14 @@ class App {
     // Dringlichkeit auslesen
     const dringlichkeitValue = document.getElementById('intern_dringlichkeit')?.value || null;
 
+    // Interne Auftragsnummer auslesen (wird im Kennzeichen-Feld gespeichert)
+    const interneAuftragsnummer = document.getElementById('intern_auftragsnummer')?.value?.trim() || '';
+    const kennzeichenWert = interneAuftragsnummer || 'INTERN';
+
     const termin = {
       kunde_name: 'Intern',
       kunde_telefon: null,
-      kennzeichen: 'INTERN',
+      kennzeichen: kennzeichenWert,
       arbeit: arbeitText,
       umfang: document.getElementById('intern_notizen').value.trim(),
       geschaetzte_zeit: geschaetzteZeit,
@@ -16762,7 +16810,7 @@ class App {
             terminNr: termin.termin_nr,
             kunde: termin.kunde_name,
             kennzeichen: termin.kennzeichen,
-            arbeit: arbeitenListe.join(', '), // Alle Arbeiten kommasepariert
+            arbeit: arbeitenListe.join(' || '), // Alle Arbeiten mit || getrennt
             arbeitenListe: arbeitenListe,
             arbeitenMitZeiten: arbeitenMitZeiten, // Detaillierte Liste für Tooltip
             arbeitIndex: 0,
@@ -23019,6 +23067,9 @@ class App {
         }
       }
 
+      // Lade auch die internen Termine
+      await this.loadInterneTermineListe(mitarbeiter, lehrlinge);
+
     } catch (error) {
       console.error('Fehler beim Laden der Team-Übersicht:', error);
       if (mitarbeiterContainer) {
@@ -23315,6 +23366,462 @@ class App {
     }
   }
 
+  /**
+   * Lädt alle internen Termine und zeigt sie in einer Liste
+   */
+  async loadInterneTermineListe(mitarbeiterListe = null, lehrlingeListe = null) {
+    const container = document.getElementById('internTermineListe');
+    const keineTermineEl = document.getElementById('internKeineTermine');
+    
+    if (!container) return;
+
+    try {
+      // Hole alle Termine (nicht nur heutige) - limitiert auf aktuelle und zukünftige
+      const alleTermine = await ApiService.get('/termine');
+      
+      // Filtere nur interne Termine (erkannt durch kunde_name='Intern' oder abholung_details='Interner Termin')
+      const interneTermine = alleTermine.filter(t => 
+        t.kunde_name === 'Intern' || 
+        t.abholung_details === 'Interner Termin' ||
+        t.kennzeichen === 'INTERN'
+      );
+
+      // Sortiere nach Datum (neueste zuerst, dann nach Status)
+      interneTermine.sort((a, b) => {
+        // Offene Termine zuerst, dann nach Datum
+        if (a.status === 'abgeschlossen' && b.status !== 'abgeschlossen') return 1;
+        if (a.status !== 'abgeschlossen' && b.status === 'abgeschlossen') return -1;
+        
+        // Nach Datum sortieren
+        const datumA = new Date(a.datum);
+        const datumB = new Date(b.datum);
+        return datumA - datumB;
+      });
+
+      // Hole Mitarbeiter/Lehrlinge falls nicht übergeben
+      if (!mitarbeiterListe) {
+        mitarbeiterListe = await ApiService.get('/mitarbeiter');
+      }
+      if (!lehrlingeListe) {
+        lehrlingeListe = await ApiService.get('/lehrlinge');
+      }
+
+      if (interneTermine.length === 0) {
+        container.innerHTML = '';
+        if (keineTermineEl) keineTermineEl.style.display = 'flex';
+        return;
+      }
+
+      if (keineTermineEl) keineTermineEl.style.display = 'none';
+
+      container.innerHTML = interneTermine.map(termin => 
+        this.renderInternerTerminKachel(termin, mitarbeiterListe, lehrlingeListe)
+      ).join('');
+
+    } catch (error) {
+      console.error('Fehler beim Laden der internen Termine:', error);
+      container.innerHTML = `
+        <div class="intern-keine-auftraege">
+          <span>⚠️</span> Fehler beim Laden der internen Termine
+        </div>
+      `;
+    }
+  }
+
+  /**
+   * Rendert eine Kachel für einen internen Termin
+   */
+  renderInternerTerminKachel(termin, mitarbeiter, lehrlinge) {
+    // Datum formatieren
+    const datum = new Date(termin.datum);
+    const heute = this.getToday();
+    const istHeute = this.formatDateLocal(datum) === this.formatDateLocal(heute);
+    const istVergangen = datum < heute && !istHeute;
+    
+    const datumFormatiert = datum.toLocaleDateString('de-DE', {
+      weekday: 'short',
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric'
+    });
+
+    // Dringlichkeits-Klasse
+    let dringlichkeitKlasse = '';
+    let dringlichkeitLabel = '';
+    if (termin.dringlichkeit === 'dringend') {
+      dringlichkeitKlasse = 'dringend';
+      dringlichkeitLabel = '🔴 Dringend';
+    } else if (termin.dringlichkeit === 'heute') {
+      dringlichkeitKlasse = 'heute';
+      dringlichkeitLabel = '🟠 Heute';
+    } else if (termin.dringlichkeit === 'woche') {
+      dringlichkeitKlasse = 'woche';
+      dringlichkeitLabel = '🟡 Laufe der Woche';
+    }
+
+    // Status-Klasse
+    let statusKlasse = '';
+    let statusLabel = 'Offen';
+    if (termin.status === 'abgeschlossen') {
+      statusKlasse = 'abgeschlossen';
+      statusLabel = '✓ Erledigt';
+    } else if (termin.status === 'in_arbeit') {
+      statusLabel = '🔧 In Arbeit';
+    }
+
+    // Zuordnung ermitteln
+    let zuordnungText = '';
+    if (termin.arbeitszeiten_details) {
+      try {
+        const details = typeof termin.arbeitszeiten_details === 'string' 
+          ? JSON.parse(termin.arbeitszeiten_details) 
+          : termin.arbeitszeiten_details;
+        
+        if (details._gesamt_mitarbeiter_id) {
+          const zuordnung = details._gesamt_mitarbeiter_id;
+          if (zuordnung.type === 'mitarbeiter') {
+            const ma = mitarbeiter.find(m => m.id === zuordnung.id);
+            zuordnungText = ma ? `👷 ${ma.name}` : '';
+          } else if (zuordnung.type === 'lehrling') {
+            const l = lehrlinge.find(lg => lg.id === zuordnung.id);
+            zuordnungText = l ? `🎓 ${l.name}` : '';
+          }
+        }
+      } catch (e) {
+        // Fehler ignorieren
+      }
+    } else if (termin.mitarbeiter_id) {
+      const ma = mitarbeiter.find(m => m.id === termin.mitarbeiter_id);
+      zuordnungText = ma ? `👷 ${ma.name}` : '';
+    }
+
+    // Zeitinfo
+    let zeitInfo = '';
+    if (termin.abholung_zeit) {
+      zeitInfo = `🕐 ${termin.abholung_zeit}`;
+    }
+    if (termin.geschaetzte_zeit) {
+      const stunden = Math.floor(termin.geschaetzte_zeit / 60);
+      const minuten = termin.geschaetzte_zeit % 60;
+      zeitInfo += zeitInfo ? ` • ` : '';
+      zeitInfo += `⏱ ${stunden > 0 ? stunden + 'h ' : ''}${minuten > 0 ? minuten + 'min' : ''}`;
+    }
+
+    // Interne Auftragsnummer (wenn nicht "INTERN")
+    const auftragsnummer = (termin.kennzeichen && termin.kennzeichen !== 'INTERN') ? termin.kennzeichen : '';
+
+    return `
+      <div class="intern-termin-kachel ${dringlichkeitKlasse} ${statusKlasse}" 
+           onclick="app.openInternerTerminBearbeiten(${termin.id})"
+           title="Klicken zum Bearbeiten">
+        <div class="intern-termin-header">
+          <div class="intern-termin-datum">
+            ${istHeute ? '📅 Heute' : datumFormatiert}
+          </div>
+          <div class="intern-termin-status">${statusLabel}</div>
+        </div>
+        <div class="intern-termin-body">
+          ${auftragsnummer ? `<div style="font-size: 0.8rem; color: #6366f1; font-weight: 600; margin-bottom: 4px;">📋 ${this.escapeHtml(auftragsnummer)}</div>` : ''}
+          <div class="intern-termin-arbeit">${this.escapeHtml(termin.arbeit || '-')}</div>
+          ${termin.umfang ? `<div style="font-size: 0.85rem; color: #64748b; margin-top: 4px;">${this.escapeHtml(termin.umfang)}</div>` : ''}
+          <div class="intern-termin-info">
+            <span class="intern-termin-zeit">${zeitInfo || '—'}</span>
+            ${zuordnungText ? `<span class="intern-termin-zuordnung">${zuordnungText}</span>` : ''}
+          </div>
+          ${dringlichkeitLabel ? `
+            <div class="intern-termin-dringlichkeit ${dringlichkeitKlasse}">${dringlichkeitLabel}</div>
+          ` : ''}
+        </div>
+      </div>
+    `;
+  }
+
+  /**
+   * Öffnet den Bearbeitungsdialog für einen internen Termin (im Modal)
+   */
+  async openInternerTerminBearbeiten(terminId) {
+    try {
+      // Lade den Termin
+      const termin = await ApiService.get(`/termine/${terminId}`);
+      
+      // Öffne das Modal
+      const modal = document.getElementById('internTerminBearbeitenModal');
+      if (!modal) {
+        console.error('Modal nicht gefunden');
+        return;
+      }
+
+      // Lade Mitarbeiter/Lehrlinge für das Select
+      await this.loadInternEditMitarbeiter();
+
+      // Fülle das Formular
+      document.getElementById('internEdit_id').value = termin.id;
+      document.getElementById('internEdit_arbeit').value = termin.arbeit || '';
+      document.getElementById('internEdit_datum').value = termin.datum || '';
+      
+      // Zeit aus Minuten in Stunden
+      const zeitStunden = termin.geschaetzte_zeit ? (termin.geschaetzte_zeit / 60) : '';
+      document.getElementById('internEdit_zeit').value = zeitStunden;
+      
+      document.getElementById('internEdit_zeit_von').value = termin.abholung_zeit || '';
+      document.getElementById('internEdit_zeit_bis').value = termin.bring_zeit || '';
+      document.getElementById('internEdit_dringlichkeit').value = termin.dringlichkeit || '';
+      document.getElementById('internEdit_notizen').value = termin.umfang || '';
+      document.getElementById('internEdit_status').value = termin.status || 'offen';
+      
+      // Interne Auftragsnummer (Kennzeichen-Feld, außer "INTERN")
+      const auftragsnummer = (termin.kennzeichen && termin.kennzeichen !== 'INTERN') ? termin.kennzeichen : '';
+      document.getElementById('internEdit_auftragsnummer').value = auftragsnummer;
+
+      // Mitarbeiter/Lehrling aus arbeitszeiten_details
+      let selectedValue = '';
+      if (termin.arbeitszeiten_details) {
+        try {
+          const details = typeof termin.arbeitszeiten_details === 'string' 
+            ? JSON.parse(termin.arbeitszeiten_details) 
+            : termin.arbeitszeiten_details;
+          
+          if (details._gesamt_mitarbeiter_id) {
+            const zuordnung = details._gesamt_mitarbeiter_id;
+            if (zuordnung.type === 'mitarbeiter') {
+              selectedValue = `ma_${zuordnung.id}`;
+            } else if (zuordnung.type === 'lehrling') {
+              selectedValue = `l_${zuordnung.id}`;
+            }
+          }
+        } catch (e) {}
+      } else if (termin.mitarbeiter_id) {
+        selectedValue = `ma_${termin.mitarbeiter_id}`;
+      }
+      document.getElementById('internEdit_mitarbeiter').value = selectedValue;
+
+      // Modal anzeigen
+      modal.style.display = 'flex';
+
+      // Event-Listener für Modal-Schließen
+      const closeBtn = document.getElementById('closeInternTerminBearbeiten');
+      if (closeBtn) {
+        closeBtn.onclick = () => this.closeInternTerminBearbeitenModal();
+      }
+
+      // Event-Listener für Formular-Submit
+      const form = document.getElementById('internTerminEditForm');
+      form.onsubmit = (e) => this.handleInternTerminEditSubmit(e);
+
+    } catch (error) {
+      console.error('Fehler beim Öffnen des internen Termins:', error);
+      this.showToast('Fehler beim Laden des Termins', 'error');
+    }
+  }
+
+  /**
+   * Lädt Mitarbeiter/Lehrlinge für das Edit-Select
+   */
+  async loadInternEditMitarbeiter() {
+    const select = document.getElementById('internEdit_mitarbeiter');
+    if (!select) return;
+
+    try {
+      const [mitarbeiter, lehrlinge] = await Promise.all([
+        ApiService.get('/mitarbeiter'),
+        ApiService.get('/lehrlinge')
+      ]);
+
+      select.innerHTML = '<option value="">-- Niemand zugeordnet --</option>';
+
+      if (mitarbeiter.length > 0) {
+        const maGroup = document.createElement('optgroup');
+        maGroup.label = '👷 Mitarbeiter';
+        mitarbeiter.forEach(ma => {
+          const opt = document.createElement('option');
+          opt.value = `ma_${ma.id}`;
+          opt.textContent = ma.name;
+          maGroup.appendChild(opt);
+        });
+        select.appendChild(maGroup);
+      }
+
+      if (lehrlinge.length > 0) {
+        const lGroup = document.createElement('optgroup');
+        lGroup.label = '🎓 Lehrlinge';
+        lehrlinge.forEach(l => {
+          const opt = document.createElement('option');
+          opt.value = `l_${l.id}`;
+          opt.textContent = l.name;
+          lGroup.appendChild(opt);
+        });
+        select.appendChild(lGroup);
+      }
+    } catch (error) {
+      console.error('Fehler beim Laden der Mitarbeiter:', error);
+    }
+  }
+
+  /**
+   * Schließt das Bearbeiten-Modal
+   */
+  closeInternTerminBearbeitenModal() {
+    const modal = document.getElementById('internTerminBearbeitenModal');
+    if (modal) {
+      modal.style.display = 'none';
+    }
+  }
+
+  /**
+   * Speichert die Änderungen am internen Termin
+   */
+  async handleInternTerminEditSubmit(e) {
+    e.preventDefault();
+
+    const terminId = document.getElementById('internEdit_id').value;
+    const arbeitText = document.getElementById('internEdit_arbeit').value.trim();
+
+    if (!arbeitText) {
+      alert('Bitte Arbeitsumfang eingeben.');
+      return;
+    }
+
+    const zeitStunden = parseFloat(document.getElementById('internEdit_zeit').value) || 1;
+    const geschaetzteZeit = Math.round(zeitStunden * 60);
+
+    // Mitarbeiterzuordnung verarbeiten
+    const selectedValue = document.getElementById('internEdit_mitarbeiter').value;
+    let mitarbeiterIdValue = null;
+    let arbeitszeitenDetails = null;
+
+    if (selectedValue && selectedValue !== '') {
+      const [type, id] = selectedValue.split('_');
+      const numId = parseInt(id, 10);
+
+      if (type === 'ma') {
+        mitarbeiterIdValue = numId;
+        arbeitszeitenDetails = {
+          _gesamt_mitarbeiter_id: { type: 'mitarbeiter', id: numId }
+        };
+      } else if (type === 'l') {
+        mitarbeiterIdValue = null;
+        arbeitszeitenDetails = {
+          _gesamt_mitarbeiter_id: { type: 'lehrling', id: numId }
+        };
+      }
+    }
+
+    const dringlichkeitValue = document.getElementById('internEdit_dringlichkeit')?.value || null;
+    const statusValue = document.getElementById('internEdit_status')?.value || 'offen';
+    
+    // Interne Auftragsnummer auslesen
+    const interneAuftragsnummer = document.getElementById('internEdit_auftragsnummer')?.value?.trim() || '';
+    const kennzeichenWert = interneAuftragsnummer || 'INTERN';
+
+    const updateData = {
+      arbeit: arbeitText,
+      umfang: document.getElementById('internEdit_notizen').value.trim(),
+      geschaetzte_zeit: geschaetzteZeit,
+      datum: document.getElementById('internEdit_datum').value,
+      abholung_zeit: document.getElementById('internEdit_zeit_von').value || null,
+      bring_zeit: document.getElementById('internEdit_zeit_bis').value || null,
+      mitarbeiter_id: mitarbeiterIdValue,
+      dringlichkeit: dringlichkeitValue,
+      status: statusValue,
+      kennzeichen: kennzeichenWert,
+      arbeitszeiten_details: arbeitszeitenDetails ? JSON.stringify(arbeitszeitenDetails) : null
+    };
+
+    try {
+      await ApiService.put(`/termine/${terminId}`, updateData);
+      this.showToast('Interner Termin erfolgreich aktualisiert!', 'success');
+      this.closeInternTerminBearbeitenModal();
+      
+      // Listen aktualisieren
+      this.loadInterneTermineImSubTab();
+      this.loadInternTab();
+      this.loadDashboard();
+    } catch (error) {
+      console.error('Fehler beim Aktualisieren:', error);
+      alert('Fehler beim Aktualisieren: ' + (error.message || 'Unbekannter Fehler'));
+    }
+  }
+
+  /**
+   * Löscht den internen Termin aus dem Modal
+   */
+  async deleteInternerTerminFromModal() {
+    const terminId = document.getElementById('internEdit_id').value;
+    if (!terminId) return;
+
+    if (!confirm('Möchten Sie diesen internen Termin wirklich löschen?')) {
+      return;
+    }
+
+    try {
+      await ApiService.delete(`/termine/${terminId}`);
+      this.showToast('Interner Termin gelöscht', 'success');
+      this.closeInternTerminBearbeitenModal();
+      
+      // Listen aktualisieren
+      this.loadInterneTermineImSubTab();
+      this.loadInternTab();
+      this.loadDashboard();
+    } catch (error) {
+      console.error('Fehler beim Löschen:', error);
+      alert('Fehler beim Löschen: ' + (error.message || 'Unbekannter Fehler'));
+    }
+  }
+
+  /**
+   * Lädt interne Termine für die Liste im Sub-Tab
+   */
+  async loadInterneTermineImSubTab() {
+    const container = document.getElementById('interneTermineSubTabListe');
+    const keineEl = document.getElementById('interneTermineSubTabKeine');
+    
+    if (!container) return;
+
+    try {
+      const alleTermine = await ApiService.get('/termine');
+      
+      // Filtere nur interne Termine
+      const interneTermine = alleTermine.filter(t => 
+        t.kunde_name === 'Intern' || 
+        t.abholung_details === 'Interner Termin' ||
+        t.kennzeichen === 'INTERN'
+      );
+
+      // Sortiere: Offene zuerst, dann nach Datum
+      interneTermine.sort((a, b) => {
+        if (a.status === 'abgeschlossen' && b.status !== 'abgeschlossen') return 1;
+        if (a.status !== 'abgeschlossen' && b.status === 'abgeschlossen') return -1;
+        return new Date(a.datum) - new Date(b.datum);
+      });
+
+      // Hole Mitarbeiter/Lehrlinge
+      const [mitarbeiter, lehrlinge] = await Promise.all([
+        ApiService.get('/mitarbeiter'),
+        ApiService.get('/lehrlinge')
+      ]);
+
+      if (interneTermine.length === 0) {
+        container.innerHTML = '';
+        if (keineEl) keineEl.style.display = 'flex';
+        return;
+      }
+
+      if (keineEl) keineEl.style.display = 'none';
+
+      container.innerHTML = interneTermine.map(termin => 
+        this.renderInternerTerminKachel(termin, mitarbeiter, lehrlinge)
+      ).join('');
+
+    } catch (error) {
+      console.error('Fehler beim Laden der internen Termine:', error);
+      container.innerHTML = `
+        <div class="intern-keine-auftraege">
+          <span>⚠️</span> Fehler beim Laden der internen Termine
+        </div>
+      `;
+    }
+  }
+
   // === ENDE INTERN TAB METHODEN ===
 }
 
@@ -23322,3 +23829,60 @@ class App {
 const app = new App();
 // App global verfügbar machen für onclick-Handler
 window.app = app;
+
+// Globale Funktion für Sub-Tab-Wechsel (Fallback für onclick)
+window.switchSubTab = function(tabName) {
+  const allTabs = ['neuerTermin', 'terminBearbeiten', 'internerTermin', 'wartendeAktionen'];
+  
+  // Alle Sub-Tabs verstecken
+  allTabs.forEach(name => {
+    const el = document.getElementById(name);
+    if (el) {
+      el.classList.remove('active');
+      el.style.display = 'none';
+    }
+  });
+  
+  // Alle Buttons deaktivieren
+  document.querySelectorAll('#termine .sub-tab-button').forEach(btn => {
+    btn.classList.remove('active');
+  });
+  
+  // Gewählten Tab anzeigen
+  const targetTab = document.getElementById(tabName);
+  if (targetTab) {
+    targetTab.classList.add('active');
+    targetTab.style.display = 'block';
+    targetTab.style.visibility = 'visible';
+    targetTab.style.opacity = '1';
+  }
+  
+  // Button aktivieren
+  const btn = document.querySelector(`#termine .sub-tab-button[data-subtab="${tabName}"]`);
+  if (btn) {
+    btn.classList.add('active');
+  }
+  
+  // Spezifische Aktionen je nach Tab
+  if (tabName === 'terminBearbeiten' && window.app) {
+    const datumInput = document.getElementById('editTerminDatum');
+    if (datumInput && !datumInput.value) {
+      datumInput.value = window.app.formatDateLocal(new Date());
+    }
+    setTimeout(() => {
+      window.app.renderEditSuchKalender();
+      window.app.updateEditSuchDatumDisplay();
+      window.app.loadEditTermine();
+    }, 50);
+  }
+  
+  if (tabName === 'internerTermin' && window.app) {
+    window.app.setInternerTerminTodayDate();
+    window.app.loadInternerTerminMitarbeiter();
+    window.app.loadInterneTermineImSubTab(); // Lade Liste der internen Termine
+  }
+  
+  if (tabName === 'wartendeAktionen' && window.app) {
+    window.app.loadWartendeAktionen();
+  }
+};

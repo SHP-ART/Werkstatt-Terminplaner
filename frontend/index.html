@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Werkstatt Terminplaner</title>
-    <link rel="stylesheet" href="src/styles/style.css?v=57">
+    <link rel="stylesheet" href="src/styles/style.css?v=64">
     <!-- SheetJS für Excel-Import -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 </head>
@@ -330,19 +330,19 @@
             </div>
 
             <div class="sub-tabs modern-tabs">
-                <button class="sub-tab-button active" data-subtab="neuerTermin">
+                <button class="sub-tab-button active" data-subtab="neuerTermin" onclick="window.switchSubTab('neuerTermin')">
                     <span class="tab-icon">➕</span>
                     <span class="tab-label">Neuer Termin</span>
                 </button>
-                <button class="sub-tab-button" data-subtab="terminBearbeiten">
+                <button class="sub-tab-button" data-subtab="terminBearbeiten" onclick="window.switchSubTab('terminBearbeiten')">
                     <span class="tab-icon">✏️</span>
                     <span class="tab-label">Termin bearbeiten</span>
                 </button>
-                <button class="sub-tab-button" data-subtab="internerTermin">
+                <button class="sub-tab-button" data-subtab="internerTermin" onclick="window.switchSubTab('internerTermin')">
                     <span class="tab-icon">🏠</span>
                     <span class="tab-label">Interner Termin</span>
                 </button>
-                <button class="sub-tab-button" data-subtab="wartendeAktionen">
+                <button class="sub-tab-button" data-subtab="wartendeAktionen" onclick="window.switchSubTab('wartendeAktionen')">
                     <span class="tab-icon">🕐</span>
                     <span class="tab-label">Wartende Aktionen</span>
                 </button>
@@ -685,12 +685,13 @@
                         <div class="dots-border"></div>
                     </button>
                 </form>
+                </div><!-- Ende form-section -->
 
                 <div class="info-box" style="margin-top: 20px; padding: 15px; background: #e3f2fd; border-radius: 8px;">
                     <p>✅ <strong>Termin erstellt!</strong></p>
                     <p>Gehen Sie zu <strong>"Zeitverwaltung"</strong>, um die Zeiten für einzelne Arbeiten zu bearbeiten.</p>
                 </div>
-            </div>
+            </div><!-- Ende neuerTermin -->
 
             <div id="terminBearbeiten" class="sub-tab-content">
                 <div class="form-section">
@@ -929,10 +930,18 @@
             </div>
 
             <div id="internerTermin" class="sub-tab-content">
+                <!-- Neuen internen Termin erstellen -->
                 <div class="form-section">
-                    <h3>Interner Termin</h3>
+                    <h3>➕ Neuen internen Termin erstellen</h3>
                     <p style="color: #666; margin-bottom: 20px;">Für interne Arbeiten wie Autoaufbereitung, Waschen, etc.</p>
                     <form id="internerTerminForm">
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>Interne Auftragsnummer (optional):</label>
+                                <input type="text" id="intern_auftragsnummer" placeholder="z.B. INT-2026-001" maxlength="50">
+                            </div>
+                        </div>
+
                         <div class="form-group">
                             <label>Arbeitsumfang: *</label>
                             <textarea id="intern_arbeit" rows="4" required placeholder="z.B.&#10;Autoaufbereitung&#10;Waschen&#10;Polieren"></textarea>
@@ -990,6 +999,20 @@
                             <div class="dots-border"></div>
                         </button>
                     </form>
+                </div>
+
+                <!-- Bestehende interne Termine Liste (unter dem Formular) -->
+                <div class="form-section" style="margin-top: 20px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                        <h3 style="margin: 0;">📋 Bestehende interne Termine</h3>
+                        <button type="button" class="btn btn-secondary btn-sm" onclick="app.loadInterneTermineImSubTab()" title="Aktualisieren">🔄 Aktualisieren</button>
+                    </div>
+                    <div id="interneTermineSubTabListe" class="intern-termine-liste">
+                        <div class="loading">Lade interne Termine...</div>
+                    </div>
+                    <div id="interneTermineSubTabKeine" class="intern-keine-auftraege" style="display: none;">
+                        <span>📭</span> Keine internen Termine vorhanden
+                    </div>
                 </div>
             </div>
 
@@ -2555,6 +2578,8 @@
                     <span>📭</span> Keine aktiven Lehrlinge
                 </div>
             </div>
+
+            <!-- Interne Termine Übersicht wurde entfernt - Termine werden bei Terminplanung → Intern verwaltet -->
         </div>
 
         <div id="papierkorb" class="tab-content">
@@ -2679,6 +2704,89 @@
                     ✓ In Formular übernehmen
                 </button>
             </div>
+        </div>
+    </div>
+
+    <!-- Internen Termin bearbeiten Modal -->
+    <div id="internTerminBearbeitenModal" class="modal">
+        <div class="modal-content" style="max-width: 600px;">
+            <span class="close" id="closeInternTerminBearbeiten">&times;</span>
+            <h3>✏️ Internen Termin bearbeiten</h3>
+            
+            <form id="internTerminEditForm">
+                <input type="hidden" id="internEdit_id">
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Interne Auftragsnummer (optional):</label>
+                        <input type="text" id="internEdit_auftragsnummer" placeholder="z.B. INT-2026-001" maxlength="50">
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label>Arbeitsumfang: *</label>
+                    <textarea id="internEdit_arbeit" rows="4" required placeholder="z.B.&#10;Autoaufbereitung&#10;Waschen&#10;Polieren"></textarea>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Datum: *</label>
+                        <input type="date" id="internEdit_datum" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Geschätzte Zeit (Stunden):</label>
+                        <input type="number" id="internEdit_zeit" min="0.25" step="0.25" placeholder="z.B. 2.5">
+                    </div>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Startzeit (optional):</label>
+                        <input type="text" id="internEdit_zeit_von" placeholder="HH:MM" pattern="[0-2][0-9]:[0-5][0-9]" maxlength="5" title="24h-Format (z.B. 08:00)" oninput="this.value = this.value.replace(/[^0-9:]/g, ''); if(this.value.length === 2 && !this.value.includes(':')) this.value += ':';" style="text-align: center;">
+                    </div>
+                    <div class="form-group">
+                        <label>Fertig bis (optional):</label>
+                        <input type="text" id="internEdit_zeit_bis" placeholder="HH:MM" pattern="[0-2][0-9]:[0-5][0-9]" maxlength="5" title="24h-Format (z.B. 12:00)" oninput="this.value = this.value.replace(/[^0-9:]/g, ''); if(this.value.length === 2 && !this.value.includes(':')) this.value += ':';" style="text-align: center;">
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label>Dringlichkeit:</label>
+                    <select id="internEdit_dringlichkeit">
+                        <option value="">-- Keine Dringlichkeit --</option>
+                        <option value="dringend">🔴 Dringend</option>
+                        <option value="heute">🟠 Heute</option>
+                        <option value="woche">🟡 Laufe der Woche</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label>Mitarbeiter/Lehrling zuordnen (optional):</label>
+                    <select id="internEdit_mitarbeiter">
+                        <option value="">-- Niemand zugeordnet --</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label>Notizen:</label>
+                    <textarea id="internEdit_notizen" rows="2" placeholder="Zusätzliche Informationen..."></textarea>
+                </div>
+
+                <div class="form-group">
+                    <label>Status:</label>
+                    <select id="internEdit_status">
+                        <option value="offen">📋 Offen</option>
+                        <option value="in_arbeit">🔧 In Arbeit</option>
+                        <option value="abgeschlossen">✓ Erledigt</option>
+                    </select>
+                </div>
+
+                <div style="display: flex; gap: 10px; margin-top: 20px;">
+                    <button type="submit" class="btn btn-primary">💾 Speichern</button>
+                    <button type="button" class="btn btn-secondary" onclick="app.closeInternTerminBearbeitenModal()">Abbrechen</button>
+                    <button type="button" class="btn btn-danger" onclick="app.deleteInternerTerminFromModal()" style="margin-left: auto;">🗑️ Löschen</button>
+                </div>
+            </form>
         </div>
     </div>
 

@@ -699,7 +699,73 @@ h3 {
 }
 
 .sub-tab-content.active {
-    display: block;
+    display: block !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+    min-height: 100px !important;
+    height: auto !important;
+    width: 100% !important;
+    position: relative !important;
+    overflow: visible !important;
+}
+
+/* Sicherstellen, dass alle Sub-Tab-Contents korrekt angezeigt werden */
+#termine .sub-tab-content.active,
+#termine > #terminBearbeiten.active,
+#termine > #internerTermin.active,
+#termine > #wartendeAktionen.active,
+#termine > #neuerTermin.active,
+#terminBearbeiten.active,
+#internerTermin.active,
+#wartendeAktionen.active,
+#neuerTermin.active {
+    display: block !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+    height: auto !important;
+    min-height: 200px !important;
+    max-height: none !important;
+    overflow: visible !important;
+    width: 100% !important;
+    position: relative !important;
+}
+
+/* Direkter Fix für die 3 problematischen Tabs */
+#terminBearbeiten,
+#internerTermin,
+#wartendeAktionen {
+    min-height: 0;
+    height: auto;
+}
+
+#terminBearbeiten.active,
+#internerTermin.active,
+#wartendeAktionen.active {
+    display: block !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+    min-height: 300px !important;
+    height: auto !important;
+    width: 100% !important;
+    background: #fff !important;
+    padding: 20px !important;
+    box-sizing: border-box !important;
+}
+
+/* Inline-Style Override für Sub-Tabs */
+div.sub-tab-content[style*="display: block"] {
+    display: block !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+    min-height: 200px !important;
+}
+
+/* Sicherstellen dass Form-Sections in Sub-Tabs sichtbar sind */
+.sub-tab-content.active .form-section,
+.sub-tab-content.active .table-section {
+    display: block !important;
+    visibility: visible !important;
+    opacity: 1 !important;
 }
 
 .form-section, .table-section, .import-section {
@@ -12905,6 +12971,157 @@ mark.highlight {
 .intern-person-schule .schule-text {
     font-weight: 600;
     color: #92400e;
+}
+
+/* ========================================
+   INTERNE TERMINE LISTE
+   ======================================== */
+
+.intern-termine-liste {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+    gap: 16px;
+}
+
+.intern-termin-kachel {
+    background: white;
+    border-radius: 12px;
+    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
+    overflow: hidden;
+    border-left: 4px solid #17a2b8;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.intern-termin-kachel:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.12);
+}
+
+.intern-termin-kachel.dringend {
+    border-left-color: #dc3545;
+}
+
+.intern-termin-kachel.heute {
+    border-left-color: #fd7e14;
+}
+
+.intern-termin-kachel.woche {
+    border-left-color: #ffc107;
+}
+
+.intern-termin-kachel.abgeschlossen {
+    border-left-color: #28a745;
+    opacity: 0.7;
+}
+
+.intern-termin-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 16px;
+    background: linear-gradient(135deg, #17a2b8 0%, #20c997 100%);
+    color: white;
+}
+
+.intern-termin-kachel.dringend .intern-termin-header {
+    background: linear-gradient(135deg, #dc3545 0%, #e25563 100%);
+}
+
+.intern-termin-kachel.heute .intern-termin-header {
+    background: linear-gradient(135deg, #fd7e14 0%, #f39c12 100%);
+}
+
+.intern-termin-kachel.abgeschlossen .intern-termin-header {
+    background: linear-gradient(135deg, #28a745 0%, #5cb85c 100%);
+}
+
+.intern-termin-datum {
+    font-size: 0.9rem;
+    font-weight: 600;
+}
+
+.intern-termin-status {
+    padding: 4px 10px;
+    border-radius: 15px;
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    background: rgba(255, 255, 255, 0.2);
+}
+
+.intern-termin-body {
+    padding: 16px;
+}
+
+.intern-termin-arbeit {
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--steel);
+    margin-bottom: 10px;
+    line-height: 1.4;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+.intern-termin-info {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 0.85rem;
+    color: #64748b;
+    margin-top: 8px;
+}
+
+.intern-termin-zeit {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.intern-termin-zuordnung {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-weight: 500;
+    color: var(--accent);
+}
+
+.intern-termin-dringlichkeit {
+    margin-top: 10px;
+    padding: 6px 10px;
+    border-radius: 6px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.intern-termin-dringlichkeit.dringend {
+    background: #ffeef0;
+    color: #dc3545;
+}
+
+.intern-termin-dringlichkeit.heute {
+    background: #fff4e5;
+    color: #fd7e14;
+}
+
+.intern-termin-dringlichkeit.woche {
+    background: #fffce5;
+    color: #d39e00;
+}
+
+/* Tablet-Modus für Intern-Termine */
+.intern-tablet-mode .intern-termine-liste {
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+}
+
+.intern-tablet-mode #internTermineSection {
+    margin-top: 20px;
 }
 
 /* ========================================
