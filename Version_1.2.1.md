@@ -1,8 +1,8 @@
 # Version 1.2.1 - Release Notes
 
-**Release-Datum:** 16. Januar 2026  
-**Commits:** 13 (von d8e49aa bis 0c3c863)  
-**Änderungen:** 39 Dateien, +15.752 Zeilen, -392 Zeilen
+**Release-Datum:** 17. Januar 2026  
+**Commits:** 14 (von d8e49aa bis b346508)  
+**Änderungen:** 40+ Dateien, +17.000 Zeilen
 
 ---
 
@@ -23,8 +23,17 @@
 - Berufsschul-Hinweis für Lehrlinge
 - Auto-Refresh alle 60 Sekunden
 - Responsive Design für alle Bildschirmgrößen
+- **Interne Termine werden nicht mehr separat angezeigt** (Zuordnung bei Mitarbeitern)
 
-### 3. KI-Planungsoptimierung mit ChatGPT
+### 3. Interne Termine - Erweiterte Verwaltung (NEU)
+- **Bearbeitungs-Modal** für interne Termine direkt im Sub-Tab
+- **Interne Auftragsnummer** optional hinzufügbar (z.B. INT-2026-001)
+- **Liste bestehender interner Termine** unter dem Erstellungsformular
+- Auftragsnummer wird in der Kachel-Anzeige prominent dargestellt
+- Bearbeitung von Arbeit, Datum, Zeit, Dringlichkeit, Mitarbeiter, Status
+- Löschen-Button im Bearbeitungs-Modal
+
+### 4. KI-Planungsoptimierung mit ChatGPT
 - **ChatGPT API-Key Verwaltung** in Einstellungen (verschlüsselt gespeichert)
 - **KI-Tagesplanung:** Optimiert Terminzuordnung zu Mitarbeitern
 - **KI-Wochenplanung:** Verteilt schwebende Termine auf die Woche
@@ -42,7 +51,20 @@
 
 ---
 
-## 🔧 Verbesserungen
+## � Bug-Fixes
+
+### Arbeiten-Trennung korrigiert
+- **Problem:** Lange Arbeitsbeschreibungen mit Kommas wurden fälschlich als mehrere Arbeiten gespeichert (z.B. "Bremsen vorne, hinten" → 2 Einträge)
+- **Lösung:** Neuer Separator ` || ` statt `, ` zum Trennen mehrerer Arbeiten
+- **Rückwärtskompatibel:** Alte Einträge mit `, ` werden weiterhin korrekt gelesen
+
+### HTML-Struktur im Intern-Tab
+- Fehlendes `</div>`-Tag im Sub-Tab `internerTermin` behoben
+- Sub-Tab-Navigation funktioniert wieder korrekt
+
+---
+
+## �🔧 Verbesserungen
 
 ### Schwebende Termine
 - **Neu-Einplanen Modal** für überfällige Termine mit 'Nicht zugeordnet' Option
@@ -152,9 +174,9 @@
 
 | Datei | Änderungen |
 |-------|------------|
-| `frontend/src/components/app.js` | +3.957 Zeilen (Intern-Tab, KI-UI) |
+| `frontend/src/components/app.js` | +4.187 Zeilen (Intern-Tab, KI-UI, Interne Termine) |
 | `frontend/src/styles/style.css` | +3.812 Zeilen (Tablet-Modus, Kacheln) |
-| `frontend/index.html` | +735 Zeilen (Neue Tabs und Modals) |
+| `frontend/index.html` | +810 Zeilen (Neue Tabs, Modals, Edit-Modal) |
 | `backend/src/controllers/termineController.js` | +215 Zeilen |
 | `backend/src/models/termineModel.js` | +71 Zeilen |
 | `backend/src/controllers/einstellungenController.js` | +98 Zeilen |
@@ -166,6 +188,7 @@
 
 | Commit | Beschreibung |
 |--------|-------------|
+| `b346508` | Interne Termine: Bearbeitung im Sub-Tab, Auftragsnummer, Bug-Fix Arbeiten-Trennung |
 | `0c3c863` | v1.2.1: Tablet-Modus für Intern-Tab |
 | `8e1aae1` | Add Intern Tab: Team-Übersicht mit Kacheln |
 | `b059c9e` | Feature: Fahrzeugtyp in Kundensuche |
