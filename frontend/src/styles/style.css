@@ -12708,6 +12708,11 @@ mark.highlight {
    TEAM GRID - Mitarbeiter/Lehrlinge Kacheln
    ======================================== */
 
+/* Team-Sections Wrapper (Normal-Modus) */
+.intern-team-sections {
+    display: block;
+}
+
 .intern-team-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(380px, 1fr));
@@ -13181,7 +13186,7 @@ mark.highlight {
     background: #dc3545;
 }
 
-/* Tablet-Modus aktiv */
+/* Tablet-Modus aktiv - 2x2 Fullscreen Grid */
 .intern-tablet-mode {
     position: fixed;
     top: 0;
@@ -13190,8 +13195,10 @@ mark.highlight {
     bottom: 0;
     z-index: 9999;
     background: #f5f7fa;
-    overflow-y: auto;
-    padding: 15px;
+    overflow: hidden;
+    padding: 10px;
+    display: flex;
+    flex-direction: column;
 }
 
 .intern-tablet-mode .page-header.intern-header {
@@ -13200,41 +13207,134 @@ mark.highlight {
 
 .intern-tablet-mode .intern-tablet-header {
     display: flex !important;
+    flex-shrink: 0;
+    margin-bottom: 10px;
 }
 
+/* Verstecke Section-Titel im Tablet-Modus */
 .intern-tablet-mode .intern-section-title {
-    font-size: 1rem;
-    margin: 15px 0 10px 0;
-    padding-bottom: 8px;
+    display: none !important;
+}
+
+/* Kombinierte Team-Sections als 2x2 Grid */
+.intern-tablet-mode .intern-team-sections {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    grid-template-rows: 1fr 1fr;
+    gap: 10px;
+    flex: 1;
+    min-height: 0;
+}
+
+/* Beide Sections nebeneinander/untereinander */
+.intern-tablet-mode #internMitarbeiterSection,
+.intern-tablet-mode #internLehrlingeSection {
+    display: contents;
 }
 
 .intern-tablet-mode .intern-team-grid {
-    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
-    gap: 15px;
+    display: contents;
 }
 
+/* Jede Person-Kachel füllt eine Grid-Zelle */
 .intern-tablet-mode .intern-person-kachel {
     border-radius: 12px;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    overflow: hidden;
 }
 
 .intern-tablet-mode .intern-person-header {
     padding: 12px 15px;
+    flex-shrink: 0;
 }
 
 .intern-tablet-mode .intern-person-name {
-    font-size: 1.1rem;
+    font-size: 1.2rem;
 }
 
 .intern-tablet-mode .intern-person-body {
     padding: 15px;
+    flex: 1;
+    overflow-y: auto;
+    min-height: 0;
 }
 
 .intern-tablet-mode .intern-person-auftrag .auftrag-kennzeichen {
-    font-size: 1.5rem;
+    font-size: 1.8rem;
+    font-weight: 700;
 }
 
-.intern-tablet-mode #internLehrlingeSection {
-    margin-top: 20px;
+.intern-tablet-mode .intern-person-auftrag .auftrag-info {
+    font-size: 1rem;
+}
+
+/* Nächster Auftrag prominent anzeigen */
+.intern-tablet-mode .intern-naechster-auftrag {
+    margin-top: auto;
+    padding-top: 10px;
+    border-top: 1px solid #e2e8f0;
+}
+
+.intern-tablet-mode .intern-naechster-auftrag .naechster-label {
+    font-size: 0.85rem;
+    color: #64748b;
+    margin-bottom: 5px;
+}
+
+.intern-tablet-mode .intern-naechster-auftrag .naechster-info {
+    font-size: 0.95rem;
+    color: #334155;
+}
+
+/* Tablet-Modus: Leer-Status und Nächster Auftrag */
+.intern-tablet-mode .intern-person-leer {
+    text-align: center;
+    padding: 20px;
+}
+
+.intern-tablet-mode .intern-person-leer .leer-icon {
+    font-size: 2.5rem;
+    margin-bottom: 10px;
+}
+
+.intern-tablet-mode .intern-person-leer .leer-text {
+    font-size: 1.1rem;
+    color: #64748b;
+}
+
+.intern-tablet-mode .intern-person-naechster {
+    margin-top: 15px;
+    padding-top: 15px;
+    border-top: 1px dashed #e2e8f0;
+}
+
+.intern-tablet-mode .intern-person-naechster .naechster-label {
+    font-size: 0.9rem;
+    color: #28a745;
+    font-weight: 600;
+    margin-bottom: 8px;
+}
+
+/* Tablet-Modus: Fortschrittsbalken größer */
+.intern-tablet-mode .intern-person-fortschritt-bar {
+    height: 10px;
+}
+
+/* Tablet-Modus: Zeit-Items größer */
+.intern-tablet-mode .intern-person-zeit-item .zeit-value {
+    font-size: 1.2rem;
+}
+
+/* Keine Lehrlinge Hinweis im Tablet-Modus verstecken */
+.intern-tablet-mode #internKeineLehrlinge {
+    display: none !important;
+}
+
+/* Verstecke Termine-Section im Tablet-Modus */
+.intern-tablet-mode #internTermineSection {
+    display: none !important;
 }
 
 /* Verstecke App-Header und Tabs im Tablet-Modus */
