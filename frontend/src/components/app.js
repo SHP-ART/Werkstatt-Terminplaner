@@ -23165,6 +23165,44 @@ class App {
   }
 
   /**
+   * Prüft ob ein Termin einer Person zugeordnet ist
+   * Berücksichtigt sowohl direkte ID als auch arbeitszeiten_details
+   */
+  isTerminFuerPerson(termin, personId, isLehrling = false) {
+    // Direkte Zuordnung prüfen
+    if (isLehrling) {
+      if (termin.lehrling_id == personId) return true;
+    } else {
+      if (termin.mitarbeiter_id == personId) return true;
+    }
+
+    // arbeitszeiten_details prüfen (JSON mit Mitarbeiter-Zuordnungen)
+    if (termin.arbeitszeiten_details) {
+      try {
+        const details = typeof termin.arbeitszeiten_details === 'string'
+          ? JSON.parse(termin.arbeitszeiten_details)
+          : termin.arbeitszeiten_details;
+
+        // Durchsuche alle Einträge in arbeitszeiten_details
+        for (const key of Object.keys(details)) {
+          const entry = details[key];
+          if (entry) {
+            if (isLehrling) {
+              if (entry.lehrling_id == personId) return true;
+            } else {
+              if (entry.mitarbeiter_id == personId) return true;
+            }
+          }
+        }
+      } catch (e) {
+        // JSON Parse Fehler ignorieren
+      }
+    }
+
+    return false;
+  }
+
+  /**
    * Rendert eine Kachel für einen Mitarbeiter oder Lehrling
    */
   renderInternPersonKachel(person, alleTermine, typ = 'mitarbeiter') {
@@ -23172,15 +23210,10 @@ class App {
     const personName = person.name;
     const isLehrling = typ === 'lehrling';
 
-    // Finde Termine für diese Person
-    let personTermine;
-    if (isLehrling) {
-      // Lehrlinge haben lehrling_id
-      personTermine = alleTermine.filter(t => t.lehrling_id == personId);
-    } else {
-      // Mitarbeiter haben mitarbeiter_id
-      personTermine = alleTermine.filter(t => t.mitarbeiter_id == personId);
-    }
+    // Finde Termine für diese Person (inkl. arbeitszeiten_details)
+    const personTermine = alleTermine.filter(t =>
+      this.isTerminFuerPerson(t, personId, isLehrling)
+    );
 
     // Sortiere nach Zeit
     personTermine.sort((a, b) => {
@@ -23189,15 +23222,43 @@ class App {
       return zeitA.localeCompare(zeitB);
     });
 
-    // Finde aktuellen Auftrag (in_arbeit)
-    const aktuellerAuftrag = personTermine.find(t => t.status === 'in_arbeit');
-    
-    // Finde nächsten Auftrag (geplant)
-    const naechsterAuftrag = personTermine.find(t => 
-      t.status !== 'in_arbeit' && 
-      t.status !== 'abgeschlossen' && 
-      t.status !== 'storniert'
-    );
+    // Aktuelle Uhrzeit für Zeitvergleiche
+    const jetzt = new Date();
+    const jetztZeit = `${String(jetzt.getHours()).padStart(2, '0')}:${String(jetzt.getMinutes()).padStart(2, '0')}`;
+
+    // Finde aktuellen Auftrag:
+    // 1. Explizit "in_arbeit" Status ODER
+    // 2. Termin der gerade laufen sollte (startzeit <= jetzt < endzeit)
+    let aktuellerAuftrag = personTermine.find(t => t.status === 'in_arbeit');
+
+    if (!aktuellerAuftrag) {
+      // Prüfe ob ein Termin gerade laufen sollte (basierend auf Zeit)
+      aktuellerAuftrag = personTermine.find(t => {
+        if (t.status === 'abgeschlossen' || t.status === 'storniert') return false;
+
+        const startzeit = t.startzeit || t.bring_zeit;
+        if (!startzeit) return false;
+
+        // Berechne Endzeit
+        const dauer = t.tatsaechliche_zeit || t.geschaetzte_zeit || 60;
+        const [h, m] = startzeit.split(':').map(Number);
+        const endMinuten = h * 60 + m + dauer;
+        const endzeit = `${String(Math.floor(endMinuten / 60)).padStart(2, '0')}:${String(endMinuten % 60).padStart(2, '0')}`;
+
+        // Prüfe ob jetzt zwischen Start und Ende liegt
+        return startzeit <= jetztZeit && jetztZeit < endzeit;
+      });
+    }
+
+    // Finde nächsten Auftrag (noch nicht gestartet)
+    const naechsterAuftrag = personTermine.find(t => {
+      if (t === aktuellerAuftrag) return false;
+      if (t.status === 'abgeschlossen' || t.status === 'storniert') return false;
+
+      const startzeit = t.startzeit || t.bring_zeit;
+      // Nächster Auftrag: entweder keine Startzeit oder Startzeit in der Zukunft
+      return !startzeit || startzeit > jetztZeit;
+    });
 
     // Prüfe ob Lehrling in Berufsschule ist
     let inBerufsschule = false;
