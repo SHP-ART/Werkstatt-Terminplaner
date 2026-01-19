@@ -137,21 +137,21 @@ Legende: ⬜ Offen  |  🟨 In Arbeit  |  ✅ Fertig
 **Zeitaufwand:** ~20-30 Stunden | **Priorität:** HOCH | **Impact:** ⭐⭐⭐⭐
 
 **Frontend-Optimierungen:**
-- [ ] Tab-Element-Caching implementieren
-- [ ] Event-Delegation für Tab-Buttons
-- [ ] Display-Toggle statt classList
-- [ ] Fuzzy Search (Basis-Implementierung)
-  - [ ] Levenshtein-Algorithmus implementieren
-  - [ ] Normalisierung (Umlaute, Sonderzeichen)
-  - [ ] Multi-Field-Search (Name, Telefon, Kennzeichen)
-  - [ ] Frontend-UI mit Score-Anzeige
+- [x] Tab-Element-Caching implementieren
+- [x] Event-Delegation für Tab-Buttons
+- [x] Display-Toggle statt classList
+- [x] Fuzzy Search (Basis-Implementierung)
+  - [x] Levenshtein-Algorithmus implementieren
+  - [x] Normalisierung (Umlaute, Sonderzeichen)
+  - [x] Multi-Field-Search (Name, Telefon, Kennzeichen)
+  - [x] Frontend-UI mit Score-Anzeige
 
 **Backend-Optimierungen:**
-- [ ] Response Compression aktivieren (gzip/brotli)
-- [ ] Prepared Statements implementieren
-- [ ] N+1 Query Problem beheben
-- [ ] Composite Indizes erstellen
-- [ ] Query-Performance-Logger einbauen
+- [x] Response Compression aktivieren (gzip/brotli)
+- [x] Prepared Statements implementieren
+- [x] N+1 Query Problem beheben
+- [x] Composite Indizes erstellen
+- [x] Query-Performance-Logger einbauen
 
 **Erwartete Verbesserung:** ~40% Frontend, ~50% Backend
 

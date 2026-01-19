@@ -17,7 +17,20 @@ class App {
     // Planungs-Drag&Drop: Lokaler Änderungspuffer
     this.planungAenderungen = new Map(); // terminId -> { startzeit, mitarbeiter_id, lehrling_id, type, originalData }
     this.planungRaster = 5; // Standard-Raster: 5 Minuten
-    
+
+    // === Performance-Optimierung: Tab-Element-Caching ===
+    // Cache für häufig verwendete DOM-Elemente
+    this.tabCache = {
+      buttons: null,         // Alle Tab-Buttons
+      contents: null,        // Alle Tab-Inhalte
+      subTabButtons: null,   // Alle Sub-Tab-Buttons
+      subTabContents: null,  // Alle Sub-Tab-Inhalte
+      byId: new Map()        // Element-Cache nach ID
+    };
+
+    // Fuzzy Search Index für Kundensuche
+    this.fuzzySearchIndex = null;
+
     this.init();
   }
 
@@ -112,6 +125,7 @@ class App {
   }
 
   init() {
+    this.initTabCache(); // Tab-Caching initialisieren (Performance-Optimierung)
     this.setupEventListeners();
     this.initSubTabs(); // Sub-Tabs initialisieren
     this.loadInitialData();
@@ -121,6 +135,42 @@ class App {
     this.setupWebSocket();
     this.setupErsatzautoOptionHandlers();
     this.loadServerVersion();
+  }
+
+  // === Performance-Optimierung: Tab-Element-Caching ===
+  // Initialisiert den Cache für Tab-Elemente (einmalig beim Start)
+  initTabCache() {
+    // Tab-Buttons cachen
+    this.tabCache.buttons = document.querySelectorAll('.tab-button');
+    this.tabCache.contents = document.querySelectorAll('.tab-content');
+    this.tabCache.subTabButtons = document.querySelectorAll('.sub-tab-button');
+    this.tabCache.subTabContents = document.querySelectorAll('.sub-tab-content');
+
+    // Elemente nach ID cachen für schnellen Zugriff
+    this.tabCache.contents.forEach(content => {
+      if (content.id) {
+        this.tabCache.byId.set(content.id, content);
+      }
+    });
+    this.tabCache.subTabContents.forEach(content => {
+      if (content.id) {
+        this.tabCache.byId.set(content.id, content);
+      }
+    });
+
+    console.log(`[Tab-Cache] Initialisiert: ${this.tabCache.buttons.length} Tabs, ${this.tabCache.subTabButtons.length} Sub-Tabs`);
+  }
+
+  // Cached getElementById - vermeidet wiederholte DOM-Abfragen
+  getCachedElement(id) {
+    if (this.tabCache.byId.has(id)) {
+      return this.tabCache.byId.get(id);
+    }
+    const element = document.getElementById(id);
+    if (element) {
+      this.tabCache.byId.set(id, element);
+    }
+    return element;
   }
 
   // Lädt und zeigt die Server-Version im Header an
@@ -180,16 +230,28 @@ class App {
   }
 
   setupEventListeners() {
-    document.querySelectorAll('.tab-button').forEach(button => {
-      button.addEventListener('click', (e) => this.handleTabChange(e));
-    });
+    // === Performance-Optimierung: Event-Delegation für Tab-Buttons ===
+    // Statt einzelne Event-Listener für jeden Button, einen einzigen auf dem Container
+    const tabsContainer = document.querySelector('.tabs');
+    if (tabsContainer) {
+      tabsContainer.addEventListener('click', (e) => {
+        const button = e.target.closest('.tab-button');
+        if (button) {
+          this.handleTabChange(e);
+        }
+      });
+    }
 
-    const subTabButtons = document.querySelectorAll('.sub-tab-button');
-    console.log('Anzahl Sub-Tab-Buttons gefunden:', subTabButtons.length);
-    subTabButtons.forEach(button => {
-      console.log('Registriere Event-Listener für:', button.dataset.subtab);
-      button.addEventListener('click', (e) => this.handleSubTabChange(e));
+    // Event-Delegation für Sub-Tabs (alle .sub-tabs Container)
+    document.querySelectorAll('.sub-tabs').forEach(container => {
+      container.addEventListener('click', (e) => {
+        const button = e.target.closest('.sub-tab-button');
+        if (button) {
+          this.handleSubTabChange(e);
+        }
+      });
     });
+    console.log('[Event-Delegation] Tab-Events initialisiert');
 
     // Schnellzugriff: Klick auf Header-Banner öffnet "Neuer Termin"
     const headerBanner = document.querySelector('header.animated-header');
@@ -2220,38 +2282,44 @@ class App {
 
   // === SCHNELLZUGRIFF: Navigiert direkt zum "Neuer Termin" Formular ===
   navigateToNeuerTermin() {
-    // 1. Zum Termine-Tab wechseln
-    document.querySelectorAll('.tab-content').forEach(content => {
-      content.classList.remove('active');
-    });
-    document.querySelectorAll('.tab-button').forEach(button => {
-      button.classList.remove('active');
-    });
-    
-    const termineTab = document.getElementById('termine');
+    // 1. Zum Termine-Tab wechseln (mit display toggle für Performance-Optimierung)
+    const contents = this.tabCache.contents || document.querySelectorAll('.tab-content');
+    for (let i = 0; i < contents.length; i++) {
+      contents[i].style.display = 'none';
+      contents[i].classList.remove('active');
+    }
+
+    const buttons = this.tabCache.buttons || document.querySelectorAll('.tab-button');
+    for (let i = 0; i < buttons.length; i++) {
+      buttons[i].classList.remove('active');
+    }
+
+    const termineTab = this.getCachedElement('termine');
     const termineTabButton = document.querySelector('.tab-button[data-tab="termine"]');
-    
+
     if (termineTab && termineTabButton) {
+      termineTab.style.display = 'block';
       termineTab.classList.add('active');
       termineTabButton.classList.add('active');
-      
+
       // 2. Zum "Neuer Termin" Sub-Tab wechseln
-      const termineContainer = document.getElementById('termine');
-      termineContainer.querySelectorAll('.sub-tab-content').forEach(content => {
+      termineTab.querySelectorAll('.sub-tab-content').forEach(content => {
+        content.style.display = 'none';
         content.classList.remove('active');
       });
-      termineContainer.querySelectorAll('.sub-tab-button').forEach(btn => {
+      termineTab.querySelectorAll('.sub-tab-button').forEach(btn => {
         btn.classList.remove('active');
       });
-      
-      const neuerTerminContent = document.getElementById('neuerTermin');
-      const neuerTerminButton = termineContainer.querySelector('.sub-tab-button[data-subtab="neuerTermin"]');
-      
+
+      const neuerTerminContent = this.getCachedElement('neuerTermin');
+      const neuerTerminButton = termineTab.querySelector('.sub-tab-button[data-subtab="neuerTermin"]');
+
       if (neuerTerminContent && neuerTerminButton) {
+        neuerTerminContent.style.display = 'block';
         neuerTerminContent.classList.add('active');
         neuerTerminButton.classList.add('active');
       }
-      
+
       // 3. Fokus auf das erste Eingabefeld setzen
       setTimeout(() => {
         const kundenSuche = document.getElementById('terminNameSuche');
@@ -2266,21 +2334,30 @@ class App {
     // closest() verwenden, falls auf ein Kind-Element (z.B. <span>) geklickt wurde
     const button = e.target.closest('.tab-button');
     if (!button) return;
-    
+
     const tabName = button.dataset.tab;
     if (!tabName) return;
 
-    // Alle Tab-Inhalte verstecken
-    document.querySelectorAll('.tab-content').forEach(content => {
-      content.classList.remove('active');
-    });
+    // === Performance-Optimierung: Display-Toggle mit Cache ===
+    // Alle Tab-Inhalte verstecken (mit cached NodeList)
+    const contents = this.tabCache.contents || document.querySelectorAll('.tab-content');
+    for (let i = 0; i < contents.length; i++) {
+      contents[i].style.display = 'none';
+      contents[i].classList.remove('active');
+    }
 
-    document.querySelectorAll('.tab-button').forEach(button => {
-      button.classList.remove('active');
-    });
+    // Alle Buttons deaktivieren (mit cached NodeList)
+    const buttons = this.tabCache.buttons || document.querySelectorAll('.tab-button');
+    for (let i = 0; i < buttons.length; i++) {
+      buttons[i].classList.remove('active');
+    }
 
-    // Gewählten Tab aktivieren
-    document.getElementById(tabName).classList.add('active');
+    // Gewählten Tab aktivieren (mit Cache)
+    const targetContent = this.getCachedElement(tabName);
+    if (targetContent) {
+      targetContent.style.display = 'block';
+      targetContent.classList.add('active');
+    }
     button.classList.add('active');
 
     // Bei Tab-Wechsel: Alle schwebenden Elemente verstecken
@@ -2361,59 +2438,41 @@ class App {
   async handleSubTabChange(e) {
     e.preventDefault();
     e.stopPropagation();
-    
+
     // Finde den Button, auch wenn auf ein inneres Element geklickt wurde
     const button = e.target.closest('.sub-tab-button');
-    if (!button) {
-      console.log('Sub-Tab: Kein Button gefunden');
-      return;
-    }
-    
+    if (!button) return;
+
     const subTabName = button.dataset.subtab;
-    console.log('Sub-Tab Wechsel zu:', subTabName);
-    if (!subTabName) {
-      console.log('Sub-Tab: Kein subtab dataset');
-      return;
-    }
+    if (!subTabName) return;
 
     // Finde den direkten Parent-Container der sub-tabs
     const subTabsContainer = button.closest('.sub-tabs');
-    if (!subTabsContainer) {
-      console.log('Sub-Tab: Kein .sub-tabs Container gefunden');
-      return;
+    if (!subTabsContainer) return;
+
+    // === Performance-Optimierung: Display-Toggle mit Cache ===
+    // Hole alle Subtab-Buttons aus dem Container (cached per Container)
+    const subTabButtons = subTabsContainer.querySelectorAll('.sub-tab-button');
+
+    // Verstecke alle zugehörigen Sub-Tab-Contents und deaktiviere Buttons
+    for (let i = 0; i < subTabButtons.length; i++) {
+      const btn = subTabButtons[i];
+      const name = btn.dataset.subtab;
+      btn.classList.remove('active');
+      if (name) {
+        const content = this.getCachedElement(name);
+        if (content) {
+          content.style.display = 'none';
+          content.classList.remove('active');
+        }
+      }
     }
 
-    // Hole alle Subtab-Namen aus den Buttons
-    const allSubTabNames = Array.from(subTabsContainer.querySelectorAll('.sub-tab-button'))
-      .map(btn => btn.dataset.subtab)
-      .filter(name => name);
-    console.log('Alle Sub-Tabs:', allSubTabNames);
-
-    // Verstecke alle zugehörigen Sub-Tab-Contents
-    allSubTabNames.forEach(name => {
-      const content = document.getElementById(name);
-      if (content) {
-        content.classList.remove('active');
-        content.style.display = 'none';
-        console.log('Verstecke Tab:', name);
-      } else {
-        console.log('Tab Content nicht gefunden:', name);
-      }
-    });
-
-    // Deaktiviere alle Sub-Tab-Buttons
-    subTabsContainer.querySelectorAll('.sub-tab-button').forEach(btn => {
-      btn.classList.remove('active');
-    });
-
-    // Aktiviere den ausgewählten Tab
-    const targetContent = document.getElementById(subTabName);
+    // Aktiviere den ausgewählten Tab (mit Cache)
+    const targetContent = this.getCachedElement(subTabName);
     if (targetContent) {
-      targetContent.classList.add('active');
       targetContent.style.display = 'block';
-      console.log('Zeige Tab:', subTabName, 'Element:', targetContent);
-    } else {
-      console.error('FEHLER: Tab Content nicht gefunden für:', subTabName);
+      targetContent.classList.add('active');
     }
     button.classList.add('active');
 
@@ -2662,7 +2721,19 @@ class App {
   filterKundenListe() {
     const sucheInput = document.getElementById('kundenListeSuche');
     const suchBegriff = sucheInput ? sucheInput.value.trim() : '';
-    this.renderKundenListe(this.kundenCache || [], suchBegriff);
+
+    // Bei leerem Suchbegriff: Alle anzeigen
+    if (!suchBegriff) {
+      this.renderKundenListe(this.kundenCache || [], '');
+      return;
+    }
+
+    // Fuzzy-Search aktivieren ab 2 Zeichen
+    if (suchBegriff.length >= 2) {
+      this.filterKundenListeFuzzy();
+    } else {
+      this.renderKundenListe(this.kundenCache || [], suchBegriff);
+    }
   }
 
   clearKundenSuche() {
@@ -6418,22 +6489,27 @@ class App {
 
   // Navigation zu Standardzeiten-Einstellungen
   navigateToStandardzeiten() {
-    // Wechsle zum Einstellungen-Tab
-    document.querySelectorAll('.tab-button').forEach(btn => {
-      btn.classList.remove('active');
-      if (btn.getAttribute('data-tab') === 'einstellungen') {
-        btn.classList.add('active');
+    // Wechsle zum Einstellungen-Tab (mit display toggle)
+    const buttons = this.tabCache.buttons || document.querySelectorAll('.tab-button');
+    for (let i = 0; i < buttons.length; i++) {
+      buttons[i].classList.remove('active');
+      if (buttons[i].getAttribute('data-tab') === 'einstellungen') {
+        buttons[i].classList.add('active');
       }
-    });
-    
-    document.querySelectorAll('.tab-content').forEach(content => {
-      content.classList.remove('active');
-    });
-    const einstellungenTab = document.getElementById('einstellungen');
+    }
+
+    const contents = this.tabCache.contents || document.querySelectorAll('.tab-content');
+    for (let i = 0; i < contents.length; i++) {
+      contents[i].style.display = 'none';
+      contents[i].classList.remove('active');
+    }
+
+    const einstellungenTab = this.getCachedElement('einstellungen');
     if (einstellungenTab) {
+      einstellungenTab.style.display = 'block';
       einstellungenTab.classList.add('active');
     }
-    
+
     // Wechsle zum Standardzeiten Sub-Tab
     document.querySelectorAll('.sub-tab-button').forEach(btn => {
       btn.classList.remove('active');
@@ -6441,16 +6517,16 @@ class App {
         btn.classList.add('active');
       }
     });
-    
+
     document.querySelectorAll('.sub-tab-content').forEach(content => {
       content.classList.remove('active');
       content.style.display = 'none';
     });
-    const standardzeitenTab = document.getElementById('standardzeiten');
+    const standardzeitenTab = this.getCachedElement('standardzeiten');
     if (standardzeitenTab) {
       standardzeitenTab.classList.add('active');
       standardzeitenTab.style.display = 'block';
-      
+
       // Lade Arbeitszeiten neu
       this.loadArbeitszeiten();
     }
@@ -18415,38 +18491,44 @@ class App {
     
     // Doppelklick zum Bearbeiten
     bar.addEventListener('dblclick', () => {
-      // Wechsle zum Termine-Tab und öffne das Formular
-      document.querySelectorAll('.tab-content').forEach(content => {
-        content.classList.remove('active');
-      });
-      document.querySelectorAll('.tab-button').forEach(button => {
-        button.classList.remove('active');
-      });
-      
-      const termineTab = document.getElementById('termine');
+      // Wechsle zum Termine-Tab und öffne das Formular (mit display toggle)
+      const contents = this.tabCache.contents || document.querySelectorAll('.tab-content');
+      for (let i = 0; i < contents.length; i++) {
+        contents[i].style.display = 'none';
+        contents[i].classList.remove('active');
+      }
+      const buttons = this.tabCache.buttons || document.querySelectorAll('.tab-button');
+      for (let i = 0; i < buttons.length; i++) {
+        buttons[i].classList.remove('active');
+      }
+
+      const termineTab = this.getCachedElement('termine');
       const termineTabButton = document.querySelector('.tab-button[data-tab="termine"]');
-      
+
       if (termineTab && termineTabButton) {
+        termineTab.style.display = 'block';
         termineTab.classList.add('active');
         termineTabButton.classList.add('active');
-        
+
         // Zum "Neuer Termin" Sub-Tab wechseln
         termineTab.querySelectorAll('.sub-tab-content').forEach(content => {
+          content.style.display = 'none';
           content.classList.remove('active');
         });
         termineTab.querySelectorAll('.sub-tab-button').forEach(btn => {
           btn.classList.remove('active');
         });
-        
-        const neuerTerminContent = document.getElementById('neuerTermin');
+
+        const neuerTerminContent = this.getCachedElement('neuerTermin');
         const neuerTerminButton = termineTab.querySelector('.sub-tab-button[data-subtab="neuerTermin"]');
-        
+
         if (neuerTerminContent && neuerTerminButton) {
+          neuerTerminContent.style.display = 'block';
           neuerTerminContent.classList.add('active');
           neuerTerminButton.classList.add('active');
         }
       }
-      
+
       this.loadTerminInForm(termin.id);
     });
 
@@ -23346,19 +23428,27 @@ class App {
    * Öffnet Termin-Details vom Intern-Tab aus
    */
   openTerminDetailFromIntern(terminId) {
-    // Wechsle zum Termine-Tab und öffne Details
-    const termineTab = document.getElementById('termine');
+    // Wechsle zum Termine-Tab und öffne Details (mit display toggle)
+    const termineTab = this.getCachedElement('termine');
     const termineTabButton = document.querySelector('.tab-button[data-tab="termine"]');
-    
+
     // Alle Tabs deaktivieren
-    document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
-    document.querySelectorAll('.tab-button').forEach(b => b.classList.remove('active'));
-    
+    const contents = this.tabCache.contents || document.querySelectorAll('.tab-content');
+    for (let i = 0; i < contents.length; i++) {
+      contents[i].style.display = 'none';
+      contents[i].classList.remove('active');
+    }
+    const buttons = this.tabCache.buttons || document.querySelectorAll('.tab-button');
+    for (let i = 0; i < buttons.length; i++) {
+      buttons[i].classList.remove('active');
+    }
+
     // Termine-Tab aktivieren
     if (termineTab && termineTabButton) {
+      termineTab.style.display = 'block';
       termineTab.classList.add('active');
       termineTabButton.classList.add('active');
-      
+
       // Lade und zeige die Termin-Details
       setTimeout(() => {
         this.showTerminDetails(terminId);
@@ -23823,6 +23913,341 @@ class App {
   }
 
   // === ENDE INTERN TAB METHODEN ===
+
+  // ============================================================
+  // === FUZZY SEARCH FUNKTIONEN (Performance-Optimierung) ===
+  // ============================================================
+
+  /**
+   * Levenshtein-Distanz Algorithmus
+   * Berechnet die minimale Anzahl von Änderungen (Einfügen, Löschen, Ersetzen),
+   * um String a in String b umzuwandeln.
+   * @param {string} a - Erster String
+   * @param {string} b - Zweiter String
+   * @returns {number} Levenshtein-Distanz
+   */
+  levenshteinDistance(a, b) {
+    if (!a || !b) return Math.max((a || '').length, (b || '').length);
+
+    const aLen = a.length;
+    const bLen = b.length;
+
+    // Schnelle Rückgabe bei leeren Strings
+    if (aLen === 0) return bLen;
+    if (bLen === 0) return aLen;
+
+    // Optimierung: Nur zwei Zeilen der Matrix speichern
+    let prevRow = new Array(bLen + 1);
+    let currRow = new Array(bLen + 1);
+
+    // Erste Zeile initialisieren
+    for (let j = 0; j <= bLen; j++) {
+      prevRow[j] = j;
+    }
+
+    for (let i = 1; i <= aLen; i++) {
+      currRow[0] = i;
+
+      for (let j = 1; j <= bLen; j++) {
+        const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+        currRow[j] = Math.min(
+          prevRow[j] + 1,      // Löschen
+          currRow[j - 1] + 1,  // Einfügen
+          prevRow[j - 1] + cost // Ersetzen
+        );
+      }
+
+      // Zeilen tauschen
+      [prevRow, currRow] = [currRow, prevRow];
+    }
+
+    return prevRow[bLen];
+  }
+
+  /**
+   * Normalisiert einen String für Fuzzy-Suche
+   * - Konvertiert zu Kleinbuchstaben
+   * - Ersetzt Umlaute (ä→ae, ö→oe, ü→ue, ß→ss)
+   * - Entfernt Sonderzeichen
+   * - Entfernt mehrfache Leerzeichen
+   * @param {string} str - Zu normalisierender String
+   * @returns {string} Normalisierter String
+   */
+  normalizeForSearch(str) {
+    if (!str) return '';
+
+    return str
+      .toLowerCase()
+      .replace(/ä/g, 'ae')
+      .replace(/ö/g, 'oe')
+      .replace(/ü/g, 'ue')
+      .replace(/ß/g, 'ss')
+      .replace(/[^a-z0-9\s]/g, '')
+      .replace(/\s+/g, ' ')
+      .trim();
+  }
+
+  /**
+   * Berechnet einen Ähnlichkeits-Score (0-100) zwischen Suchbegriff und Zieltext
+   * @param {string} search - Suchbegriff
+   * @param {string} target - Zieltext
+   * @returns {number} Score zwischen 0 (keine Übereinstimmung) und 100 (exakt)
+   */
+  calculateFuzzyScore(search, target) {
+    if (!search || !target) return 0;
+
+    const normalizedSearch = this.normalizeForSearch(search);
+    const normalizedTarget = this.normalizeForSearch(target);
+
+    if (!normalizedSearch || !normalizedTarget) return 0;
+
+    // Exakte Übereinstimmung
+    if (normalizedSearch === normalizedTarget) return 100;
+
+    // Enthält den Suchbegriff
+    if (normalizedTarget.includes(normalizedSearch)) {
+      // Höherer Score wenn am Anfang
+      if (normalizedTarget.startsWith(normalizedSearch)) return 95;
+      return 85;
+    }
+
+    // Wort-Anfangs-Match (z.B. "mei" findet "Meier")
+    const words = normalizedTarget.split(' ');
+    for (const word of words) {
+      if (word.startsWith(normalizedSearch)) return 90;
+    }
+
+    // Levenshtein-basierter Score
+    const distance = this.levenshteinDistance(normalizedSearch, normalizedTarget);
+    const maxLen = Math.max(normalizedSearch.length, normalizedTarget.length);
+
+    // Score berechnen: Je geringer die Distanz, desto höher der Score
+    const similarity = 1 - (distance / maxLen);
+    const score = Math.round(similarity * 70); // Max 70 für Levenshtein-Match
+
+    // Mindest-Score-Schwelle
+    return score > 20 ? score : 0;
+  }
+
+  /**
+   * Fuzzy-Suche über mehrere Felder eines Kunden
+   * @param {string} searchTerm - Suchbegriff
+   * @param {Object} kunde - Kundenobjekt
+   * @returns {Object} { match: boolean, score: number, matchedField: string }
+   */
+  fuzzySearchKunde(searchTerm, kunde) {
+    if (!searchTerm || !kunde) return { match: false, score: 0, matchedField: null };
+
+    const fields = [
+      { name: 'name', value: kunde.name, weight: 1.0 },
+      { name: 'telefon', value: kunde.telefon, weight: 0.9 },
+      { name: 'kennzeichen', value: kunde.kennzeichen, weight: 0.9 },
+      { name: 'email', value: kunde.email, weight: 0.7 },
+      { name: 'fahrzeug', value: kunde.fahrzeug, weight: 0.6 }
+    ];
+
+    let bestScore = 0;
+    let matchedField = null;
+
+    for (const field of fields) {
+      if (!field.value) continue;
+
+      const score = this.calculateFuzzyScore(searchTerm, field.value) * field.weight;
+      if (score > bestScore) {
+        bestScore = score;
+        matchedField = field.name;
+      }
+    }
+
+    return {
+      match: bestScore >= 30, // Mindest-Score für Treffer
+      score: Math.round(bestScore),
+      matchedField
+    };
+  }
+
+  /**
+   * Führt eine Fuzzy-Suche über alle Kunden durch
+   * @param {string} searchTerm - Suchbegriff
+   * @param {number} limit - Maximale Anzahl der Ergebnisse (Standard: 10)
+   * @returns {Array} Sortierte Liste von { kunde, score, matchedField }
+   */
+  fuzzySearchKunden(searchTerm, limit = 10) {
+    if (!searchTerm || searchTerm.length < 2) return [];
+
+    const results = [];
+
+    for (const kunde of this.kundenCache) {
+      const result = this.fuzzySearchKunde(searchTerm, kunde);
+      if (result.match) {
+        results.push({
+          kunde,
+          score: result.score,
+          matchedField: result.matchedField
+        });
+      }
+    }
+
+    // Nach Score absteigend sortieren
+    results.sort((a, b) => b.score - a.score);
+
+    return results.slice(0, limit);
+  }
+
+  /**
+   * Rendert Fuzzy-Search-Ergebnisse mit Score-Anzeige
+   * @param {Array} results - Ergebnisse von fuzzySearchKunden
+   * @param {HTMLElement} container - Container für die Ergebnisse
+   */
+  renderFuzzySearchResults(results, container) {
+    if (!container) return;
+
+    if (!results || results.length === 0) {
+      container.innerHTML = '<div class="fuzzy-no-results">Keine passenden Kunden gefunden</div>';
+      container.style.display = 'block';
+      return;
+    }
+
+    container.innerHTML = results.map(result => {
+      const kunde = result.kunde;
+      const scoreClass = result.score >= 80 ? 'high' : result.score >= 50 ? 'medium' : 'low';
+      const fieldLabel = {
+        name: 'Name',
+        telefon: 'Telefon',
+        kennzeichen: 'Kennzeichen',
+        email: 'E-Mail',
+        fahrzeug: 'Fahrzeug'
+      }[result.matchedField] || result.matchedField;
+
+      return `
+        <div class="fuzzy-result-item" data-kunde-id="${kunde.id}">
+          <div class="fuzzy-result-main">
+            <span class="fuzzy-kunde-name">${this.escapeHtml(kunde.name || 'Unbekannt')}</span>
+            ${kunde.kennzeichen ? `<span class="fuzzy-kunde-kz">${this.escapeHtml(kunde.kennzeichen)}</span>` : ''}
+          </div>
+          <div class="fuzzy-result-details">
+            ${kunde.telefon ? `<span class="fuzzy-detail">📞 ${this.escapeHtml(kunde.telefon)}</span>` : ''}
+            ${kunde.fahrzeug ? `<span class="fuzzy-detail">🚗 ${this.escapeHtml(kunde.fahrzeug)}</span>` : ''}
+          </div>
+          <div class="fuzzy-result-score">
+            <span class="fuzzy-score-badge ${scoreClass}">${result.score}%</span>
+            <span class="fuzzy-match-field">${fieldLabel}</span>
+          </div>
+        </div>
+      `;
+    }).join('');
+
+    container.style.display = 'block';
+  }
+
+  /**
+   * Filtert die Kundenliste mit Fuzzy-Search
+   * Wird von filterKundenListe aufgerufen
+   */
+  filterKundenListeFuzzy() {
+    const sucheInput = document.getElementById('kundenListeSuche');
+    const suchBegriff = sucheInput ? sucheInput.value.trim() : '';
+
+    if (suchBegriff.length < 2) {
+      // Bei zu kurzem Suchbegriff: Alle anzeigen
+      this.renderKundenListe(this.kundenCache, '');
+      return;
+    }
+
+    // Fuzzy-Suche durchführen
+    const results = this.fuzzySearchKunden(suchBegriff, 100);
+
+    // Gefundene Kunden extrahieren
+    const gefundeneKunden = results.map(r => r.kunde);
+
+    // Liste rendern mit Score-Info
+    this.renderKundenListeMitScore(results);
+  }
+
+  /**
+   * Rendert die Kundenliste mit Fuzzy-Score-Anzeige
+   * @param {Array} results - Ergebnisse von fuzzySearchKunden
+   */
+  renderKundenListeMitScore(results) {
+    const tbody = document.getElementById('kundenTable')?.getElementsByTagName('tbody')[0];
+    if (!tbody) return;
+
+    // Update Badge
+    const badge = document.getElementById('kundenAnzahlBadge');
+    if (badge) {
+      badge.textContent = results.length;
+    }
+
+    // Clear-Button anzeigen
+    const clearBtn = document.getElementById('kundenSucheClearBtn');
+    if (clearBtn) {
+      clearBtn.style.display = results.length > 0 ? 'block' : 'none';
+    }
+
+    tbody.innerHTML = '';
+
+    if (results.length === 0) {
+      const row = tbody.insertRow();
+      const cell = row.insertCell(0);
+      cell.colSpan = 6;
+      cell.style.textAlign = 'center';
+      cell.style.padding = '20px';
+      cell.innerHTML = '<span style="color: #666;">Keine Kunden gefunden</span>';
+      return;
+    }
+
+    results.forEach(result => {
+      const kunde = result.kunde;
+      const row = tbody.insertRow();
+      row.dataset.kundeId = kunde.id;
+
+      // Score-Badge für die erste Spalte
+      const scoreClass = result.score >= 80 ? 'high' : result.score >= 50 ? 'medium' : 'low';
+
+      row.insertCell(0).innerHTML = `
+        <span class="fuzzy-inline-score ${scoreClass}" title="Übereinstimmung: ${result.score}%">
+          ${this.escapeHtml(kunde.name || '-')}
+        </span>
+      `;
+      row.insertCell(1).textContent = kunde.telefon || '-';
+      row.insertCell(2).textContent = kunde.email || '-';
+      row.insertCell(3).textContent = kunde.kennzeichen || '-';
+      row.insertCell(4).textContent = kunde.fahrzeug || '-';
+
+      // Aktionen
+      const actionsCell = row.insertCell(5);
+      actionsCell.innerHTML = `
+        <button onclick="app.openKundeDetails(${kunde.id})" class="action-btn">Details</button>
+        <button onclick="app.navigateToNeuerTerminMitKunde(${kunde.id})" class="action-btn">Neuer Termin</button>
+      `;
+    });
+  }
+
+  /**
+   * Baut den Fuzzy-Search-Index für schnellere Suche auf
+   * Wird einmal nach dem Laden der Kunden aufgerufen
+   */
+  buildFuzzySearchIndex() {
+    if (!this.kundenCache || this.kundenCache.length === 0) {
+      this.fuzzySearchIndex = null;
+      return;
+    }
+
+    // Index mit normalisierten Werten erstellen
+    this.fuzzySearchIndex = this.kundenCache.map(kunde => ({
+      id: kunde.id,
+      normalizedName: this.normalizeForSearch(kunde.name),
+      normalizedTelefon: this.normalizeForSearch(kunde.telefon),
+      normalizedKennzeichen: this.normalizeForSearch(kunde.kennzeichen),
+      normalizedEmail: this.normalizeForSearch(kunde.email),
+      normalizedFahrzeug: this.normalizeForSearch(kunde.fahrzeug),
+      original: kunde
+    }));
+
+    console.log(`[Fuzzy-Index] ${this.fuzzySearchIndex.length} Kunden indexiert`);
+  }
+
+  // === ENDE FUZZY SEARCH FUNKTIONEN ===
 }
 
 

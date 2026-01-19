@@ -185,9 +185,30 @@ async function startServer(clientCountCallback, requestLogCallback) {
 
     app.use(cors(corsOptions));
     logStartup('CORS Middleware aktiviert');
-    
-    app.use(compression()); // GZIP Komprimierung aktivieren
-    logStartup('Compression Middleware aktiviert');
+
+    // === Performance-Optimierung: Verbesserte Compression ===
+    app.use(compression({
+      // Nur komprimieren wenn größer als 1KB
+      threshold: 1024,
+      // Kompressionslevel (1-9, höher = bessere Kompression aber langsamer)
+      level: 6,
+      // Diese Content-Types komprimieren
+      filter: (req, res) => {
+        // Immer JSON und HTML komprimieren
+        const contentType = res.getHeader('Content-Type');
+        if (contentType && (
+          contentType.includes('application/json') ||
+          contentType.includes('text/html') ||
+          contentType.includes('text/css') ||
+          contentType.includes('application/javascript')
+        )) {
+          return true;
+        }
+        // Standardfilter für andere Typen
+        return compression.filter(req, res);
+      }
+    }));
+    logStartup('Compression Middleware aktiviert (optimiert)');
     
     app.use(bodyParser.json({ limit: '10mb' }));
     app.use(bodyParser.urlencoded({ extended: true, limit: '10mb' }));

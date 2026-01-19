@@ -13322,3 +13322,147 @@ body.intern-tablet-mode-active #intern {
         grid-template-columns: 1fr;
     }
 }
+
+/* ================================================
+   FUZZY SEARCH STYLES
+   ================================================ */
+
+/* Fuzzy Search Score Badges */
+.fuzzy-score-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 3px 8px;
+    border-radius: 12px;
+    font-size: 11px;
+    font-weight: 600;
+    min-width: 40px;
+}
+
+.fuzzy-score-badge.high {
+    background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+    color: white;
+}
+
+.fuzzy-score-badge.medium {
+    background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+    color: white;
+}
+
+.fuzzy-score-badge.low {
+    background: linear-gradient(135deg, #6b7280 0%, #4b5563 100%);
+    color: white;
+}
+
+/* Inline Score für Tabellenzellen */
+.fuzzy-inline-score {
+    position: relative;
+    padding-left: 8px;
+}
+
+.fuzzy-inline-score.high::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 4px;
+    height: 100%;
+    border-radius: 2px;
+    background: #10b981;
+}
+
+.fuzzy-inline-score.medium::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 4px;
+    height: 100%;
+    border-radius: 2px;
+    background: #f59e0b;
+}
+
+.fuzzy-inline-score.low::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 4px;
+    height: 100%;
+    border-radius: 2px;
+    background: #6b7280;
+}
+
+/* Fuzzy Search Dropdown */
+.fuzzy-result-item {
+    display: flex;
+    flex-direction: column;
+    padding: 12px 15px;
+    border-bottom: 1px solid #eee;
+    cursor: pointer;
+    transition: background 0.15s ease;
+}
+
+.fuzzy-result-item:hover {
+    background: #f5f7fa;
+}
+
+.fuzzy-result-item:last-child {
+    border-bottom: none;
+}
+
+.fuzzy-result-main {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 4px;
+}
+
+.fuzzy-kunde-name {
+    font-weight: 600;
+    color: var(--steel);
+}
+
+.fuzzy-kunde-kz {
+    font-size: 12px;
+    padding: 2px 6px;
+    background: #e5e7eb;
+    border-radius: 4px;
+    font-family: monospace;
+}
+
+.fuzzy-result-details {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    font-size: 12px;
+    color: #666;
+}
+
+.fuzzy-detail {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.fuzzy-result-score {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 8px;
+}
+
+.fuzzy-match-field {
+    font-size: 11px;
+    color: #9ca3af;
+}
+
+.fuzzy-no-results {
+    padding: 20px;
+    text-align: center;
+    color: #666;
+    font-style: italic;
+}

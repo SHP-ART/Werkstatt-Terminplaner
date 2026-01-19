@@ -814,6 +814,49 @@ function initializeDatabase() {
       if (err) console.error('Fehler beim Erstellen des Index idx_termine_datum_status:', err);
     });
 
+    // === Performance-Optimierung v1.3.0: Composite Indizes ===
+    // Index für Papierkorb-Abfragen (geloescht_am IS NULL mit Datum)
+    dbWrapper.connection.run(`CREATE INDEX IF NOT EXISTS idx_termine_geloescht_datum ON termine(geloescht_am, datum)`, (err) => {
+      if (err) console.error('Fehler beim Erstellen des Index idx_termine_geloescht_datum:', err);
+    });
+
+    // Index für Auslastungs-Abfragen (Datum + Status + Mitarbeiter)
+    dbWrapper.connection.run(`CREATE INDEX IF NOT EXISTS idx_termine_auslastung ON termine(datum, status, mitarbeiter_id)`, (err) => {
+      if (err) console.error('Fehler beim Erstellen des Index idx_termine_auslastung:', err);
+    });
+
+    // Index für schwebende Termine Abfragen
+    dbWrapper.connection.run(`CREATE INDEX IF NOT EXISTS idx_termine_schwebend ON termine(ist_schwebend, datum)`, (err) => {
+      if (err) console.error('Fehler beim Erstellen des Index idx_termine_schwebend:', err);
+    });
+
+    // Index für Kunden-Suche (Name + Kennzeichen kombiniert)
+    dbWrapper.connection.run(`CREATE INDEX IF NOT EXISTS idx_kunden_suche ON kunden(name, kennzeichen, telefon)`, (err) => {
+      if (err) console.error('Fehler beim Erstellen des Index idx_kunden_suche:', err);
+    });
+
+    // Index für Termin-Erweiterungen
+    dbWrapper.connection.run(`CREATE INDEX IF NOT EXISTS idx_termine_erweiterung ON termine(erweiterung_von_id, ist_erweiterung)`, (err) => {
+      if (err) console.error('Fehler beim Erstellen des Index idx_termine_erweiterung:', err);
+    });
+
+    // Index für Ersatzauto-Abfragen
+    dbWrapper.connection.run(`CREATE INDEX IF NOT EXISTS idx_termine_ersatzauto ON termine(ersatzauto, datum, ersatzauto_bis_datum)`, (err) => {
+      if (err) console.error('Fehler beim Erstellen des Index idx_termine_ersatzauto:', err);
+    });
+
+    // Index für aktive Mitarbeiter
+    dbWrapper.connection.run(`CREATE INDEX IF NOT EXISTS idx_mitarbeiter_aktiv ON mitarbeiter(aktiv)`, (err) => {
+      if (err) console.error('Fehler beim Erstellen des Index idx_mitarbeiter_aktiv:', err);
+    });
+
+    // Index für aktive Lehrlinge
+    dbWrapper.connection.run(`CREATE INDEX IF NOT EXISTS idx_lehrlinge_aktiv ON lehrlinge(aktiv)`, (err) => {
+      if (err) console.error('Fehler beim Erstellen des Index idx_lehrlinge_aktiv:', err);
+    });
+
+    console.log('✅ Composite Indizes für Performance-Optimierung erstellt');
+
     // Termin-Phasen für mehrtägige Arbeiten (z.B. Unfallreparatur)
     dbWrapper.connection.run(`CREATE TABLE IF NOT EXISTS termin_phasen (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
