@@ -23183,10 +23183,18 @@ class App {
           ? JSON.parse(termin.arbeitszeiten_details)
           : termin.arbeitszeiten_details;
 
+        // Prüfe _gesamt_mitarbeiter_id (Hauptzuordnung)
+        if (details._gesamt_mitarbeiter_id) {
+          const gesamt = details._gesamt_mitarbeiter_id;
+          if (isLehrling && gesamt.type === 'lehrling' && gesamt.id == personId) return true;
+          if (!isLehrling && gesamt.type === 'mitarbeiter' && gesamt.id == personId) return true;
+        }
+
         // Durchsuche alle Einträge in arbeitszeiten_details
         for (const key of Object.keys(details)) {
+          if (key.startsWith('_')) continue; // Überspringe Meta-Felder
           const entry = details[key];
-          if (entry) {
+          if (entry && typeof entry === 'object') {
             if (isLehrling) {
               if (entry.lehrling_id == personId) return true;
             } else {
