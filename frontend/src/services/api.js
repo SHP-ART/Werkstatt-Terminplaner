@@ -338,6 +338,26 @@ class EinstellungenService {
     return ApiService.put('/einstellungen/ki-enabled', { enabled });
   }
 
+  // KI-Modus aktualisieren (local/openai)
+  static async updateKIMode(mode) {
+    return ApiService.put('/einstellungen/ki-mode', { mode });
+  }
+
+  // Echtzeit-Updates aktivieren/deaktivieren
+  static async updateRealtimeEnabled(enabled) {
+    return ApiService.put('/einstellungen/realtime-enabled', { enabled });
+  }
+
+  // Smart Scheduling aktivieren/deaktivieren
+  static async updateSmartSchedulingEnabled(enabled) {
+    return ApiService.put('/einstellungen/smart-scheduling-enabled', { enabled });
+  }
+
+  // Anomalie-Erkennung aktivieren/deaktivieren
+  static async updateAnomalyDetectionEnabled(enabled) {
+    return ApiService.put('/einstellungen/anomaly-detection-enabled', { enabled });
+  }
+
   static async getAbwesenheit(datum) {
     return ApiService.get(`/abwesenheiten/${datum}`);
   }
@@ -596,6 +616,13 @@ class AIService {
   }
 
   /**
+   * Schätzt die Zeit für gegebene Arbeiten (Alias)
+   */
+  static async estimateTime(arbeiten, fahrzeug = '') {
+    return ApiService.post('/ai/estimate-time', { arbeiten, fahrzeug });
+  }
+
+  /**
    * Erkennt benötigte Teile aus einer Beschreibung
    * @param {string} beschreibung - Arbeitsbeschreibung
    * @param {string} fahrzeug - Optional: Fahrzeuginfo
@@ -765,4 +792,3 @@ class KIPlanungService {
     return ApiService.get(`/ki-planung/wochenplanung/${startDatum}`);
   }
 }
-

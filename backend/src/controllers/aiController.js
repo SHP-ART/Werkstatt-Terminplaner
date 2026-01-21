@@ -7,6 +7,22 @@
  */
 
 const openaiService = require('../services/openaiService');
+const localAiService = require('../services/localAiService');
+const EinstellungenModel = require('../models/einstellungenModel');
+
+async function getKISettings() {
+  const settings = await EinstellungenModel.getWerkstatt();
+  const enabled = settings?.ki_enabled !== false && settings?.ki_enabled !== 0;
+  let mode = settings?.ki_mode;
+  if (!mode) {
+    mode = settings?.chatgpt_api_key ? 'openai' : 'local';
+  }
+  return { enabled, mode, settings };
+}
+
+function getKIService(mode) {
+  return mode === 'openai' ? openaiService : localAiService;
+}
 
 // =============================================================================
 // STATUS & KONFIGURATION
@@ -18,22 +34,43 @@ const openaiService = require('../services/openaiService');
  */
 async function getStatus(req, res) {
   try {
-    const configured = openaiService.isConfigured();
-    
-    if (!configured) {
+    const { enabled, mode } = await getKISettings();
+
+    if (!enabled) {
       return res.json({
         enabled: false,
         configured: false,
+        mode,
+        message: 'KI-Funktionen deaktiviert'
+      });
+    }
+
+    if (mode === 'local') {
+      return res.json({
+        enabled: true,
+        configured: true,
+        mode: 'local',
+        message: 'Lokale KI aktiv'
+      });
+    }
+
+    const configured = openaiService.isConfigured();
+    if (!configured) {
+      return res.json({
+        enabled: true,
+        configured: false,
+        mode: 'openai',
         message: 'OpenAI API-Key nicht konfiguriert'
       });
     }
-    
+
     const costStatus = openaiService.getMonthlyEstimatedCost();
     const limitStatus = openaiService.checkCostLimit();
-    
+
     res.json({
       enabled: true,
       configured: true,
+      mode: 'openai',
       costStatus,
       limitStatus,
       message: 'KI-Integration aktiv'
@@ -54,20 +91,39 @@ async function getStatus(req, res) {
  */
 async function testConnection(req, res) {
   try {
+    const { enabled, mode } = await getKISettings();
+
+    if (!enabled) {
+      return res.status(400).json({
+        success: false,
+        error: 'KI-Funktionen sind deaktiviert'
+      });
+    }
+
+    if (mode === 'local') {
+      return res.json({
+        success: true,
+        message: 'Lokale KI ist aktiv',
+        mode: 'local'
+      });
+    }
+
     const result = await openaiService.testConnection();
-    
+
     if (result.success) {
       res.json({
         success: true,
         message: 'Verbindung zu OpenAI erfolgreich',
         model: result.model,
-        costStatus: result.costStatus
+        costStatus: result.costStatus,
+        mode: 'openai'
       });
     } else {
       res.status(400).json({
         success: false,
         error: result.error,
-        configured: result.configured
+        configured: result.configured,
+        mode: 'openai'
       });
     }
     
@@ -99,12 +155,19 @@ async function parseTermin(req, res) {
         error: 'Text muss mindestens 5 Zeichen lang sein' 
       });
     }
-    
-    const result = await openaiService.parseTerminFromText(text);
-    
+
+    const { enabled, mode } = await getKISettings();
+    if (!enabled) {
+      return res.status(403).json({ error: 'KI-Funktionen sind deaktiviert' });
+    }
+
+    const service = getKIService(mode);
+    const result = await service.parseTerminFromText(text);
+
     res.json({
       success: true,
-      data: result
+      data: result,
+      mode
     });
     
   } catch (error) {
@@ -135,12 +198,19 @@ async function suggestArbeiten(req, res) {
         error: 'Beschreibung muss mindestens 5 Zeichen lang sein' 
       });
     }
-    
-    const result = await openaiService.suggestArbeiten(beschreibung, fahrzeug);
-    
+
+    const { enabled, mode } = await getKISettings();
+    if (!enabled) {
+      return res.status(403).json({ error: 'KI-Funktionen sind deaktiviert' });
+    }
+
+    const service = getKIService(mode);
+    const result = await service.suggestArbeiten(beschreibung, fahrzeug);
+
     res.json({
       success: true,
-      data: result
+      data: result,
+      mode
     });
     
   } catch (error) {
@@ -171,12 +241,19 @@ async function estimateZeit(req, res) {
         error: 'Arbeiten-Array erforderlich' 
       });
     }
-    
-    const result = await openaiService.estimateZeit(arbeiten, fahrzeug);
-    
+
+    const { enabled, mode } = await getKISettings();
+    if (!enabled) {
+      return res.status(403).json({ error: 'KI-Funktionen sind deaktiviert' });
+    }
+
+    const service = getKIService(mode);
+    const result = await service.estimateZeit(arbeiten, fahrzeug);
+
     res.json({
       success: true,
-      data: result
+      data: result,
+      mode
     });
     
   } catch (error) {
@@ -186,6 +263,14 @@ async function estimateZeit(req, res) {
       message: error.message 
     });
   }
+}
+
+/**
+ * POST /api/ai/estimate-time
+ * Alias für Zeitschätzung (lokales Modell/OpenAI abhängig vom Modus)
+ */
+async function estimateTime(req, res) {
+  return estimateZeit(req, res);
 }
 
 // =============================================================================
@@ -207,12 +292,19 @@ async function erkenneTeilebedarf(req, res) {
         error: 'Beschreibung muss mindestens 5 Zeichen lang sein' 
       });
     }
-    
-    const result = await openaiService.erkenneTeilebedarf(beschreibung, fahrzeug);
-    
+
+    const { enabled, mode } = await getKISettings();
+    if (!enabled) {
+      return res.status(403).json({ error: 'KI-Funktionen sind deaktiviert' });
+    }
+
+    const service = getKIService(mode);
+    const result = await service.erkenneTeilebedarf(beschreibung, fahrzeug);
+
     res.json({
       success: true,
-      data: result
+      data: result,
+      mode
     });
     
   } catch (error) {
@@ -243,17 +335,24 @@ async function checkFremdmarke(req, res) {
         error: 'Text erforderlich' 
       });
     }
-    
-    const result = openaiService.erkenneFremdmarke(text);
-    
+
+    const { enabled, mode } = await getKISettings();
+    if (!enabled) {
+      return res.status(403).json({ error: 'KI-Funktionen sind deaktiviert' });
+    }
+
+    const service = getKIService(mode);
+    const result = service.erkenneFremdmarke(text);
+
     res.json({
       success: true,
       data: {
         ...result,
-        warnung: result.istFremdmarke 
-          ? `${result.erkannteMarke} ist keine Citroën-Marke. Arbeiten nur für Bestandskunden möglich.`
+        warnung: result.istFremdmarke
+          ? `${result.erkannteMarke} ist keine Citroen-Marke. Arbeiten nur fuer Bestandskunden moeglich.`
           : null
-      }
+      },
+      mode
     });
     
   } catch (error) {
@@ -284,36 +383,44 @@ async function fullAnalysis(req, res) {
         error: 'Text muss mindestens 5 Zeichen lang sein' 
       });
     }
-    
+
+    const { enabled, mode } = await getKISettings();
+    if (!enabled) {
+      return res.status(403).json({ error: 'KI-Funktionen sind deaktiviert' });
+    }
+
+    const service = getKIService(mode);
+
     // Schritt 1: Termin parsen
-    const terminData = await openaiService.parseTerminFromText(text);
-    
+    const terminData = await service.parseTerminFromText(text);
+
     // Schritt 2: Zeit schätzen (falls Arbeiten erkannt)
     let zeitData = null;
     if (terminData.arbeiten && terminData.arbeiten.length > 0) {
-      zeitData = await openaiService.estimateZeit(
-        terminData.arbeiten, 
+      zeitData = await service.estimateZeit(
+        terminData.arbeiten,
         `${terminData.fahrzeug?.marke || ''} ${terminData.fahrzeug?.modell || ''}`.trim()
       );
     }
-    
+
     // Schritt 3: Teile erkennen (optional)
     let teileData = null;
     if (includeTeile && terminData.beschreibung) {
-      teileData = await openaiService.erkenneTeilebedarf(
+      teileData = await service.erkenneTeilebedarf(
         terminData.beschreibung,
         `${terminData.fahrzeug?.marke || ''} ${terminData.fahrzeug?.modell || ''}`.trim()
       );
     }
-    
+
     res.json({
       success: true,
       data: {
         termin: terminData,
         zeitschaetzung: zeitData,
         teile: teileData,
-        costStatus: openaiService.getMonthlyEstimatedCost()
-      }
+        costStatus: mode === 'openai' ? openaiService.getMonthlyEstimatedCost() : null
+      },
+      mode
     });
     
   } catch (error) {
@@ -350,9 +457,18 @@ async function getWartungsplan(req, res) {
         error: 'Gültiger Kilometerstand ist erforderlich' 
       });
     }
-    
-    const result = await openaiService.getWartungsplan(fahrzeug, kmStand, alter);
-    
+
+    const { enabled, mode } = await getKISettings();
+    if (!enabled) {
+      return res.status(403).json({ error: 'KI-Funktionen sind deaktiviert' });
+    }
+
+    const service = getKIService(mode);
+    const result = await service.getWartungsplan(fahrzeug, kmStand, alter);
+    if (result && typeof result === 'object' && !result.mode) {
+      result.mode = mode;
+    }
+
     res.json(result);
     
   } catch (error) {
@@ -381,9 +497,18 @@ async function decodeVIN(req, res) {
         error: 'Fahrgestellnummer (VIN) ist erforderlich' 
       });
     }
-    
-    const result = openaiService.decodeVIN(vin);
-    
+
+    const { enabled, mode } = await getKISettings();
+    if (!enabled) {
+      return res.status(403).json({ error: 'KI-Funktionen sind deaktiviert' });
+    }
+
+    const service = getKIService(mode);
+    const result = await service.decodeVIN(vin);
+    if (result && typeof result === 'object' && !result.mode) {
+      result.mode = mode;
+    }
+
     res.json(result);
     
   } catch (error) {
@@ -414,9 +539,18 @@ async function checkTeileKompatibilitaet(req, res) {
         error: 'Arbeitsbeschreibung ist erforderlich' 
       });
     }
-    
-    const result = openaiService.checkTeileKompatibilitaet(vin, arbeit);
-    
+
+    const { enabled, mode } = await getKISettings();
+    if (!enabled) {
+      return res.status(403).json({ error: 'KI-Funktionen sind deaktiviert' });
+    }
+
+    const service = getKIService(mode);
+    const result = await service.checkTeileKompatibilitaet(vin, arbeit);
+    if (result && typeof result === 'object' && !result.mode) {
+      result.mode = mode;
+    }
+
     res.json(result);
     
   } catch (error) {
@@ -438,6 +572,7 @@ module.exports = {
   parseTermin,
   suggestArbeiten,
   estimateZeit,
+  estimateTime,
   erkenneTeilebedarf,
   checkFremdmarke,
   fullAnalysis,

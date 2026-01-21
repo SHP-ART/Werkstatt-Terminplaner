@@ -6,6 +6,9 @@ const MitarbeiterModel = require('../models/mitarbeiterModel');
 const LehrlingeModel = require('../models/lehrlingeModel');
 const Fahrzeug = require('../models/fahrzeug');
 const openaiService = require('../services/openaiService');
+const { parsePagination } = require('../utils/pagination');
+const { SimpleCache } = require('../utils/cache');
+const { broadcastEvent } = require('../utils/websocket');
 
 // Cache für Mitarbeiter und Lehrlinge (Performance-Optimierung)
 let mitarbeiterCache = { data: null, timestamp: 0 };
@@ -13,6 +16,16 @@ let lehrlingeCache = { data: null, timestamp: 0 };
 let aktiveMitarbeiterCache = { data: null, timestamp: 0 };
 let aktiveLehrlingeCache = { data: null, timestamp: 0 };
 const CACHE_TTL = 60000; // 1 Minute
+
+const termineListCache = new SimpleCache({ ttlMs: 60000, maxEntries: 200 });
+
+function getTermineCacheKey(datum, pagination) {
+  return `termine:${datum || 'all'}:${pagination ? JSON.stringify(pagination) : 'all'}`;
+}
+
+function invalidateTermineCache() {
+  termineListCache.clear();
+}
 
 async function getCachedMitarbeiter() {
   const now = Date.now();
@@ -511,6 +524,11 @@ function berechneAuslastungErgebnis(params) {
 }
 
 class TermineController {
+  static async getByDatumLegacy(req, res) {
+    req.query.datum = req.params.datum;
+    return TermineController.getAll(req, res);
+  }
+
   static async getById(req, res) {
     try {
       const { id } = req.params;
@@ -527,14 +545,61 @@ class TermineController {
   static async getAll(req, res) {
     try {
       const { datum } = req.query;
+      const pagination = parsePagination(req.query);
 
-      if (datum) {
-        const rows = await TermineModel.getByDatum(datum);
-        res.json(rows);
-      } else {
+      if (!pagination) {
+        const cacheKey = getTermineCacheKey(datum, null);
+        const cached = termineListCache.get(cacheKey);
+        if (cached) {
+          return res.json(cached);
+        }
+        if (datum) {
+          const rows = await TermineModel.getByDatum(datum);
+          termineListCache.set(cacheKey, rows);
+          return res.json(rows);
+        }
         const rows = await TermineModel.getAll();
-        res.json(rows);
+        termineListCache.set(cacheKey, rows);
+        return res.json(rows);
       }
+
+      const { limit, offset, page, pageSize } = pagination;
+      const cacheKey = getTermineCacheKey(datum, pagination);
+      const cached = termineListCache.get(cacheKey);
+      if (cached) {
+        return res.json(cached);
+      }
+      if (datum) {
+        const [rows, countRow] = await Promise.all([
+          TermineModel.getByDatumPaginated(datum, limit, offset),
+          TermineModel.countByDatum(datum)
+        ]);
+        const total = countRow ? Number(countRow.total) || 0 : 0;
+        const response = {
+          data: rows,
+          page,
+          pageSize,
+          total,
+          totalPages: pageSize > 0 ? Math.ceil(total / pageSize) : 0
+        };
+        termineListCache.set(cacheKey, response);
+        return res.json(response);
+      }
+
+      const [rows, countRow] = await Promise.all([
+        TermineModel.getAllPaginated(limit, offset),
+        TermineModel.countAll()
+      ]);
+      const total = countRow ? Number(countRow.total) || 0 : 0;
+      const response = {
+        data: rows,
+        page,
+        pageSize,
+        total,
+        totalPages: pageSize > 0 ? Math.ceil(total / pageSize) : 0
+      };
+      termineListCache.set(cacheKey, response);
+      res.json(response);
     } catch (err) {
       res.status(500).json({ error: err.message });
     }
@@ -624,6 +689,8 @@ class TermineController {
       
       // Cache invalidierten
       invalidateAuslastungCache(payload.datum);
+      invalidateTermineCache();
+      broadcastEvent('termin.created', { id: result.id, datum: payload.datum || null });
       res.json({
         id: result.id,
         termin_nr: result.terminNr,
@@ -703,8 +770,17 @@ class TermineController {
         if (endzeit) updateData.endzeit_berechnet = endzeit;
       }
 
+      const newDatum = updateData.datum || termin.datum;
       const result = await TermineModel.update(req.params.id, updateData);
       const changes = (result && result.changes) || 0;
+      if (changes > 0) {
+        invalidateTermineCache();
+        broadcastEvent('termin.updated', {
+          id: req.params.id,
+          datum: newDatum || null,
+          oldDatum: termin.datum || null
+        });
+      }
       
       // 🚗 AUTO-SPEICHERUNG: Fahrzeugdaten in fahrzeuge-Tabelle speichern (bei VIN-Update)
       const vinUpdate = req.body.vin || updateData.vin;
@@ -813,6 +889,10 @@ class TermineController {
       // Cache invalidierten
       if (termin && termin.datum) {
         invalidateAuslastungCache(termin.datum);
+      }
+      if (result && result.changes > 0) {
+        invalidateTermineCache();
+        broadcastEvent('termin.deleted', { id: req.params.id, datum: termin.datum || null });
       }
       res.json({ changes: (result && result.changes) || 0, message: 'Termin gelöscht' });
     } catch (err) {
@@ -1482,6 +1562,10 @@ class TermineController {
       const result = await TermineModel.restore(id);
       // Cache invalidierten
       invalidateAuslastungCache(termin.datum);
+      if (result && result.changes > 0) {
+        invalidateTermineCache();
+        broadcastEvent('termin.restored', { id, datum: termin.datum || null });
+      }
       res.json({ message: 'Termin wiederhergestellt', changes: result.changes });
     } catch (err) {
       res.status(500).json({ error: err.message });
@@ -1502,6 +1586,14 @@ class TermineController {
       const result = await TermineModel.permanentDelete(id);
       // Cache invalidierten
       invalidateAuslastungCache(termin.datum);
+      if (result && result.changes > 0) {
+        invalidateTermineCache();
+        broadcastEvent('termin.deleted', {
+          id,
+          datum: termin.datum || null,
+          permanent: true
+        });
+      }
       res.json({ message: 'Termin permanent gelöscht', changes: result.changes });
     } catch (err) {
       res.status(500).json({ error: err.message });
@@ -1524,6 +1616,14 @@ class TermineController {
       const result = await TermineModel.setSchwebend(id, ist_schwebend);
       // Cache invalidierten
       invalidateAuslastungCache(termin.datum);
+      if (result && result.changes > 0) {
+        invalidateTermineCache();
+        broadcastEvent('termin.updated', {
+          id,
+          datum: termin.datum || null,
+          ist_schwebend: !!ist_schwebend
+        });
+      }
       res.json({
         message: ist_schwebend ? 'Termin als schwebend markiert' : 'Termin fest eingeplant',
         changes: result.changes
@@ -1571,6 +1671,12 @@ class TermineController {
       // Cache für beide Tage invalidierten
       invalidateAuslastungCache(termin.datum);
       invalidateAuslastungCache(teil2_datum);
+      invalidateTermineCache();
+      broadcastEvent('termin.updated', { id, datum: termin.datum || null });
+      broadcastEvent('termin.created', {
+        id: result.teil2?.id || null,
+        datum: result.teil2?.datum || teil2_datum || null
+      });
       res.json({
         message: 'Termin erfolgreich aufgeteilt',
         ...result
@@ -1711,6 +1817,17 @@ class TermineController {
       if (zielDatum && zielDatum !== originalTermin.datum) {
         invalidateAuslastungCache(zielDatum);
       }
+      invalidateTermineCache();
+      if (result && result.ergebnis) {
+        broadcastEvent('termin.created', {
+          id: result.ergebnis.erweiterungs_termin_id,
+          datum: result.ergebnis.datum || zielDatum || null
+        });
+      }
+      broadcastEvent('termin.updated', {
+        id,
+        datum: originalTermin.datum || null
+      });
 
       res.json({
         message: 'Auftragserweiterung erfolgreich erstellt',

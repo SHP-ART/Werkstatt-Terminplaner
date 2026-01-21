@@ -78,6 +78,7 @@ router.post('/suggest-arbeiten', aiController.suggestArbeiten);
  * }
  */
 router.post('/estimate-zeit', aiController.estimateZeit);
+router.post('/estimate-time', aiController.estimateTime);
 
 // =============================================================================
 // TEILE-ERKENNUNG

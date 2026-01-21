@@ -1,5 +1,10 @@
 const EinstellungenModel = require('../models/einstellungenModel');
+const localAiService = require('../services/localAiService');
 const { getAsync, allAsync } = require('../utils/dbHelper');
+
+const DEFAULT_ARBEITSBEGINN_MIN = 8 * 60;
+const DEFAULT_ARBEITSENDE_MIN = 18 * 60;
+const DEFAULT_TERMIN_DAUER_MIN = 60;
 
 class KIPlanungController {
   
@@ -12,6 +17,41 @@ class KIPlanungController {
       
       if (!datum) {
         return res.status(400).json({ error: 'Datum erforderlich' });
+      }
+
+      const settings = await EinstellungenModel.getWerkstatt();
+      const mode = KIPlanungController.resolveKIMode(settings);
+      if (settings?.ki_enabled === false || settings?.ki_enabled === 0) {
+        return res.status(403).json({ error: 'KI-Funktionen sind deaktiviert.' });
+      }
+      if (settings?.smart_scheduling_enabled === 0) {
+        return res.status(403).json({ error: 'Smart Scheduling ist deaktiviert.' });
+      }
+      if (mode === 'local') {
+        const [mitarbeiter, lehrlinge, termine, schwebendeTermine, abwesenheiten] = await Promise.all([
+          KIPlanungController.getMitarbeiterMitDetails(),
+          KIPlanungController.getLehrlingeMitDetails(),
+          KIPlanungController.getTermineFuerDatum(datum),
+          KIPlanungController.getSchwebendeTermine(),
+          KIPlanungController.getAbwesenheitenFuerDatum(datum)
+        ]);
+
+        const vorschlag = KIPlanungController.buildLocalTagesVorschlag({
+          datum,
+          mitarbeiter,
+          lehrlinge,
+          termine,
+          schwebendeTermine,
+          einstellungen: settings,
+          abwesenheiten
+        });
+
+        return res.json({
+          success: true,
+          datum,
+          vorschlag,
+          mode: 'local'
+        });
       }
       
       // API-Key prüfen
@@ -78,6 +118,47 @@ class KIPlanungController {
       
       if (!startDatum) {
         return res.status(400).json({ error: 'Startdatum erforderlich' });
+      }
+
+      const settings = await EinstellungenModel.getWerkstatt();
+      const mode = KIPlanungController.resolveKIMode(settings);
+      if (settings?.ki_enabled === false || settings?.ki_enabled === 0) {
+        return res.status(403).json({ error: 'KI-Funktionen sind deaktiviert.' });
+      }
+      if (settings?.smart_scheduling_enabled === 0) {
+        return res.status(403).json({ error: 'Smart Scheduling ist deaktiviert.' });
+      }
+      if (mode === 'local') {
+        const wochentage = KIPlanungController.getWochentage(startDatum);
+        const wochenDaten = await Promise.all(wochentage.map(async (tag) => {
+          const [termine, abwesenheiten] = await Promise.all([
+            KIPlanungController.getTermineFuerDatum(tag),
+            KIPlanungController.getAbwesenheitenFuerDatum(tag)
+          ]);
+          return { datum: tag, termine, abwesenheiten };
+        }));
+
+        const [mitarbeiter, lehrlinge, schwebendeTermine] = await Promise.all([
+          KIPlanungController.getMitarbeiterMitDetails(),
+          KIPlanungController.getLehrlingeMitDetails(),
+          KIPlanungController.getSchwebendeTermine()
+        ]);
+
+        const vorschlag = KIPlanungController.buildLocalWochenVorschlag({
+          wochentage,
+          wochenDaten,
+          mitarbeiter,
+          lehrlinge,
+          schwebendeTermine,
+          einstellungen: settings
+        });
+
+        return res.json({
+          success: true,
+          wochentage,
+          vorschlag,
+          mode: 'local'
+        });
       }
       
       // API-Key prüfen
@@ -201,6 +282,473 @@ class KIPlanungController {
     return tage;
   }
 
+  static resolveKIMode(settings) {
+    if (!settings) return 'local';
+    if (settings.ki_mode) return settings.ki_mode;
+    return settings.chatgpt_api_key ? 'openai' : 'local';
+  }
+
+  static timeToMinutes(time) {
+    if (!time || typeof time !== 'string') return null;
+    const match = time.match(/^(\d{1,2}):(\d{2})$/);
+    if (!match) return null;
+    const h = parseInt(match[1], 10);
+    const m = parseInt(match[2], 10);
+    if (Number.isNaN(h) || Number.isNaN(m)) return null;
+    return h * 60 + m;
+  }
+
+  static minutesToTime(minutes) {
+    const safe = Math.max(0, Math.round(minutes || 0));
+    const h = Math.floor(safe / 60);
+    const m = safe % 60;
+    return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+  }
+
+  static parseArbeitszeitenDetails(termin) {
+    if (!termin || !termin.arbeitszeiten_details) return null;
+    try {
+      if (typeof termin.arbeitszeiten_details === 'string') {
+        return JSON.parse(termin.arbeitszeiten_details);
+      }
+      return termin.arbeitszeiten_details;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  static getTerminGesamtZuordnung(termin) {
+    const details = KIPlanungController.parseArbeitszeitenDetails(termin);
+    if (details && details._gesamt_mitarbeiter_id) {
+      const gesamt = details._gesamt_mitarbeiter_id;
+      if (typeof gesamt === 'object' && gesamt.id) {
+        return { type: gesamt.type || 'mitarbeiter', id: gesamt.id };
+      }
+      if (typeof gesamt === 'number') {
+        return { type: 'mitarbeiter', id: gesamt };
+      }
+    }
+    if (termin?.mitarbeiter_id) {
+      return { type: 'mitarbeiter', id: termin.mitarbeiter_id };
+    }
+    return null;
+  }
+
+  static hasEinzelZuordnung(details) {
+    if (!details || typeof details !== 'object') return false;
+    return Object.keys(details).some(key => {
+      if (key.startsWith('_')) return false;
+      const value = details[key];
+      if (value && typeof value === 'object') {
+        return !!(value.mitarbeiter_id || value.lehrling_id);
+      }
+      return false;
+    });
+  }
+
+  static isTerminZugeordnet(termin) {
+    if (!termin) return false;
+    if (termin.mitarbeiter_id) return true;
+    const details = KIPlanungController.parseArbeitszeitenDetails(termin);
+    if (details && details._gesamt_mitarbeiter_id) return true;
+    return KIPlanungController.hasEinzelZuordnung(details);
+  }
+
+  static getTerminDauerMinuten(termin) {
+    const value = termin?.tatsaechliche_zeit || termin?.geschaetzte_zeit || DEFAULT_TERMIN_DAUER_MIN;
+    const minuten = parseInt(value, 10);
+    return Number.isFinite(minuten) && minuten > 0 ? minuten : DEFAULT_TERMIN_DAUER_MIN;
+  }
+
+  static getTerminStartMinuten(termin) {
+    const details = KIPlanungController.parseArbeitszeitenDetails(termin);
+    const start = details?._startzeit || termin?.bring_zeit || null;
+    return KIPlanungController.timeToMinutes(start);
+  }
+
+  static buildPersonList(mitarbeiter, lehrlinge, abwesenheiten, einstellungen) {
+    const mittagspause = parseInt(einstellungen?.mittagspause_minuten, 10);
+    const pauseMin = Number.isFinite(mittagspause) ? Math.max(mittagspause, 0) : 0;
+    const abwesendMitarbeiter = new Set(
+      (abwesenheiten || []).filter(a => a.mitarbeiter_id).map(a => a.mitarbeiter_id)
+    );
+    const abwesendLehrlinge = new Set(
+      (abwesenheiten || []).filter(a => a.lehrling_id).map(a => a.lehrling_id)
+    );
+
+    const personen = [];
+    (mitarbeiter || []).forEach(ma => {
+      if (abwesendMitarbeiter.has(ma.id)) return;
+      const stunden = ma.arbeitsstunden_pro_tag || 8;
+      const capacity = Math.max(0, stunden * 60 - pauseMin);
+      const dayEnd = Math.min(DEFAULT_ARBEITSENDE_MIN, DEFAULT_ARBEITSBEGINN_MIN + stunden * 60);
+      personen.push({
+        type: 'mitarbeiter',
+        id: ma.id,
+        name: ma.name,
+        nur_service: !!ma.nur_service,
+        effizienz: 1,
+        capacityMin: capacity,
+        dayStartMin: DEFAULT_ARBEITSBEGINN_MIN,
+        dayEndMin: dayEnd
+      });
+    });
+
+    (lehrlinge || []).forEach(l => {
+      if (abwesendLehrlinge.has(l.id)) return;
+      const stunden = l.arbeitsstunden_pro_tag || 8;
+      const capacity = Math.max(0, stunden * 60 - pauseMin);
+      const effizienz = Math.max(0.5, (l.aufgabenbewaeltigung_prozent || 100) / 100);
+      const dayEnd = Math.min(DEFAULT_ARBEITSENDE_MIN, DEFAULT_ARBEITSBEGINN_MIN + stunden * 60);
+      personen.push({
+        type: 'lehrling',
+        id: l.id,
+        name: l.name,
+        nur_service: false,
+        effizienz,
+        capacityMin: capacity,
+        dayStartMin: DEFAULT_ARBEITSBEGINN_MIN,
+        dayEndMin: dayEnd
+      });
+    });
+
+    return personen;
+  }
+
+  static buildScheduleMap(personen) {
+    const schedule = new Map();
+    (personen || []).forEach(person => {
+      schedule.set(`${person.type}:${person.id}`, {
+        person,
+        usedMin: 0,
+        blocks: []
+      });
+    });
+    return schedule;
+  }
+
+  static addTerminToSchedule(schedule, assignment, termin, durationMin) {
+    if (!assignment) return;
+    const key = `${assignment.type}:${assignment.id}`;
+    const entry = schedule.get(key);
+    if (!entry) return;
+
+    const adjusted = Math.ceil(durationMin / (entry.person.effizienz || 1));
+    entry.usedMin += adjusted;
+
+    const startMin = KIPlanungController.getTerminStartMinuten(termin);
+    if (startMin === null) {
+      return;
+    }
+    entry.blocks.push({
+      start: startMin,
+      end: startMin + adjusted
+    });
+  }
+
+  static buildExistingSchedules(termine, personen) {
+    const schedule = KIPlanungController.buildScheduleMap(personen);
+    (termine || []).forEach(termin => {
+      const assignment = KIPlanungController.getTerminGesamtZuordnung(termin);
+      if (!assignment) return;
+      const duration = KIPlanungController.getTerminDauerMinuten(termin);
+      KIPlanungController.addTerminToSchedule(schedule, assignment, termin, duration);
+    });
+    return schedule;
+  }
+
+  static findAvailableSlot(blocks, preferredStart, duration, dayStart, dayEnd) {
+    const start = Math.max(dayStart, preferredStart ?? dayStart);
+    const sorted = [...blocks].sort((a, b) => a.start - b.start);
+    let cursor = start;
+
+    for (const block of sorted) {
+      if (cursor + duration <= block.start) {
+        return cursor;
+      }
+      if (cursor < block.end) {
+        cursor = block.end;
+      }
+    }
+
+    if (cursor + duration <= dayEnd) {
+      return cursor;
+    }
+    return null;
+  }
+
+  static pickBestCandidate(candidates) {
+    if (!candidates.length) return null;
+    const withCapacity = candidates.filter(c => c.remaining >= 0);
+    const pool = withCapacity.length ? withCapacity : candidates;
+    pool.sort((a, b) => {
+      if (a.slotStart !== b.slotStart) return a.slotStart - b.slotStart;
+      return b.remaining - a.remaining;
+    });
+    return pool[0];
+  }
+
+  static buildLocalTagesVorschlag({ datum, mitarbeiter, lehrlinge, termine, schwebendeTermine, einstellungen, abwesenheiten }) {
+    const personen = KIPlanungController.buildPersonList(mitarbeiter, lehrlinge, abwesenheiten, einstellungen);
+    const schedule = KIPlanungController.buildExistingSchedules(termine, personen);
+    const tagesZuordnungen = [];
+    const schwebendeVorschlaege = [];
+    const warnungen = [];
+
+    const offeneTermine = (termine || []).filter(t => !KIPlanungController.isTerminZugeordnet(t));
+
+    offeneTermine.forEach(termin => {
+      const duration = KIPlanungController.getTerminDauerMinuten(termin);
+      const preferredStart = KIPlanungController.getTerminStartMinuten(termin) ?? DEFAULT_ARBEITSBEGINN_MIN;
+      const candidates = [];
+      schedule.forEach(entry => {
+        const adjusted = Math.ceil(duration / (entry.person.effizienz || 1));
+        const slotStart = KIPlanungController.findAvailableSlot(
+          entry.blocks,
+          preferredStart,
+          adjusted,
+          entry.person.dayStartMin,
+          entry.person.dayEndMin
+        );
+        if (slotStart === null) return;
+        const remaining = entry.person.capacityMin - entry.usedMin - adjusted;
+        candidates.push({
+          entry,
+          slotStart,
+          remaining,
+          durationAdjusted: adjusted
+        });
+      });
+
+      const best = KIPlanungController.pickBestCandidate(candidates);
+      if (!best) {
+        warnungen.push(`Kein freier Slot für Termin #${termin.id} (${termin.arbeit || 'ohne Arbeit'}).`);
+        return;
+      }
+
+      const { entry, slotStart, durationAdjusted } = best;
+      const startzeit = KIPlanungController.minutesToTime(slotStart);
+      entry.usedMin += durationAdjusted;
+      entry.blocks.push({ start: slotStart, end: slotStart + durationAdjusted });
+
+      tagesZuordnungen.push({
+        terminId: termin.id,
+        mitarbeiterId: entry.person.id,
+        mitarbeiterTyp: entry.person.type,
+        startzeit,
+        begruendung: 'Freier Slot innerhalb der Kapazität.',
+        terminInfo: `${termin.arbeit || 'Termin'} - ${termin.kunde_name || 'k.A.'}`,
+        personName: entry.person.name,
+        gueltig: true
+      });
+    });
+
+    const gesamtKapazitaet = personen.reduce((sum, p) => sum + p.capacityMin, 0);
+    let remainingKapazitaet = Math.max(
+      gesamtKapazitaet - Array.from(schedule.values()).reduce((sum, entry) => sum + entry.usedMin, 0),
+      0
+    );
+
+    (schwebendeTermine || []).forEach(termin => {
+      const duration = KIPlanungController.getTerminDauerMinuten(termin);
+      const preferredStart = DEFAULT_ARBEITSBEGINN_MIN;
+      const candidates = [];
+      schedule.forEach(entry => {
+        const adjusted = Math.ceil(duration / (entry.person.effizienz || 1));
+        const slotStart = KIPlanungController.findAvailableSlot(
+          entry.blocks,
+          preferredStart,
+          adjusted,
+          entry.person.dayStartMin,
+          entry.person.dayEndMin
+        );
+        if (slotStart === null) return;
+        const remaining = entry.person.capacityMin - entry.usedMin - adjusted;
+        candidates.push({
+          entry,
+          slotStart,
+          remaining,
+          durationAdjusted: adjusted
+        });
+      });
+
+      const best = KIPlanungController.pickBestCandidate(candidates);
+      if (!best) {
+        schwebendeVorschlaege.push({
+          terminId: termin.id,
+          mitarbeiterId: null,
+          mitarbeiterTyp: 'mitarbeiter',
+          startzeit: null,
+          begruendung: 'Keine freie Kapazität für heute.',
+          empfehlung: 'spaeter',
+          terminInfo: `${termin.arbeit || 'Termin'} - ${termin.kunde_name || 'k.A.'}`,
+          personName: 'Nicht zugeordnet',
+          gueltig: false
+        });
+        return;
+      }
+
+      const empfehlung = remainingKapazitaet >= best.durationAdjusted ? 'heute_einplanen' : 'spaeter';
+      const startzeit = KIPlanungController.minutesToTime(best.slotStart);
+
+      if (empfehlung === 'heute_einplanen') {
+        best.entry.usedMin += best.durationAdjusted;
+        best.entry.blocks.push({ start: best.slotStart, end: best.slotStart + best.durationAdjusted });
+        remainingKapazitaet = Math.max(remainingKapazitaet - best.durationAdjusted, 0);
+      }
+
+      schwebendeVorschlaege.push({
+        terminId: termin.id,
+        mitarbeiterId: best.entry.person.id,
+        mitarbeiterTyp: best.entry.person.type,
+        startzeit,
+        begruendung: empfehlung === 'heute_einplanen'
+          ? 'Freie Kapazität vorhanden, Termin passt in den Tagesplan.'
+          : 'Kapazität knapp, besser später einplanen.',
+        empfehlung,
+        terminInfo: `${termin.arbeit || 'Termin'} - ${termin.kunde_name || 'k.A.'}`,
+        personName: best.entry.person.name,
+        gueltig: true
+      });
+    });
+
+    if (einstellungen?.anomaly_detection_enabled !== 0) {
+      warnungen.push(...KIPlanungController.collectAnomalien(termine, schedule, personen, einstellungen));
+    }
+
+    const genutztMinuten = Array.from(schedule.values()).reduce((sum, entry) => sum + entry.usedMin, 0);
+    const freiMinuten = Math.max(gesamtKapazitaet - genutztMinuten, 0);
+    const zusammenfassung = `Lokale Planung: ${tagesZuordnungen.length} offene Termine zugeordnet, ${schwebendeVorschlaege.filter(v => v.empfehlung === 'heute_einplanen').length} schwebende Termine für heute vorgeschlagen.`;
+
+    return {
+      zusammenfassung,
+      kapazitaetsAnalyse: {
+        gesamtKapazitaet: `${gesamtKapazitaet} min`,
+        genutzt: `${genutztMinuten} min`,
+        frei: `${freiMinuten} min`
+      },
+      warnungen,
+      tagesZuordnungen,
+      schwebendeVorschlaege
+    };
+  }
+
+  static buildLocalWochenVorschlag({ wochentage, wochenDaten, mitarbeiter, lehrlinge, schwebendeTermine, einstellungen }) {
+    const dayStats = (wochenDaten || []).map(day => {
+      const personen = KIPlanungController.buildPersonList(mitarbeiter, lehrlinge, day.abwesenheiten, einstellungen);
+      const schedule = KIPlanungController.buildExistingSchedules(day.termine, personen);
+      const capacity = personen.reduce((sum, p) => sum + p.capacityMin, 0);
+      const used = Array.from(schedule.values()).reduce((sum, entry) => sum + entry.usedMin, 0);
+      return {
+        datum: day.datum,
+        personen,
+        schedule,
+        capacity,
+        used
+      };
+    });
+
+    const verteilung = [];
+    const warnungen = [];
+
+    (schwebendeTermine || []).forEach(termin => {
+      const duration = KIPlanungController.getTerminDauerMinuten(termin);
+      let bestDay = null;
+      let bestFree = -Infinity;
+
+      dayStats.forEach(day => {
+        const free = day.capacity - day.used;
+        if (free >= duration && free > bestFree) {
+          bestDay = day;
+          bestFree = free;
+        } else if (bestDay === null && free > bestFree) {
+          bestDay = day;
+          bestFree = free;
+        }
+      });
+
+      if (!bestDay) return;
+
+      bestDay.used += duration;
+
+      const begruendung = bestFree >= duration
+        ? 'Tag mit der höchsten freien Kapazität gewählt.'
+        : 'Kapazität knapp, dennoch bester verfügbarer Tag.';
+
+      verteilung.push({
+        terminId: termin.id,
+        empfohlenesDatum: bestDay.datum,
+        begruendung,
+        terminInfo: `${termin.arbeit || 'Termin'} - ${termin.kunde_name || 'k.A.'}`,
+        gueltig: wochentage.includes(bestDay.datum)
+      });
+    });
+
+    if (einstellungen?.anomaly_detection_enabled !== 0) {
+      dayStats.forEach(day => {
+        warnungen.push(...KIPlanungController.collectAnomalien(day.termine, day.schedule, day.personen, einstellungen));
+      });
+    }
+
+    const wochenAuslastung = {};
+    const tageKeys = ['montag', 'dienstag', 'mittwoch', 'donnerstag', 'freitag'];
+    dayStats.forEach((day, idx) => {
+      const percent = day.capacity > 0 ? Math.round((day.used / day.capacity) * 100) : 0;
+      wochenAuslastung[tageKeys[idx]] = percent;
+    });
+
+    const zusammenfassung = `Lokale Wochenverteilung: ${verteilung.length} schwebende Termine verteilt.`;
+
+    return {
+      zusammenfassung,
+      warnungen,
+      wochenAuslastung,
+      verteilung
+    };
+  }
+
+  static collectAnomalien(termine, schedule, personen, einstellungen) {
+    const warnungen = new Set();
+    const shortThreshold = 15;
+    const longThreshold = DEFAULT_ARBEITSENDE_MIN - DEFAULT_ARBEITSBEGINN_MIN;
+
+    (termine || []).forEach(termin => {
+      const dauer = KIPlanungController.getTerminDauerMinuten(termin);
+      if (dauer < shortThreshold) {
+        warnungen.add(`Unrealistische Zeit für Termin #${termin.id}: ${dauer} min.`);
+      }
+      if (dauer > longThreshold) {
+        warnungen.add(`Sehr lange Dauer bei Termin #${termin.id}: ${dauer} min.`);
+      }
+      if (termin.tatsaechliche_zeit && termin.geschaetzte_zeit) {
+        const ratio = termin.tatsaechliche_zeit / Math.max(termin.geschaetzte_zeit, 1);
+        if (ratio > 2.5) {
+          warnungen.add(`Abweichung bei Termin #${termin.id}: tatsächliche Zeit deutlich höher.`);
+        } else if (ratio < 0.4) {
+          warnungen.add(`Abweichung bei Termin #${termin.id}: tatsächliche Zeit deutlich niedriger.`);
+        }
+      }
+    });
+
+    (personen || []).forEach(person => {
+      const entry = schedule.get(`${person.type}:${person.id}`);
+      if (!entry) return;
+      if (entry.usedMin > person.capacityMin) {
+        warnungen.add(`Überlastung: ${person.name} ${entry.usedMin}/${person.capacityMin} min.`);
+      }
+
+      const blocks = [...entry.blocks].sort((a, b) => a.start - b.start);
+      for (let i = 1; i < blocks.length; i++) {
+        if (blocks[i].start < blocks[i - 1].end) {
+          warnungen.add(`Doppelbuchung bei ${person.name} um ${KIPlanungController.minutesToTime(blocks[i].start)}.`);
+          break;
+        }
+      }
+    });
+
+    return Array.from(warnungen).slice(0, 12);
+  }
+
   static erstellePlanungsPrompt({ datum, mitarbeiter, lehrlinge, termine, schwebendeTermine, einstellungen, abwesenheiten }) {
     const datumFormatiert = new Date(datum).toLocaleDateString('de-DE', { 
       weekday: 'long', day: '2-digit', month: '2-digit', year: 'numeric' 
@@ -213,7 +761,7 @@ class KIPlanungController {
     const mitarbeiterInfo = mitarbeiter.map(m => {
       const istAbwesend = abwesendeIds.has(`mitarbeiter_${m.id}`);
       const pause = m.mittagspause_start || '12:00';
-      return `- ${m.name} (ID: ${m.id}): ${m.arbeitsstunden_pro_tag || 8}h/Tag, Pause: ${pause}${m.nur_service ? ', NUR Service' : ''}${istAbwesend ? ' [ABWESEND]' : ''}`;
+      return `- ${m.name} (ID: ${m.id}): ${m.arbeitsstunden_pro_tag || 8}h/Tag, Pause: ${pause}${istAbwesend ? ' [ABWESEND]' : ''}`;
     }).join('\n');
     
     // Lehrlinge-Info

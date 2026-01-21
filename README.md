@@ -431,6 +431,42 @@ http://localhost:3001/api
 
 ---
 
+### ⚙️ Einstellungen & System
+
+- **GET** `/api/einstellungen/werkstatt` - Werkstatt-Einstellungen abrufen
+- **PUT** `/api/einstellungen/werkstatt` - Werkstatt-Einstellungen speichern
+- **PUT** `/api/einstellungen/ki-enabled` - KI global aktivieren/deaktivieren
+- **PUT** `/api/einstellungen/ki-mode` - KI-Modus setzen (`local` | `openai`)
+- **PUT** `/api/einstellungen/realtime-enabled` - Echtzeit-Updates ein/aus
+- **PUT** `/api/einstellungen/smart-scheduling-enabled` - Smart Scheduling ein/aus
+- **PUT** `/api/einstellungen/anomaly-detection-enabled` - Anomalie-Erkennung ein/aus
+- **PUT** `/api/einstellungen/chatgpt-api-key` - OpenAI API-Key speichern
+- **DELETE** `/api/einstellungen/chatgpt-api-key` - OpenAI API-Key löschen
+- **GET** `/api/einstellungen/chatgpt-api-key/test` - API-Key testen
+- **GET** `/api/einstellungen/ersatzauto/:datum` - Ersatzauto-Verfügbarkeit
+- **GET** `/api/einstellungen/datenbank-pfad` - Datenbankpfad anzeigen
+
+---
+
+### 🤖 KI & Planung
+
+- **GET** `/api/ai/status` - KI-Status (Modus/Verfügbarkeit)
+- **GET** `/api/ai/test` - OpenAI-Verbindung testen
+- **POST** `/api/ai/parse-termin` - Freitext in Termin-Daten parsen
+- **POST** `/api/ai/suggest-arbeiten` - Arbeiten vorschlagen
+- **POST** `/api/ai/estimate-zeit` - Zeitschätzung (lokal/OpenAI)
+- **POST** `/api/ai/estimate-time` - Alias für Zeitschätzung
+- **POST** `/api/ai/teile-bedarf` - Teilebedarf erkennen
+- **POST** `/api/ai/check-fremdmarke` - Fremdmarke prüfen
+- **POST** `/api/ai/analyze` - Kombinierte Analyse
+- **POST** `/api/ai/wartungsplan` - Wartungsplan erzeugen
+- **POST** `/api/ai/vin-decode` - VIN dekodieren
+- **POST** `/api/ai/vin-teile-check` - Teile-Kompatibilität prüfen
+- **GET** `/api/ki-planung/tagesplanung/:datum` - Tagesplanungsvorschlag
+- **GET** `/api/ki-planung/wochenplanung/:startDatum` - Wochenverteilung schwebender Termine
+
+---
+
 ### 🧑‍🔧 Mitarbeiter & Lehrlinge
 
 #### Mitarbeiter

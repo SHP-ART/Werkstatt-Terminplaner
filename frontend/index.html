@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Werkstatt Terminplaner</title>
-    <link rel="stylesheet" href="src/styles/style.css?v=64">
+    <link rel="stylesheet" href="src/styles/style.css?v=68">
     <!-- SheetJS für Excel-Import -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 </head>
@@ -226,7 +226,9 @@
             </div>
         </div>
 
-        <div id="heute" class="tab-content">
+        <div id="heute" class="tab-content" data-template-id="tab-template-heute"></div>
+
+        <template id="tab-template-heute">
             <div class="page-header">
                 <h2>📅 Termine Heute</h2>
                 <p class="page-subtitle">Übersicht aller heutigen Termine und Aufgaben</p>
@@ -321,9 +323,11 @@
                     <div class="loading">Termine werden geladen...</div>
                 </div>
             </div>
-        </div>
+        </template>
 
-        <div id="termine" class="tab-content">
+        <div id="termine" class="tab-content" data-template-id="tab-template-termine"></div>
+
+        <template id="tab-template-termine">
             <div class="page-header">
                 <h2>🗓️ Terminplanung</h2>
                 <p class="page-subtitle">Erstellen und verwalten Sie Termine für Ihre Kunden</p>
@@ -1164,11 +1168,12 @@
                     </div>
                 </div>
             </div>
-        </div>
-        </div>
+        </template>
 
         <!-- Kunden Tab -->
-        <div id="kunden" class="tab-content">
+        <div id="kunden" class="tab-content" data-template-id="tab-template-kunden"></div>
+
+        <template id="tab-template-kunden">
             <div class="page-header">
                 <h2>👥 Kundenverwaltung</h2>
                 <p class="page-subtitle">Suchen und verwalten Sie Ihre Kunden und Fahrzeuge</p>
@@ -1197,10 +1202,12 @@
             <div id="kundenSearchLoading" style="display: none; text-align: center; padding: 40px;">
                 <p>Suche läuft...</p>
             </div>
-        </div>
+        </template>
 
         <!-- Ersatzautos Tab -->
-        <div id="ersatzautos" class="tab-content">
+        <div id="ersatzautos" class="tab-content" data-template-id="tab-template-ersatzautos"></div>
+
+        <template id="tab-template-ersatzautos">
             <div class="page-header">
                 <h2>🚗 Ersatzauto-Verwaltung</h2>
                 <p class="page-subtitle">Verwalten Sie Ihre Ersatzfahrzeuge und deren Verfügbarkeit</p>
@@ -1322,9 +1329,11 @@
                     <div class="loading">Lade Übersicht...</div>
                 </div>
             </div>
-        </div>
+        </template>
 
-        <div id="zeitverwaltung" class="tab-content">
+        <div id="zeitverwaltung" class="tab-content" data-template-id="tab-template-zeitverwaltung"></div>
+
+        <template id="tab-template-zeitverwaltung">
             <div class="page-header">
                 <h2>⏱️ Zeitverwaltung</h2>
                 <p class="page-subtitle">Termine verwalten, Zeiten erfassen und Mitarbeiter organisieren</p>
@@ -1729,9 +1738,11 @@
                     </div>
                 </div>
             </div>
-        </div>
+        </template>
 
-        <div id="auslastung" class="tab-content">
+        <div id="auslastung" class="tab-content" data-template-id="tab-template-auslastung"></div>
+
+        <template id="tab-template-auslastung">
             <div class="page-header">
                 <h2>📈 Auslastungsanzeige</h2>
                 <p class="page-subtitle">Tages- und Wochenübersicht der Werkstattauslastung</p>
@@ -1972,9 +1983,11 @@
                     <div id="progressWocheEmpty" class="progress-empty" style="position: absolute; width: 100%; text-align: center; line-height: 50px; color: #999; pointer-events: none;">Keine Termine</div>
                 </div>
             </div>
-        </div>
+        </template>
 
-        <div id="einstellungen" class="tab-content">
+        <div id="einstellungen" class="tab-content" data-template-id="tab-template-einstellungen"></div>
+
+        <template id="tab-template-einstellungen">
             <div class="page-header">
                 <h2>⚙️ Werkstatt-Einstellungen</h2>
                 <p class="page-subtitle">Server-Verbindung, Datensicherung und Verwaltungsoptionen</p>
@@ -2230,6 +2243,68 @@
                         </ul>
                     </div>
                 </div>
+
+                <div class="form-section ki-mode-section" style="margin-bottom: 20px;">
+                    <h3 style="margin: 0 0 10px 0;">🧠 KI-Modus</h3>
+                    <div class="form-row">
+                        <div class="form-group" style="flex: 1;">
+                            <label for="kiModeSelect">Betriebsmodus:</label>
+                            <select id="kiModeSelect">
+                                <option value="local">Lokal (leicht, ohne Internet)</option>
+                                <option value="openai">OpenAI (Cloud, benötigt API-Key)</option>
+                            </select>
+                        </div>
+                    </div>
+                    <p class="hint" style="margin: 0;">
+                        Lokal nutzt einfache Heuristiken und läuft auf dem Server ohne zusätzliche Hardware.
+                    </p>
+                </div>
+
+                <div class="form-section realtime-toggle-section" style="margin-bottom: 20px;">
+                    <div class="ki-master-toggle">
+                        <div class="ki-toggle-header">
+                            <h3 style="margin: 0;">⚡ Echtzeit-Updates</h3>
+                            <label class="switch-toggle">
+                                <input type="checkbox" id="realtimeEnabledToggle" checked>
+                                <span class="slider round"></span>
+                            </label>
+                        </div>
+                        <p class="hint" style="margin: 10px 0 0 0;">
+                            Aktiviert Live-Updates über WebSocket (z.B. Termine, Auslastung, Dashboard).<br>
+                            Bei Deaktivierung werden Daten nur bei manuellen Aktionen aktualisiert.
+                        </p>
+                    </div>
+                </div>
+
+                <div class="form-section smart-scheduling-toggle-section" style="margin-bottom: 20px;">
+                    <div class="ki-master-toggle">
+                        <div class="ki-toggle-header">
+                            <h3 style="margin: 0;">🧭 Smart Scheduling</h3>
+                            <label class="switch-toggle">
+                                <input type="checkbox" id="smartSchedulingToggle" checked>
+                                <span class="slider round"></span>
+                            </label>
+                        </div>
+                        <p class="hint" style="margin: 10px 0 0 0;">
+                            Aktiviert lokale Termin-Vorschläge für Tages- und Wochenplanung (auch ohne OpenAI).
+                        </p>
+                    </div>
+                </div>
+
+                <div class="form-section anomaly-toggle-section" style="margin-bottom: 20px;">
+                    <div class="ki-master-toggle">
+                        <div class="ki-toggle-header">
+                            <h3 style="margin: 0;">🛡️ Anomalie-Erkennung</h3>
+                            <label class="switch-toggle">
+                                <input type="checkbox" id="anomalyDetectionToggle" checked>
+                                <span class="slider round"></span>
+                            </label>
+                        </div>
+                        <p class="hint" style="margin: 10px 0 0 0;">
+                            Warnungen zu unrealistischen Zeiten, Doppelbuchungen und Überlastung anzeigen.
+                        </p>
+                    </div>
+                </div>
                 
                 <div class="form-section" id="kiApiKeySection">
                     <h3>ChatGPT / OpenAI API</h3>
@@ -2284,10 +2359,12 @@
                     </ul>
                 </div>
             </div>
-        </div>
+        </template>
 
         <!-- Neuer Tab für Drag & Drop Planung -->
-        <div id="auslastung-dragdrop" class="tab-content">
+        <div id="auslastung-dragdrop" class="tab-content" data-template-id="tab-template-auslastung-dragdrop"></div>
+
+        <template id="tab-template-auslastung-dragdrop">
             <div class="page-header">
                 <h2>🏗️ Planung & Zuweisung (Beta)</h2>
                 <p class="page-subtitle">Drag & Drop Terminplanung mit Zeitleiste</p>
@@ -2418,12 +2495,14 @@
                     </div>
                 </div>
             </div>
-        </div>
+        </template>
 
         <!-- ============================================================== -->
         <!-- TEILE-BESTELLEN TAB -->
         <!-- ============================================================== -->
-        <div id="teile-bestellen" class="tab-content">
+        <div id="teile-bestellen" class="tab-content" data-template-id="tab-template-teile-bestellen"></div>
+
+        <template id="tab-template-teile-bestellen">
             <div class="page-header">
                 <h2>🛒 Teile-Bestellen</h2>
                 <p class="page-subtitle">Übersicht über benötigte Teile für anstehende Termine</p>
@@ -2526,12 +2605,14 @@
                     </button>
                 </div>
             </div>
-        </div>
+        </template>
 
         <!-- ================================================
              INTERN TAB - Mitarbeiter Arbeitsübersicht
              ================================================ -->
-        <div id="intern" class="tab-content">
+        <div id="intern" class="tab-content" data-template-id="tab-template-intern"></div>
+
+        <template id="tab-template-intern">
             <div class="page-header intern-header">
                 <div class="intern-header-left">
                     <h2>👷 Intern – Team-Übersicht</h2>
@@ -2583,9 +2664,11 @@
             </div>
 
             <!-- Interne Termine Übersicht wurde entfernt - Termine werden bei Terminplanung → Intern verwaltet -->
-        </div>
+        </template>
 
-        <div id="papierkorb" class="tab-content">
+        <div id="papierkorb" class="tab-content" data-template-id="tab-template-papierkorb"></div>
+
+        <template id="tab-template-papierkorb">
             <div class="page-header">
                 <h2>🗑️ Papierkorb</h2>
                 <p class="page-subtitle">Gelöschte Termine wiederherstellen oder endgültig entfernen</p>
@@ -2609,8 +2692,7 @@
                     <tbody></tbody>
                 </table>
             </div>
-        </div>
-    </div>
+        </template>
 
     <!-- KI-Assistent Modal -->
     <div id="kiAssistentModal" class="modal">
@@ -3611,6 +3693,6 @@
 
     <script src="config.js"></script>
     <script src="src/services/api.js?v=46"></script>
-    <script src="src/components/app.js?v=158"></script>
+    <script src="src/components/app.js?v=166"></script>
 </body>
 </html>

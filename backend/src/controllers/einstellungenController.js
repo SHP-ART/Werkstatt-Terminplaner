@@ -27,7 +27,12 @@ class EinstellungenController {
         servicezeit_minuten: 10, 
         ersatzauto_anzahl: 2,
         chatgpt_api_key_configured: false,
-        chatgpt_api_key_masked: null
+        chatgpt_api_key_masked: null,
+        ki_enabled: true,
+        realtime_enabled: true,
+        ki_mode: 'local',
+        smart_scheduling_enabled: true,
+        anomaly_detection_enabled: true
       });
     } catch (err) {
       res.status(500).json({ error: err.message });
@@ -160,6 +165,74 @@ class EinstellungenController {
       }
       
       const result = await EinstellungenModel.updateKIEnabled(enabled);
+      res.json(result);
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  }
+
+  // Echtzeit-Updates aktivieren/deaktivieren
+  static async updateRealtimeEnabled(req, res) {
+    try {
+      const { enabled } = req.body;
+
+      if (typeof enabled !== 'boolean') {
+        return res.status(400).json({ error: 'enabled muss ein Boolean sein' });
+      }
+
+      const result = await EinstellungenModel.updateRealtimeEnabled(enabled);
+      res.json(result);
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  }
+
+  // Smart Scheduling aktivieren/deaktivieren
+  static async updateSmartSchedulingEnabled(req, res) {
+    try {
+      const { enabled } = req.body;
+
+      if (typeof enabled !== 'boolean') {
+        return res.status(400).json({ error: 'enabled muss ein Boolean sein' });
+      }
+
+      const result = await EinstellungenModel.updateSmartSchedulingEnabled(enabled);
+      res.json(result);
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  }
+
+  // Anomalie-Erkennung aktivieren/deaktivieren
+  static async updateAnomalyDetectionEnabled(req, res) {
+    try {
+      const { enabled } = req.body;
+
+      if (typeof enabled !== 'boolean') {
+        return res.status(400).json({ error: 'enabled muss ein Boolean sein' });
+      }
+
+      const result = await EinstellungenModel.updateAnomalyDetectionEnabled(enabled);
+      res.json(result);
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  }
+
+  // KI-Modus aktualisieren
+  static async updateKIMode(req, res) {
+    try {
+      const { mode } = req.body;
+
+      if (typeof mode !== 'string') {
+        return res.status(400).json({ error: 'mode muss ein String sein' });
+      }
+      const allowed = new Set(['local', 'openai']);
+      if (!allowed.has(mode)) {
+        return res.status(400).json({ error: 'Ungültiger KI-Modus' });
+      }
+
+      const result = await EinstellungenModel.updateKIMode(mode);
       res.json(result);
     } catch (err) {
       res.status(500).json({ error: err.message });

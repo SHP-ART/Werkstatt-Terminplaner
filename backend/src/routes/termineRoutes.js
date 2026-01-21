@@ -6,6 +6,7 @@ const TermineController = require('../controllers/termineController');
 
 // Papierkorb-Routes
 router.get('/papierkorb', TermineController.getDeleted);
+router.get('/geloescht', TermineController.getDeleted);
 router.post('/:id/restore', TermineController.restore);
 router.delete('/:id/permanent', TermineController.permanentDelete);
 
@@ -23,6 +24,8 @@ router.get('/:id/erweiterungen', TermineController.getErweiterungen);
 router.get('/:id/erweiterungen/count', TermineController.countErweiterungen);
 
 // Andere spezifische Routes
+router.get('/datum/:datum', TermineController.getByDatumLegacy);
+router.get('/auslastung/:datum', TermineController.getAuslastung);
 router.get('/verfuegbarkeit', TermineController.checkAvailability);
 router.post('/validate', TermineController.validate);
 router.get('/vorschlaege', TermineController.getVorschlaege);

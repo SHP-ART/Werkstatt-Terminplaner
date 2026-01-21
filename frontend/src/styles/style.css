@@ -11325,6 +11325,46 @@ mark.highlight {
     padding: 20px;
 }
 
+.ki-mode-section {
+    background: #f8fafc;
+    border: 1px solid #dbeafe;
+    border-radius: 12px;
+    padding: 16px;
+}
+
+.realtime-toggle-section {
+    background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
+    border: 2px solid #0ea5e9;
+    border-radius: 12px;
+    padding: 20px;
+}
+
+.realtime-toggle-section .ki-toggle-header h3 {
+    color: #0284c7;
+}
+
+.smart-scheduling-toggle-section {
+    background: linear-gradient(135deg, #f7fee7 0%, #ecfccb 100%);
+    border: 2px solid #65a30d;
+    border-radius: 12px;
+    padding: 20px;
+}
+
+.smart-scheduling-toggle-section .ki-toggle-header h3 {
+    color: #3f6212;
+}
+
+.anomaly-toggle-section {
+    background: linear-gradient(135deg, #fff7ed 0%, #ffedd5 100%);
+    border: 2px solid #f97316;
+    border-radius: 12px;
+    padding: 20px;
+}
+
+.anomaly-toggle-section .ki-toggle-header h3 {
+    color: #c2410c;
+}
+
 .ki-master-toggle .ki-toggle-header {
     display: flex;
     justify-content: space-between;
@@ -13196,7 +13236,7 @@ mark.highlight {
     z-index: 9999;
     background: #f5f7fa;
     overflow: hidden;
-    padding: 10px;
+    padding: 8px;
     display: flex;
     flex-direction: column;
 }
@@ -13208,7 +13248,20 @@ mark.highlight {
 .intern-tablet-mode .intern-tablet-header {
     display: flex !important;
     flex-shrink: 0;
-    margin-bottom: 10px;
+    margin-bottom: 8px;
+    padding: 6px 12px;
+    border-radius: 8px;
+}
+
+.intern-tablet-mode .intern-tablet-header .tablet-title {
+    font-size: 1.05rem;
+}
+
+.intern-tablet-mode .btn-tablet {
+    width: 38px;
+    height: 38px;
+    border-radius: 8px;
+    font-size: 1.1rem;
 }
 
 /* Verstecke Section-Titel im Tablet-Modus */
@@ -13219,11 +13272,14 @@ mark.highlight {
 /* Kombinierte Team-Sections als 2x2 Grid */
 .intern-tablet-mode .intern-team-sections {
     display: grid;
-    grid-template-columns: 1fr 1fr;
-    grid-template-rows: 1fr 1fr;
-    gap: 10px;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-rows: repeat(2, minmax(0, 1fr));
+    gap: 8px;
     flex: 1;
     min-height: 0;
+    height: 100%;
+    overflow: hidden;
+    align-content: stretch;
 }
 
 /* Beide Sections nebeneinander/untereinander */
@@ -13246,28 +13302,63 @@ mark.highlight {
 }
 
 .intern-tablet-mode .intern-person-header {
-    padding: 12px 15px;
+    padding: 10px 12px;
     flex-shrink: 0;
 }
 
 .intern-tablet-mode .intern-person-name {
-    font-size: 1.2rem;
+    font-size: 1.05rem;
 }
 
 .intern-tablet-mode .intern-person-body {
-    padding: 15px;
+    padding: 10px;
     flex: 1;
     overflow-y: auto;
     min-height: 0;
 }
 
+.intern-tablet-mode .intern-person-auftrag {
+    margin-bottom: 10px;
+}
+
+.intern-tablet-mode .intern-person-auftrag .auftrag-kunde {
+    font-size: 1rem;
+}
+
 .intern-tablet-mode .intern-person-auftrag .auftrag-kennzeichen {
-    font-size: 1.8rem;
+    font-size: 1.5rem;
     font-weight: 700;
 }
 
 .intern-tablet-mode .intern-person-auftrag .auftrag-info {
-    font-size: 1rem;
+    font-size: 0.95rem;
+}
+
+.intern-tablet-mode .intern-person-auftrag .auftrag-arbeit {
+    font-size: 0.85rem;
+}
+
+.intern-tablet-mode .intern-person-zeit {
+    padding: 8px 10px;
+    margin-top: 8px;
+    border-radius: 8px;
+}
+
+.intern-tablet-mode .intern-person-fortschritt {
+    margin-top: 10px;
+}
+
+.intern-tablet-mode .intern-person-fortschritt-text {
+    font-size: 0.75rem;
+}
+
+.intern-tablet-mode .intern-person-naechster {
+    margin-top: 10px;
+    padding-top: 10px;
+}
+
+.intern-tablet-mode .intern-person-naechster .naechster-info {
+    font-size: 0.9rem;
 }
 
 /* Nächster Auftrag prominent anzeigen */
@@ -13311,7 +13402,7 @@ mark.highlight {
 }
 
 .intern-tablet-mode .intern-person-naechster .naechster-label {
-    font-size: 0.9rem;
+    font-size: 0.85rem;
     color: #28a745;
     font-weight: 600;
     margin-bottom: 8px;
@@ -13324,7 +13415,19 @@ mark.highlight {
 
 /* Tablet-Modus: Zeit-Items größer */
 .intern-tablet-mode .intern-person-zeit-item .zeit-value {
-    font-size: 1.2rem;
+    font-size: 1.05rem;
+}
+
+.intern-tablet-mode .intern-person-leer {
+    padding: 12px;
+}
+
+.intern-tablet-mode .intern-person-leer .leer-icon {
+    font-size: 2rem;
+}
+
+.intern-tablet-mode .intern-person-leer .leer-text {
+    font-size: 1rem;
 }
 
 /* Keine Lehrlinge Hinweis im Tablet-Modus verstecken */

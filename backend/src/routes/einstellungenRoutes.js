@@ -14,5 +14,13 @@ router.get('/chatgpt-api-key/test', EinstellungenController.testChatGPTApiKey);
 
 // KI-Funktionen aktivieren/deaktivieren
 router.put('/ki-enabled', EinstellungenController.updateKIEnabled);
+// Echtzeit-Updates aktivieren/deaktivieren
+router.put('/realtime-enabled', EinstellungenController.updateRealtimeEnabled);
+// Smart Scheduling aktivieren/deaktivieren
+router.put('/smart-scheduling-enabled', EinstellungenController.updateSmartSchedulingEnabled);
+// Anomalie-Erkennung aktivieren/deaktivieren
+router.put('/anomaly-detection-enabled', EinstellungenController.updateAnomalyDetectionEnabled);
+// KI-Modus aktualisieren
+router.put('/ki-mode', EinstellungenController.updateKIMode);
 
 module.exports = router;

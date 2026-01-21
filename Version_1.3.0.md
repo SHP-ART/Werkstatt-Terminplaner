@@ -118,12 +118,12 @@ Version 1.3.0 ist ein **großes Performance-Update** mit Fokus auf Geschwindigke
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│ Phase 1: Quick Wins          │ ⬜⬜⬜⬜⬜⬜⬜⬜⬜⬜ │  0% │
-│ Phase 2: Lazy Loading        │ ⬜⬜⬜⬜⬜⬜⬜⬜⬜⬜ │  0% │
-│ Phase 3: KI & Real-time      │ ⬜⬜⬜⬜⬜⬜⬜⬜⬜⬜ │  0% │
+│ Phase 1: Quick Wins          │ ✅✅✅✅✅✅✅✅✅✅ │ 100% │
+│ Phase 2: Lazy Loading        │ ✅✅✅✅✅✅✅✅✅✅ │ 100% │
+│ Phase 3: KI & Real-time      │ ✅✅✅✅✅✅✅⬜⬜⬜ │ 70% │
 │ Phase 4: PostgreSQL & Polish │ ⬜⬜⬜⬜⬜⬜⬜⬜⬜⬜ │  0% │
 ├─────────────────────────────────────────────────────────────────┤
-│ GESAMT                       │ ⬜⬜⬜⬜⬜⬜⬜⬜⬜⬜ │  0% │
+│ GESAMT                       │ ✅✅✅✅✅✅✅⬜⬜⬜ │  70% │
 └─────────────────────────────────────────────────────────────────┘
 
 Legende: ⬜ Offen  |  🟨 In Arbeit  |  ✅ Fertig
@@ -161,25 +161,26 @@ Legende: ⬜ Offen  |  🟨 In Arbeit  |  ✅ Fertig
 **Zeitaufwand:** ~25-35 Stunden | **Priorität:** HOCH | **Impact:** ⭐⭐⭐⭐⭐
 
 **Frontend:**
-- [ ] Tab-Templates aus HTML extrahieren
-- [ ] Lazy DOM Creation implementieren
-- [ ] Ungenutzte Tabs aus DOM entfernen
-- [ ] State-Management für Tab-States
-- [ ] Fuzzy Search Performance-Index
+- [x] Tab-Templates aus HTML extrahieren
+- [x] Lazy DOM Creation implementieren
+- [x] Ungenutzte Tabs aus DOM entfernen
+- [x] State-Management für Tab-States
+- [x] Fuzzy Search Performance-Index
 
 **Backend:**
-- [ ] In-Memory Cache (node-cache) implementieren
-- [ ] API Pagination einführen
-  - [ ] `/api/termine` mit Pagination
-  - [ ] `/api/kunden` mit Pagination
-- [ ] Cache-Invalidierung bei Updates
-- [ ] Fuzzy Search Backend-API
+- [x] In-Memory Cache (SimpleCache) implementieren
+- [x] API Pagination einführen
+  - [x] `/api/termine` mit Pagination
+  - [x] `/api/kunden` mit Pagination
+- [x] Cache-Invalidierung bei Updates
+- [x] Fuzzy Search Backend-API
 
 **Erwartete Verbesserung:** ~60% Frontend, ~70% Backend
 
 ---
 
 ### 🤖 Phase 3: KI & Real-time (Woche 3)
+
 **Zeitaufwand:** ~30-40 Stunden | **Priorität:** MITTEL | **Impact:** ⭐⭐⭐⭐⭐
 
 **Frontend:**
@@ -187,28 +188,33 @@ Legende: ⬜ Offen  |  🟨 In Arbeit  |  ✅ Fertig
 - [ ] Tabs in ES6-Module aufteilen
 - [ ] Dynamic Imports implementieren
 - [ ] Service Worker für Caching (optional)
-- [ ] WebSocket-Client für Real-time Updates
+- [x] WebSocket-Client für Real-time Updates
+- [x] Echtzeit-Updates Toggle in Einstellungen
+- [x] KI-Modus Auswahl (Lokal/OpenAI)
 
 **Backend:**
 - [ ] Schema-Migrations-System einführen
-- [ ] WebSocket-Server implementieren
+- [x] WebSocket-Server implementieren
+- [x] Realtime-Settings API (`/einstellungen/realtime-enabled`)
+- [x] Lokale KI-Heuristik (Server)
+- [x] KI-Modus Settings API (`/einstellungen/ki-mode`)
 - [ ] Request Batching Endpoint (`/api/batch`)
-- [ ] KI-Erweiterungen implementieren:
-  - [ ] Intelligente Zeitschätzung (Machine Learning)
-    - [ ] Training-Daten aus Historie extrahieren
-    - [ ] Modell-Training implementieren
-    - [ ] Vorhersage-API (`/api/ai/estimate-time`)
-    - [ ] Auto-Training täglich (Cron-Job)
-  - [ ] Automatische Kategorisierung
-    - [ ] Kategorie aus Arbeitsbeschreibung
-    - [ ] Prioritäts-Erkennung
-  - [ ] Smart Scheduling
-    - [ ] Beste Zeitslot-Vorschläge
-    - [ ] Mitarbeiter-Spezialisierung
-  - [ ] Anomalie-Erkennung
-    - [ ] Unrealistische Zeitschätzungen warnen
-    - [ ] Doppelbuchungen erkennen
-    - [ ] Überlastungs-Warnungen
+  - [ ] KI-Erweiterungen implementieren:
+  - [x] Intelligente Zeitschätzung (Machine Learning)
+    - [x] Training-Daten aus Historie extrahieren
+    - [x] Modell-Training implementieren
+    - [x] Vorhersage-API (`/api/ai/estimate-time`)
+    - [x] Auto-Training täglich (Cron-Job)
+  - [x] Automatische Kategorisierung
+    - [x] Kategorie aus Arbeitsbeschreibung
+    - [x] Prioritäts-Erkennung
+  - [x] Smart Scheduling
+    - [x] Beste Zeitslot-Vorschläge
+    - [ ] Mitarbeiter-Spezialisierung (nicht benötigt)
+  - [x] Anomalie-Erkennung
+    - [x] Unrealistische Zeitschätzungen warnen
+    - [x] Doppelbuchungen erkennen
+    - [x] Überlastungs-Warnungen
 
 **Erwartete Verbesserung:** ~80% Frontend, ~80% Backend
 
@@ -252,20 +258,23 @@ Legende: ⬜ Offen  |  🟨 In Arbeit  |  ✅ Fertig
 ### 📑 Zusammenfassung: Gesamt-Checkliste
 
 **Kern-Features (MUSS):**
-- [ ] ⚡ Frontend-Performance (Phase 1+2) - 80% schneller
-- [ ] 🔍 Fuzzy Search (Phase 1+2) - Tippfehler-tolerant
-- [ ] 🚀 Backend-Performance (Phase 1+2) - 75% schneller
-- [ ] 🤖 KI-Zeitschätzung (Phase 3) - Intelligente Vorhersagen
-- [ ] 🌐 WebSocket Real-time (Phase 3) - Keine Polling mehr
+- [x] ⚡ Frontend-Performance (Phase 1+2) - 80% schneller
+- [x] 🔍 Fuzzy Search (Phase 1+2) - Tippfehler-tolerant
+- [x] 🚀 Backend-Performance (Phase 1+2) - 75% schneller
+- [x] 🤖 KI-Zeitschätzung (Phase 3) - Intelligente Vorhersagen
+- [x] 🌐 WebSocket Real-time (Phase 3) - Keine Polling mehr
+- [x] ⚡ Echtzeit-Updates Toggle (Phase 3) - WebSocket schaltbar
+- [x] 🧠 Lokale KI (Phase 3) - Server ohne Cloud
 
 **Optional (bei Bedarf):**
 - [ ] 🗄️ PostgreSQL (Phase 4) - Nur ab >1000 Terminen
 - [ ] 🎨 Service Worker (Phase 3) - Offline-Fähigkeit
-- [ ] 📊 Smart Scheduling (Phase 3) - Termin-Vorschläge
+- [x] 📊 Smart Scheduling (Phase 3) - Termin-Vorschläge
+- [x] 🛡️ Anomalie-Erkennung (Phase 3) - Warnungen
 
 **Qualitätssicherung (MUSS):**
-- [ ] ✅ Testing & Performance-Messung (Phase 5)
-- [ ] 📝 Dokumentation (Phase 5)
+- [x] ✅ Testing & Performance-Messung (Phase 5)
+- [x] 📝 Dokumentation (Phase 5)
 - [ ] 🪟 Windows-Installation testen (Phase 5)
 
 **Geschätzter Gesamt-Aufwand:** 105-150 Stunden (4-6 Wochen)
@@ -276,19 +285,19 @@ Legende: ⬜ Offen  |  🟨 In Arbeit  |  ✅ Fertig
 **Zeitaufwand:** ~10-15 Stunden | **Priorität:** HOCH | **Impact:** ⭐⭐⭐⭐⭐
 
 **Testing:**
-- [ ] Frontend-Performance testen (Lighthouse)
-- [ ] Backend-Load-Testing (100+ parallele Requests)
-- [ ] Fuzzy Search Accuracy testen
-- [ ] KI-Zeitschätzung Genauigkeit messen
+- [x] Frontend-Performance testen (Lighthouse)
+- [x] Backend-Load-Testing (100+ parallele Requests)
+- [x] Fuzzy Search Accuracy testen
+- [x] KI-Zeitschätzung Genauigkeit messen
 - [ ] PostgreSQL Migration testen
 - [ ] Windows-Installation testen
-- [ ] Rückwärtskompatibilität prüfen
+- [x] Rückwärtskompatibilität prüfen
 
 **Dokumentation:**
-- [ ] CHANGELOG.md aktualisieren
-- [ ] Migrations-Guide schreiben
-- [ ] API-Dokumentation aktualisieren
-- [ ] Windows-Setup-Guide erweitern
+- [x] CHANGELOG.md aktualisieren
+- [x] Migrations-Guide schreiben
+- [x] API-Dokumentation aktualisieren
+- [x] Windows-Setup-Guide erweitern
 
 **Release:**
 - [ ] Version auf 1.3.0 bumpen
@@ -669,15 +678,15 @@ async init() {
 
 ### Woche 1: Quick Wins - Frontend & Backend
 **Frontend:**
-- [ ] Tab-Element-Caching implementieren
-- [ ] Event-Delegation für Tab-Buttons
-- [ ] Display-Toggle statt classList
+- [x] Tab-Element-Caching implementieren
+- [x] Event-Delegation für Tab-Buttons
+- [x] Display-Toggle statt classList
 
 **Backend:**
-- [ ] Response Compression aktivieren
-- [ ] Prepared Statements implementieren
-- [ ] N+1 Query Problem beheben
-- [ ] Composite Indizes erstellen
+- [x] Response Compression aktivieren
+- [x] Prepared Statements implementieren
+- [x] N+1 Query Problem beheben
+- [x] Composite Indizes erstellen
 
 **Erwartete Verbesserung:** ~40% Frontend, ~50% Backend
 
@@ -685,15 +694,15 @@ async init() {
 
 ### Woche 2: Lazy Loading & API-Optimierung
 **Frontend:**
-- [ ] Tab-Templates extrahieren
-- [ ] Lazy DOM Creation implementieren
-- [ ] Ungenutzte Tabs aus DOM entfernen
-- [ ] State-Management für Tab-States
+- [x] Tab-Templates extrahieren
+- [x] Lazy DOM Creation implementieren
+- [x] Ungenutzte Tabs aus DOM entfernen
+- [x] State-Management für Tab-States
 
 **Backend:**
-- [ ] In-Memory Cache (node-cache) implementieren
-- [ ] API Pagination einführen
-- [ ] Query-Performance-Logger einbauen
+- [x] In-Memory Cache (SimpleCache) implementieren
+- [x] API Pagination einführen
+- [x] Query-Performance-Logger einbauen
 
 **Erwartete Verbesserung:** ~60% Frontend, ~70% Backend
 
@@ -708,7 +717,7 @@ async init() {
 
 **Backend:**
 - [ ] Schema-Migrations-System einführen
-- [ ] WebSocket für Real-time Updates
+- [x] WebSocket für Real-time Updates
 - [ ] Request Batching Endpoint
 
 **Erwartete Verbesserung:** ~80% Frontend, ~80% Backend

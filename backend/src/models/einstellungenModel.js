@@ -41,6 +41,14 @@ class EinstellungenModel {
     // KI-Funktionen Status (Standard: aktiviert)
     if (settings) {
       settings.ki_enabled = settings.ki_enabled !== undefined ? !!settings.ki_enabled : true;
+      settings.realtime_enabled = settings.realtime_enabled !== undefined ? !!settings.realtime_enabled : true;
+      settings.ki_mode = settings.ki_mode || (settings.chatgpt_api_key_configured ? 'openai' : 'local');
+      settings.smart_scheduling_enabled = settings.smart_scheduling_enabled !== undefined
+        ? !!settings.smart_scheduling_enabled
+        : true;
+      settings.anomaly_detection_enabled = settings.anomaly_detection_enabled !== undefined
+        ? !!settings.anomaly_detection_enabled
+        : true;
     }
     return settings;
   }
@@ -62,6 +70,97 @@ class EinstellungenModel {
     }
     
     return { success: true, ki_enabled: !!enabled, message: enabled ? 'KI-Funktionen aktiviert' : 'KI-Funktionen deaktiviert' };
+  }
+
+  // KI-Modus aktualisieren (local/openai)
+  static async updateKIMode(mode) {
+    const allowed = new Set(['local', 'openai']);
+    if (!allowed.has(mode)) {
+      throw new Error('Ungültiger KI-Modus');
+    }
+
+    const result = await runAsync(
+      `UPDATE werkstatt_einstellungen SET ki_mode = ? WHERE id = 1`,
+      [mode]
+    );
+
+    if (result.changes === 0) {
+      await runAsync(
+        `INSERT OR REPLACE INTO werkstatt_einstellungen (id, ki_mode) VALUES (1, ?)`,
+        [mode]
+      );
+    }
+
+    return { success: true, ki_mode: mode, message: `KI-Modus gesetzt: ${mode}` };
+  }
+
+  // Echtzeit-Updates aktivieren/deaktivieren
+  static async updateRealtimeEnabled(enabled) {
+    const realtimeEnabled = enabled ? 1 : 0;
+
+    const result = await runAsync(
+      `UPDATE werkstatt_einstellungen SET realtime_enabled = ? WHERE id = 1`,
+      [realtimeEnabled]
+    );
+
+    if (result.changes === 0) {
+      await runAsync(
+        `INSERT OR REPLACE INTO werkstatt_einstellungen (id, realtime_enabled) VALUES (1, ?)`,
+        [realtimeEnabled]
+      );
+    }
+
+    return {
+      success: true,
+      realtime_enabled: !!enabled,
+      message: enabled ? 'Echtzeit-Updates aktiviert' : 'Echtzeit-Updates deaktiviert'
+    };
+  }
+
+  // Smart Scheduling aktivieren/deaktivieren
+  static async updateSmartSchedulingEnabled(enabled) {
+    const smartEnabled = enabled ? 1 : 0;
+
+    const result = await runAsync(
+      `UPDATE werkstatt_einstellungen SET smart_scheduling_enabled = ? WHERE id = 1`,
+      [smartEnabled]
+    );
+
+    if (result.changes === 0) {
+      await runAsync(
+        `INSERT OR REPLACE INTO werkstatt_einstellungen (id, smart_scheduling_enabled) VALUES (1, ?)`,
+        [smartEnabled]
+      );
+    }
+
+    return {
+      success: true,
+      smart_scheduling_enabled: !!enabled,
+      message: enabled ? 'Smart Scheduling aktiviert' : 'Smart Scheduling deaktiviert'
+    };
+  }
+
+  // Anomalie-Erkennung aktivieren/deaktivieren
+  static async updateAnomalyDetectionEnabled(enabled) {
+    const anomalyEnabled = enabled ? 1 : 0;
+
+    const result = await runAsync(
+      `UPDATE werkstatt_einstellungen SET anomaly_detection_enabled = ? WHERE id = 1`,
+      [anomalyEnabled]
+    );
+
+    if (result.changes === 0) {
+      await runAsync(
+        `INSERT OR REPLACE INTO werkstatt_einstellungen (id, anomaly_detection_enabled) VALUES (1, ?)`,
+        [anomalyEnabled]
+      );
+    }
+
+    return {
+      success: true,
+      anomaly_detection_enabled: !!enabled,
+      message: enabled ? 'Anomalie-Erkennung aktiviert' : 'Anomalie-Erkennung deaktiviert'
+    };
   }
 
   // Holt den entschlüsselten API-Key (nur für interne Verwendung)

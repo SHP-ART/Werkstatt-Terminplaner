@@ -57,9 +57,17 @@ logStartup('Lade routes...');
 const routes = require('./routes');
 logStartup('routes geladen ✓');
 
+logStartup('Lade localAiService...');
+const localAiService = require('./services/localAiService');
+logStartup('localAiService geladen ✓');
+
 logStartup('Lade ws (WebSocket)...');
 const { WebSocketServer } = require('ws');
 logStartup('ws geladen ✓');
+
+logStartup('Lade websocket utils...');
+const { setWebSocketServer } = require('./utils/websocket');
+logStartup('websocket utils geladen ✓');
 
 logStartup('Lade http...');
 const http = require('http');
@@ -245,6 +253,9 @@ async function startServer(clientCountCallback, requestLogCallback) {
         throw dbError;
     }
 
+    // Lokales KI-Training (täglich)
+    localAiService.scheduleDailyTraining();
+
     logStartup('Registriere API-Routen...');
     app.use('/api', routes);
     logStartup('API-Routen registriert ✓');
@@ -291,6 +302,7 @@ async function startServer(clientCountCallback, requestLogCallback) {
     logStartup('Erstelle WebSocket Server...');
     wss = new WebSocketServer({ server });
     logStartup('WebSocket Server erstellt ✓');
+    setWebSocketServer(wss);
 
     wss.on('connection', (ws) => {
         logStartup('WebSocket Client connected');
@@ -309,6 +321,7 @@ async function startServer(clientCountCallback, requestLogCallback) {
     logStartup(`Starte Server auf Port ${PORT}...`);
     server.listen(PORT, '0.0.0.0', () => {
         logStartup('=== SERVER ERFOLGREICH GESTARTET ===');
+        logStartup('Server erfolgreich gestartet');
         console.log(`\n✅ ${APP_NAME} v${VERSION} gestartet!`);
         console.log(`📡 Backend-Server: http://0.0.0.0:${PORT}`);
         console.log(`🔌 API-Endpoint:   http://0.0.0.0:${PORT}/api`);

@@ -6,9 +6,22 @@ class App {
     this.termineById = {};
     this.autocompleteSelectedIndex = -1;
     this.uhrzeitInterval = null;
+    this.kiAssistentListenersBound = false;
+    this.teileBestellenListenersBound = false;
+    this.auslastungKalenderInitialized = false;
+    this.editAuslastungKalenderInitialized = false;
+    this.editSuchKalenderInitialized = false;
     
     // KI-Funktionen Status (wird beim Laden der Einstellungen aktualisiert)
     this.kiEnabled = true; // Standard: aktiviert
+    // KI-Modus (local/openai)
+    this.kiMode = 'local';
+    // Echtzeit-Updates Status (wird beim Laden der Einstellungen aktualisiert)
+    this.realtimeEnabled = true; // Standard: aktiviert
+    // Smart Scheduling Status
+    this.smartSchedulingEnabled = true;
+    // Anomalie-Erkennung Status
+    this.anomalyDetectionEnabled = true;
     
     // Test-Datum Override: Setze auf null für echtes Datum, oder z.B. '2026-01-04' für Tests
     // Kann auch über Browser-Konsole gesetzt werden: app.testDatum = '2026-01-05'
@@ -27,6 +40,11 @@ class App {
       subTabContents: null,  // Alle Sub-Tab-Inhalte
       byId: new Map()        // Element-Cache nach ID
     };
+    this.currentTab = 'dashboard';
+    this.tabStateStore = new Map();
+    this.stickyTabs = new Set(['dashboard']);
+    this.ws = null;
+    this.wsReconnectTimer = null;
 
     // Fuzzy Search Index für Kundensuche
     this.fuzzySearchIndex = null;
@@ -164,13 +182,228 @@ class App {
   // Cached getElementById - vermeidet wiederholte DOM-Abfragen
   getCachedElement(id) {
     if (this.tabCache.byId.has(id)) {
-      return this.tabCache.byId.get(id);
+      const cached = this.tabCache.byId.get(id);
+      if (cached && document.contains(cached)) {
+        return cached;
+      }
+      this.tabCache.byId.delete(id);
     }
     const element = document.getElementById(id);
     if (element) {
       this.tabCache.byId.set(id, element);
     }
     return element;
+  }
+
+  escapeSelector(value) {
+    if (window.CSS && CSS.escape) {
+      return CSS.escape(value);
+    }
+    return String(value).replace(/["'\\]/g, '\\$&');
+  }
+
+  saveTabState(tabName) {
+    const container = this.getCachedElement(tabName);
+    if (!container) return;
+    if (container.dataset.templateId && container.dataset.loaded !== 'true') return;
+
+    const fields = [];
+    container.querySelectorAll('input, select, textarea').forEach(field => {
+      if (!field.id && !field.name) return;
+      if (field.type === 'file') return;
+
+      const entry = {
+        kind: field.tagName.toLowerCase(),
+        type: field.type || null,
+        id: field.id || null,
+        name: field.name || null
+      };
+
+      if (field.tagName === 'SELECT') {
+        if (field.multiple) {
+          entry.multiple = true;
+          entry.selectedValues = Array.from(field.selectedOptions).map(option => option.value);
+        } else {
+          entry.value = field.value;
+        }
+        fields.push(entry);
+        return;
+      }
+
+      if (field.type === 'checkbox') {
+        entry.checked = field.checked;
+        fields.push(entry);
+        return;
+      }
+
+      if (field.type === 'radio') {
+        if (field.checked) {
+          entry.value = field.value;
+          fields.push(entry);
+        }
+        return;
+      }
+
+      entry.value = field.value;
+      fields.push(entry);
+    });
+
+    const subTabs = [];
+    container.querySelectorAll('.sub-tabs').forEach((subTabsContainer, index) => {
+      const activeButton = subTabsContainer.querySelector('.sub-tab-button.active');
+      const activeName = activeButton ? activeButton.dataset.subtab : null;
+      subTabs.push({ index, activeName });
+    });
+
+    this.tabStateStore.set(tabName, {
+      fields,
+      subTabs,
+      scrollTop: container.scrollTop || 0
+    });
+  }
+
+  restoreTabSubTabs(tabName) {
+    const state = this.tabStateStore.get(tabName);
+    if (!state || !state.subTabs) return;
+
+    const container = this.getCachedElement(tabName);
+    if (!container) return;
+
+    const subTabsContainers = container.querySelectorAll('.sub-tabs');
+    state.subTabs.forEach(saved => {
+      const subTabsContainer = subTabsContainers[saved.index];
+      if (!subTabsContainer || !saved.activeName) return;
+      this.setActiveSubTabInContainer(subTabsContainer, saved.activeName);
+    });
+  }
+
+  restoreTabFields(tabName) {
+    const state = this.tabStateStore.get(tabName);
+    if (!state) return;
+
+    const container = this.getCachedElement(tabName);
+    if (!container) return;
+
+    if (typeof state.scrollTop === 'number') {
+      container.scrollTop = state.scrollTop;
+    }
+
+    state.fields.forEach(entry => {
+      let field = null;
+      if (entry.id) {
+        field = container.querySelector(`#${this.escapeSelector(entry.id)}`);
+      }
+
+      if (entry.type === 'radio') {
+        if (!entry.name) return;
+        const selector = `input[type="radio"][name="${this.escapeSelector(entry.name)}"][value="${this.escapeSelector(entry.value)}"]`;
+        const radio = container.querySelector(selector);
+        if (radio) {
+          radio.checked = true;
+        }
+        return;
+      }
+
+      if (!field && entry.name) {
+        field = container.querySelector(`[name="${this.escapeSelector(entry.name)}"]`);
+      }
+
+      if (!field) return;
+
+      if (field.tagName === 'SELECT' && entry.multiple) {
+        const values = new Set(entry.selectedValues || []);
+        Array.from(field.options).forEach(option => {
+          option.selected = values.has(option.value);
+        });
+        return;
+      }
+
+      if (entry.type === 'checkbox') {
+        field.checked = !!entry.checked;
+        return;
+      }
+
+      if ('value' in entry) {
+        field.value = entry.value;
+      }
+    });
+  }
+
+  unloadTabContent(tabName) {
+    if (this.stickyTabs.has(tabName)) return;
+    const container = this.getCachedElement(tabName);
+    if (!container || !container.dataset.templateId) return;
+    if (container.dataset.loaded !== 'true') return;
+
+    this.saveTabState(tabName);
+    container.querySelectorAll('[id]').forEach(element => {
+      if (element.id) {
+        this.tabCache.byId.delete(element.id);
+      }
+    });
+    container.innerHTML = '';
+    container.dataset.loaded = 'false';
+    console.log(`[Lazy-Tab] Unloaded: ${tabName}`);
+  }
+
+  setActiveSubTabInContainer(subTabsContainer, subTabName) {
+    const buttons = subTabsContainer.querySelectorAll('.sub-tab-button');
+    const hasMatch = Array.from(buttons).some(btn => btn.dataset.subtab === subTabName);
+    if (!hasMatch) return;
+    for (let i = 0; i < buttons.length; i++) {
+      const btn = buttons[i];
+      const name = btn.dataset.subtab;
+      btn.classList.toggle('active', name === subTabName);
+      if (name) {
+        const content = this.getCachedElement(name);
+        if (content) {
+          const isActive = name === subTabName;
+          content.style.display = isActive ? 'block' : 'none';
+          content.classList.toggle('active', isActive);
+        }
+      }
+    }
+  }
+
+  bindEventListenerOnce(element, event, handler, key) {
+    if (!element) return;
+    const datasetKey = `bound${key}`;
+    if (element.dataset[datasetKey]) return;
+    element.addEventListener(event, handler);
+    element.dataset[datasetKey] = 'true';
+  }
+
+  initSubTabsFor(container) {
+    if (!container) return;
+    container.querySelectorAll('.sub-tab-content').forEach(content => {
+      if (!content.classList.contains('active')) {
+        content.style.display = 'none';
+      } else {
+        content.style.display = 'block';
+      }
+    });
+  }
+
+  ensureTabContent(tabName) {
+    const container = this.getCachedElement(tabName);
+    if (!container) return;
+
+    const templateId = container.dataset.templateId;
+    if (!templateId) return;
+    if (container.dataset.loaded === 'true' && container.innerHTML.trim() === '') {
+      console.warn(`[Lazy-Tab] Leerer Container trotz loaded=true, lade neu: ${tabName}`);
+      container.dataset.loaded = 'false';
+    }
+    if (container.dataset.loaded === 'true') return;
+
+    const template = document.getElementById(templateId);
+    if (!template) return;
+
+    container.appendChild(template.content.cloneNode(true));
+    container.dataset.loaded = 'true';
+    this.initSubTabsFor(container);
+    this.bindSubTabDelegation();
+    this.bindLazyEventListeners();
   }
 
   // Lädt und zeigt die Server-Version im Header an
@@ -200,6 +433,15 @@ class App {
   }
 
   setupWebSocket() {
+    if (!this.realtimeEnabled) {
+      console.log('Echtzeit-Updates deaktiviert. WebSocket wird nicht gestartet.');
+      return;
+    }
+
+    if (this.ws && (this.ws.readyState === WebSocket.OPEN || this.ws.readyState === WebSocket.CONNECTING)) {
+      return;
+    }
+
     const serverConfig = CONFIG.getServerConfig();
     if (!serverConfig || !serverConfig.ip || !serverConfig.port) {
         console.error("Server-Konfiguration nicht gefunden. WebSocket kann nicht gestartet werden.");
@@ -210,15 +452,34 @@ class App {
     console.log(`Connecting WebSocket to ${wsUrl}`);
 
     const connect = () => {
+        if (!this.realtimeEnabled) {
+            return;
+        }
         const ws = new WebSocket(wsUrl);
+        this.ws = ws;
 
         ws.addEventListener('open', () => {
+            if (!this.realtimeEnabled) {
+              ws.close(1000, 'Realtime disabled');
+              return;
+            }
             console.log('WebSocket-Verbindung hergestellt.');
+        });
+
+        ws.addEventListener('message', (event) => {
+            if (!this.realtimeEnabled) return;
+            this.handleWebSocketMessage(event);
         });
 
         ws.addEventListener('close', (event) => {
             console.log(`WebSocket-Verbindung getrennt. Code: ${event.code}, Grund: '${event.reason}'. Erneuter Verbindungsversuch in 5 Sekunden...`);
-            setTimeout(connect, 5000);
+            if (this.ws === ws) {
+              this.ws = null;
+            }
+            if (this.realtimeEnabled) {
+              this.clearWebSocketReconnect();
+              this.wsReconnectTimer = setTimeout(connect, 5000);
+            }
         });
 
         ws.addEventListener('error', (err) => {
@@ -226,7 +487,465 @@ class App {
         });
     }
 
+    this.clearWebSocketReconnect();
     connect();
+  }
+
+  clearWebSocketReconnect() {
+    if (this.wsReconnectTimer) {
+      clearTimeout(this.wsReconnectTimer);
+      this.wsReconnectTimer = null;
+    }
+  }
+
+  stopWebSocket() {
+    this.clearWebSocketReconnect();
+    if (this.ws) {
+      try {
+        this.ws.close(1000, 'Realtime disabled');
+      } catch (err) {
+        // ignore close errors
+      }
+      this.ws = null;
+    }
+  }
+
+  handleWebSocketMessage(event) {
+    let message = null;
+    try {
+      message = JSON.parse(event.data);
+    } catch (err) {
+      return;
+    }
+
+    if (!message || !message.event) return;
+
+    const eventName = message.event;
+    const data = message.data || {};
+
+    if (eventName.startsWith('kunde.')) {
+      this.handleRealtimeKundenEvent(eventName, data);
+      return;
+    }
+
+    if (eventName.startsWith('termin.')) {
+      this.handleRealtimeTerminEvent(eventName, data);
+    }
+  }
+
+  handleRealtimeKundenEvent(eventName, data) {
+    this.loadKunden();
+
+    if (this.currentTab === 'dashboard') {
+      this.loadDashboard();
+    }
+  }
+
+  handleRealtimeTerminEvent(eventName, data) {
+    const activeTab = this.currentTab;
+
+    this.loadTermineCache();
+
+    if (activeTab === 'dashboard') {
+      this.loadDashboard();
+    }
+
+    if (activeTab === 'heute') {
+      this.loadHeuteTermine();
+    }
+
+    if (activeTab === 'termine') {
+      this.loadTerminAuslastungAnzeige();
+
+      const activeSubTab = document.querySelector('#termine .sub-tab-button.active');
+      const subTabName = activeSubTab ? activeSubTab.dataset.subtab : null;
+
+      if (subTabName === 'terminBearbeiten') {
+        this.loadEditTermine();
+      }
+      if (subTabName === 'wartendeAktionen') {
+        this.loadWartendeAktionen();
+      }
+      if (subTabName === 'internerTermin') {
+        this.loadInterneTermineImSubTab();
+      }
+    }
+
+    if (activeTab === 'zeitverwaltung') {
+      this.loadTermine();
+      this.loadTermineZeiten();
+    }
+
+    if (activeTab === 'auslastung') {
+      const selectedDatum = document.getElementById('auslastungDatum')?.value;
+      if (!selectedDatum || this.eventTouchesDatum(data, selectedDatum)) {
+        this.loadAuslastung();
+      }
+    }
+
+    if (activeTab === 'auslastung-dragdrop') {
+      const selectedDatum = document.getElementById('auslastungDragDropDatum')?.value;
+      if (!selectedDatum || this.eventTouchesDatum(data, selectedDatum)) {
+        this.loadAuslastungDragDrop();
+      }
+    }
+
+    if (activeTab === 'papierkorb' && (eventName === 'termin.deleted' || eventName === 'termin.restored')) {
+      this.loadPapierkorb();
+    }
+  }
+
+  eventTouchesDatum(data, datum) {
+    if (!datum) return true;
+    return data.datum === datum || data.oldDatum === datum || data.newDatum === datum;
+  }
+
+  bindPlanungEventListeners() {
+    const dragDropDatum = document.getElementById('auslastungDragDropDatum');
+    this.bindEventListenerOnce(dragDropDatum, 'change', () => {
+      this.updatePlanungWocheInfo();
+      this.loadAuslastungDragDrop();
+    }, 'PlanungDatumChange');
+
+    const planungPrevTag = document.getElementById('planungPrevTag');
+    const planungNextTag = document.getElementById('planungNextTag');
+    const planungPrevWoche = document.getElementById('planungPrevWoche');
+    const planungNextWoche = document.getElementById('planungNextWoche');
+    const planungHeuteBtn = document.getElementById('planungHeuteBtn');
+
+    this.bindEventListenerOnce(planungPrevTag, 'click', () => this.navigatePlanung(-1, 'day'), 'PlanungPrevTag');
+    this.bindEventListenerOnce(planungNextTag, 'click', () => this.navigatePlanung(1, 'day'), 'PlanungNextTag');
+    this.bindEventListenerOnce(planungPrevWoche, 'click', () => this.navigatePlanung(-7, 'week'), 'PlanungPrevWoche');
+    this.bindEventListenerOnce(planungNextWoche, 'click', () => this.navigatePlanung(7, 'week'), 'PlanungNextWoche');
+    this.bindEventListenerOnce(planungHeuteBtn, 'click', () => this.goToPlanungHeute(), 'PlanungHeute');
+  }
+
+  bindSubTabDelegation() {
+    document.querySelectorAll('.sub-tabs').forEach(container => {
+      this.bindEventListenerOnce(container, 'click', (e) => {
+        const button = e.target.closest('.sub-tab-button');
+        if (button) {
+          this.handleSubTabChange(e);
+        }
+      }, 'SubTabDelegation');
+    });
+  }
+
+  bindLazyEventListeners() {
+    this.bindEventListenerOnce(document.getElementById('terminForm'), 'submit', (e) => this.handleTerminSubmit(e), 'TerminFormSubmit');
+    this.bindEventListenerOnce(document.getElementById('internerTerminForm'), 'submit', (e) => this.handleInternerTerminSubmit(e), 'InternerTerminFormSubmit');
+    this.bindEventListenerOnce(document.getElementById('kundenForm'), 'submit', (e) => this.handleKundenSubmit(e), 'KundenFormSubmit');
+    this.bindEventListenerOnce(document.getElementById('zeitAnpassungForm'), 'submit', (e) => this.handleZeitAnpassungSubmit(e), 'ZeitAnpassungFormSubmit');
+    this.bindEventListenerOnce(document.getElementById('serverConfigForm'), 'submit', (e) => this.handleServerConfigSubmit(e), 'ServerConfigFormSubmit');
+    this.bindEventListenerOnce(document.getElementById('werkstattSettingsForm'), 'submit', (e) => this.handleWerkstattSettingsSubmit(e), 'WerkstattSettingsFormSubmit');
+
+    const chatgptApiKeyForm = document.getElementById('chatgptApiKeyForm');
+    this.bindEventListenerOnce(chatgptApiKeyForm, 'submit', (e) => this.handleChatGPTApiKeySubmit(e), 'ChatGPTApiKeySubmit');
+
+    const toggleApiKeyVisibility = document.getElementById('toggleApiKeyVisibility');
+    this.bindEventListenerOnce(toggleApiKeyVisibility, 'click', () => this.toggleApiKeyVisibility(), 'ToggleApiKeyVisibility');
+
+    const testApiKeyBtn = document.getElementById('testApiKeyBtn');
+    this.bindEventListenerOnce(testApiKeyBtn, 'click', () => this.testChatGPTApiKey(), 'TestApiKey');
+
+    const deleteApiKeyBtn = document.getElementById('deleteApiKeyBtn');
+    this.bindEventListenerOnce(deleteApiKeyBtn, 'click', () => this.deleteChatGPTApiKey(), 'DeleteApiKey');
+
+    const kiEnabledToggle = document.getElementById('kiEnabledToggle');
+    this.bindEventListenerOnce(kiEnabledToggle, 'change', (e) => this.handleKIEnabledToggle(e), 'KiEnabledToggle');
+    const realtimeEnabledToggle = document.getElementById('realtimeEnabledToggle');
+    this.bindEventListenerOnce(realtimeEnabledToggle, 'change', (e) => this.handleRealtimeEnabledToggle(e), 'RealtimeEnabledToggle');
+    const smartSchedulingToggle = document.getElementById('smartSchedulingToggle');
+    this.bindEventListenerOnce(smartSchedulingToggle, 'change', (e) => this.handleSmartSchedulingToggle(e), 'SmartSchedulingToggle');
+    const anomalyDetectionToggle = document.getElementById('anomalyDetectionToggle');
+    this.bindEventListenerOnce(anomalyDetectionToggle, 'change', (e) => this.handleAnomalyDetectionToggle(e), 'AnomalyDetectionToggle');
+    const kiModeSelect = document.getElementById('kiModeSelect');
+    this.bindEventListenerOnce(kiModeSelect, 'change', (e) => this.handleKIModeChange(e), 'KIModeChange');
+
+    const wartendeAktionForm = document.getElementById('wartendeAktionForm');
+    this.bindEventListenerOnce(wartendeAktionForm, 'submit', (e) => this.handleWartendeAktionSubmit(e), 'WartendeAktionSubmit');
+
+    this.setupWartendeAktionenKundensuche();
+
+    const ersatzautoForm = document.getElementById('ersatzautoForm');
+    this.bindEventListenerOnce(ersatzautoForm, 'submit', (e) => this.handleErsatzautoSubmit(e), 'ErsatzautoSubmit');
+
+    this.bindEventListenerOnce(document.getElementById('urlaubForm'), 'submit', (e) => this.handleUrlaubSubmit(e), 'UrlaubFormSubmit');
+    this.bindEventListenerOnce(document.getElementById('krankForm'), 'submit', (e) => this.handleKrankSubmit(e), 'KrankFormSubmit');
+
+    const arbeitEingabe = document.getElementById('arbeitEingabe');
+    this.bindEventListenerOnce(arbeitEingabe, 'input', (e) => {
+      this.updateZeitschaetzung();
+      this.handleArbeitAutocomplete(e);
+      this.validateTerminEchtzeit();
+      this.handleKIAutoSuggest(e);
+    }, 'ArbeitEingabeInput');
+    this.bindEventListenerOnce(arbeitEingabe, 'keydown', (e) => this.handleArbeitKeydown(e), 'ArbeitEingabeKeydown');
+
+    const kiVorschlaegeClose = document.getElementById('kiVorschlaegeClose');
+    this.bindEventListenerOnce(kiVorschlaegeClose, 'click', () => this.hideKIVorschlaege(), 'KiVorschlaegeClose');
+
+    this.bindEventListenerOnce(document.getElementById('filterDatum'), 'change', () => {
+      this.loadTermine();
+      this.updateZeitverwaltungDatumAnzeige();
+    }, 'FilterDatumChange');
+    this.bindEventListenerOnce(document.getElementById('alleTermineBtn'), 'click', () => this.showAllTermine(), 'AlleTermineClick');
+    this.bindEventListenerOnce(document.getElementById('auslastungDatum'), 'change', () => this.loadAuslastung(), 'AuslastungDatumChange');
+
+    this.bindPlanungEventListeners();
+
+    this.bindEventListenerOnce(document.getElementById('auslastungPrevTag'), 'click', () => this.navigateAuslastung(-1, 'day'), 'AuslastungPrevTag');
+    this.bindEventListenerOnce(document.getElementById('auslastungNextTag'), 'click', () => this.navigateAuslastung(1, 'day'), 'AuslastungNextTag');
+    this.bindEventListenerOnce(document.getElementById('auslastungPrevWoche'), 'click', () => this.navigateAuslastung(-7, 'week'), 'AuslastungPrevWoche');
+    this.bindEventListenerOnce(document.getElementById('auslastungNextWoche'), 'click', () => this.navigateAuslastung(7, 'week'), 'AuslastungNextWoche');
+    this.bindEventListenerOnce(document.getElementById('auslastungHeuteBtn'), 'click', () => this.goToAuslastungHeute(), 'AuslastungHeute');
+
+    this.bindEventListenerOnce(document.getElementById('prevDayBtn'), 'click', () => this.navigateZeitverwaltung(-1, 'day'), 'ZeitverwaltungPrevDay');
+    this.bindEventListenerOnce(document.getElementById('nextDayBtn'), 'click', () => this.navigateZeitverwaltung(1, 'day'), 'ZeitverwaltungNextDay');
+    this.bindEventListenerOnce(document.getElementById('prevWeekBtn'), 'click', () => this.navigateZeitverwaltung(-7, 'week'), 'ZeitverwaltungPrevWeek');
+    this.bindEventListenerOnce(document.getElementById('nextWeekBtn'), 'click', () => this.navigateZeitverwaltung(7, 'week'), 'ZeitverwaltungNextWeek');
+    this.bindEventListenerOnce(document.getElementById('todayBtn'), 'click', () => this.goToToday(), 'ZeitverwaltungToday');
+    this.bindEventListenerOnce(document.getElementById('morgenBtn'), 'click', () => this.goToMorgen(), 'ZeitverwaltungMorgen');
+    this.bindEventListenerOnce(document.getElementById('wocheBtn'), 'click', () => this.showWocheTermine(), 'ZeitverwaltungWoche');
+    this.bindEventListenerOnce(document.getElementById('offeneTermineBtn'), 'click', () => this.showOffeneTermine(), 'ZeitverwaltungOffene');
+    this.bindEventListenerOnce(document.getElementById('schwebendeTermineBtn'), 'click', () => this.showSchwebendeTermine(), 'ZeitverwaltungSchwebende');
+
+    const schwebendDisplay = document.getElementById('schwebendDisplay');
+    this.bindEventListenerOnce(schwebendDisplay, 'click', () => this.showSchwebendeTermine(), 'SchwebendDisplayClick');
+
+    this.bindEventListenerOnce(document.getElementById('krankVonDatum'), 'change', () => this.validateKrankDatum(), 'KrankVonDatum');
+    this.bindEventListenerOnce(document.getElementById('krankBisDatum'), 'change', () => this.validateKrankDatum(), 'KrankBisDatum');
+    this.bindEventListenerOnce(document.getElementById('importBtn'), 'click', () => this.importKunden(), 'ImportKunden');
+    this.bindEventListenerOnce(document.getElementById('testConnectionBtn'), 'click', () => this.testConnection(), 'TestConnection');
+
+    this.setupKIAssistentEventListeners();
+    this.setupTeileBestellenEventListeners();
+
+    const excelFileInput = document.getElementById('excelFileInput');
+    this.bindEventListenerOnce(excelFileInput, 'change', (e) => this.handleExcelFileSelect(e), 'ExcelFileChange');
+    const confirmImportBtn = document.getElementById('confirmImportBtn');
+    this.bindEventListenerOnce(confirmImportBtn, 'click', () => this.confirmExcelImport(), 'ConfirmExcelImport');
+    const cancelImportBtn = document.getElementById('cancelImportBtn');
+    this.bindEventListenerOnce(cancelImportBtn, 'click', () => this.cancelExcelImport(), 'CancelExcelImport');
+
+    const bringZeitInputNew = document.getElementById('bring_zeit');
+    const datumInputForBringzeit = document.getElementById('datum');
+    this.bindEventListenerOnce(bringZeitInputNew, 'blur', () => this.pruefeBringzeitUeberschneidung('bring_zeit', 'datum', 'bringzeitHinweis'), 'BringzeitBlur');
+    this.bindEventListenerOnce(bringZeitInputNew, 'change', () => this.pruefeBringzeitUeberschneidung('bring_zeit', 'datum', 'bringzeitHinweis'), 'BringzeitChange');
+    this.bindEventListenerOnce(datumInputForBringzeit, 'change', () => {
+      const bringzeit = document.getElementById('bring_zeit')?.value;
+      if (bringzeit && bringzeit.match(/^\d{2}:\d{2}$/)) {
+        this.pruefeBringzeitUeberschneidung('bring_zeit', 'datum', 'bringzeitHinweis');
+      }
+    }, 'BringzeitDatumChange');
+
+    const editBringZeitInputNew = document.getElementById('edit_bring_zeit');
+    const editDatumInputNew = document.getElementById('edit_datum');
+    this.bindEventListenerOnce(editBringZeitInputNew, 'blur', () => this.pruefeBringzeitUeberschneidung('edit_bring_zeit', 'edit_datum', 'editBringzeitHinweis', this.editingTerminId), 'EditBringzeitBlur');
+    this.bindEventListenerOnce(editBringZeitInputNew, 'change', () => this.pruefeBringzeitUeberschneidung('edit_bring_zeit', 'edit_datum', 'editBringzeitHinweis', this.editingTerminId), 'EditBringzeitChange');
+    this.bindEventListenerOnce(editDatumInputNew, 'change', () => {
+      const bringzeit = document.getElementById('edit_bring_zeit')?.value;
+      if (bringzeit && bringzeit.match(/^\d{2}:\d{2}$/)) {
+        this.pruefeBringzeitUeberschneidung('edit_bring_zeit', 'edit_datum', 'editBringzeitHinweis', this.editingTerminId);
+      }
+    }, 'EditBringzeitDatumChange');
+
+    const closeFahrzeugAuswahl = document.getElementById('closeFahrzeugAuswahl');
+    this.bindEventListenerOnce(closeFahrzeugAuswahl, 'click', () => this.closeFahrzeugAuswahlModal(), 'CloseFahrzeugAuswahl');
+    const fahrzeugAuswahlZurueck = document.getElementById('fahrzeugAuswahlZurueck');
+    this.bindEventListenerOnce(fahrzeugAuswahlZurueck, 'click', () => this.closeFahrzeugAuswahlModal(), 'FahrzeugAuswahlZurueck');
+
+    const closeFahrzeugVerwaltung = document.getElementById('closeFahrzeugVerwaltung');
+    this.bindEventListenerOnce(closeFahrzeugVerwaltung, 'click', () => this.closeFahrzeugVerwaltungModal(), 'CloseFahrzeugVerwaltung');
+    const fahrzeugVerwaltungSchliessen = document.getElementById('fahrzeugVerwaltungSchliessen');
+    this.bindEventListenerOnce(fahrzeugVerwaltungSchliessen, 'click', () => this.closeFahrzeugVerwaltungModal(), 'FahrzeugVerwaltungSchliessen');
+    const fahrzeugHinzufuegenBtn = document.getElementById('fahrzeugHinzufuegenBtn');
+    this.bindEventListenerOnce(fahrzeugHinzufuegenBtn, 'click', () => this.addFahrzeugFromModal(), 'FahrzeugHinzufuegen');
+
+    const kundenListeSuche = document.getElementById('kundenListeSuche');
+    this.bindEventListenerOnce(kundenListeSuche, 'input', () => this.filterKundenListe(), 'KundenListeSucheInput');
+    this.bindEventListenerOnce(kundenListeSuche, 'keydown', (e) => {
+      if (e.key === 'Escape') {
+        this.clearKundenSuche();
+      }
+    }, 'KundenListeSucheKeydown');
+    const kundenSucheClearBtn = document.getElementById('kundenSucheClearBtn');
+    this.bindEventListenerOnce(kundenSucheClearBtn, 'click', () => this.clearKundenSuche(), 'KundenSucheClear');
+
+    const terminNameSuche = document.getElementById('terminNameSuche');
+    this.bindEventListenerOnce(terminNameSuche, 'input', () => this.handleNameSuche(), 'TerminNameSucheInput');
+    this.bindEventListenerOnce(terminNameSuche, 'keydown', (e) => this.handleSucheKeydown(e, 'name'), 'TerminNameSucheKeydown');
+    this.bindEventListenerOnce(terminNameSuche, 'blur', () => setTimeout(() => this.hideVorschlaege('name'), 350), 'TerminNameSucheBlur');
+
+    const kzFelder = ['kzSucheBezirk', 'kzSucheBuchstaben', 'kzSucheNummer'];
+    const kzFelderSet = new Set(kzFelder);
+    kzFelder.forEach((feldId) => {
+      const feld = document.getElementById(feldId);
+      this.bindEventListenerOnce(feld, 'input', (e) => {
+        e.target.value = e.target.value.toUpperCase();
+        this.handleKennzeichenSuche();
+        if (feldId === 'kzSucheBezirk' && e.target.value.length >= 3) {
+          document.getElementById('kzSucheBuchstaben')?.focus();
+        } else if (feldId === 'kzSucheBuchstaben' && e.target.value.length >= 2) {
+          document.getElementById('kzSucheNummer')?.focus();
+        }
+      }, `KzSucheInput${feldId}`);
+      this.bindEventListenerOnce(feld, 'keydown', (e) => this.handleSucheKeydown(e, 'kennzeichen'), `KzSucheKeydown${feldId}`);
+      this.bindEventListenerOnce(feld, 'blur', () => {
+        setTimeout(() => {
+          const aktivesElement = document.activeElement;
+          const aktivesId = aktivesElement ? aktivesElement.id : '';
+          if (!kzFelderSet.has(aktivesId)) {
+            this.hideVorschlaege('kennzeichen');
+          }
+        }, 100);
+      }, `KzSucheBlur${feldId}`);
+    });
+
+    document.querySelectorAll('input[name="abholung_typ"]').forEach(radio => {
+      this.bindEventListenerOnce(radio, 'change', () => this.toggleAbholungDetails(), 'AbholungTypChange');
+    });
+
+    this.bindEventListenerOnce(document.getElementById('ersatzauto'), 'change', () => this.checkErsatzautoVerfuegbarkeit(), 'ErsatzautoChange');
+    this.bindEventListenerOnce(document.getElementById('datum'), 'change', () => this.checkErsatzautoVerfuegbarkeit(), 'ErsatzautoDatumChange');
+
+    const kundenSearchInput = document.getElementById('kundenSearchInput');
+    const kundenSearchBtn = document.getElementById('kundenSearchBtn');
+    this.bindEventListenerOnce(kundenSearchBtn, 'click', () => this.searchKunden(), 'KundenSearchClick');
+    this.bindEventListenerOnce(kundenSearchInput, 'keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        this.searchKunden();
+      }
+    }, 'KundenSearchEnter');
+
+    const editTerminLadenBtn = document.getElementById('editTerminLadenBtn');
+    this.bindEventListenerOnce(editTerminLadenBtn, 'click', () => this.loadEditTermine(), 'EditTerminLaden');
+    const editTerminDatum = document.getElementById('editTerminDatum');
+    this.bindEventListenerOnce(editTerminDatum, 'change', () => this.loadEditTermine(), 'EditTerminDatum');
+    const terminEditForm = document.getElementById('terminEditForm');
+    this.bindEventListenerOnce(terminEditForm, 'submit', (e) => this.handleTerminEditSubmit(e), 'TerminEditSubmit');
+    const editTerminAbbrechenBtn = document.getElementById('editTerminAbbrechenBtn');
+    this.bindEventListenerOnce(editTerminAbbrechenBtn, 'click', () => this.resetTerminEditForm(), 'EditTerminAbbrechen');
+    const editAbholungTyp = document.getElementById('edit_abholung_typ');
+    this.bindEventListenerOnce(editAbholungTyp, 'change', () => this.toggleEditAbholungDetails(), 'EditAbholungTyp');
+    const editErsatzauto = document.getElementById('edit_ersatzauto');
+    this.bindEventListenerOnce(editErsatzauto, 'change', () => this.checkEditErsatzautoVerfuegbarkeit(), 'EditErsatzauto');
+    const editDatum = document.getElementById('edit_datum');
+    this.bindEventListenerOnce(editDatum, 'change', () => {
+      this.checkEditErsatzautoVerfuegbarkeit();
+      this.loadEditTerminAuslastungAnzeige();
+      this.updateEditSelectedDatumDisplay();
+    }, 'EditDatum');
+    const editArbeitEingabe = document.getElementById('edit_arbeitEingabe');
+    this.bindEventListenerOnce(editArbeitEingabe, 'input', () => this.updateEditZeitschaetzung(), 'EditArbeitInput');
+
+    const mehrtaegigCheckbox = document.getElementById('mehrtaegigCheckbox');
+    this.bindEventListenerOnce(mehrtaegigCheckbox, 'change', () => this.togglePhasenSection(), 'MehrtaegigChange');
+    const addPhaseBtn = document.getElementById('addPhaseBtn');
+    this.bindEventListenerOnce(addPhaseBtn, 'click', () => this.addPhase(), 'AddPhase');
+
+    const heuteTabellenBtn = document.getElementById('heuteTabellenAnsicht');
+    this.bindEventListenerOnce(heuteTabellenBtn, 'click', () => this.handleHeuteViewSwitch('tabelle'), 'HeuteTabellen');
+    const heuteKartenBtn = document.getElementById('heuteKartenAnsicht');
+    this.bindEventListenerOnce(heuteKartenBtn, 'click', () => this.handleHeuteViewSwitch('karten'), 'HeuteKarten');
+
+    const datumInput = document.getElementById('datum');
+    this.bindEventListenerOnce(datumInput, 'change', () => {
+      this.validateTerminEchtzeit();
+      this.loadTerminAuslastungAnzeige();
+    }, 'DatumEchtzeitChange');
+
+    this.setupAuslastungKalender();
+    this.setupEditAuslastungKalender();
+    this.setupEditSuchKalender();
+
+    const kmStandInput = document.getElementById('kilometerstand');
+    this.bindEventListenerOnce(kmStandInput, 'input', () => {
+      if (kmStandInput.value) {
+        kmStandInput.classList.remove('has-previous-value');
+        kmStandInput.placeholder = 'z.B. 128000';
+      }
+    }, 'KmStandInput');
+
+    const createBackupBtn = document.getElementById('createBackupBtn');
+    this.bindEventListenerOnce(createBackupBtn, 'click', () => this.handleCreateBackup(), 'CreateBackup');
+    const refreshBackupsBtn = document.getElementById('refreshBackupsBtn');
+    this.bindEventListenerOnce(refreshBackupsBtn, 'click', () => {
+      this.loadBackupStatus();
+      this.loadBackupList();
+    }, 'RefreshBackups');
+    const backupTable = document.getElementById('backupTable');
+    this.bindEventListenerOnce(backupTable, 'click', (e) => {
+      const restoreBtn = e.target.closest('[data-backup-restore]');
+      if (restoreBtn) {
+        this.handleRestoreBackup(restoreBtn.dataset.backupRestore);
+      }
+    }, 'BackupTableClick');
+
+    const uploadInput = document.getElementById('backupUploadInput');
+    const uploadName = document.getElementById('backupUploadName');
+    this.bindEventListenerOnce(uploadInput, 'change', () => {
+      const file = uploadInput.files && uploadInput.files[0];
+      if (uploadName) {
+        uploadName.textContent = file ? file.name : 'Keine Datei ausgewählt';
+      }
+    }, 'BackupUploadChange');
+    const uploadRestoreBtn = document.getElementById('uploadRestoreBtn');
+    this.bindEventListenerOnce(uploadRestoreBtn, 'click', () => this.handleUploadAndRestore(), 'UploadRestore');
+
+    document.querySelectorAll('.close').forEach((btn) => {
+      this.bindEventListenerOnce(btn, 'click', () => this.closeModal(), 'CloseModal');
+    });
+    this.bindEventListenerOnce(document.getElementById('closeDetails'), 'click', () => this.closeTerminDetails(), 'CloseDetails');
+    this.bindEventListenerOnce(document.getElementById('closeArbeitszeitenModal'), 'click', () => this.closeArbeitszeitenModal(), 'CloseArbeitszeitenModal');
+    this.bindEventListenerOnce(document.getElementById('closeTagesUebersicht'), 'click', () => this.closeTagesUebersichtModal(), 'CloseTagesUebersicht');
+    this.bindEventListenerOnce(document.getElementById('saveArbeitszeitenBtn'), 'click', () => this.saveArbeitszeitenModal(), 'SaveArbeitszeiten');
+
+    const closeSplitModal = document.getElementById('closeSplitModal');
+    this.bindEventListenerOnce(closeSplitModal, 'click', () => this.closeSplitModal(), 'CloseSplitModal');
+
+    const closeErweiterungModal = document.getElementById('closeErweiterungModal');
+    this.bindEventListenerOnce(closeErweiterungModal, 'click', () => this.closeErweiterungModal(), 'CloseErweiterungModal');
+
+    const neuEinplanenModal = document.getElementById('neuEinplanenModal');
+    this.bindEventListenerOnce(neuEinplanenModal, 'click', (e) => {
+      if (e.target === neuEinplanenModal) {
+        this.closeNeuEinplanenModal();
+      }
+    }, 'NeuEinplanenModalClick');
+
+    const erweiterungTypRadios = document.querySelectorAll('input[name="erweiterungTyp"]');
+    erweiterungTypRadios.forEach((radio) => {
+      this.bindEventListenerOnce(radio, 'change', () => this.updateErweiterungTyp(), 'ErweiterungTypChange');
+    });
+
+    const konfliktLoesungRadios = document.querySelectorAll('input[name="konfliktLoesung"]');
+    konfliktLoesungRadios.forEach((radio) => {
+      this.bindEventListenerOnce(radio, 'change', () => this.updateKonfliktLoesung(), 'KonfliktLoesungChange');
+    });
+
+    const erweiterungArbeitszeit = document.getElementById('erweiterungArbeitszeit');
+    this.bindEventListenerOnce(erweiterungArbeitszeit, 'change', () => {
+      this.updateErweiterungVorschau();
+      if (document.querySelector('input[name="erweiterungTyp"]:checked')?.value === 'anschluss') {
+        this.pruefeErweiterungsKonflikte();
+      }
+    }, 'ErweiterungArbeitszeit');
+
+    const erweiterungDatum = document.getElementById('erweiterungDatum');
+    this.bindEventListenerOnce(erweiterungDatum, 'change', () => this.updateErweiterungVorschau(), 'ErweiterungDatum');
+
+    const erweiterungMitarbeiterSelect = document.getElementById('erweiterungMitarbeiterSelect');
+    this.bindEventListenerOnce(erweiterungMitarbeiterSelect, 'change', () => this.updateErweiterungVorschau(), 'ErweiterungMitarbeiter');
+
+    const terminErweiternBtn = document.getElementById('terminErweiternBtn');
+    this.bindEventListenerOnce(terminErweiternBtn, 'click', () => this.openErweiterungModal(), 'TerminErweitern');
+
+    const modalMehrtaegigCheckbox = document.getElementById('modalMehrtaegigCheckbox');
+    this.bindEventListenerOnce(modalMehrtaegigCheckbox, 'change', () => this.toggleModalPhasenSection(), 'ModalMehrtaegig');
+    const modalAddPhaseBtn = document.getElementById('modalAddPhaseBtn');
+    this.bindEventListenerOnce(modalAddPhaseBtn, 'click', () => this.addModalPhase(), 'ModalAddPhase');
   }
 
   setupEventListeners() {
@@ -242,15 +961,7 @@ class App {
       });
     }
 
-    // Event-Delegation für Sub-Tabs (alle .sub-tabs Container)
-    document.querySelectorAll('.sub-tabs').forEach(container => {
-      container.addEventListener('click', (e) => {
-        const button = e.target.closest('.sub-tab-button');
-        if (button) {
-          this.handleSubTabChange(e);
-        }
-      });
-    });
+    this.bindSubTabDelegation();
     console.log('[Event-Delegation] Tab-Events initialisiert');
 
     // Schnellzugriff: Klick auf Header-Banner öffnet "Neuer Termin"
@@ -260,486 +971,7 @@ class App {
       headerBanner.setAttribute('title', 'Klicken für neuen Termin');
     }
 
-    document.getElementById('terminForm').addEventListener('submit', (e) => this.handleTerminSubmit(e));
-    document.getElementById('internerTerminForm').addEventListener('submit', (e) => this.handleInternerTerminSubmit(e));
-    document.getElementById('kundenForm').addEventListener('submit', (e) => this.handleKundenSubmit(e));
-    document.getElementById('zeitAnpassungForm').addEventListener('submit', (e) => this.handleZeitAnpassungSubmit(e));
-    document.getElementById('serverConfigForm').addEventListener('submit', (e) => this.handleServerConfigSubmit(e));
-    document.getElementById('werkstattSettingsForm').addEventListener('submit', (e) => this.handleWerkstattSettingsSubmit(e));
-    
-    // ChatGPT API-Key Formular
-    const chatgptApiKeyForm = document.getElementById('chatgptApiKeyForm');
-    if (chatgptApiKeyForm) {
-      chatgptApiKeyForm.addEventListener('submit', (e) => this.handleChatGPTApiKeySubmit(e));
-    }
-    
-    // ChatGPT API-Key Buttons
-    const toggleApiKeyVisibility = document.getElementById('toggleApiKeyVisibility');
-    if (toggleApiKeyVisibility) {
-      toggleApiKeyVisibility.addEventListener('click', () => this.toggleApiKeyVisibility());
-    }
-    
-    const testApiKeyBtn = document.getElementById('testApiKeyBtn');
-    if (testApiKeyBtn) {
-      testApiKeyBtn.addEventListener('click', () => this.testChatGPTApiKey());
-    }
-    
-    const deleteApiKeyBtn = document.getElementById('deleteApiKeyBtn');
-    if (deleteApiKeyBtn) {
-      deleteApiKeyBtn.addEventListener('click', () => this.deleteChatGPTApiKey());
-    }
-    
-    // KI-Funktionen Toggle
-    const kiEnabledToggle = document.getElementById('kiEnabledToggle');
-    if (kiEnabledToggle) {
-      kiEnabledToggle.addEventListener('change', (e) => this.handleKIEnabledToggle(e));
-    }
-    
-    // Wartende Aktionen Formular
-    const wartendeAktionForm = document.getElementById('wartendeAktionForm');
-    if (wartendeAktionForm) {
-      wartendeAktionForm.addEventListener('submit', (e) => this.handleWartendeAktionSubmit(e));
-    }
-    
-    // Wartende Aktionen Kundensuche
-    this.setupWartendeAktionenKundensuche();
-    
-    // Ersatzauto-Formular
-    const ersatzautoForm = document.getElementById('ersatzautoForm');
-    if (ersatzautoForm) {
-      ersatzautoForm.addEventListener('submit', (e) => this.handleErsatzautoSubmit(e));
-    }
-
-    // Neue Abwesenheiten-Formulare
-    document.getElementById('urlaubForm').addEventListener('submit', (e) => this.handleUrlaubSubmit(e));
-    document.getElementById('krankForm').addEventListener('submit', (e) => this.handleKrankSubmit(e));
-
-    const arbeitEingabe = document.getElementById('arbeitEingabe');
-    if (arbeitEingabe) {
-      arbeitEingabe.addEventListener('input', (e) => {
-        this.updateZeitschaetzung();
-        this.handleArbeitAutocomplete(e);
-        this.validateTerminEchtzeit();
-        this.handleKIAutoSuggest(e); // KI-Vorschläge beim Tippen
-      });
-      arbeitEingabe.addEventListener('keydown', (e) => this.handleArbeitKeydown(e));
-    }
-    
-    // KI-Vorschläge schließen Button
-    const kiVorschlaegeClose = document.getElementById('kiVorschlaegeClose');
-    if (kiVorschlaegeClose) {
-      kiVorschlaegeClose.addEventListener('click', () => this.hideKIVorschlaege());
-    }
-    
-    document.getElementById('filterDatum').addEventListener('change', () => {
-      this.loadTermine();
-      this.updateZeitverwaltungDatumAnzeige();
-    });
-    document.getElementById('alleTermineBtn').addEventListener('click', () => this.showAllTermine());
-    document.getElementById('auslastungDatum').addEventListener('change', () => this.loadAuslastung());
-    
-    // Drag & Drop Planung Datum
-    const dragDropDatum = document.getElementById('auslastungDragDropDatum');
-    if (dragDropDatum) {
-      dragDropDatum.addEventListener('change', () => {
-        this.updatePlanungWocheInfo();
-        this.loadAuslastungDragDrop();
-      });
-    }
-
-    // Planung Navigation Buttons
-    const planungPrevTag = document.getElementById('planungPrevTag');
-    const planungNextTag = document.getElementById('planungNextTag');
-    const planungPrevWoche = document.getElementById('planungPrevWoche');
-    const planungNextWoche = document.getElementById('planungNextWoche');
-    const planungHeuteBtn = document.getElementById('planungHeuteBtn');
-    
-    if (planungPrevTag) planungPrevTag.addEventListener('click', () => this.navigatePlanung(-1, 'day'));
-    if (planungNextTag) planungNextTag.addEventListener('click', () => this.navigatePlanung(1, 'day'));
-    if (planungPrevWoche) planungPrevWoche.addEventListener('click', () => this.navigatePlanung(-7, 'week'));
-    if (planungNextWoche) planungNextWoche.addEventListener('click', () => this.navigatePlanung(7, 'week'));
-    if (planungHeuteBtn) planungHeuteBtn.addEventListener('click', () => this.goToPlanungHeute());
-
-    // Auslastung Navigation Buttons
-    document.getElementById('auslastungPrevTag').addEventListener('click', () => this.navigateAuslastung(-1, 'day'));
-    document.getElementById('auslastungNextTag').addEventListener('click', () => this.navigateAuslastung(1, 'day'));
-    document.getElementById('auslastungPrevWoche').addEventListener('click', () => this.navigateAuslastung(-7, 'week'));
-    document.getElementById('auslastungNextWoche').addEventListener('click', () => this.navigateAuslastung(7, 'week'));
-    document.getElementById('auslastungHeuteBtn').addEventListener('click', () => this.goToAuslastungHeute());
-
-    // Zeitverwaltung Navigation Buttons
-    document.getElementById('prevDayBtn').addEventListener('click', () => this.navigateZeitverwaltung(-1, 'day'));
-    document.getElementById('nextDayBtn').addEventListener('click', () => this.navigateZeitverwaltung(1, 'day'));
-    document.getElementById('prevWeekBtn').addEventListener('click', () => this.navigateZeitverwaltung(-7, 'week'));
-    document.getElementById('nextWeekBtn').addEventListener('click', () => this.navigateZeitverwaltung(7, 'week'));
-    document.getElementById('todayBtn').addEventListener('click', () => this.goToToday());
-    document.getElementById('morgenBtn').addEventListener('click', () => this.goToMorgen());
-    document.getElementById('wocheBtn').addEventListener('click', () => this.showWocheTermine());
-    document.getElementById('offeneTermineBtn').addEventListener('click', () => this.showOffeneTermine());
-    document.getElementById('schwebendeTermineBtn').addEventListener('click', () => this.showSchwebendeTermine());
-    
-    // Schwebende Termine Anzeige klickbar machen
-    const schwebendDisplay = document.getElementById('schwebendDisplay');
-    if (schwebendDisplay) {
-      schwebendDisplay.addEventListener('click', () => this.showSchwebendeTermine());
-    }
-
-    // Event-Listener für 7-Tage-Limit bei Krankmeldungen
-    document.getElementById('krankVonDatum').addEventListener('change', () => this.validateKrankDatum());
-    document.getElementById('krankBisDatum').addEventListener('change', () => this.validateKrankDatum());
-    document.getElementById('importBtn').addEventListener('click', () => this.importKunden());
-    document.getElementById('testConnectionBtn').addEventListener('click', () => this.testConnection());
-    
-    // KI-Assistent Event-Listener
-    this.setupKIAssistentEventListeners();
-    
-    // Teile-Bestellen Filter Event-Listener
-    this.setupTeileBestellenEventListeners();
-    
-    // Excel Import Event-Listener
-    const excelFileInput = document.getElementById('excelFileInput');
-    if (excelFileInput) {
-      excelFileInput.addEventListener('change', (e) => this.handleExcelFileSelect(e));
-    }
-    const confirmImportBtn = document.getElementById('confirmImportBtn');
-    if (confirmImportBtn) {
-      confirmImportBtn.addEventListener('click', () => this.confirmExcelImport());
-    }
-    const cancelImportBtn = document.getElementById('cancelImportBtn');
-    if (cancelImportBtn) {
-      cancelImportBtn.addEventListener('click', () => this.cancelExcelImport());
-    }
-
-    // Bringzeit-Prüfung Event-Listener
-    const bringZeitInputNew = document.getElementById('bring_zeit');
-    const datumInputForBringzeit = document.getElementById('datum');
-    if (bringZeitInputNew) {
-      bringZeitInputNew.addEventListener('blur', () => this.pruefeBringzeitUeberschneidung('bring_zeit', 'datum', 'bringzeitHinweis'));
-      bringZeitInputNew.addEventListener('change', () => this.pruefeBringzeitUeberschneidung('bring_zeit', 'datum', 'bringzeitHinweis'));
-    }
-    if (datumInputForBringzeit) {
-      datumInputForBringzeit.addEventListener('change', () => {
-        // Prüfe Bringzeit wenn sich das Datum ändert und Bringzeit bereits eingegeben ist
-        const bringzeit = document.getElementById('bring_zeit')?.value;
-        if (bringzeit && bringzeit.match(/^\d{2}:\d{2}$/)) {
-          this.pruefeBringzeitUeberschneidung('bring_zeit', 'datum', 'bringzeitHinweis');
-        }
-      });
-    }
-    
-    // Bringzeit-Prüfung für Edit-Modal
-    const editBringZeitInputNew = document.getElementById('edit_bring_zeit');
-    const editDatumInputNew = document.getElementById('edit_datum');
-    if (editBringZeitInputNew) {
-      editBringZeitInputNew.addEventListener('blur', () => this.pruefeBringzeitUeberschneidung('edit_bring_zeit', 'edit_datum', 'editBringzeitHinweis', this.editingTerminId));
-      editBringZeitInputNew.addEventListener('change', () => this.pruefeBringzeitUeberschneidung('edit_bring_zeit', 'edit_datum', 'editBringzeitHinweis', this.editingTerminId));
-    }
-    if (editDatumInputNew) {
-      editDatumInputNew.addEventListener('change', () => {
-        const bringzeit = document.getElementById('edit_bring_zeit')?.value;
-        if (bringzeit && bringzeit.match(/^\d{2}:\d{2}$/)) {
-          this.pruefeBringzeitUeberschneidung('edit_bring_zeit', 'edit_datum', 'editBringzeitHinweis', this.editingTerminId);
-        }
-      });
-    }
-    
-    // Fahrzeug-Auswahl Modal Event-Listener
-    const closeFahrzeugAuswahl = document.getElementById('closeFahrzeugAuswahl');
-    if (closeFahrzeugAuswahl) {
-      closeFahrzeugAuswahl.addEventListener('click', () => this.closeFahrzeugAuswahlModal());
-    }
-    const fahrzeugAuswahlZurueck = document.getElementById('fahrzeugAuswahlZurueck');
-    if (fahrzeugAuswahlZurueck) {
-      fahrzeugAuswahlZurueck.addEventListener('click', () => this.closeFahrzeugAuswahlModal());
-    }
-    
-    // Fahrzeugverwaltung Modal Event-Listener
-    const closeFahrzeugVerwaltung = document.getElementById('closeFahrzeugVerwaltung');
-    if (closeFahrzeugVerwaltung) {
-      closeFahrzeugVerwaltung.addEventListener('click', () => this.closeFahrzeugVerwaltungModal());
-    }
-    const fahrzeugVerwaltungSchliessen = document.getElementById('fahrzeugVerwaltungSchliessen');
-    if (fahrzeugVerwaltungSchliessen) {
-      fahrzeugVerwaltungSchliessen.addEventListener('click', () => this.closeFahrzeugVerwaltungModal());
-    }
-    const fahrzeugHinzufuegenBtn = document.getElementById('fahrzeugHinzufuegenBtn');
-    if (fahrzeugHinzufuegenBtn) {
-      fahrzeugHinzufuegenBtn.addEventListener('click', () => this.addFahrzeugFromModal());
-    }
-    
-    // Kundenliste-Suche Event-Listener
-    const kundenListeSuche = document.getElementById('kundenListeSuche');
-    if (kundenListeSuche) {
-      kundenListeSuche.addEventListener('input', () => this.filterKundenListe());
-      kundenListeSuche.addEventListener('keydown', (e) => {
-        if (e.key === 'Escape') {
-          this.clearKundenSuche();
-        }
-      });
-    }
-    const kundenSucheClearBtn = document.getElementById('kundenSucheClearBtn');
-    if (kundenSucheClearBtn) {
-      kundenSucheClearBtn.addEventListener('click', () => this.clearKundenSuche());
-    }
-    
-    // Neue verbesserte Kundensuche mit getrennten Feldern
-    const terminNameSuche = document.getElementById('terminNameSuche');
-    if (terminNameSuche) {
-      terminNameSuche.addEventListener('input', () => this.handleNameSuche());
-      terminNameSuche.addEventListener('keydown', (e) => this.handleSucheKeydown(e, 'name'));
-      terminNameSuche.addEventListener('blur', () => setTimeout(() => this.hideVorschlaege('name'), 350));
-    }
-    
-    // Kennzeichen-Suche mit 3 Feldern
-    const kzFelder = ['kzSucheBezirk', 'kzSucheBuchstaben', 'kzSucheNummer'];
-    const kzFelderSet = new Set(kzFelder);
-    kzFelder.forEach(feldId => {
-      const feld = document.getElementById(feldId);
-      if (feld) {
-        feld.addEventListener('input', (e) => {
-          e.target.value = e.target.value.toUpperCase();
-          this.handleKennzeichenSuche();
-          // Auto-Tab zum nächsten Feld
-          if (feldId === 'kzSucheBezirk' && e.target.value.length >= 3) {
-            document.getElementById('kzSucheBuchstaben').focus();
-          } else if (feldId === 'kzSucheBuchstaben' && e.target.value.length >= 2) {
-            document.getElementById('kzSucheNummer').focus();
-          }
-        });
-        feld.addEventListener('keydown', (e) => this.handleSucheKeydown(e, 'kennzeichen'));
-        // Blur nur verstecken wenn Fokus nicht auf einem anderen KZ-Feld liegt
-        feld.addEventListener('blur', () => {
-          setTimeout(() => {
-            const aktivesElement = document.activeElement;
-            const aktivesId = aktivesElement ? aktivesElement.id : '';
-            // Nur verstecken wenn Fokus NICHT auf einem anderen KZ-Feld liegt
-            if (!kzFelderSet.has(aktivesId)) {
-              this.hideVorschlaege('kennzeichen');
-            }
-          }, 100);
-        });
-      }
-    });
-
-    // Service-Art Radio-Buttons (Neuer Termin)
-    document.querySelectorAll('input[name="abholung_typ"]').forEach(radio => {
-      radio.addEventListener('change', () => this.toggleAbholungDetails());
-    });
-
-    // Ersatzauto Verfügbarkeit prüfen
-    document.getElementById('ersatzauto').addEventListener('change', () => this.checkErsatzautoVerfuegbarkeit());
-    document.getElementById('datum').addEventListener('change', () => this.checkErsatzautoVerfuegbarkeit());
-
-    // Kunden-Suche Event-Listener
-    const kundenSearchInput = document.getElementById('kundenSearchInput');
-    const kundenSearchBtn = document.getElementById('kundenSearchBtn');
-    if (kundenSearchInput && kundenSearchBtn) {
-      kundenSearchBtn.addEventListener('click', () => this.searchKunden());
-      kundenSearchInput.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter') {
-          e.preventDefault();
-          this.searchKunden();
-        }
-      });
-    }
-
-    // Termin bearbeiten Event-Listener
-    const editTerminLadenBtn = document.getElementById('editTerminLadenBtn');
-    if (editTerminLadenBtn) {
-      editTerminLadenBtn.addEventListener('click', () => this.loadEditTermine());
-    }
-    const editTerminDatum = document.getElementById('editTerminDatum');
-    if (editTerminDatum) {
-      editTerminDatum.addEventListener('change', () => this.loadEditTermine());
-    }
-    // Event-Listener für editTerminAuswahl entfernt - jetzt klickbare Liste mit inline-Handlern
-    const terminEditForm = document.getElementById('terminEditForm');
-    if (terminEditForm) {
-      terminEditForm.addEventListener('submit', (e) => this.handleTerminEditSubmit(e));
-    }
-    const editTerminAbbrechenBtn = document.getElementById('editTerminAbbrechenBtn');
-    if (editTerminAbbrechenBtn) {
-      editTerminAbbrechenBtn.addEventListener('click', () => this.resetTerminEditForm());
-    }
-    const editAbholungTyp = document.getElementById('edit_abholung_typ');
-    if (editAbholungTyp) {
-      editAbholungTyp.addEventListener('change', () => this.toggleEditAbholungDetails());
-    }
-    const editErsatzauto = document.getElementById('edit_ersatzauto');
-    if (editErsatzauto) {
-      editErsatzauto.addEventListener('change', () => this.checkEditErsatzautoVerfuegbarkeit());
-    }
-    const editDatum = document.getElementById('edit_datum');
-    if (editDatum) {
-      editDatum.addEventListener('change', () => {
-        this.checkEditErsatzautoVerfuegbarkeit();
-        this.loadEditTerminAuslastungAnzeige();
-        this.updateEditSelectedDatumDisplay();
-      });
-    }
-    const editArbeitEingabe = document.getElementById('edit_arbeitEingabe');
-    if (editArbeitEingabe) {
-      editArbeitEingabe.addEventListener('input', () => this.updateEditZeitschaetzung());
-    }
-
-    // Phasen-System Event-Listener
-    const mehrtaegigCheckbox = document.getElementById('mehrtaegigCheckbox');
-    if (mehrtaegigCheckbox) {
-      mehrtaegigCheckbox.addEventListener('change', () => this.togglePhasenSection());
-    }
-    const addPhaseBtn = document.getElementById('addPhaseBtn');
-    if (addPhaseBtn) {
-      addPhaseBtn.addEventListener('click', () => this.addPhase());
-    }
-
-    const heuteTabellenBtn = document.getElementById('heuteTabellenAnsicht');
-    if (heuteTabellenBtn) {
-      heuteTabellenBtn.addEventListener('click', () => this.handleHeuteViewSwitch('tabelle'));
-    }
-    const heuteKartenBtn = document.getElementById('heuteKartenAnsicht');
-    if (heuteKartenBtn) {
-      heuteKartenBtn.addEventListener('click', () => this.handleHeuteViewSwitch('karten'));
-    }
-
-    // Echtzeit-Validierung für Termin-Formular
-    const datumInput = document.getElementById('datum');
-    if (datumInput) {
-      datumInput.addEventListener('change', () => {
-        this.validateTerminEchtzeit();
-        this.loadTerminAuslastungAnzeige();
-      });
-    }
-
-    // Kalender-Picker Event-Listener
-    this.setupAuslastungKalender();
-    this.setupEditAuslastungKalender();
-    this.setupEditSuchKalender();
-
-    // Entferne Placeholder-Styling wenn Benutzer KM-Stand eingibt
-    const kmStandInput = document.getElementById('kilometerstand');
-    if (kmStandInput) {
-      kmStandInput.addEventListener('input', () => {
-        if (kmStandInput.value) {
-          kmStandInput.classList.remove('has-previous-value');
-          kmStandInput.placeholder = 'z.B. 128000';
-        }
-      });
-    }
-
-    const createBackupBtn = document.getElementById('createBackupBtn');
-    if (createBackupBtn) {
-      createBackupBtn.addEventListener('click', () => this.handleCreateBackup());
-    }
-    const refreshBackupsBtn = document.getElementById('refreshBackupsBtn');
-    if (refreshBackupsBtn) {
-      refreshBackupsBtn.addEventListener('click', () => {
-        this.loadBackupStatus();
-        this.loadBackupList();
-      });
-    }
-    const backupTable = document.getElementById('backupTable');
-    if (backupTable) {
-      backupTable.addEventListener('click', (e) => {
-        const restoreBtn = e.target.closest('[data-backup-restore]');
-        if (restoreBtn) {
-          this.handleRestoreBackup(restoreBtn.dataset.backupRestore);
-        }
-      });
-    }
-
-    const uploadInput = document.getElementById('backupUploadInput');
-    const uploadName = document.getElementById('backupUploadName');
-    if (uploadInput && uploadName) {
-      uploadInput.addEventListener('change', () => {
-        const file = uploadInput.files && uploadInput.files[0];
-        uploadName.textContent = file ? file.name : 'Keine Datei ausgewählt';
-      });
-    }
-    const uploadRestoreBtn = document.getElementById('uploadRestoreBtn');
-    if (uploadRestoreBtn && uploadInput) {
-      uploadRestoreBtn.addEventListener('click', () => this.handleUploadAndRestore());
-    }
-
-    document.querySelector('.close').addEventListener('click', () => this.closeModal());
-    document.getElementById('closeDetails').addEventListener('click', () => this.closeTerminDetails());
-    document.getElementById('closeArbeitszeitenModal').addEventListener('click', () => this.closeArbeitszeitenModal());
-    document.getElementById('closeTagesUebersicht').addEventListener('click', () => this.closeTagesUebersichtModal());
-    document.getElementById('saveArbeitszeitenBtn').addEventListener('click', () => this.saveArbeitszeitenModal());
-
-    // Split-Modal Event-Listener
-    const closeSplitModal = document.getElementById('closeSplitModal');
-    if (closeSplitModal) {
-      closeSplitModal.addEventListener('click', () => this.closeSplitModal());
-    }
-
-    // Erweiterungs-Modal Event-Listener
-    const closeErweiterungModal = document.getElementById('closeErweiterungModal');
-    if (closeErweiterungModal) {
-      closeErweiterungModal.addEventListener('click', () => this.closeErweiterungModal());
-    }
-
-    // Neu-Einplanen Modal - Klick außerhalb schließt Modal
-    const neuEinplanenModal = document.getElementById('neuEinplanenModal');
-    if (neuEinplanenModal) {
-      neuEinplanenModal.addEventListener('click', (e) => {
-        if (e.target === neuEinplanenModal) {
-          this.closeNeuEinplanenModal();
-        }
-      });
-    }
-
-    // Erweiterungs-Typ Radio-Buttons
-    const erweiterungTypRadios = document.querySelectorAll('input[name="erweiterungTyp"]');
-    erweiterungTypRadios.forEach(radio => {
-      radio.addEventListener('change', () => this.updateErweiterungTyp());
-    });
-
-    // Erweiterungs-Konfliktlösung Radio-Buttons
-    const konfliktLoesungRadios = document.querySelectorAll('input[name="konfliktLoesung"]');
-    konfliktLoesungRadios.forEach(radio => {
-      radio.addEventListener('change', () => this.updateKonfliktLoesung());
-    });
-
-    // Erweiterungs-Arbeitszeit-Feld
-    const erweiterungArbeitszeit = document.getElementById('erweiterungArbeitszeit');
-    if (erweiterungArbeitszeit) {
-      erweiterungArbeitszeit.addEventListener('change', () => {
-        this.updateErweiterungVorschau();
-        if (document.querySelector('input[name="erweiterungTyp"]:checked')?.value === 'anschluss') {
-          this.pruefeErweiterungsKonflikte();
-        }
-      });
-    }
-
-    // Erweiterungs-Datum-Feld
-    const erweiterungDatum = document.getElementById('erweiterungDatum');
-    if (erweiterungDatum) {
-      erweiterungDatum.addEventListener('change', () => this.updateErweiterungVorschau());
-    }
-
-    // Erweiterungs-Mitarbeiter-Select
-    const erweiterungMitarbeiterSelect = document.getElementById('erweiterungMitarbeiterSelect');
-    if (erweiterungMitarbeiterSelect) {
-      erweiterungMitarbeiterSelect.addEventListener('change', () => this.updateErweiterungVorschau());
-    }
-
-    // Erweiterungs-Speichern-Button - NICHT hier, wird über onclick im HTML aufgerufen
-
-    // Auftrag-erweitern Button im Termin-Details-Modal
-    const terminErweiternBtn = document.getElementById('terminErweiternBtn');
-    if (terminErweiternBtn) {
-      terminErweiternBtn.addEventListener('click', () => this.openErweiterungModal());
-    }
-
-    // Modal Phasen Event-Listener
-    const modalMehrtaegigCheckbox = document.getElementById('modalMehrtaegigCheckbox');
-    if (modalMehrtaegigCheckbox) {
-      modalMehrtaegigCheckbox.addEventListener('change', () => this.toggleModalPhasenSection());
-    }
-    const modalAddPhaseBtn = document.getElementById('modalAddPhaseBtn');
-    if (modalAddPhaseBtn) {
-      modalAddPhaseBtn.addEventListener('click', () => this.addModalPhase());
-    }
+    this.bindLazyEventListeners();
 
     window.addEventListener('click', (event) => {
       const modal = document.getElementById('modal');
@@ -785,6 +1017,10 @@ class App {
     const bringzeitGroup = document.getElementById('bringzeitGroup');
     const abholzeitGroup = document.getElementById('abholzeitGroup');
     const kontaktOptionGroup = document.getElementById('kontaktOptionGroup');
+
+    if (!detailsGroup || !zeitRow || !bringzeitGroup || !abholzeitGroup || !kontaktOptionGroup) {
+      return;
+    }
 
     // Details anzeigen bei hol_bring, bringen oder ruecksprache
     const showDetails = abholungTyp === 'hol_bring' || abholungTyp === 'ruecksprache' || abholungTyp === 'bringen';
@@ -2282,52 +2518,25 @@ class App {
 
   // === SCHNELLZUGRIFF: Navigiert direkt zum "Neuer Termin" Formular ===
   navigateToNeuerTermin() {
-    // 1. Zum Termine-Tab wechseln (mit display toggle für Performance-Optimierung)
-    const contents = this.tabCache.contents || document.querySelectorAll('.tab-content');
-    for (let i = 0; i < contents.length; i++) {
-      contents[i].style.display = 'none';
-      contents[i].classList.remove('active');
-    }
+    this.switchToTab('termine');
 
-    const buttons = this.tabCache.buttons || document.querySelectorAll('.tab-button');
-    for (let i = 0; i < buttons.length; i++) {
-      buttons[i].classList.remove('active');
-    }
+    setTimeout(() => {
+      this.ensureTabContent('termine');
+      const termineTab = this.getCachedElement('termine');
+      if (!termineTab) return;
 
-    const termineTab = this.getCachedElement('termine');
-    const termineTabButton = document.querySelector('.tab-button[data-tab="termine"]');
-
-    if (termineTab && termineTabButton) {
-      termineTab.style.display = 'block';
-      termineTab.classList.add('active');
-      termineTabButton.classList.add('active');
-
-      // 2. Zum "Neuer Termin" Sub-Tab wechseln
-      termineTab.querySelectorAll('.sub-tab-content').forEach(content => {
-        content.style.display = 'none';
-        content.classList.remove('active');
-      });
-      termineTab.querySelectorAll('.sub-tab-button').forEach(btn => {
-        btn.classList.remove('active');
-      });
-
-      const neuerTerminContent = this.getCachedElement('neuerTermin');
-      const neuerTerminButton = termineTab.querySelector('.sub-tab-button[data-subtab="neuerTermin"]');
-
-      if (neuerTerminContent && neuerTerminButton) {
-        neuerTerminContent.style.display = 'block';
-        neuerTerminContent.classList.add('active');
-        neuerTerminButton.classList.add('active');
+      const subTabsContainer = termineTab.querySelector('.sub-tabs');
+      if (subTabsContainer) {
+        this.setActiveSubTabInContainer(subTabsContainer, 'neuerTermin');
+      } else if (window.switchSubTab) {
+        window.switchSubTab('neuerTermin');
       }
 
-      // 3. Fokus auf das erste Eingabefeld setzen
-      setTimeout(() => {
-        const kundenSuche = document.getElementById('terminNameSuche');
-        if (kundenSuche) {
-          kundenSuche.focus();
-        }
-      }, 100);
-    }
+      const kundenSuche = document.getElementById('terminNameSuche');
+      if (kundenSuche) {
+        kundenSuche.focus();
+      }
+    }, 0);
   }
 
   handleTabChange(e) {
@@ -2337,6 +2546,17 @@ class App {
 
     const tabName = button.dataset.tab;
     if (!tabName) return;
+
+    const previousTab = this.currentTab;
+    const isSameTab = previousTab === tabName;
+    if (previousTab && !isSameTab) {
+      this.unloadTabContent(previousTab);
+    }
+
+    this.ensureTabContent(tabName);
+    if (!isSameTab) {
+      this.restoreTabSubTabs(tabName);
+    }
 
     // === Performance-Optimierung: Display-Toggle mit Cache ===
     // Alle Tab-Inhalte verstecken (mit cached NodeList)
@@ -2363,9 +2583,6 @@ class App {
     // Bei Tab-Wechsel: Alle schwebenden Elemente verstecken
     this.hideAllFloatingElements();
     
-    // Bei JEDEM Tab-Wechsel: Sub-Tabs im "termine" Container zurücksetzen
-    this.resetTermineSubTabs();
-    
     // Stoppe Timeline "Jetzt"-Linie Interval wenn nicht auf Planungs-Tab oder Auslastungs-Tab
     if (tabName !== 'auslastung-dragdrop' && tabName !== 'auslastung' && this.nowLineInterval) {
       clearInterval(this.nowLineInterval);
@@ -2373,12 +2590,19 @@ class App {
     }
 
     if (tabName === 'termine') {
+      const hasSavedState = this.tabStateStore.has(tabName);
       // Formular komplett zurücksetzen beim Öffnen des Termine-Tabs
-      this.resetTerminForm();
-      this.setInternerTerminTodayDate();
-      this.loadInternerTerminMitarbeiter();
+      if (!hasSavedState) {
+        this.resetTerminForm();
+        this.resetTermineSubTabs();
+      }
       this.loadTerminAuslastungAnzeige();
+      this.loadArbeitszeiten();
     } else if (tabName === 'auslastung') {
+      const auslastungDatum = document.getElementById('auslastungDatum');
+      if (auslastungDatum && !auslastungDatum.value) {
+        auslastungDatum.value = this.formatDateLocal(this.getToday());
+      }
       // Immer neu laden um Synchronisation mit Planungs-Tab sicherzustellen
       this.loadAuslastung();
       this.auslastungNeedsRefresh = false;
@@ -2401,27 +2625,9 @@ class App {
       this.loadHeuteTermine();
     } else if (tabName === 'einstellungen') {
       this.loadWerkstattSettings();
-      const backupTabButton = document.querySelector('#einstellungen .sub-tab-button[data-subtab="settingsBackup"]');
-      if (backupTabButton && backupTabButton.classList.contains('active')) {
-        this.loadBackupStatus();
-        this.loadBackupList();
-      }
-      const kundenTabButton = document.querySelector('#einstellungen .sub-tab-button[data-subtab="settingsKunden"]');
-      if (kundenTabButton && kundenTabButton.classList.contains('active')) {
-        this.loadKunden();
-      }
     } else if (tabName === 'zeitverwaltung') {
+      this.loadArbeitszeiten();
       this.loadTermineZeiten();
-
-      // Lade Mitarbeiter/Lehrlinge und Abwesenheiten-Daten wenn der Mitarbeiter-Sub-Tab aktiv ist
-      const mitarbeiterTabButton = document.querySelector('#zeitverwaltung .sub-tab-button[data-subtab="mitarbeiter"]');
-      if (mitarbeiterTabButton && mitarbeiterTabButton.classList.contains('active')) {
-        this.loadWerkstattSettings();
-        this.loadMitarbeiter();
-        this.loadLehrlinge();
-        this.loadAbwesenheitenPersonen();
-        this.loadUrlaubListe();
-      }
     } else if (tabName === 'papierkorb') {
       this.loadPapierkorb();
     } else if (tabName === 'kunden') {
@@ -2433,49 +2639,15 @@ class App {
     } else if (tabName === 'intern') {
       this.initInternTab();
     }
+
+    if (!isSameTab) {
+      this.triggerActiveSubTabLoads(tabName);
+      this.restoreTabFields(tabName);
+    }
+    this.currentTab = tabName;
   }
 
-  async handleSubTabChange(e) {
-    e.preventDefault();
-    e.stopPropagation();
-
-    // Finde den Button, auch wenn auf ein inneres Element geklickt wurde
-    const button = e.target.closest('.sub-tab-button');
-    if (!button) return;
-
-    const subTabName = button.dataset.subtab;
-    if (!subTabName) return;
-
-    // Finde den direkten Parent-Container der sub-tabs
-    const subTabsContainer = button.closest('.sub-tabs');
-    if (!subTabsContainer) return;
-
-    // === Performance-Optimierung: Display-Toggle mit Cache ===
-    // Hole alle Subtab-Buttons aus dem Container (cached per Container)
-    const subTabButtons = subTabsContainer.querySelectorAll('.sub-tab-button');
-
-    // Verstecke alle zugehörigen Sub-Tab-Contents und deaktiviere Buttons
-    for (let i = 0; i < subTabButtons.length; i++) {
-      const btn = subTabButtons[i];
-      const name = btn.dataset.subtab;
-      btn.classList.remove('active');
-      if (name) {
-        const content = this.getCachedElement(name);
-        if (content) {
-          content.style.display = 'none';
-          content.classList.remove('active');
-        }
-      }
-    }
-
-    // Aktiviere den ausgewählten Tab (mit Cache)
-    const targetContent = this.getCachedElement(subTabName);
-    if (targetContent) {
-      targetContent.style.display = 'block';
-      targetContent.classList.add('active');
-    }
-    button.classList.add('active');
-
+  handleSubTabActivation(subTabName) {
     if (subTabName === 'mitarbeiter') {
       this.loadWerkstattSettings();
       this.loadMitarbeiter();
@@ -2537,6 +2709,63 @@ class App {
     }
   }
 
+  triggerActiveSubTabLoads(tabName) {
+    const container = this.getCachedElement(tabName);
+    if (!container) return;
+
+    const activeButtons = container.querySelectorAll('.sub-tabs .sub-tab-button.active');
+    const handled = new Set();
+    activeButtons.forEach(button => {
+      const name = button.dataset.subtab;
+      if (!name || handled.has(name)) return;
+      handled.add(name);
+      this.handleSubTabActivation(name);
+    });
+  }
+
+  async handleSubTabChange(e) {
+    e.preventDefault();
+    e.stopPropagation();
+
+    // Finde den Button, auch wenn auf ein inneres Element geklickt wurde
+    const button = e.target.closest('.sub-tab-button');
+    if (!button) return;
+
+    const subTabName = button.dataset.subtab;
+    if (!subTabName) return;
+
+    // Finde den direkten Parent-Container der sub-tabs
+    const subTabsContainer = button.closest('.sub-tabs');
+    if (!subTabsContainer) return;
+
+    // === Performance-Optimierung: Display-Toggle mit Cache ===
+    // Hole alle Subtab-Buttons aus dem Container (cached per Container)
+    const subTabButtons = subTabsContainer.querySelectorAll('.sub-tab-button');
+
+    // Verstecke alle zugehörigen Sub-Tab-Contents und deaktiviere Buttons
+    for (let i = 0; i < subTabButtons.length; i++) {
+      const btn = subTabButtons[i];
+      const name = btn.dataset.subtab;
+      btn.classList.remove('active');
+      if (name) {
+        const content = this.getCachedElement(name);
+        if (content) {
+          content.style.display = 'none';
+          content.classList.remove('active');
+        }
+      }
+    }
+
+    // Aktiviere den ausgewählten Tab (mit Cache)
+    const targetContent = this.getCachedElement(subTabName);
+    if (targetContent) {
+      targetContent.style.display = 'block';
+      targetContent.classList.add('active');
+    }
+    button.classList.add('active');
+    this.handleSubTabActivation(subTabName);
+  }
+
   switchToTab(tabName) {
     const tabButton = document.querySelector(`[data-tab="${tabName}"]`);
     if (tabButton) {
@@ -2552,20 +2781,11 @@ class App {
     this.loadTermineCache().catch(err => {
       console.error('loadTermineCache failed:', err);
     });
-    this.loadTermine().catch(err => {
-      console.error('loadTermine failed:', err);
-    });
-    this.loadArbeitszeiten().catch(err => {
-      console.error('loadArbeitszeiten failed:', err);
-    });
     this.loadDashboard().catch(err => {
       console.error('loadDashboard failed:', err);
     });
     this.loadWerkstattSettings().catch(err => {
       console.error('loadWerkstattSettings failed:', err);
-    });
-    this.loadTermineZeiten().catch(err => {
-      console.error('loadTermineZeiten failed:', err);
     });
     this.heuteTermine = [];
   }
@@ -2585,6 +2805,7 @@ class App {
     try {
       const kunden = await KundenService.getAll();
       this.kundenCache = kunden;
+      this.buildFuzzySearchIndex();
 
       const kundenListe = document.getElementById('kundenListe');
       if (kundenListe) {
@@ -3299,82 +3520,87 @@ class App {
       this.arbeitszeiten = arbeitszeiten;
 
       const arbeitListe = document.getElementById('arbeitListe');
-      arbeitListe.innerHTML = '';
-      arbeitszeiten.forEach(arbeit => {
-        const option = document.createElement('option');
-        option.value = arbeit.bezeichnung;
-        arbeitListe.appendChild(option);
-        
-        // Auch Aliase als Optionen hinzufügen
-        if (arbeit.aliase) {
-          arbeit.aliase.split(',').forEach(alias => {
-            const aliasOption = document.createElement('option');
-            aliasOption.value = alias.trim();
-            arbeitListe.appendChild(aliasOption);
-          });
-        }
-      });
-
-      const tbody = document.getElementById('arbeitszeitenTable').getElementsByTagName('tbody')[0];
-      tbody.innerHTML = '';
-      arbeitszeiten.forEach(arbeit => {
-        const row = tbody.insertRow();
-        const stundenWert = (arbeit.standard_minuten / 60).toFixed(2);
-        row.innerHTML = `
-          <td>
-            <input type="text"
-                   id="bezeichnung_${arbeit.id}"
-                   data-id="${arbeit.id}"
-                   value="${arbeit.bezeichnung}"
-                   style="width: 100%; min-width: 150px; padding: 8px;">
-          </td>
-          <td>
-            <input type="text"
-                   id="aliase_${arbeit.id}"
-                   data-id="${arbeit.id}"
-                   value="${arbeit.aliase || ''}"
-                   placeholder="z.B. Service, DS, Durchsicht"
-                   title="Mehrere Suchbegriffe durch Komma getrennt"
-                   style="width: 100%; min-width: 200px; padding: 8px;">
-          </td>
-          <td>
-            <input type="number"
-                   id="zeit_${arbeit.id}"
-                   data-id="${arbeit.id}"
-                   value="${stundenWert}"
-                   min="0.01"
-                   step="0.25"
-                   placeholder="z.B. 0.25"
-                   title="Eingabe in Stunden (z.B. 0.25 = 15 Min, 0.5 = 30 Min, 1 = 60 Min)"
-                   style="width: 120px; padding: 8px;">
-          </td>
-          <td>
-            <button class="btn btn-danger delete-arbeitszeit-btn" data-id="${arbeit.id}" style="padding: 6px 12px; font-size: 14px;">🗑️ Löschen</button>
-          </td>
-        `;
-      });
-
-      // Event-Listener für alle Löschen-Buttons hinzufügen
-      // Entferne zuerst alle vorhandenen Listener, um Duplikate zu vermeiden
-      tbody.querySelectorAll('.delete-arbeitszeit-btn').forEach(btn => {
-        // Klone den Button, um alle Event-Listener zu entfernen
-        const newBtn = btn.cloneNode(true);
-        btn.parentNode.replaceChild(newBtn, btn);
-        
-        newBtn.addEventListener('click', (e) => {
-          e.preventDefault();
-          e.stopPropagation();
+      if (arbeitListe) {
+        arbeitListe.innerHTML = '';
+        arbeitszeiten.forEach(arbeit => {
+          const option = document.createElement('option');
+          option.value = arbeit.bezeichnung;
+          arbeitListe.appendChild(option);
           
-          const idStr = newBtn.dataset.id;
-          const id = parseInt(idStr, 10);
-          
-          if (Number.isFinite(id) && id > 0) {
-            this.deleteArbeitszeit(id);
-          } else {
-            alert('Fehler: Ungültige ID - ' + idStr);
+          // Auch Aliase als Optionen hinzufügen
+          if (arbeit.aliase) {
+            arbeit.aliase.split(',').forEach(alias => {
+              const aliasOption = document.createElement('option');
+              aliasOption.value = alias.trim();
+              arbeitListe.appendChild(aliasOption);
+            });
           }
         });
-      });
+      }
+
+      const arbeitszeitenTable = document.getElementById('arbeitszeitenTable');
+      if (arbeitszeitenTable) {
+        const tbody = arbeitszeitenTable.getElementsByTagName('tbody')[0];
+        tbody.innerHTML = '';
+        arbeitszeiten.forEach(arbeit => {
+          const row = tbody.insertRow();
+          const stundenWert = (arbeit.standard_minuten / 60).toFixed(2);
+          row.innerHTML = `
+            <td>
+              <input type="text"
+                     id="bezeichnung_${arbeit.id}"
+                     data-id="${arbeit.id}"
+                     value="${arbeit.bezeichnung}"
+                     style="width: 100%; min-width: 150px; padding: 8px;">
+            </td>
+            <td>
+              <input type="text"
+                     id="aliase_${arbeit.id}"
+                     data-id="${arbeit.id}"
+                     value="${arbeit.aliase || ''}"
+                     placeholder="z.B. Service, DS, Durchsicht"
+                     title="Mehrere Suchbegriffe durch Komma getrennt"
+                     style="width: 100%; min-width: 200px; padding: 8px;">
+            </td>
+            <td>
+              <input type="number"
+                     id="zeit_${arbeit.id}"
+                     data-id="${arbeit.id}"
+                     value="${stundenWert}"
+                     min="0.01"
+                     step="0.25"
+                     placeholder="z.B. 0.25"
+                     title="Eingabe in Stunden (z.B. 0.25 = 15 Min, 0.5 = 30 Min, 1 = 60 Min)"
+                     style="width: 120px; padding: 8px;">
+            </td>
+            <td>
+              <button class="btn btn-danger delete-arbeitszeit-btn" data-id="${arbeit.id}" style="padding: 6px 12px; font-size: 14px;">🗑️ Löschen</button>
+            </td>
+          `;
+        });
+
+        // Event-Listener für alle Löschen-Buttons hinzufügen
+        // Entferne zuerst alle vorhandenen Listener, um Duplikate zu vermeiden
+        tbody.querySelectorAll('.delete-arbeitszeit-btn').forEach(btn => {
+          // Klone den Button, um alle Event-Listener zu entfernen
+          const newBtn = btn.cloneNode(true);
+          btn.parentNode.replaceChild(newBtn, btn);
+          
+          newBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            
+            const idStr = newBtn.dataset.id;
+            const id = parseInt(idStr, 10);
+            
+            if (Number.isFinite(id) && id > 0) {
+              this.deleteArbeitszeit(id);
+            } else {
+              alert('Fehler: Ungültige ID - ' + idStr);
+            }
+          });
+        });
+      }
     } catch (error) {
       console.error('Fehler beim Laden der Arbeitszeiten:', error);
     }
@@ -4458,39 +4684,35 @@ class App {
     const kzBuchstaben = document.getElementById('wartendKzBuchstaben');
     const kzNummer = document.getElementById('wartendKzNummer');
 
-    if (nameSuche) {
-      nameSuche.addEventListener('input', () => this.handleWartendNameSuche());
-      nameSuche.addEventListener('keydown', (e) => this.handleWartendSucheKeydown(e, 'name'));
-      nameSuche.addEventListener('blur', () => setTimeout(() => this.hideWartendVorschlaege('name'), 350));
-    }
+    this.bindEventListenerOnce(nameSuche, 'input', () => this.handleWartendNameSuche(), 'WartendNameInput');
+    this.bindEventListenerOnce(nameSuche, 'keydown', (e) => this.handleWartendSucheKeydown(e, 'name'), 'WartendNameKeydown');
+    this.bindEventListenerOnce(nameSuche, 'blur', () => setTimeout(() => this.hideWartendVorschlaege('name'), 350), 'WartendNameBlur');
 
     // Kennzeichen-Suche mit 3 Feldern
     const kzFelder = [kzBezirk, kzBuchstaben, kzNummer];
     const kzFeldIds = ['wartendKzBezirk', 'wartendKzBuchstaben', 'wartendKzNummer'];
     
     kzFelder.forEach((feld, index) => {
-      if (feld) {
-        feld.addEventListener('input', (e) => {
-          e.target.value = e.target.value.toUpperCase();
-          this.handleWartendKennzeichenSuche();
-          // Auto-Tab zum nächsten Feld
-          if (kzFeldIds[index] === 'wartendKzBezirk' && e.target.value.length >= 3) {
-            document.getElementById('wartendKzBuchstaben')?.focus();
-          } else if (kzFeldIds[index] === 'wartendKzBuchstaben' && e.target.value.length >= 2) {
-            document.getElementById('wartendKzNummer')?.focus();
+      const fieldKey = kzFeldIds[index];
+      this.bindEventListenerOnce(feld, 'input', (e) => {
+        e.target.value = e.target.value.toUpperCase();
+        this.handleWartendKennzeichenSuche();
+        if (kzFeldIds[index] === 'wartendKzBezirk' && e.target.value.length >= 3) {
+          document.getElementById('wartendKzBuchstaben')?.focus();
+        } else if (kzFeldIds[index] === 'wartendKzBuchstaben' && e.target.value.length >= 2) {
+          document.getElementById('wartendKzNummer')?.focus();
+        }
+      }, `WartendKzInput${fieldKey}`);
+      this.bindEventListenerOnce(feld, 'keydown', (e) => this.handleWartendSucheKeydown(e, 'kennzeichen'), `WartendKzKeydown${fieldKey}`);
+      this.bindEventListenerOnce(feld, 'blur', () => {
+        setTimeout(() => {
+          const aktivesElement = document.activeElement;
+          const aktivesId = aktivesElement ? aktivesElement.id : '';
+          if (!kzFeldIds.includes(aktivesId)) {
+            this.hideWartendVorschlaege('kennzeichen');
           }
-        });
-        feld.addEventListener('keydown', (e) => this.handleWartendSucheKeydown(e, 'kennzeichen'));
-        feld.addEventListener('blur', () => {
-          setTimeout(() => {
-            const aktivesElement = document.activeElement;
-            const aktivesId = aktivesElement ? aktivesElement.id : '';
-            if (!kzFeldIds.includes(aktivesId)) {
-              this.hideWartendVorschlaege('kennzeichen');
-            }
-          }, 100);
-        });
-      }
+        }, 100);
+      }, `WartendKzBlur${fieldKey}`);
     });
   }
 
@@ -5323,7 +5545,12 @@ class App {
   }
 
   async loadTermine() {
-    const filterDatum = document.getElementById('filterDatum').value;
+    const filterDatumInput = document.getElementById('filterDatum');
+    const termineTable = document.getElementById('termineTable');
+    if (!filterDatumInput || !termineTable) {
+      return;
+    }
+    const filterDatum = filterDatumInput.value;
 
     try {
       const termine = await TermineService.getAll(filterDatum || null);
@@ -5333,7 +5560,7 @@ class App {
       }
       this.termineById = {};
 
-      const tbody = document.getElementById('termineTable').getElementsByTagName('tbody')[0];
+      const tbody = termineTable.getElementsByTagName('tbody')[0];
       tbody.innerHTML = '';
 
       termine.forEach(termin => {
@@ -5763,7 +5990,7 @@ class App {
     const filterDatum = document.getElementById('filterDatum');
     const datumAnzeige = document.getElementById('zeitverwaltungDatumText');
     
-    if (!datumAnzeige) return;
+    if (!datumAnzeige || !filterDatum) return;
     
     if (!filterDatum.value) {
       datumAnzeige.textContent = '📋 Alle Termine';
@@ -8603,7 +8830,9 @@ class App {
   }
 
   async loadAuslastung() {
-    const datum = document.getElementById('auslastungDatum').value;
+    const datumInput = document.getElementById('auslastungDatum');
+    if (!datumInput) return;
+    const datum = datumInput.value;
 
     if (!datum) return;
 
@@ -11307,8 +11536,11 @@ class App {
 
   async loadPapierkorb() {
     try {
+      const papierkorbTable = document.getElementById('papierkorbTable');
+      if (!papierkorbTable) return;
+
       const termine = await TermineService.getDeleted();
-      const tbody = document.getElementById('papierkorbTable').getElementsByTagName('tbody')[0];
+      const tbody = papierkorbTable.getElementsByTagName('tbody')[0];
       tbody.innerHTML = '';
 
       if (termine.length === 0) {
@@ -11385,6 +11617,10 @@ class App {
       const einstellungen = await EinstellungenService.getWerkstatt();
       this.prefillWerkstattSettings(einstellungen);
       this.updateApiKeyStatus(einstellungen);
+      this.updateRealtimeEnabledStatus(einstellungen?.realtime_enabled !== false);
+      this.updateKIModeStatus(einstellungen?.ki_mode || 'local');
+      this.updateSmartSchedulingStatus(einstellungen?.smart_scheduling_enabled !== false);
+      this.updateAnomalyDetectionStatus(einstellungen?.anomaly_detection_enabled !== false);
     } catch (error) {
       console.error('Fehler beim Laden der Werkstatt-Einstellungen:', error);
     }
@@ -11470,6 +11706,55 @@ class App {
     
     // Speichere den Status für spätere Verwendung
     this.kiEnabled = enabled;
+
+    const modeSelect = document.getElementById('kiModeSelect');
+    if (modeSelect) {
+      modeSelect.disabled = !enabled;
+    }
+  }
+
+  // KI-Modus aktualisieren (local/openai)
+  updateKIModeStatus(mode) {
+    const select = document.getElementById('kiModeSelect');
+    if (select) {
+      select.value = mode || 'local';
+      select.disabled = !this.kiEnabled;
+    }
+    this.kiMode = mode || 'local';
+  }
+
+  // Echtzeit-Updates Status aktualisieren (WebSocket ein-/aus)
+  updateRealtimeEnabledStatus(enabled) {
+    const toggle = document.getElementById('realtimeEnabledToggle');
+    if (toggle) {
+      toggle.checked = enabled;
+    }
+
+    this.realtimeEnabled = enabled;
+
+    if (enabled) {
+      this.setupWebSocket();
+    } else {
+      this.stopWebSocket();
+    }
+  }
+
+  // Smart Scheduling Status aktualisieren
+  updateSmartSchedulingStatus(enabled) {
+    const toggle = document.getElementById('smartSchedulingToggle');
+    if (toggle) {
+      toggle.checked = enabled;
+    }
+    this.smartSchedulingEnabled = enabled;
+  }
+
+  // Anomalie-Erkennung Status aktualisieren
+  updateAnomalyDetectionStatus(enabled) {
+    const toggle = document.getElementById('anomalyDetectionToggle');
+    if (toggle) {
+      toggle.checked = enabled;
+    }
+    this.anomalyDetectionEnabled = enabled;
   }
 
   // KI-Funktionen aktivieren/deaktivieren (Toggle-Handler)
@@ -11492,6 +11777,100 @@ class App {
       }
     } catch (error) {
       console.error('Fehler beim Aktualisieren der KI-Einstellung:', error);
+      e.target.checked = !enabled;
+      this.showToast('Fehler beim Speichern der Einstellung', 'error');
+    }
+  }
+
+  // KI-Modus ändern
+  async handleKIModeChange(e) {
+    const mode = e.target.value;
+    const previous = this.kiMode;
+
+    try {
+      const result = await EinstellungenService.updateKIMode(mode);
+
+      if (result.success) {
+        this.updateKIModeStatus(mode);
+        this.showToast(`🧠 KI-Modus: ${mode === 'local' ? 'Lokal' : 'OpenAI'}`, 'success');
+      } else {
+        e.target.value = previous;
+        this.showToast('Fehler beim Speichern des KI-Modus', 'error');
+      }
+    } catch (error) {
+      console.error('Fehler beim Aktualisieren des KI-Modus:', error);
+      e.target.value = previous;
+      this.showToast('Fehler beim Speichern des KI-Modus', 'error');
+    }
+  }
+
+  // Echtzeit-Updates aktivieren/deaktivieren (Toggle-Handler)
+  async handleRealtimeEnabledToggle(e) {
+    const enabled = e.target.checked;
+
+    try {
+      const result = await EinstellungenService.updateRealtimeEnabled(enabled);
+
+      if (result.success) {
+        this.updateRealtimeEnabledStatus(enabled);
+        this.showToast(
+          enabled ? '⚡ Echtzeit-Updates aktiviert' : '⏸️ Echtzeit-Updates deaktiviert',
+          'success'
+        );
+      } else {
+        e.target.checked = !enabled;
+        this.showToast('Fehler beim Speichern der Einstellung', 'error');
+      }
+    } catch (error) {
+      console.error('Fehler beim Aktualisieren der Echtzeit-Einstellung:', error);
+      e.target.checked = !enabled;
+      this.showToast('Fehler beim Speichern der Einstellung', 'error');
+    }
+  }
+
+  // Smart Scheduling aktivieren/deaktivieren
+  async handleSmartSchedulingToggle(e) {
+    const enabled = e.target.checked;
+
+    try {
+      const result = await EinstellungenService.updateSmartSchedulingEnabled(enabled);
+
+      if (result.success) {
+        this.updateSmartSchedulingStatus(enabled);
+        this.showToast(
+          enabled ? '🧭 Smart Scheduling aktiviert' : '🧭 Smart Scheduling deaktiviert',
+          'success'
+        );
+      } else {
+        e.target.checked = !enabled;
+        this.showToast('Fehler beim Speichern der Einstellung', 'error');
+      }
+    } catch (error) {
+      console.error('Fehler beim Aktualisieren von Smart Scheduling:', error);
+      e.target.checked = !enabled;
+      this.showToast('Fehler beim Speichern der Einstellung', 'error');
+    }
+  }
+
+  // Anomalie-Erkennung aktivieren/deaktivieren
+  async handleAnomalyDetectionToggle(e) {
+    const enabled = e.target.checked;
+
+    try {
+      const result = await EinstellungenService.updateAnomalyDetectionEnabled(enabled);
+
+      if (result.success) {
+        this.updateAnomalyDetectionStatus(enabled);
+        this.showToast(
+          enabled ? '🛡️ Anomalie-Erkennung aktiviert' : '🛡️ Anomalie-Erkennung deaktiviert',
+          'success'
+        );
+      } else {
+        e.target.checked = !enabled;
+        this.showToast('Fehler beim Speichern der Einstellung', 'error');
+      }
+    } catch (error) {
+      console.error('Fehler beim Aktualisieren der Anomalie-Erkennung:', error);
       e.target.checked = !enabled;
       this.showToast('Fehler beim Speichern der Einstellung', 'error');
     }
@@ -15545,30 +15924,31 @@ class App {
   // ==========================================
 
   setupAuslastungKalender() {
+    const kalenderTage = document.getElementById('kalenderTage');
+    const kalenderMonatJahr = document.getElementById('kalenderMonatJahr');
+    if (!kalenderTage || !kalenderMonatJahr || this.auslastungKalenderInitialized) {
+      return;
+    }
+
     this.kalenderAktuellMonat = new Date();
     this.kalenderAuslastungCache = {};
 
     // Navigation Buttons
     const kalenderPrevMonth = document.getElementById('kalenderPrevMonth');
-    if (kalenderPrevMonth) {
-      kalenderPrevMonth.addEventListener('click', () => this.navigateKalenderMonat(-1));
-    }
+    this.bindEventListenerOnce(kalenderPrevMonth, 'click', () => this.navigateKalenderMonat(-1), 'KalenderPrevMonth');
 
     const kalenderNextMonth = document.getElementById('kalenderNextMonth');
-    if (kalenderNextMonth) {
-      kalenderNextMonth.addEventListener('click', () => this.navigateKalenderMonat(1));
-    }
+    this.bindEventListenerOnce(kalenderNextMonth, 'click', () => this.navigateKalenderMonat(1), 'KalenderNextMonth');
 
     const kalenderHeuteBtn = document.getElementById('kalenderHeuteBtn');
-    if (kalenderHeuteBtn) {
-      kalenderHeuteBtn.addEventListener('click', () => this.selectKalenderHeute());
-    }
+    this.bindEventListenerOnce(kalenderHeuteBtn, 'click', () => this.selectKalenderHeute(), 'KalenderHeute');
 
     // Kalender sofort rendern (inline, immer sichtbar)
     this.renderAuslastungKalender();
     
     // Datum-Anzeige initial aktualisieren
     this.updateSelectedDatumDisplay();
+    this.auslastungKalenderInitialized = true;
   }
 
   // Aktualisiert die Datum-Anzeige über dem Kalender
@@ -15769,25 +16149,26 @@ class App {
   // ==========================================
 
   setupEditAuslastungKalender() {
+    const kalenderTage = document.getElementById('editKalenderTage');
+    const kalenderMonatJahr = document.getElementById('editKalenderMonatJahr');
+    if (!kalenderTage || !kalenderMonatJahr || this.editAuslastungKalenderInitialized) {
+      return;
+    }
+
     this.editKalenderAktuellMonat = new Date();
 
     // Navigation Buttons für Edit-Kalender
     const editKalenderPrevMonth = document.getElementById('editKalenderPrevMonth');
-    if (editKalenderPrevMonth) {
-      editKalenderPrevMonth.addEventListener('click', () => this.navigateEditKalenderMonat(-1));
-    }
+    this.bindEventListenerOnce(editKalenderPrevMonth, 'click', () => this.navigateEditKalenderMonat(-1), 'EditKalenderPrevMonth');
 
     const editKalenderNextMonth = document.getElementById('editKalenderNextMonth');
-    if (editKalenderNextMonth) {
-      editKalenderNextMonth.addEventListener('click', () => this.navigateEditKalenderMonat(1));
-    }
+    this.bindEventListenerOnce(editKalenderNextMonth, 'click', () => this.navigateEditKalenderMonat(1), 'EditKalenderNextMonth');
 
     const editKalenderHeuteBtn = document.getElementById('editKalenderHeuteBtn');
-    if (editKalenderHeuteBtn) {
-      editKalenderHeuteBtn.addEventListener('click', () => this.selectEditKalenderHeute());
-    }
+    this.bindEventListenerOnce(editKalenderHeuteBtn, 'click', () => this.selectEditKalenderHeute(), 'EditKalenderHeute');
 
     // Kalender initial NICHT rendern - wird erst beim Laden eines Termins gerendert
+    this.editAuslastungKalenderInitialized = true;
   }
 
   // Aktualisiert die Datum-Anzeige über dem Edit-Kalender
@@ -15968,27 +16349,28 @@ class App {
   // ==========================================
 
   setupEditSuchKalender() {
+    const kalenderTage = document.getElementById('editSuchKalenderTage');
+    const kalenderMonatJahr = document.getElementById('editSuchKalenderMonatJahr');
+    if (!kalenderTage || !kalenderMonatJahr || this.editSuchKalenderInitialized) {
+      return;
+    }
+
     this.editSuchKalenderAktuellMonat = new Date();
 
     // Navigation Buttons für Such-Kalender
     const editSuchKalenderPrevMonth = document.getElementById('editSuchKalenderPrevMonth');
-    if (editSuchKalenderPrevMonth) {
-      editSuchKalenderPrevMonth.addEventListener('click', () => this.navigateEditSuchKalenderMonat(-1));
-    }
+    this.bindEventListenerOnce(editSuchKalenderPrevMonth, 'click', () => this.navigateEditSuchKalenderMonat(-1), 'EditSuchKalenderPrevMonth');
 
     const editSuchKalenderNextMonth = document.getElementById('editSuchKalenderNextMonth');
-    if (editSuchKalenderNextMonth) {
-      editSuchKalenderNextMonth.addEventListener('click', () => this.navigateEditSuchKalenderMonat(1));
-    }
+    this.bindEventListenerOnce(editSuchKalenderNextMonth, 'click', () => this.navigateEditSuchKalenderMonat(1), 'EditSuchKalenderNextMonth');
 
     const editSuchKalenderHeuteBtn = document.getElementById('editSuchKalenderHeuteBtn');
-    if (editSuchKalenderHeuteBtn) {
-      editSuchKalenderHeuteBtn.addEventListener('click', () => this.selectEditSuchKalenderHeute());
-    }
+    this.bindEventListenerOnce(editSuchKalenderHeuteBtn, 'click', () => this.selectEditSuchKalenderHeute(), 'EditSuchKalenderHeute');
 
     // Kalender sofort rendern
     this.renderEditSuchKalender();
     this.updateEditSuchDatumDisplay();
+    this.editSuchKalenderInitialized = true;
   }
 
   // Aktualisiert die Datum-Anzeige über dem Such-Kalender
@@ -16929,7 +17311,7 @@ class App {
       }
 
       // Rendere die Zeitleiste mit Abwesenheitsinformation
-      this.renderZeitleiste(body, arbeitenMap, ohneZuordnung, mitarbeiter, lehrlinge, mittagspauseDauer, abwesendeMitarbeiter, abwesendeLehrlinge);
+      this.renderZeitleiste(body, arbeitenMap, ohneZuordnung, mitarbeiter, lehrlinge, mittagspauseDauer, abwesendeMitarbeiter, abwesendeLehrlinge, datum);
 
     } catch (error) {
       console.error('Fehler beim Laden der Zeitleiste:', error);
@@ -16937,7 +17319,7 @@ class App {
     }
   }
 
-  renderZeitleiste(container, arbeitenMap, ohneZuordnung, mitarbeiter, lehrlinge, mittagspauseDauer = 30, abwesendeMitarbeiter = new Set(), abwesendeLehrlinge = new Set()) {
+  renderZeitleiste(container, arbeitenMap, ohneZuordnung, mitarbeiter, lehrlinge, mittagspauseDauer = 30, abwesendeMitarbeiter = new Set(), abwesendeLehrlinge = new Set(), datum = null) {
     // Prüfe ob es überhaupt Mitarbeiter oder Lehrlinge gibt
     const hatPersonal = mitarbeiter.length > 0 || lehrlinge.length > 0;
     
@@ -16960,7 +17342,7 @@ class App {
 
     // Aktuelle Zeit Marker Position berechnen (falls heute)
     const heute = this.formatDateLocal(new Date());
-    const selectedDatum = document.getElementById('auslastungDatum').value;
+    const selectedDatum = datum || document.getElementById('auslastungDatum')?.value || heute;
     let jetztMarkerHtml = '';
     
     if (selectedDatum === heute) {
@@ -16994,7 +17376,7 @@ class App {
       const istAbwesend = abwesendeLehrlinge.has(lehrling.id);
       
       // Prüfe ob Lehrling in Berufsschule ist
-      const schule = this.isLehrlingInBerufsschule(lehrling, datum);
+      const schule = this.isLehrlingInBerufsschule(lehrling, selectedDatum);
       const berufsschulBadge = schule.inSchule ? ` 📚 KW ${schule.kw}` : '';
       const abwesendBadge = istAbwesend ? ' 🏥' : '';
       
@@ -20743,6 +21125,10 @@ class App {
    * Initialisiert alle Event-Listener für den KI-Assistenten
    */
   setupKIAssistentEventListeners() {
+    if (this.kiAssistentListenersBound) {
+      return;
+    }
+
     // KI-Analyse Checkbox
     const kiCheckbox = document.getElementById('kiAnalyseAktiv');
     if (kiCheckbox) {
@@ -20753,24 +21139,22 @@ class App {
       }
       
       // Änderungen speichern
-      kiCheckbox.addEventListener('change', (e) => {
+      this.bindEventListenerOnce(kiCheckbox, 'change', (e) => {
         localStorage.setItem('kiAnalyseAktiv', e.target.checked);
         if (!e.target.checked) {
           this.hideKIVorschlaege();
         }
-      });
+      }, 'KiAnalyseAktivChange');
     }
 
     // VIN-Decoder Button
     const vinDecodeBtn = document.getElementById('vinDecodeBtn');
-    if (vinDecodeBtn) {
-      vinDecodeBtn.addEventListener('click', () => this.decodeVIN());
-    }
+    this.bindEventListenerOnce(vinDecodeBtn, 'click', () => this.decodeVIN(), 'VinDecodeClick');
     
     // VIN-Eingabefeld: Auto-Decode bei 17 Zeichen
     const vinInput = document.getElementById('vin');
     if (vinInput) {
-      vinInput.addEventListener('input', (e) => {
+      this.bindEventListenerOnce(vinInput, 'input', (e) => {
         const vin = e.target.value.replace(/[^A-HJ-NPR-Z0-9]/gi, '');
         e.target.value = vin.toUpperCase();
         
@@ -20782,69 +21166,62 @@ class App {
           const vinInfo = document.getElementById('vinInfoBereich');
           if (vinInfo) vinInfo.style.display = 'none';
         }
-      });
+      }, 'VinInput');
     }
 
     // KI-Assistent Banner/Button
     const kiAssistentBtn = document.getElementById('kiAssistentBtn');
-    if (kiAssistentBtn) {
-      kiAssistentBtn.addEventListener('click', () => this.openKIAssistent());
-    }
+    this.bindEventListenerOnce(kiAssistentBtn, 'click', () => this.openKIAssistent(), 'KiAssistentOpen');
 
     // Modal schließen
     const closeKiAssistent = document.getElementById('closeKiAssistent');
-    if (closeKiAssistent) {
-      closeKiAssistent.addEventListener('click', () => this.closeKIAssistent());
-    }
+    this.bindEventListenerOnce(closeKiAssistent, 'click', () => this.closeKIAssistent(), 'KiAssistentClose');
 
     // Abbrechen Button
     const kiAbbrechen = document.getElementById('kiAbbrechen');
-    if (kiAbbrechen) {
-      kiAbbrechen.addEventListener('click', () => this.closeKIAssistent());
-    }
+    this.bindEventListenerOnce(kiAbbrechen, 'click', () => this.closeKIAssistent(), 'KiAbbrechen');
 
     // Analysieren Button
     const kiAnalysierenBtn = document.getElementById('kiAnalysierenBtn');
-    if (kiAnalysierenBtn) {
-      kiAnalysierenBtn.addEventListener('click', () => this.analyzeWithKI());
-    }
+    this.bindEventListenerOnce(kiAnalysierenBtn, 'click', () => this.analyzeWithKI(), 'KiAnalysieren');
 
     // Übernehmen Button
     const kiUebernehmen = document.getElementById('kiUebernehmen');
-    if (kiUebernehmen) {
-      kiUebernehmen.addEventListener('click', () => this.applyKIResults());
-    }
+    this.bindEventListenerOnce(kiUebernehmen, 'click', () => this.applyKIResults(), 'KiUebernehmen');
 
     // Beispiel-Buttons
     document.querySelectorAll('.ki-beispiel-btn').forEach(btn => {
-      btn.addEventListener('click', (e) => {
+      this.bindEventListenerOnce(btn, 'click', (e) => {
         const text = e.target.dataset.text;
         const textarea = document.getElementById('kiFreitextInput');
         if (textarea && text) {
           textarea.value = text;
           textarea.focus();
         }
-      });
+      }, 'KiBeispielClick');
     });
 
     // Modal schließen bei Klick außerhalb
     const kiModal = document.getElementById('kiAssistentModal');
-    if (kiModal) {
-      kiModal.addEventListener('click', (e) => {
-        if (e.target === kiModal) {
-          this.closeKIAssistent();
-        }
-      });
-    }
+    this.bindEventListenerOnce(kiModal, 'click', (e) => {
+      if (e.target === kiModal) {
+        this.closeKIAssistent();
+      }
+    }, 'KiModalClick');
 
     // KI-Status beim Start prüfen
     this.checkKIStatus();
+    this.kiAssistentListenersBound = true;
   }
 
   /**
    * Event-Listener für Teile-Bestellen Tab
    */
   setupTeileBestellenEventListeners() {
+    if (this.teileBestellenListenersBound) {
+      return;
+    }
+
     // Filter-Checkboxen mit Debounce
     const filterOffen = document.getElementById('teileFilterOffen');
     const filterBestellt = document.getElementById('teileFilterBestellt');
@@ -20858,18 +21235,14 @@ class App {
       teileFilterTimeout = setTimeout(() => this.loadTeileBestellungen(), 300);
     };
     
-    if (filterOffen) {
-      filterOffen.addEventListener('change', debouncedLoad);
+    if (filterOffen || filterBestellt || filterGeliefert || filterZeitraum) {
+      this.teileBestellenListenersBound = true;
     }
-    if (filterBestellt) {
-      filterBestellt.addEventListener('change', debouncedLoad);
-    }
-    if (filterGeliefert) {
-      filterGeliefert.addEventListener('change', debouncedLoad);
-    }
-    if (filterZeitraum) {
-      filterZeitraum.addEventListener('change', debouncedLoad);
-    }
+
+    this.bindEventListenerOnce(filterOffen, 'change', debouncedLoad, 'TeileFilterOffen');
+    this.bindEventListenerOnce(filterBestellt, 'change', debouncedLoad, 'TeileFilterBestellt');
+    this.bindEventListenerOnce(filterGeliefert, 'change', debouncedLoad, 'TeileFilterGeliefert');
+    this.bindEventListenerOnce(filterZeitraum, 'change', debouncedLoad, 'TeileFilterZeitraum');
   }
 
   /**
@@ -22373,6 +22746,10 @@ class App {
       this.showToast('🔌 KI-Funktionen sind deaktiviert. Aktivieren Sie diese unter Einstellungen → KI / API', 'warning');
       return;
     }
+    if (!this.smartSchedulingEnabled) {
+      this.showToast('🧭 Smart Scheduling ist deaktiviert. Bitte in den Einstellungen aktivieren.', 'warning');
+      return;
+    }
     
     const datumInput = document.getElementById('auslastungDragDropDatum');
     if (!datumInput || !datumInput.value) {
@@ -22404,6 +22781,10 @@ class App {
     // Prüfe ob KI global aktiviert ist
     if (this.kiEnabled === false) {
       this.showToast('🔌 KI-Funktionen sind deaktiviert. Aktivieren Sie diese unter Einstellungen → KI / API', 'warning');
+      return;
+    }
+    if (!this.smartSchedulingEnabled) {
+      this.showToast('🧭 Smart Scheduling ist deaktiviert. Bitte in den Einstellungen aktivieren.', 'warning');
       return;
     }
     
@@ -24068,6 +24449,10 @@ class App {
     const normalizedSearch = this.normalizeForSearch(search);
     const normalizedTarget = this.normalizeForSearch(target);
 
+    return this.calculateFuzzyScoreNormalized(normalizedSearch, normalizedTarget);
+  }
+
+  calculateFuzzyScoreNormalized(normalizedSearch, normalizedTarget) {
     if (!normalizedSearch || !normalizedTarget) return 0;
 
     // Exakte Übereinstimmung
@@ -24135,6 +24520,39 @@ class App {
     };
   }
 
+  fuzzySearchKundeFromIndex(normalizedSearch, kundeIndex) {
+    if (!normalizedSearch || !kundeIndex) {
+      return { match: false, score: 0, matchedField: null };
+    }
+
+    const fields = [
+      { name: 'name', value: kundeIndex.normalizedName, weight: 1.0 },
+      { name: 'telefon', value: kundeIndex.normalizedTelefon, weight: 0.9 },
+      { name: 'kennzeichen', value: kundeIndex.normalizedKennzeichen, weight: 0.9 },
+      { name: 'email', value: kundeIndex.normalizedEmail, weight: 0.7 },
+      { name: 'fahrzeug', value: kundeIndex.normalizedFahrzeug, weight: 0.6 }
+    ];
+
+    let bestScore = 0;
+    let matchedField = null;
+
+    for (const field of fields) {
+      if (!field.value) continue;
+
+      const score = this.calculateFuzzyScoreNormalized(normalizedSearch, field.value) * field.weight;
+      if (score > bestScore) {
+        bestScore = score;
+        matchedField = field.name;
+      }
+    }
+
+    return {
+      match: bestScore >= 30,
+      score: Math.round(bestScore),
+      matchedField
+    };
+  }
+
   /**
    * Führt eine Fuzzy-Suche über alle Kunden durch
    * @param {string} searchTerm - Suchbegriff
@@ -24144,16 +24562,37 @@ class App {
   fuzzySearchKunden(searchTerm, limit = 10) {
     if (!searchTerm || searchTerm.length < 2) return [];
 
-    const results = [];
+    const normalizedSearch = this.normalizeForSearch(searchTerm);
+    if (!normalizedSearch) return [];
 
-    for (const kunde of this.kundenCache) {
-      const result = this.fuzzySearchKunde(searchTerm, kunde);
-      if (result.match) {
-        results.push({
-          kunde,
-          score: result.score,
-          matchedField: result.matchedField
-        });
+    const results = [];
+    const kunden = this.kundenCache || [];
+
+    if (!this.fuzzySearchIndex || this.fuzzySearchIndex.length !== kunden.length) {
+      this.buildFuzzySearchIndex();
+    }
+
+    if (this.fuzzySearchIndex && this.fuzzySearchIndex.length === kunden.length) {
+      for (const kundeIndex of this.fuzzySearchIndex) {
+        const result = this.fuzzySearchKundeFromIndex(normalizedSearch, kundeIndex);
+        if (result.match) {
+          results.push({
+            kunde: kundeIndex.original,
+            score: result.score,
+            matchedField: result.matchedField
+          });
+        }
+      }
+    } else {
+      for (const kunde of kunden) {
+        const result = this.fuzzySearchKunde(searchTerm, kunde);
+        if (result.match) {
+          results.push({
+            kunde,
+            score: result.score,
+            matchedField: result.matchedField
+          });
+        }
       }
     }
 

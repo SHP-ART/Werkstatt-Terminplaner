@@ -2,6 +2,19 @@ const { getAsync, allAsync, runAsync } = require('../utils/dbHelper');
 const { withTransaction } = require('../utils/transaction');
 
 class PhasenModel {
+  static async getAll() {
+    return await allAsync(
+      `SELECT p.*, 
+              m.name as mitarbeiter_name,
+              l.name as lehrling_name
+       FROM termin_phasen p
+       LEFT JOIN mitarbeiter m ON p.mitarbeiter_id = m.id
+       LEFT JOIN lehrlinge l ON p.lehrling_id = l.id
+       ORDER BY p.datum DESC, p.phase_nr ASC`,
+      []
+    );
+  }
+
   // Alle Phasen eines Termins abrufen
   static async getByTerminId(terminId) {
     return await allAsync(

@@ -5,6 +5,7 @@ const AbwesenheitenController = require('../controllers/abwesenheitenController'
 // WICHTIG: Spezifische Routes MÜSSEN vor Parameter-Routes stehen!
 
 // Neue Routes für individuelle Mitarbeiter-/Lehrlinge-Abwesenheiten
+router.get('/', AbwesenheitenController.getAll);
 router.get('/liste', AbwesenheitenController.getAll);
 router.get('/range', AbwesenheitenController.getByDateRange);
 router.post('/', AbwesenheitenController.create);

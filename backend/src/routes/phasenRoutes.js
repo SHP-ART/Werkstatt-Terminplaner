@@ -2,6 +2,9 @@ const express = require('express');
 const router = express.Router();
 const PhasenController = require('../controllers/phasenController');
 
+// Alle Phasen abrufen
+router.get('/', PhasenController.getAll);
+
 // Phasen für ein Datum abrufen (für Auslastung)
 router.get('/datum/:datum', PhasenController.getByDatum);
 

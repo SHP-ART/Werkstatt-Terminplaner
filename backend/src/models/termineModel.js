@@ -45,6 +45,35 @@ class TermineModel {
     return await allAsync(query, []);
   }
 
+  static async getAllPaginated(limit, offset) {
+    const query = `
+      SELECT t.*,
+             COALESCE(k.name, t.kunde_name) as kunde_name,
+             COALESCE(k.telefon, t.kunde_telefon) as kunde_telefon,
+             m.name as mitarbeiter_name
+      FROM termine t
+      LEFT JOIN kunden k ON t.kunde_id = k.id
+      LEFT JOIN mitarbeiter m ON t.mitarbeiter_id = m.id
+      WHERE t.geloescht_am IS NULL
+        AND t.arbeit != 'Fahrzeug aus Import'
+        AND t.arbeit != 'Fahrzeug hinzugefügt'
+      ORDER BY t.datum DESC
+      LIMIT ? OFFSET ?
+    `;
+    return await allAsync(query, [limit, offset]);
+  }
+
+  static async countAll() {
+    const query = `
+      SELECT COUNT(*) as total
+      FROM termine t
+      WHERE t.geloescht_am IS NULL
+        AND t.arbeit != 'Fahrzeug aus Import'
+        AND t.arbeit != 'Fahrzeug hinzugefügt'
+    `;
+    return await getAsync(query, []);
+  }
+
   static async getByDatum(datum) {
     const query = `
       SELECT t.*,
@@ -60,6 +89,35 @@ class TermineModel {
       ORDER BY t.erstellt_am
     `;
     return await allAsync(query, [datum]);
+  }
+
+  static async getByDatumPaginated(datum, limit, offset) {
+    const query = `
+      SELECT t.*,
+             COALESCE(k.name, t.kunde_name) as kunde_name,
+             COALESCE(k.telefon, t.kunde_telefon) as kunde_telefon,
+             m.name as mitarbeiter_name
+      FROM termine t
+      LEFT JOIN kunden k ON t.kunde_id = k.id
+      LEFT JOIN mitarbeiter m ON t.mitarbeiter_id = m.id
+      WHERE t.datum = ? AND t.geloescht_am IS NULL
+        AND t.arbeit != 'Fahrzeug aus Import'
+        AND t.arbeit != 'Fahrzeug hinzugefügt'
+      ORDER BY t.erstellt_am
+      LIMIT ? OFFSET ?
+    `;
+    return await allAsync(query, [datum, limit, offset]);
+  }
+
+  static async countByDatum(datum) {
+    const query = `
+      SELECT COUNT(*) as total
+      FROM termine t
+      WHERE t.datum = ? AND t.geloescht_am IS NULL
+        AND t.arbeit != 'Fahrzeug aus Import'
+        AND t.arbeit != 'Fahrzeug hinzugefügt'
+    `;
+    return await getAsync(query, [datum]);
   }
 
   /**

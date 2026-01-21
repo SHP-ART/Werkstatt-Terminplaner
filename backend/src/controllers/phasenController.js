@@ -1,6 +1,17 @@
 const PhasenModel = require('../models/phasenModel');
 
 class PhasenController {
+  // Alle Phasen abrufen
+  static async getAll(req, res) {
+    try {
+      const phasen = await PhasenModel.getAll();
+      res.json(phasen);
+    } catch (error) {
+      console.error('Fehler beim Abrufen der Phasen:', error);
+      res.status(500).json({ error: 'Fehler beim Abrufen der Phasen' });
+    }
+  }
+
   // Alle Phasen eines Termins abrufen
   static async getByTerminId(req, res) {
     try {

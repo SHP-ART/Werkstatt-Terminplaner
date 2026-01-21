@@ -6,6 +6,24 @@ class KundenModel {
     return await allAsync('SELECT * FROM kunden ORDER BY name', []);
   }
 
+  static async getAllForFuzzySearch() {
+    return await allAsync(
+      'SELECT id, name, telefon, email, adresse, locosoft_id, kennzeichen, fahrzeugtyp, erstellt_am FROM kunden',
+      []
+    );
+  }
+
+  static async getAllPaginated(limit, offset) {
+    return await allAsync(
+      'SELECT * FROM kunden ORDER BY name LIMIT ? OFFSET ?',
+      [limit, offset]
+    );
+  }
+
+  static async countAll() {
+    return await getAsync('SELECT COUNT(*) as total FROM kunden', []);
+  }
+
   static async create(kunde) {
     const { name, telefon, email, adresse, locosoft_id, kennzeichen, vin, fahrzeugtyp } = kunde;
     return await runAsync(
@@ -283,6 +301,33 @@ class KundenModel {
     }));
 
     return result;
+  }
+
+  static async getTermineForKundenIds(kundenIds) {
+    if (!kundenIds || kundenIds.length === 0) {
+      return [];
+    }
+
+    const placeholders = kundenIds.map(() => '?').join(',');
+
+    const termineQuery = `
+      SELECT 
+        t.id,
+        t.termin_nr,
+        t.kunde_id,
+        t.kennzeichen,
+        t.arbeit,
+        t.umfang,
+        t.geschaetzte_zeit,
+        t.tatsaechliche_zeit,
+        t.datum,
+        t.status
+      FROM termine t
+      WHERE t.kunde_id IN (${placeholders})
+      ORDER BY t.datum DESC, t.erstellt_am DESC
+    `;
+
+    return await allAsync(termineQuery, kundenIds);
   }
 
   // Alle Fahrzeuge (Kennzeichen) eines Kunden aus Terminen holen

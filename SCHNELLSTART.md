@@ -12,6 +12,17 @@
 2. Doppelklick auf **`werkstattplaner-oeffnen.bat`**
 3. Im Browser → **Einstellungen** → Server-IP: `localhost` → Port: `3001` → Speichern
 
+### Windows-Setup (Details):
+1. **Node.js LTS** installieren (empfohlen) und danach den Rechner neu starten
+2. Start-Skripte:
+   - `start-server.bat` (Backend + WebSocket)
+   - `werkstattplaner-oeffnen.bat` (Frontend im Browser)
+3. **Ports freigeben**:
+   - `3001` (Backend + WebSocket)
+   - optional `3000` (Frontend, falls getrennt gestartet)
+4. **Logs prüfen**:
+   - `logs/backend.log` für Backend-Start und Fehler
+
 ---
 
 ## Für Client-PCs (Arbeitsplätze)

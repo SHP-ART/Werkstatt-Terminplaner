@@ -722,6 +722,34 @@ function initializeDatabase() {
       }
     });
 
+    // Füge Echtzeit-Updates aktiviert/deaktiviert Spalte hinzu (1 = aktiviert, 0 = deaktiviert)
+    dbWrapper.connection.run(`ALTER TABLE werkstatt_einstellungen ADD COLUMN realtime_enabled INTEGER DEFAULT 1`, (err) => {
+      if (err && !err.message.includes('duplicate column')) {
+        console.error('Fehler beim Hinzufügen von realtime_enabled:', err);
+      }
+    });
+
+    // Füge KI-Modus Spalte hinzu (local/openai)
+    dbWrapper.connection.run(`ALTER TABLE werkstatt_einstellungen ADD COLUMN ki_mode TEXT DEFAULT 'local'`, (err) => {
+      if (err && !err.message.includes('duplicate column')) {
+        console.error('Fehler beim Hinzufügen von ki_mode:', err);
+      }
+    });
+
+    // Füge Smart Scheduling Spalte hinzu (1 = aktiviert, 0 = deaktiviert)
+    dbWrapper.connection.run(`ALTER TABLE werkstatt_einstellungen ADD COLUMN smart_scheduling_enabled INTEGER DEFAULT 1`, (err) => {
+      if (err && !err.message.includes('duplicate column')) {
+        console.error('Fehler beim Hinzufügen von smart_scheduling_enabled:', err);
+      }
+    });
+
+    // Füge Anomalie-Erkennung Spalte hinzu (1 = aktiviert, 0 = deaktiviert)
+    dbWrapper.connection.run(`ALTER TABLE werkstatt_einstellungen ADD COLUMN anomaly_detection_enabled INTEGER DEFAULT 1`, (err) => {
+      if (err && !err.message.includes('duplicate column')) {
+        console.error('Fehler beim Hinzufügen von anomaly_detection_enabled:', err);
+      }
+    });
+
     // Ersatzautos-Tabelle
     dbWrapper.connection.run(`CREATE TABLE IF NOT EXISTS ersatzautos (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
