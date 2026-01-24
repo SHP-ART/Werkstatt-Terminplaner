@@ -164,7 +164,7 @@ function stopServer() {
 app.whenReady().then(async () => {
   // Server initialisieren (prüft ob Port frei ist)
   server = await initServer();
-  
+
   createWindow();
 
   // System-Stats alle 2 Sekunden senden

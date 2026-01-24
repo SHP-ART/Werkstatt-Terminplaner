@@ -11,6 +11,7 @@
     "status.html",
     "status.js",
     "src/",
+    "migrations/",
     ".env",
     "!database/**"
   ],
