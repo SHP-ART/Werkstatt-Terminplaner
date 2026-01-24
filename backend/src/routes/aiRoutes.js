@@ -188,6 +188,36 @@ router.post('/vin-decode', aiController.decodeVIN);
 router.post('/vin-teile-check', aiController.checkTeileKompatibilitaet);
 
 // =============================================================================
+// TRAINING DATA MANAGEMENT
+// =============================================================================
+
+/**
+ * GET /api/ai/training-data
+ * Liefert Übersicht der Trainingsdaten mit Statistiken und Ausreißer-Erkennung
+ */
+router.get('/training-data', aiController.getTrainingData);
+
+/**
+ * POST /api/ai/training-data/:id/exclude
+ * Schließt einen einzelnen Termin vom Training aus/ein
+ *
+ * Body: { exclude: true/false, note: "Grund" }
+ */
+router.post('/training-data/:id/exclude', aiController.excludeFromTraining);
+
+/**
+ * POST /api/ai/training-data/exclude-outliers
+ * Schließt alle erkannten Ausreißer automatisch vom Training aus
+ */
+router.post('/training-data/exclude-outliers', aiController.excludeAllOutliers);
+
+/**
+ * POST /api/ai/retrain
+ * Erzwingt Neutraining des KI-Modells
+ */
+router.post('/retrain', aiController.retrainModel);
+
+// =============================================================================
 // EXPORT
 // =============================================================================
 

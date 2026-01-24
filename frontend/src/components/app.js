@@ -662,6 +662,14 @@ class App {
     const kiModeSelect = document.getElementById('kiModeSelect');
     this.bindEventListenerOnce(kiModeSelect, 'change', (e) => this.handleKIModeChange(e), 'KIModeChange');
 
+    // KI-Trainingsdaten Buttons
+    const btnExcludeOutliers = document.getElementById('btnExcludeOutliers');
+    this.bindEventListenerOnce(btnExcludeOutliers, 'click', () => this.handleExcludeOutliers(), 'ExcludeOutliers');
+    const btnRetrainModel = document.getElementById('btnRetrainModel');
+    this.bindEventListenerOnce(btnRetrainModel, 'click', () => this.handleRetrainModel(), 'RetrainModel');
+    const btnShowTrainingDetails = document.getElementById('btnShowTrainingDetails');
+    this.bindEventListenerOnce(btnShowTrainingDetails, 'click', () => this.toggleTrainingDetails(), 'ShowTrainingDetails');
+
     const wartendeAktionForm = document.getElementById('wartendeAktionForm');
     this.bindEventListenerOnce(wartendeAktionForm, 'submit', (e) => this.handleWartendeAktionSubmit(e), 'WartendeAktionSubmit');
 
@@ -11621,6 +11629,8 @@ class App {
       this.updateKIModeStatus(einstellungen?.ki_mode || 'local', !!einstellungen?.chatgpt_api_key_configured);
       this.updateSmartSchedulingStatus(einstellungen?.smart_scheduling_enabled !== false);
       this.updateAnomalyDetectionStatus(einstellungen?.anomaly_detection_enabled !== false);
+      // KI-Trainingsdaten laden
+      this.loadKITrainingData();
     } catch (error) {
       console.error('Fehler beim Laden der Werkstatt-Einstellungen:', error);
     }
@@ -11810,6 +11820,155 @@ class App {
       toggle.checked = enabled;
     }
     this.anomalyDetectionEnabled = enabled;
+  }
+
+  // KI-Trainingsdaten laden und anzeigen
+  async loadKITrainingData() {
+    const statusText = document.getElementById('kiTrainingStatusText');
+    const detailsButton = document.getElementById('btnShowTrainingDetails');
+    const excludeButton = document.getElementById('btnExcludeOutliers');
+
+    if (!statusText) return;
+
+    try {
+      const result = await ApiService.get('/ai/training-data');
+
+      if (result.success) {
+        const { stats, termine, outlierCount } = result.data;
+        const activeOutliers = termine.filter(t => t.isOutlier && !t.ki_training_exclude).length;
+        const excludedCount = stats.ausgeschlossen || 0;
+        const usableCount = stats.abgeschlossen - excludedCount;
+
+        statusText.innerHTML = `
+          <strong>${usableCount} nutzbare Trainingseinträge</strong>
+          <div style="font-size: 0.85em; color: #666; margin-top: 4px;">
+            ${stats.total} Einträge gesamt •
+            ${activeOutliers > 0 ? `<span style="color: #e65100;">${activeOutliers} Ausreißer erkannt</span>` : '<span style="color: #2e7d32;">Keine Ausreißer</span>'}
+            ${excludedCount > 0 ? ` • ${excludedCount} ausgeschlossen` : ''}
+          </div>
+        `;
+
+        // Ausreißer-Button aktivieren/deaktivieren
+        if (excludeButton) {
+          excludeButton.disabled = activeOutliers === 0;
+          excludeButton.textContent = activeOutliers > 0
+            ? `🚫 ${activeOutliers} Ausreißer ausschließen`
+            : '🚫 Keine Ausreißer';
+        }
+
+        // Daten für Details-Anzeige speichern
+        this._kiTrainingData = termine;
+      } else {
+        statusText.innerHTML = '<strong style="color: #c62828;">Fehler beim Laden</strong>';
+      }
+    } catch (error) {
+      console.error('Fehler beim Laden der KI-Trainingsdaten:', error);
+      statusText.innerHTML = '<strong style="color: #c62828;">Fehler beim Laden</strong>';
+    }
+  }
+
+  // Alle Ausreißer automatisch ausschließen
+  async handleExcludeOutliers() {
+    if (!confirm('Alle erkannten Ausreißer vom Training ausschließen?')) return;
+
+    try {
+      const data = await ApiService.post('/ai/training-data/exclude-outliers', {});
+
+      if (data.success) {
+        this.showToast(`${data.excluded} Ausreißer ausgeschlossen`, 'success');
+        this.loadKITrainingData();
+        this.updateTrainingDetailsTable();
+      } else {
+        this.showToast('Fehler beim Ausschließen', 'error');
+      }
+    } catch (error) {
+      console.error('Fehler beim Ausschließen der Ausreißer:', error);
+      this.showToast('Fehler beim Ausschließen', 'error');
+    }
+  }
+
+  // Modell neu trainieren
+  async handleRetrainModel() {
+    const btn = document.getElementById('btnRetrainModel');
+    if (btn) btn.disabled = true;
+
+    try {
+      const data = await ApiService.post('/ai/retrain', {});
+
+      if (data.success) {
+        this.showToast(`Modell trainiert: ${data.model.sampleCount} Einträge`, 'success');
+        this.loadKITrainingData();
+      } else {
+        this.showToast('Fehler beim Training', 'error');
+      }
+    } catch (error) {
+      console.error('Fehler beim Neutraining:', error);
+      this.showToast('Fehler beim Training', 'error');
+    } finally {
+      if (btn) btn.disabled = false;
+    }
+  }
+
+  // Details-Tabelle anzeigen/verstecken
+  toggleTrainingDetails() {
+    const details = document.getElementById('kiTrainingDetails');
+    const btn = document.getElementById('btnShowTrainingDetails');
+
+    if (details) {
+      const isVisible = details.style.display !== 'none';
+      details.style.display = isVisible ? 'none' : 'block';
+      if (btn) btn.textContent = isVisible ? '📋 Details anzeigen' : '📋 Details ausblenden';
+
+      if (!isVisible) {
+        this.updateTrainingDetailsTable();
+      }
+    }
+  }
+
+  // Details-Tabelle aktualisieren
+  updateTrainingDetailsTable() {
+    const tbody = document.getElementById('kiTrainingTableBody');
+    if (!tbody || !this._kiTrainingData) return;
+
+    tbody.innerHTML = this._kiTrainingData.map(t => {
+      const statusClass = t.ki_training_exclude ? 'excluded' : (t.isOutlier ? 'outlier' : 'normal');
+      const statusLabel = t.ki_training_exclude ? '❌ Ausgeschlossen' : (t.isOutlier ? '⚠️ Ausreißer' : '✅ OK');
+      const rowStyle = t.ki_training_exclude ? 'background: #ffebee; color: #999;' : (t.isOutlier ? 'background: #fff3e0;' : '');
+
+      return `
+        <tr style="${rowStyle}">
+          <td style="padding: 8px; border-bottom: 1px solid #eee;">${t.datum || '-'}</td>
+          <td style="padding: 8px; border-bottom: 1px solid #eee;">${t.arbeit || '-'}</td>
+          <td style="padding: 8px; text-align: right; border-bottom: 1px solid #eee;">${t.tatsaechliche_zeit || '-'}</td>
+          <td style="padding: 8px; text-align: center; border-bottom: 1px solid #eee;">${statusLabel}</td>
+          <td style="padding: 8px; text-align: center; border-bottom: 1px solid #eee;">
+            <button onclick="window.app.toggleTrainingExclude(${t.id}, ${t.ki_training_exclude ? 0 : 1})"
+                    style="padding: 4px 8px; font-size: 0.8em; cursor: pointer;">
+              ${t.ki_training_exclude ? '✅ Einschließen' : '🚫 Ausschließen'}
+            </button>
+          </td>
+        </tr>
+      `;
+    }).join('');
+  }
+
+  // Einzelnen Eintrag vom Training ein-/ausschließen
+  async toggleTrainingExclude(id, exclude) {
+    try {
+      const data = await ApiService.post(`/ai/training-data/${id}/exclude`, { exclude: !!exclude });
+
+      if (data.success) {
+        // Lokale Daten aktualisieren
+        const item = this._kiTrainingData.find(t => t.id === id);
+        if (item) item.ki_training_exclude = exclude;
+
+        this.updateTrainingDetailsTable();
+        this.loadKITrainingData();
+      }
+    } catch (error) {
+      console.error('Fehler beim Aktualisieren:', error);
+      this.showToast('Fehler beim Aktualisieren', 'error');
+    }
   }
 
   // KI-Funktionen aktivieren/deaktivieren (Toggle-Handler)
@@ -13952,9 +14111,9 @@ class App {
   }
 
   parseArbeiten(text) {
-    // Teile nach Zeilenumbruch ODER Komma
+    // Teile nach Zeilenumbruch, Komma ODER ||
     return text
-      .split(/[\r\n,]+/)
+      .split(/[\r\n,]+|\s*\|\|\s*/)
       .map(t => t.trim())
       .filter(Boolean);
   }

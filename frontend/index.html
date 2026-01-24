@@ -2317,7 +2317,52 @@
                         </p>
                     </div>
                 </div>
-                
+
+                <div class="form-section ki-training-section" style="margin-bottom: 20px;">
+                    <h3 style="margin: 0 0 10px 0;">📊 KI-Trainingsdaten</h3>
+                    <p class="hint" style="margin-bottom: 15px;">
+                        Überwachen und bereinigen Sie die Daten, mit denen die lokale KI trainiert wird.
+                        Ausreißer (z.B. ungewöhnlich lange/kurze Zeiten) werden automatisch erkannt.
+                    </p>
+
+                    <div id="kiTrainingStatus" style="padding: 12px 15px; border-radius: 8px; background: #f5f5f5; border: 1px solid #ddd; margin-bottom: 15px;">
+                        <div style="display: flex; align-items: center; gap: 10px;">
+                            <span style="font-size: 1.3em;">📈</span>
+                            <div id="kiTrainingStatusText">
+                                <strong>Lade Trainingsdaten...</strong>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div style="display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 15px;">
+                        <button type="button" id="btnExcludeOutliers" class="btn-secondary" style="padding: 8px 16px;">
+                            🚫 Alle Ausreißer ausschließen
+                        </button>
+                        <button type="button" id="btnRetrainModel" class="btn-secondary" style="padding: 8px 16px;">
+                            🔄 Modell neu trainieren
+                        </button>
+                        <button type="button" id="btnShowTrainingDetails" class="btn-secondary" style="padding: 8px 16px;">
+                            📋 Details anzeigen
+                        </button>
+                    </div>
+
+                    <div id="kiTrainingDetails" style="display: none; max-height: 400px; overflow-y: auto; border: 1px solid #ddd; border-radius: 8px; background: #fafafa;">
+                        <table style="width: 100%; border-collapse: collapse; font-size: 0.9em;">
+                            <thead style="position: sticky; top: 0; background: #e0e0e0;">
+                                <tr>
+                                    <th style="padding: 8px; text-align: left; border-bottom: 1px solid #ccc;">Datum</th>
+                                    <th style="padding: 8px; text-align: left; border-bottom: 1px solid #ccc;">Arbeit</th>
+                                    <th style="padding: 8px; text-align: right; border-bottom: 1px solid #ccc;">Zeit (Min)</th>
+                                    <th style="padding: 8px; text-align: center; border-bottom: 1px solid #ccc;">Status</th>
+                                    <th style="padding: 8px; text-align: center; border-bottom: 1px solid #ccc;">Aktion</th>
+                                </tr>
+                            </thead>
+                            <tbody id="kiTrainingTableBody">
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
                 <div class="form-section" id="kiApiKeySection">
                     <h3>ChatGPT / OpenAI API</h3>
                     <p class="hint" style="margin-bottom: 15px;">

@@ -147,23 +147,22 @@ async function trainZeitModel(force = false) {
     }
 
     const arbeitszeiten = await ArbeitszeitenModel.getAll();
+    // Nur abgeschlossene Termine, nicht ausgeschlossene, mit tatsächlicher Zeit
     const rows = await allAsync(
       `SELECT arbeit, geschaetzte_zeit, tatsaechliche_zeit, status
        FROM termine
-       WHERE geloescht_am IS NULL AND arbeit IS NOT NULL`
+       WHERE geloescht_am IS NULL
+         AND arbeit IS NOT NULL
+         AND status = 'abgeschlossen'
+         AND tatsaechliche_zeit IS NOT NULL
+         AND tatsaechliche_zeit > 0
+         AND (ki_training_exclude IS NULL OR ki_training_exclude = 0)`
     );
 
-    const stats = new Map();
-    let globalSum = 0;
-    let globalCount = 0;
-
+    // Erste Phase: Sammle alle Zeiten pro Arbeit für Ausreißer-Erkennung
+    const rawStats = new Map();
     rows.forEach(row => {
-      if (row.status && row.status !== 'abgeschlossen' && !row.tatsaechliche_zeit) {
-        return;
-      }
-      const totalMinuten = row.tatsaechliche_zeit || row.geschaetzte_zeit;
-      if (!totalMinuten || totalMinuten <= 0) return;
-
+      const totalMinuten = row.tatsaechliche_zeit;
       const arbeiten = splitArbeiten(row.arbeit);
       if (arbeiten.length === 0) return;
 
@@ -181,15 +180,53 @@ async function trainZeitModel(force = false) {
         const assigned = (totalMinuten * weight) / sumWeights;
         const key = normalizeText(match.bezeichnung);
 
-        const entry = stats.get(key) || { name: match.bezeichnung, sum: 0, count: 0 };
-        entry.sum += assigned;
-        entry.count += 1;
-        stats.set(key, entry);
-
-        globalSum += assigned;
-        globalCount += 1;
+        if (!rawStats.has(key)) {
+          rawStats.set(key, { name: match.bezeichnung, values: [] });
+        }
+        rawStats.get(key).values.push(assigned);
       });
     });
+
+    // Zweite Phase: Ausreißer filtern (IQR-Methode)
+    const stats = new Map();
+    let globalSum = 0;
+    let globalCount = 0;
+    let outlierCount = 0;
+
+    rawStats.forEach((entry, key) => {
+      const values = entry.values.sort((a, b) => a - b);
+      if (values.length < 3) {
+        // Zu wenig Daten für Ausreißer-Erkennung, alle nutzen
+        const sum = values.reduce((s, v) => s + v, 0);
+        stats.set(key, { name: entry.name, sum, count: values.length });
+        globalSum += sum;
+        globalCount += values.length;
+        return;
+      }
+
+      // IQR-basierte Ausreißer-Erkennung
+      const q1 = values[Math.floor(values.length * 0.25)];
+      const q3 = values[Math.floor(values.length * 0.75)];
+      const iqr = q3 - q1;
+      const lowerBound = Math.max(5, q1 - 1.5 * iqr); // Minimum 5 Minuten
+      const upperBound = q3 + 1.5 * iqr;
+
+      // Filtere Ausreißer
+      const filtered = values.filter(v => v >= lowerBound && v <= upperBound);
+      const outliers = values.length - filtered.length;
+      outlierCount += outliers;
+
+      if (filtered.length > 0) {
+        const sum = filtered.reduce((s, v) => s + v, 0);
+        stats.set(key, { name: entry.name, sum, count: filtered.length });
+        globalSum += sum;
+        globalCount += filtered.length;
+      }
+    });
+
+    if (outlierCount > 0) {
+      console.log(`[KI-Training] ${outlierCount} Ausreißer automatisch gefiltert`);
+    }
 
     const byArbeit = {};
     stats.forEach((entry, key) => {
