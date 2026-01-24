@@ -21,6 +21,12 @@ if ! command -v node &> /dev/null; then
     exit 1
 fi
 
+# Prüfe ob npm installiert ist
+if ! command -v npm &> /dev/null; then
+    echo -e "${RED}[ERROR]${NC} npm ist nicht installiert!"
+    exit 1
+fi
+
 # Backend-Dependencies installieren
 if [ ! -d "backend/node_modules" ]; then
     echo -e "${YELLOW}[INFO]${NC} Installiere Backend-Dependencies..."
@@ -37,6 +43,25 @@ fi
 
 # Erstelle Logs-Verzeichnis
 mkdir -p logs
+
+# Frontend bauen (nur wenn dist fehlt)
+if [ ! -f "frontend/dist/index.html" ]; then
+    echo -e "${YELLOW}[INFO]${NC} Frontend-Build (Vite) wird erstellt..."
+    if [ ! -d "frontend/node_modules" ]; then
+        echo -e "${YELLOW}[INFO]${NC} Installiere Frontend-Dependencies..."
+        cd frontend && npm install > /dev/null 2>&1 && cd ..
+        echo -e "${GREEN}[OK]${NC} Dependencies installiert"
+    fi
+    cd frontend
+    npm run build > /dev/null 2>&1
+    BUILD_STATUS=$?
+    cd ..
+    if [ $BUILD_STATUS -ne 0 ]; then
+        echo -e "${RED}[ERROR]${NC} Frontend-Build fehlgeschlagen!"
+        exit 1
+    fi
+    echo -e "${GREEN}[OK]${NC} Frontend-Build erstellt"
+fi
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 BACKEND_DIR="$SCRIPT_DIR/backend"

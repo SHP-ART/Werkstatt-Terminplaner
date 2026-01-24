@@ -249,7 +249,6 @@ Die Skripte erledigen automatisch:
 ### Voraussetzungen für manuelle Installation
 - Node.js (Version 14 oder höher) - https://nodejs.org
 - npm (wird mit Node.js installiert)
-- Python 3 (macOS/Linux) oder Python (Windows) - https://python.org
 
 **Hinweis**: Bei Verwendung des Windows Installers oder der .exe-Dateien sind keine Voraussetzungen erforderlich!
 
@@ -287,23 +286,18 @@ Der Backend-Server läuft auf: **http://localhost:3001**
 
 ### Frontend starten
 
-**macOS / Linux:**
 ```bash
 cd frontend
-python3 -m http.server 3000
+npm install
+npm run dev
 ```
 
-**Windows:**
-```cmd
-cd frontend
-python -m http.server 3000
-```
-
-Alternativ mit einem anderen Server:
+Alternativ (statischer Build):
 
 ```bash
-# Mit Node.js http-server (npm install -g http-server)
-http-server -p 3000
+cd frontend
+npm run build
+# Danach dist/ mit einem beliebigen Webserver ausliefern
 ```
 
 Das Frontend läuft auf: **http://localhost:3000**

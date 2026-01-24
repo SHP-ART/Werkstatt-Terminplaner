@@ -355,12 +355,12 @@
                 <div class="form-section">
                     <h3>Neuer Termin</h3>
                     
-                    <!-- KI-Assistent Button -->
-                    <div class="ki-assistent-banner" id="kiAssistentBanner">
-                        <button type="button" class="ki-assistent-btn" id="kiAssistentBtn" title="KI-Assistent für schnelle Terminerstellung">
+                    <!-- KI-Assistent Button (nur für OpenAI/ChatGPT) -->
+                    <div class="ki-assistent-banner openai-only" id="kiAssistentBanner">
+                        <button type="button" class="ki-assistent-btn" id="kiAssistentBtn" title="KI-Assistent für schnelle Terminerstellung (benötigt ChatGPT)">
                             <span class="ki-icon">🤖</span>
                             <span class="ki-text">KI-Assistent</span>
-                            <span class="ki-badge">NEU</span>
+                            <span class="ki-badge">ChatGPT</span>
                         </button>
                         <span class="ki-hint">Beschreibe den Termin in eigenen Worten!</span>
                     </div>
@@ -2245,6 +2245,19 @@
 
                 <div class="form-section ki-mode-section" style="margin-bottom: 20px;">
                     <h3 style="margin: 0 0 10px 0;">🧠 KI-Modus</h3>
+
+                    <div id="kiModeStatus" class="ki-mode-status" style="margin-bottom: 15px; padding: 12px 15px; border-radius: 8px; background: #e8f5e9; border: 1px solid #a5d6a7;">
+                        <div style="display: flex; align-items: center; gap: 10px;">
+                            <span id="kiModeStatusIcon" style="font-size: 1.3em;">🟢</span>
+                            <div>
+                                <strong id="kiModeStatusText">Aktiv: Lokale KI</strong>
+                                <div id="kiModeStatusHint" style="font-size: 0.85em; color: #666; margin-top: 2px;">
+                                    Nutzt Heuristiken auf dem Server (kein Internet erforderlich)
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
                     <div class="form-row">
                         <div class="form-group" style="flex: 1;">
                             <label for="kiModeSelect">Betriebsmodus:</label>

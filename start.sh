@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Werkstatt Terminplaner - Frontend Start Script (nur Port 3000)
+# Werkstatt Terminplaner - Frontend Start Script (Vite, Port 3000)
 # Für macOS und Linux
 
 echo "=========================================="
@@ -15,10 +15,17 @@ YELLOW='\033[1;33m'
 RED='\033[0;31m'
 NC='\033[0m' # No Color
 
-# Prüfe ob Python3 installiert ist
-if ! command -v python3 &> /dev/null; then
-    echo -e "${RED}[ERROR]${NC} Python3 ist nicht installiert!"
-    echo "Bitte installieren Sie Python3"
+# Prüfe ob Node.js installiert ist
+if ! command -v node &> /dev/null; then
+    echo -e "${RED}[ERROR]${NC} Node.js ist nicht installiert!"
+    echo "Bitte installieren Sie Node.js von https://nodejs.org"
+    exit 1
+fi
+
+# Prüfe ob npm installiert ist
+if ! command -v npm &> /dev/null; then
+    echo -e "${RED}[ERROR]${NC} npm ist nicht installiert!"
+    echo "Bitte installieren Sie Node.js von https://nodejs.org"
     exit 1
 fi
 
@@ -32,10 +39,19 @@ fi
 # Erstelle Logs-Verzeichnis
 mkdir -p logs
 
+# Frontend-Dependencies installieren (falls noch nicht geschehen)
+if [ ! -d "frontend/node_modules" ]; then
+    echo -e "${YELLOW}[INFO]${NC} Installiere Frontend-Dependencies..."
+    cd frontend
+    npm install > /dev/null 2>&1
+    cd ..
+    echo -e "${GREEN}[OK]${NC} Frontend-Dependencies installiert"
+fi
+
 # Starte Frontend
 echo -e "${BLUE}[START]${NC} Starte Frontend-Server auf Port 3000..."
 cd frontend
-nohup python3 -m http.server 3000 > ../logs/frontend.log 2>&1 &
+nohup npm run dev > ../logs/frontend.log 2>&1 &
 FRONTEND_PID=$!
 echo $FRONTEND_PID > ../logs/frontend.pid
 cd ..

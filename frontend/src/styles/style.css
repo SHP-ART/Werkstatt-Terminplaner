@@ -11443,6 +11443,11 @@ mark.highlight {
     display: none !important;
 }
 
+/* KI Lokal-Modus - OpenAI-only Elemente ausblenden */
+.ki-mode-local .openai-only {
+    display: none !important;
+}
+
 .api-key-status {
     margin-bottom: 20px;
     padding: 15px;

@@ -16,15 +16,6 @@ if %ERRORLEVEL% NEQ 0 (
     exit /b 1
 )
 
-REM Prüfe ob Python installiert ist
-where python >nul 2>nul
-if %ERRORLEVEL% NEQ 0 (
-    echo [ERROR] Python ist nicht installiert!
-    echo Bitte installieren Sie Python von https://python.org
-    pause
-    exit /b 1
-)
-
 REM Backend-Dependencies installieren (falls noch nicht geschehen)
 if not exist "backend\node_modules\" (
     echo [INFO] Installiere Backend-Dependencies...
@@ -32,6 +23,15 @@ if not exist "backend\node_modules\" (
     call npm install >nul 2>&1
     cd ..
     echo [OK] Backend-Dependencies installiert
+)
+
+REM Frontend-Dependencies installieren (falls noch nicht geschehen)
+if not exist "frontend\node_modules\" (
+    echo [INFO] Installiere Frontend-Dependencies...
+    cd frontend
+    call npm install >nul 2>&1
+    cd ..
+    echo [OK] Frontend-Dependencies installiert
 )
 
 REM Erstelle Logs-Verzeichnis
@@ -64,7 +64,7 @@ timeout /t 3 /nobreak >nul
 REM Starte Frontend
 echo [START] Starte Frontend-Server auf Port 3000...
 cd frontend
-start /B cmd /c "python -m http.server 3000 > ..\logs\frontend.log 2>&1"
+start /B cmd /c "npm run dev > ..\logs\frontend.log 2>&1"
 cd ..
 timeout /t 2 /nobreak >nul
 

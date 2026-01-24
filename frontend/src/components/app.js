@@ -11616,9 +11616,9 @@ class App {
     try {
       const einstellungen = await EinstellungenService.getWerkstatt();
       this.prefillWerkstattSettings(einstellungen);
-      this.updateApiKeyStatus(einstellungen);
+      this.updateApiKeyStatus(einstellungen); // Setzt this._hasOpenAIKey
       this.updateRealtimeEnabledStatus(einstellungen?.realtime_enabled !== false);
-      this.updateKIModeStatus(einstellungen?.ki_mode || 'local');
+      this.updateKIModeStatus(einstellungen?.ki_mode || 'local', !!einstellungen?.chatgpt_api_key_configured);
       this.updateSmartSchedulingStatus(einstellungen?.smart_scheduling_enabled !== false);
       this.updateAnomalyDetectionStatus(einstellungen?.anomaly_detection_enabled !== false);
     } catch (error) {
@@ -11660,10 +11660,13 @@ class App {
   updateApiKeyStatus(einstellungen) {
     const statusContainer = document.getElementById('apiKeyStatus');
     if (!statusContainer) return;
-    
+
     const isConfigured = einstellungen?.chatgpt_api_key_configured;
     const maskedKey = einstellungen?.chatgpt_api_key_masked;
-    
+
+    // API-Key Status für KI-Modus-Anzeige speichern
+    this._hasOpenAIKey = !!isConfigured;
+
     if (isConfigured) {
       statusContainer.innerHTML = `
         <div class="status-indicator configured">
@@ -11679,7 +11682,7 @@ class App {
         </div>
       `;
     }
-    
+
     // KI-Enabled Status aktualisieren
     this.updateKIEnabledStatus(einstellungen?.ki_enabled !== false);
   }
@@ -11711,16 +11714,68 @@ class App {
     if (modeSelect) {
       modeSelect.disabled = !enabled;
     }
+
+    // KI-Modus Status-Indikator aktualisieren
+    this.updateKIModeStatus(this.kiMode);
   }
 
   // KI-Modus aktualisieren (local/openai)
-  updateKIModeStatus(mode) {
+  updateKIModeStatus(mode, hasApiKey = null) {
     const select = document.getElementById('kiModeSelect');
     if (select) {
       select.value = mode || 'local';
       select.disabled = !this.kiEnabled;
     }
     this.kiMode = mode || 'local';
+
+    // Status-Indikator aktualisieren
+    const statusContainer = document.getElementById('kiModeStatus');
+    const statusIcon = document.getElementById('kiModeStatusIcon');
+    const statusText = document.getElementById('kiModeStatusText');
+    const statusHint = document.getElementById('kiModeStatusHint');
+
+    if (statusContainer && statusIcon && statusText && statusHint) {
+      if (!this.kiEnabled) {
+        // KI deaktiviert
+        statusContainer.style.background = '#f5f5f5';
+        statusContainer.style.borderColor = '#e0e0e0';
+        statusIcon.textContent = '⚪';
+        statusText.textContent = 'KI deaktiviert';
+        statusHint.textContent = 'Aktiviere KI-Funktionen oben, um den Modus zu nutzen';
+      } else if (this.kiMode === 'openai') {
+        // OpenAI Modus
+        const apiKeyConfigured = hasApiKey !== null ? hasApiKey : this._hasOpenAIKey;
+        if (apiKeyConfigured) {
+          statusContainer.style.background = '#e3f2fd';
+          statusContainer.style.borderColor = '#90caf9';
+          statusIcon.textContent = '🔵';
+          statusText.textContent = 'Aktiv: OpenAI (ChatGPT)';
+          statusHint.textContent = 'Nutzt OpenAI API für intelligente Vorschläge (Internet erforderlich)';
+        } else {
+          statusContainer.style.background = '#fff3e0';
+          statusContainer.style.borderColor = '#ffcc80';
+          statusIcon.textContent = '🟠';
+          statusText.textContent = 'OpenAI ausgewählt - API-Key fehlt!';
+          statusHint.textContent = 'Bitte konfiguriere unten einen API-Key für OpenAI';
+        }
+      } else {
+        // Lokal Modus
+        statusContainer.style.background = '#e8f5e9';
+        statusContainer.style.borderColor = '#a5d6a7';
+        statusIcon.textContent = '🟢';
+        statusText.textContent = 'Aktiv: Lokale KI';
+        statusHint.textContent = 'Nutzt Heuristiken auf dem Server (kein Internet erforderlich)';
+      }
+    }
+
+    // Body-Klasse für OpenAI-only Elemente setzen
+    if (this.kiEnabled && this.kiMode === 'openai') {
+      document.body.classList.remove('ki-mode-local');
+      document.body.classList.add('ki-mode-openai');
+    } else {
+      document.body.classList.remove('ki-mode-openai');
+      document.body.classList.add('ki-mode-local');
+    }
   }
 
   // Echtzeit-Updates Status aktualisieren (WebSocket ein-/aus)

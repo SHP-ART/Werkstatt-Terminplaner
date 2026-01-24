@@ -127,12 +127,20 @@ function checkEnvironment() {
 // Funktion zum Finden des Frontend-Ordners
 function findFrontendPath() {
     const possiblePaths = [
+        // Entwicklung: dist (Vite Build)
+        path.join(__dirname, '..', '..', 'frontend', 'dist'),
         // Entwicklung: Frontend neben Backend
         path.join(__dirname, '..', '..', 'frontend'),
+        // Produktion: dist neben der EXE
+        path.join(process.resourcesPath || '', '..', 'frontend', 'dist'),
         // Produktion: Frontend im gleichen Ordner wie die EXE
         path.join(process.resourcesPath || '', '..', 'frontend'),
+        // Produktion: dist in resources
+        path.join(process.resourcesPath || '', 'frontend', 'dist'),
         // Produktion: Frontend in resources
         path.join(process.resourcesPath || '', 'frontend'),
+        // Fallback: dist relativ zum Arbeitsverzeichnis
+        path.join(process.cwd(), 'frontend', 'dist'),
         // Fallback: Relativ zum Arbeitsverzeichnis
         path.join(process.cwd(), 'frontend'),
     ];
