@@ -7,6 +7,10 @@ logs/
 .DS_Store
 .env
 
+# Backups (lokal behalten, nicht auf GitHub)
+backups/
+backend/backups/
+
 # Lokale Testdaten (nicht hochladen)
 testdaten/
 
