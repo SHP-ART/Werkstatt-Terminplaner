@@ -24760,7 +24760,8 @@ class App {
 
 
 const app = new App();
-// App global verfügbar machen für onclick-Handler
+// App global verfügbar machen für onclick-Handler und Vite-Kompatibilität
+window.App = App;
 window.app = app;
 
 // Globale Funktion für Sub-Tab-Wechsel (Fallback für onclick)

@@ -1,5 +1,6 @@
 const { app, BrowserWindow } = require('electron');
 const path = require('path');
+const fs = require('fs');
 
 function createWindow() {
   const mainWindow = new BrowserWindow({
@@ -10,7 +11,17 @@ function createWindow() {
     }
   });
 
-  mainWindow.loadFile('index.html');
+  // Prüfe ob dist/index.html existiert (Production Build)
+  const distPath = path.join(__dirname, 'dist', 'index.html');
+  const devPath = path.join(__dirname, 'index.html');
+
+  if (fs.existsSync(distPath)) {
+    // Production: Lade aus dist/
+    mainWindow.loadFile(distPath);
+  } else {
+    // Development: Lade direkt (für npm run dev)
+    mainWindow.loadFile(devPath);
+  }
 
   // Open the DevTools.
   // mainWindow.webContents.openDevTools();

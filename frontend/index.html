@@ -4,8 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Werkstatt Terminplaner</title>
-    <link rel="stylesheet" href="src/styles/style.css?v=68">
-    <!-- SheetJS für Excel-Import -->
+    <!-- SheetJS für Excel-Import (extern, nicht gebündelt) -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 </head>
 <body>
@@ -3691,8 +3690,7 @@
         </div>
     </div>
 
-    <script src="config.js"></script>
-    <script src="src/services/api.js?v=46"></script>
-    <script src="src/components/app.js?v=166"></script>
+    <!-- Vite Entry Point -->
+    <script type="module" src="/src/main.js"></script>
 </body>
 </html>

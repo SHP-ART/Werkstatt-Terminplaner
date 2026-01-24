@@ -77,5 +77,10 @@ const CONFIG = {
   setServerConfig
 };
 
+// Global verfügbar machen (für Vite-Kompatibilität)
+window.CONFIG = CONFIG;
+window.getServerConfig = getServerConfig;
+window.setServerConfig = setServerConfig;
+
 // Debug-Ausgabe beim Laden
 console.log('Server-Konfiguration:', getServerConfig());

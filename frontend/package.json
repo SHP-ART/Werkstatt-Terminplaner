@@ -4,22 +4,24 @@
   "description": "Frontend für Werkstatt Terminplaner",
   "main": "main.js",
   "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
     "start": "electron .",
-    "build:exe": "set CSC_IDENTITY_AUTO_DISCOVERY=false&& electron-builder"
+    "build:exe": "npm run build && electron-builder"
   },
   "devDependencies": {
     "electron": "^28.2.3",
-    "electron-builder": "^24.9.1"
+    "electron-builder": "^24.9.1",
+    "vite": "^7.3.1"
   },
   "build": {
     "appId": "com.example.werkstatt-terminplaner",
     "productName": "Werkstatt Terminplaner",
     "files": [
-      "index.html",
+      "dist/**/*",
       "main.js",
-      "preload.js",
-      "src/",
-      "config.js"
+      "preload.js"
     ],
     "win": {
       "target": "nsis"

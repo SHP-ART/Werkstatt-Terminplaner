@@ -792,3 +792,19 @@ class KIPlanungService {
     return ApiService.get(`/ki-planung/wochenplanung/${startDatum}`);
   }
 }
+
+// Global verfügbar machen (für Vite-Kompatibilität)
+window.ApiService = ApiService;
+window.KundenService = KundenService;
+window.TermineService = TermineService;
+window.ArbeitszeitenService = ArbeitszeitenService;
+window.AuslastungService = AuslastungService;
+window.EinstellungenService = EinstellungenService;
+window.MitarbeiterService = MitarbeiterService;
+window.LehrlingeService = LehrlingeService;
+window.BackupService = BackupService;
+window.ErsatzautosService = ErsatzautosService;
+window.PhasenService = PhasenService;
+window.AIService = AIService;
+window.TeileBestellService = TeileBestellService;
+window.KIPlanungService = KIPlanungService;
