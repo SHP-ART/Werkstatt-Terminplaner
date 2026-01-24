@@ -10560,25 +10560,59 @@ class App {
 
   // Kennzeichen in Teile zerlegen
   parseKennzeichen(kz) {
-    const normalized = this.normalizeKennzeichen(kz);
-    
-    // Versuche verschiedene Formate zu parsen
-    // Format: ABC-XY 123 oder ABCXY123 oder ABC XY 123
-    
-    // Versuche Bezirk (1-3 Buchstaben am Anfang)
+    if (!kz) return { bezirk: '', buchstaben: '', nummer: '' };
+
+    const original = (kz || '').toUpperCase().trim();
+
+    // Methode 1: Versuche anhand von Trennzeichen (Bindestrich/Leerzeichen) zu parsen
+    // Format: "HY-D 107" oder "HY D 107" oder "HY-D107"
+    const mitTrennzeichen = original.match(/^([A-ZÄÖÜ]{1,3})[\s\-]+([A-ZÄÖÜ]{1,2})[\s\-]*(\d+[A-Z]?)$/);
+    if (mitTrennzeichen) {
+      return {
+        bezirk: mitTrennzeichen[1],
+        buchstaben: mitTrennzeichen[2],
+        nummer: mitTrennzeichen[3]
+      };
+    }
+
+    // Methode 2: Format mit nur einem Trennzeichen "HY-D107" oder "HY D107"
+    const einTrennzeichen = original.match(/^([A-ZÄÖÜ]{1,3})[\s\-]+([A-ZÄÖÜ]{1,2})(\d+[A-Z]?)$/);
+    if (einTrennzeichen) {
+      return {
+        bezirk: einTrennzeichen[1],
+        buchstaben: einTrennzeichen[2],
+        nummer: einTrennzeichen[3]
+      };
+    }
+
+    // Methode 3: Fallback für zusammengeschriebene Kennzeichen "HYD107"
+    // Hier müssen wir raten - nehme kürzestmöglichen Bezirk wenn Buchstaben folgen
+    const normalized = original.replace(/[\s\-]/g, '');
+
+    // Versuche zuerst 1-Buchstaben-Bezirk, dann 2, dann 3
+    for (let bezirkLen = 1; bezirkLen <= 3; bezirkLen++) {
+      const potBezirk = normalized.substring(0, bezirkLen);
+      const rest = normalized.substring(bezirkLen);
+
+      // Prüfe ob nach Bezirk noch 1-2 Buchstaben kommen (Kennungsbuchstaben)
+      const buchstabenMatch = rest.match(/^([A-ZÄÖÜ]{1,2})(\d+[A-Z]?)$/);
+      if (buchstabenMatch && /^[A-ZÄÖÜ]+$/.test(potBezirk)) {
+        return {
+          bezirk: potBezirk,
+          buchstaben: buchstabenMatch[1],
+          nummer: buchstabenMatch[2]
+        };
+      }
+    }
+
+    // Letzter Fallback: Alte greedy Methode
     const bezirkMatch = normalized.match(/^([A-ZÄÖÜ]{1,3})/);
     const bezirk = bezirkMatch ? bezirkMatch[1] : '';
-    
-    // Rest nach Bezirk
     const rest = normalized.substring(bezirk.length);
-    
-    // Buchstaben (1-2 Buchstaben nach Bezirk)
     const buchstabenMatch = rest.match(/^([A-ZÄÖÜ]{1,2})/);
     const buchstaben = buchstabenMatch ? buchstabenMatch[1] : '';
-    
-    // Nummer (Rest: Zahlen + evtl. E/H)
     const nummer = rest.substring(buchstaben.length);
-    
+
     return { bezirk, buchstaben, nummer };
   }
 
