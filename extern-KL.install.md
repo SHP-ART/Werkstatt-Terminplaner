@@ -24,6 +24,24 @@ SERVICE_PORT=5000 \
 bash <(wget -qO- https://raw.githubusercontent.com/SHP-ART/Werkstatt-Terminplaner/main/tools/ki-service/bootstrap.sh)
 ```
 
+## 1b) Standalone Installer (ohne lokales Repo)
+
+Dieser Installer laedt nur die KI-Dateien aus GitHub und richtet den Service ein.
+
+```bash
+BACKEND_URL=http://<WERKSTATT-SERVER>:3001 \
+SERVICE_PORT=5000 \
+bash <(curl -fsSL https://raw.githubusercontent.com/SHP-ART/Werkstatt-Terminplaner/main/tools/ki-service/standalone-install.sh)
+```
+
+Alternativ mit `wget`:
+
+```bash
+BACKEND_URL=http://<WERKSTATT-SERVER>:3001 \
+SERVICE_PORT=5000 \
+bash <(wget -qO- https://raw.githubusercontent.com/SHP-ART/Werkstatt-Terminplaner/main/tools/ki-service/standalone-install.sh)
+```
+
 ## 2) Status pruefen
 
 ```bash
@@ -73,4 +91,3 @@ TRAINING_INTERVAL_MINUTES=720 \
 TRAINING_LOOKBACK_DAYS=7 \
 bash <(curl -fsSL https://raw.githubusercontent.com/SHP-ART/Werkstatt-Terminplaner/main/tools/ki-service/bootstrap.sh)
 ```
-
