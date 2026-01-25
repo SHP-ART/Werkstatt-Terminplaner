@@ -21574,6 +21574,7 @@ class App {
       if (response.mode === 'external') {
         this._externalKIStatus = response.health || null;
         this.updateExternalKIStatus(this._externalKIStatus);
+        this.updateExternalTrainingStatus(this._externalKIStatus);
         if (this.kiMode === 'external') {
           this.updateKIModeStatus('external', null, this._externalKIStatus);
         }
@@ -21602,6 +21603,11 @@ class App {
         banner.style.display = 'none';
       }
       this.updateExternalKIStatus({
+        success: false,
+        configured: true,
+        error: error.message || 'Status-Abfrage fehlgeschlagen'
+      });
+      this.updateExternalTrainingStatus({
         success: false,
         configured: true,
         error: error.message || 'Status-Abfrage fehlgeschlagen'
@@ -21650,6 +21656,40 @@ class App {
     statusContainer.style.borderColor = '#ffcc80';
     statusIcon.textContent = '🟠';
     statusText.innerHTML = `<strong>Externe KI nicht erreichbar</strong>${details}<div style="font-size:0.85em; color:#666; margin-top:4px;">${status.error || 'Bitte Service/Netzwerk prüfen'}</div>`;
+  }
+
+  updateExternalTrainingStatus(status) {
+    const statusContainer = document.getElementById('externalKiTrainingStatus');
+    const statusText = document.getElementById('externalKiTrainingStatusText');
+    if (!statusContainer || !statusText) return;
+
+    if (!status) {
+      statusText.innerHTML = '<strong>Externes KI-Training wird geprüft...</strong>';
+      return;
+    }
+
+    if (!status.configured) {
+      statusText.innerHTML = '<strong>Externe KI nicht konfiguriert</strong>';
+      return;
+    }
+
+    if (!status.success) {
+      statusText.innerHTML = `<strong>Externes KI-Training nicht erreichbar</strong><div style="font-size:0.85em; color:#666; margin-top:4px;">${status.error || 'Bitte Service prüfen'}</div>`;
+      return;
+    }
+
+    const samples = status.model_samples ?? status.samples ?? 0;
+    const trainedAt = status.trained_at ? new Date(status.trained_at * 1000) : null;
+    const trainedText = trainedAt ? trainedAt.toLocaleString('de-DE') : 'unbekannt';
+    const lastId = status.last_id ?? '-';
+    const lookback = status.lookback_days ?? '-';
+
+    statusText.innerHTML = `
+      <strong>Externes Modell: ${samples} Samples</strong>
+      <div style="font-size:0.85em; color:#666; margin-top:4px;">
+        Letztes Training: ${trainedText} • Letzte ID: ${lastId} • Lookback: ${lookback} Tage
+      </div>
+    `;
   }
 
   /**
