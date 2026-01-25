@@ -9,7 +9,6 @@ Ersetze `<WERKSTATT-SERVER>` durch die IP/den Host deines Werkstatt-Servers.
 Der KI-Service laeuft auf Port 5000.
 
 ```bash
-BACKEND_URL=http://<WERKSTATT-SERVER>:3001 \
 REPO_URL=https://github.com/SHP-ART/Werkstatt-Terminplaner.git \
 SERVICE_PORT=5000 \
 bash <(curl -fsSL https://raw.githubusercontent.com/SHP-ART/Werkstatt-Terminplaner/main/tools/ki-service/bootstrap.sh)
@@ -18,7 +17,6 @@ bash <(curl -fsSL https://raw.githubusercontent.com/SHP-ART/Werkstatt-Terminplan
 Alternativ mit `wget`:
 
 ```bash
-BACKEND_URL=http://<WERKSTATT-SERVER>:3001 \
 REPO_URL=https://github.com/SHP-ART/Werkstatt-Terminplaner.git \
 SERVICE_PORT=5000 \
 bash <(wget -qO- https://raw.githubusercontent.com/SHP-ART/Werkstatt-Terminplaner/main/tools/ki-service/bootstrap.sh)
@@ -29,7 +27,6 @@ bash <(wget -qO- https://raw.githubusercontent.com/SHP-ART/Werkstatt-Terminplane
 Dieser Installer laedt nur die KI-Dateien aus GitHub und richtet den Service ein.
 
 ```bash
-BACKEND_URL=http://<WERKSTATT-SERVER>:3001 \
 SERVICE_PORT=5000 \
 bash <(curl -fsSL https://raw.githubusercontent.com/SHP-ART/Werkstatt-Terminplaner/main/tools/ki-service/standalone-install.sh)
 ```
@@ -37,7 +34,6 @@ bash <(curl -fsSL https://raw.githubusercontent.com/SHP-ART/Werkstatt-Terminplan
 Alternativ mit `wget`:
 
 ```bash
-BACKEND_URL=http://<WERKSTATT-SERVER>:3001 \
 SERVICE_PORT=5000 \
 bash <(wget -qO- https://raw.githubusercontent.com/SHP-ART/Werkstatt-Terminplaner/main/tools/ki-service/standalone-install.sh)
 ```
@@ -64,6 +60,9 @@ cd ../frontend && npm run build
 ./start_server.sh
 ```
 
+Hinweis: Die Auto-Erkennung der KI zum Backend nutzt mDNS (`_werkstatt-backend._tcp`).
+Falls das im Netzwerk blockiert ist, setze `BACKEND_URL` manuell.
+
 ## 4) Im UI aktivieren
 
 Einstellungen -> KI/API:
@@ -74,6 +73,7 @@ Einstellungen -> KI/API:
 
 Diese Variablen kannst du beim One-Liner setzen:
 
+- `BACKEND_URL` (optional, falls Auto-Discovery nicht funktioniert)
 - `SERVICE_PORT` (Default: 5000)
 - `TRAINING_INTERVAL_MINUTES` (Default: 1440)
 - `TRAINING_LOOKBACK_DAYS` (Default: 14)

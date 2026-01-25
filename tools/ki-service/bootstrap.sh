@@ -23,9 +23,7 @@ if [[ -z "$REPO_URL" ]]; then
 fi
 
 if [[ -z "$BACKEND_URL" ]]; then
-  echo "BACKEND_URL ist erforderlich."
-  echo "Beispiel: BACKEND_URL=http://192.168.1.10:3001"
-  exit 1
+  echo "Hinweis: BACKEND_URL nicht gesetzt - Auto-Discovery wird genutzt."
 fi
 
 if [[ "${EUID}" -ne 0 ]]; then

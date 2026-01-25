@@ -13,7 +13,7 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.linear_model import Ridge
 from sklearn.metrics.pairwise import cosine_similarity
 import joblib
-from zeroconf import ServiceInfo, Zeroconf
+from zeroconf import ServiceBrowser, ServiceInfo, Zeroconf
 
 APP_DIR = os.path.dirname(os.path.abspath(__file__))
 BASE_DIR = os.path.abspath(os.path.join(APP_DIR, '..'))
@@ -30,6 +30,7 @@ TRAINING_BACKOFF_INITIAL_SECONDS = float(os.environ.get('TRAINING_BACKOFF_INITIA
 TRAINING_BACKOFF_MAX_SECONDS = float(os.environ.get('TRAINING_BACKOFF_MAX_SECONDS', '300'))
 BACKEND_TIMEOUT_SECONDS = float(os.environ.get('BACKEND_TIMEOUT_SECONDS', '5'))
 DISCOVERY_ENABLED = os.environ.get('DISCOVERY_ENABLED', '1') != '0'
+BACKEND_DISCOVERY_ENABLED = os.environ.get('BACKEND_DISCOVERY_ENABLED', '1') != '0'
 
 DEFAULT_MINUTES = 60
 MIN_MINUTES = 5
@@ -52,6 +53,9 @@ _model_state = {
 
 _zeroconf = None
 _service_info = None
+_backend_zeroconf = None
+_backend_browser = None
+_backend_lock = threading.Lock()
 
 KATEGORIEN = [
     ('Inspektion', ['inspektion', 'service', 'wartung', 'durchsicht']),
@@ -129,6 +133,20 @@ def ensure_data_dir() -> None:
         os.makedirs(DATA_DIR, exist_ok=True)
 
 
+def set_backend_url(url: str) -> None:
+    global BACKEND_URL
+    if not url:
+        return
+    normalized = url.rstrip('/')
+    with _backend_lock:
+        BACKEND_URL = normalized
+
+
+def get_backend_url() -> str:
+    with _backend_lock:
+        return BACKEND_URL
+
+
 def load_model_from_disk() -> None:
     if not os.path.isfile(MODEL_PATH):
         return
@@ -155,6 +173,10 @@ def fetch_training_data_with_retry(since_id: int) -> Optional[tuple]:
     delay = TRAINING_BACKOFF_INITIAL_SECONDS
     for attempt in range(1, TRAINING_MAX_RETRIES + 1):
         try:
+            backend_url = get_backend_url()
+            if not backend_url:
+                logging.info('BACKEND_URL nicht gesetzt - warte auf Auto-Discovery.')
+                return None
             params = {}
             if TRAINING_LIMIT <= 0:
                 params['limit'] = 'all'
@@ -165,7 +187,7 @@ def fetch_training_data_with_retry(since_id: int) -> Optional[tuple]:
             if since_id > 0:
                 params['since_id'] = since_id
 
-            url = f'{BACKEND_URL}/api/ai/training-data'
+            url = f'{backend_url}/api/ai/training-data'
             response = requests.get(url, params=params, timeout=BACKEND_TIMEOUT_SECONDS)
             response.raise_for_status()
             payload = response.json()
@@ -181,7 +203,9 @@ def fetch_training_data_with_retry(since_id: int) -> Optional[tuple]:
 
 
 def train_model() -> None:
-    if not BACKEND_URL:
+    if not get_backend_url():
+        if BACKEND_DISCOVERY_ENABLED:
+            start_backend_discovery()
         logging.info('BACKEND_URL nicht gesetzt - Training uebersprungen.')
         return
 
@@ -302,6 +326,9 @@ def train_model() -> None:
 def training_loop() -> None:
     while True:
         train_model()
+        if not get_backend_url():
+            time.sleep(60)
+            continue
         time.sleep(TRAINING_INTERVAL_MINUTES * 60)
 
 
@@ -390,6 +417,41 @@ def register_mdns() -> None:
         logging.warning('mDNS Registrierung fehlgeschlagen: %s', err)
 
 
+class BackendDiscoveryListener:
+    def add_service(self, zeroconf, service_type, name):
+        info = zeroconf.get_service_info(service_type, name, timeout=2000)
+        if not info:
+            return
+        ip = None
+        for addr in info.addresses:
+            if len(addr) == 4:
+                ip = socket.inet_ntoa(addr)
+                break
+        if not ip:
+            return
+        url = f'http://{ip}:{info.port}'
+        set_backend_url(url)
+        logging.info('Backend via mDNS gefunden: %s', url)
+
+
+def start_backend_discovery() -> None:
+    global _backend_zeroconf, _backend_browser
+    if not BACKEND_DISCOVERY_ENABLED or get_backend_url():
+        return
+    if _backend_browser:
+        return
+    try:
+        _backend_zeroconf = Zeroconf()
+        _backend_browser = ServiceBrowser(
+            _backend_zeroconf,
+            '_werkstatt-backend._tcp.local.',
+            BackendDiscoveryListener()
+        )
+        logging.info('Suche Backend via mDNS...')
+    except Exception as err:
+        logging.warning('Backend mDNS Discovery fehlgeschlagen: %s', err)
+
+
 def unregister_mdns() -> None:
     global _zeroconf, _service_info
     if _zeroconf and _service_info:
@@ -404,6 +466,7 @@ def unregister_mdns() -> None:
 def on_startup() -> None:
     load_model_from_disk()
     register_mdns()
+    start_backend_discovery()
     thread = threading.Thread(target=training_loop, daemon=True)
     thread.start()
 
@@ -418,7 +481,8 @@ def health() -> dict:
     return {
         'status': 'ok',
         'device': socket.gethostname(),
-        'backend_url': BACKEND_URL or None,
+        'backend_url': get_backend_url() or None,
+        'backend_discovery': BACKEND_DISCOVERY_ENABLED,
         'model_samples': _model_state.get('samples', 0),
         'trained_at': _model_state.get('trained_at', 0),
         'last_id': _model_state.get('last_id', 0),

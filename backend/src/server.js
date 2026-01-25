@@ -61,6 +61,10 @@ logStartup('Lade localAiService...');
 const localAiService = require('./services/localAiService');
 logStartup('localAiService geladen ✓');
 
+logStartup('Lade backendDiscoveryService...');
+const backendDiscoveryService = require('./services/backendDiscoveryService');
+logStartup('backendDiscoveryService geladen ✓');
+
 logStartup('Lade kiDiscoveryService...');
 const kiDiscoveryService = require('./services/kiDiscoveryService');
 kiDiscoveryService.start();
@@ -344,6 +348,7 @@ async function startServer(clientCountCallback, requestLogCallback) {
         console.log(`🌐 Netzwerk:       http://<IP-ADRESSE>:${PORT}`);
         console.log(`\n👉 Zum Stoppen: CTRL+C\n`);
         logStartup(`Server hört auf http://0.0.0.0:${PORT}`);
+        backendDiscoveryService.start(PORT);
     });
     
     server.on('error', (err) => {
@@ -365,6 +370,7 @@ async function startServer(clientCountCallback, requestLogCallback) {
         // Neue Requests ablehnen
         server.close(async () => {
             console.log('✅ HTTP Server: Keine neuen Requests mehr angenommen');
+            backendDiscoveryService.stop();
             
             // WebSocket-Connections schließen
             if (wss) {
