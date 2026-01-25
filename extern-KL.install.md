@@ -11,7 +11,7 @@ Der KI-Service laeuft auf Port 5000.
 ```bash
 REPO_URL=https://github.com/SHP-ART/Werkstatt-Terminplaner.git \
 SERVICE_PORT=5000 \
-bash <(curl -fsSL https://raw.githubusercontent.com/SHP-ART/Werkstatt-Terminplaner/main/tools/ki-service/bootstrap.sh)
+bash <(curl -fsSL https://raw.githubusercontent.com/SHP-ART/Werkstatt-Terminplaner/master/tools/ki-service/bootstrap.sh)
 ```
 
 Alternativ mit `wget`:
@@ -19,7 +19,7 @@ Alternativ mit `wget`:
 ```bash
 REPO_URL=https://github.com/SHP-ART/Werkstatt-Terminplaner.git \
 SERVICE_PORT=5000 \
-bash <(wget -qO- https://raw.githubusercontent.com/SHP-ART/Werkstatt-Terminplaner/main/tools/ki-service/bootstrap.sh)
+bash <(wget -qO- https://raw.githubusercontent.com/SHP-ART/Werkstatt-Terminplaner/master/tools/ki-service/bootstrap.sh)
 ```
 
 ## 1b) Standalone Installer (ohne lokales Repo)
@@ -28,14 +28,14 @@ Dieser Installer laedt nur die KI-Dateien aus GitHub und richtet den Service ein
 
 ```bash
 SERVICE_PORT=5000 \
-bash <(curl -fsSL https://raw.githubusercontent.com/SHP-ART/Werkstatt-Terminplaner/main/tools/ki-service/standalone-install.sh)
+bash <(curl -fsSL https://raw.githubusercontent.com/SHP-ART/Werkstatt-Terminplaner/master/tools/ki-service/standalone-install.sh)
 ```
 
 Alternativ mit `wget`:
 
 ```bash
 SERVICE_PORT=5000 \
-bash <(wget -qO- https://raw.githubusercontent.com/SHP-ART/Werkstatt-Terminplaner/main/tools/ki-service/standalone-install.sh)
+bash <(wget -qO- https://raw.githubusercontent.com/SHP-ART/Werkstatt-Terminplaner/master/tools/ki-service/standalone-install.sh)
 ```
 
 ## 2) Status pruefen
@@ -89,5 +89,60 @@ REPO_URL=https://github.com/SHP-ART/Werkstatt-Terminplaner.git \
 SERVICE_PORT=5000 \
 TRAINING_INTERVAL_MINUTES=720 \
 TRAINING_LOOKBACK_DAYS=7 \
-bash <(curl -fsSL https://raw.githubusercontent.com/SHP-ART/Werkstatt-Terminplaner/main/tools/ki-service/bootstrap.sh)
+bash <(curl -fsSL https://raw.githubusercontent.com/SHP-ART/Werkstatt-Terminplaner/master/tools/ki-service/bootstrap.sh)
 ```
+## 6) Service aktualisieren (auf dem externen KI-Gerät)
+
+Um den externen KI-Service auf die neueste Version zu aktualisieren:
+
+```bash
+# Auf das KI-Gerät verbinden (ersetze IP und Benutzer)
+ssh benutzer@<KI-GERAET-IP>
+
+# Service stoppen
+sudo systemctl stop werkstatt-ki
+
+# Zum Service-Verzeichnis wechseln
+cd /opt/werkstatt-ki
+
+# Code aktualisieren (falls über Git installiert)
+sudo git pull origin master
+
+# Dependencies aktualisieren
+cd tools/ki-service
+sudo /opt/werkstatt-ki/venv/bin/pip install -r requirements.txt --upgrade
+
+# Service neu starten
+sudo systemctl restart werkstatt-ki
+
+# Status und Logs prüfen
+sudo systemctl status werkstatt-ki
+sudo journalctl -u werkstatt-ki -n 50
+```
+
+**Alternativ: Neuinstallation mit dem Standalone-Installer**
+
+Diese Methode überschreibt die Installation komplett:
+
+```bash
+ssh benutzer@<KI-GERAET-IP>
+
+# Service stoppen
+sudo systemctl stop werkstatt-ki
+
+# Neuinstallation (behält Konfiguration)
+SERVICE_PORT=5000 \
+bash <(curl -fsSL https://raw.githubusercontent.com/SHP-ART/Werkstatt-Terminplaner/master/tools/ki-service/standalone-install.sh)
+```
+
+**Nach dem Update prüfen:**
+
+```bash
+# Prüfe ob der Service läuft
+curl http://<KI-GERAET-IP>:5000/health
+
+# Prüfe ob neue Endpoints verfügbar sind (z.B. manuelles Training)
+curl -X POST http://<KI-GERAET-IP>:5000/api/retrain
+```
+
+Wenn die Antwort `{"success": true, ...}` statt `{"detail":"Not Found"}` ist, wurde das Update erfolgreich durchgeführt.

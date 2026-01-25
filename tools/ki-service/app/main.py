@@ -42,13 +42,16 @@ logging.basicConfig(level=logging.INFO, format='[KI] %(message)s')
 app = FastAPI(title='Werkstatt KI Service', version='1.0')
 
 _model_lock = threading.Lock()
+_train_lock = threading.Lock()
 _model_state = {
     'vectorizer': None,
     'regressor': None,
     'task_texts': [],
     'task_matrix': None,
     'trained_at': 0,
-    'samples': 0
+    'samples': 0,
+    'training_in_progress': False,
+    'last_train_request_at': 0
 }
 
 _zeroconf = None
@@ -202,7 +205,7 @@ def fetch_training_data_with_retry(since_id: int) -> Optional[tuple]:
             delay = min(delay * 2, TRAINING_BACKOFF_MAX_SECONDS)
 
 
-def train_model() -> None:
+def _train_model_internal() -> None:
     if not get_backend_url():
         if BACKEND_DISCOVERY_ENABLED:
             start_backend_discovery()
@@ -321,6 +324,23 @@ def train_model() -> None:
 
     save_model_to_disk(state)
     logging.info('Modell trainiert (%s Samples, %s Tasks).', len(texts), len(task_texts))
+
+
+def train_model() -> bool:
+    if not _train_lock.acquire(blocking=False):
+        logging.info('Training laeuft bereits.')
+        return False
+
+    try:
+        with _model_lock:
+            _model_state['training_in_progress'] = True
+            _model_state['last_train_request_at'] = int(time.time())
+        _train_model_internal()
+        return True
+    finally:
+        with _model_lock:
+            _model_state['training_in_progress'] = False
+        _train_lock.release()
 
 
 def training_loop() -> None:
@@ -487,6 +507,8 @@ def health() -> dict:
         'trained_at': _model_state.get('trained_at', 0),
         'last_id': _model_state.get('last_id', 0),
         'lookback_days': TRAINING_LOOKBACK_DAYS,
+        'training_in_progress': _model_state.get('training_in_progress', False),
+        'last_train_request_at': _model_state.get('last_train_request_at', 0),
         'service_port': SERVICE_PORT
     }
 
@@ -564,4 +586,16 @@ def teile_bedarf_endpoint(request: ArbeitenRequest) -> dict:
             'teile': teile,
             'hinweise': [f'Fahrzeug: {fahrzeug}'] if fahrzeug else []
         }
+    }
+
+
+@app.post('/api/retrain')
+def retrain_endpoint() -> dict:
+    started = train_model()
+    return {
+        'success': True,
+        'started': started,
+        'message': 'Training gestartet' if started else 'Training läuft bereits',
+        'trained_at': _model_state.get('trained_at', 0),
+        'samples': _model_state.get('samples', 0)
     }
