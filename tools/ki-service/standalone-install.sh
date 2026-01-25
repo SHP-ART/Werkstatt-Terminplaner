@@ -20,7 +20,7 @@ BACKEND_DISCOVERY_ENABLED="${BACKEND_DISCOVERY_ENABLED:-1}"
 
 REPO_OWNER="${REPO_OWNER:-SHP-ART}"
 REPO_NAME="${REPO_NAME:-Werkstatt-Terminplaner}"
-REPO_BRANCH="${REPO_BRANCH:-main}"
+REPO_BRANCH="${REPO_BRANCH:-master}"
 REPO_RAW_BASE="${REPO_RAW_BASE:-https://raw.githubusercontent.com/${REPO_OWNER}/${REPO_NAME}/${REPO_BRANCH}/tools/ki-service}"
 
 if [[ -z "$BACKEND_URL" ]]; then
