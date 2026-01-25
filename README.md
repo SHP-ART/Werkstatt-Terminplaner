@@ -1,6 +1,6 @@
 # Werkstatt Terminplaner
 
-[![Version](https://img.shields.io/badge/version-1.0.10-blue.svg)](https://github.com/SHP-ART/Werkstatt-Terminplaner/releases)
+[![Version](https://img.shields.io/badge/version-1.4.0-blue.svg)](https://github.com/SHP-ART/Werkstatt-Terminplaner/releases)
 [![Node.js](https://img.shields.io/badge/node-%3E%3D14.0.0-brightgreen.svg)](https://nodejs.org)
 [![License](https://img.shields.io/badge/license-Proprietary-red.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey.svg)](README.md)
@@ -57,13 +57,13 @@ backend/src/config/version.js
 ```
 
 ```javascript
-const VERSION = '1.0.10';        // ← Hier Version ändern
+const VERSION = '1.4.0';        // ← Hier Version ändern
 const APP_NAME = 'Werkstatt Terminplaner';
-const RELEASE_DATE = '2026-01-05';
+const RELEASE_DATE = '2026-01-24';
 ```
 
 Diese Version wird automatisch verwendet in:
-- **Server-Banner** beim Start: `"✅ Werkstatt Terminplaner v1.0.10 gestartet!"`
+- **Server-Banner** beim Start: `"✅ Werkstatt Terminplaner v1.4.0 gestartet!"`
 - **API-Endpunkt** `/api/server-info`: Liefert Version, App-Name und Server-Infos
 - **Status-Fenster** der Electron-App
 
@@ -956,5 +956,5 @@ Proprietäre Software für interne Nutzung.
 
 ---
 
-**Version**: 1.0.10  
+**Version**: 1.4.0  
 **Letztes Update**: Januar 2026

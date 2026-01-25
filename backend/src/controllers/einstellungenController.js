@@ -1,6 +1,14 @@
 const EinstellungenModel = require('../models/einstellungenModel');
 const TermineController = require('./termineController');
 const path = require('path');
+const kiDiscoveryService = require('../services/kiDiscoveryService');
+
+function normalizeExternalUrl(value) {
+  const raw = String(value || '').trim();
+  if (!raw) return null;
+  const withScheme = /^https?:\/\//i.test(raw) ? raw : `http://${raw}`;
+  return withScheme.replace(/\/+$/, '');
+}
 
 class EinstellungenController {
   static async getDatenbankPfad(req, res) {
@@ -31,6 +39,7 @@ class EinstellungenController {
         ki_enabled: true,
         realtime_enabled: true,
         ki_mode: 'local',
+        ki_external_url: null,
         smart_scheduling_enabled: true,
         anomaly_detection_enabled: true
       });
@@ -227,12 +236,31 @@ class EinstellungenController {
       if (typeof mode !== 'string') {
         return res.status(400).json({ error: 'mode muss ein String sein' });
       }
-      const allowed = new Set(['local', 'openai']);
+      const allowed = new Set(['local', 'openai', 'external']);
       if (!allowed.has(mode)) {
         return res.status(400).json({ error: 'Ungültiger KI-Modus' });
       }
 
       const result = await EinstellungenModel.updateKIMode(mode);
+      res.json(result);
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  }
+
+  // Externe KI-URL speichern (Fallback, wenn Discovery nichts findet)
+  static async updateKIExternalUrl(req, res) {
+    try {
+      const { url } = req.body;
+
+      if (url !== null && url !== undefined && typeof url !== 'string') {
+        return res.status(400).json({ error: 'url muss ein String sein' });
+      }
+
+      const normalized = normalizeExternalUrl(url);
+      const result = await EinstellungenModel.updateKIExternalUrl(normalized);
+      kiDiscoveryService.setManualUrl(normalized);
+
       res.json(result);
     } catch (err) {
       res.status(500).json({ error: err.message });

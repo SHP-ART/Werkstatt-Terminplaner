@@ -124,7 +124,7 @@ async function shouldTrainModel() {
   if (settings?.ki_enabled === false || settings?.ki_enabled === 0) {
     return false;
   }
-  if (settings?.ki_mode && settings.ki_mode !== 'local') {
+  if (settings?.ki_mode && !['local', 'external'].includes(settings.ki_mode)) {
     return false;
   }
   return true;

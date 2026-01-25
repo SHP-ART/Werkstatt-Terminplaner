@@ -43,6 +43,7 @@ class EinstellungenModel {
       settings.ki_enabled = settings.ki_enabled !== undefined ? !!settings.ki_enabled : true;
       settings.realtime_enabled = settings.realtime_enabled !== undefined ? !!settings.realtime_enabled : true;
       settings.ki_mode = settings.ki_mode || (settings.chatgpt_api_key_configured ? 'openai' : 'local');
+      settings.ki_external_url = settings.ki_external_url || null;
       settings.smart_scheduling_enabled = settings.smart_scheduling_enabled !== undefined
         ? !!settings.smart_scheduling_enabled
         : true;
@@ -72,9 +73,9 @@ class EinstellungenModel {
     return { success: true, ki_enabled: !!enabled, message: enabled ? 'KI-Funktionen aktiviert' : 'KI-Funktionen deaktiviert' };
   }
 
-  // KI-Modus aktualisieren (local/openai)
+  // KI-Modus aktualisieren (local/openai/external)
   static async updateKIMode(mode) {
-    const allowed = new Set(['local', 'openai']);
+    const allowed = new Set(['local', 'openai', 'external']);
     if (!allowed.has(mode)) {
       throw new Error('Ungültiger KI-Modus');
     }
@@ -92,6 +93,24 @@ class EinstellungenModel {
     }
 
     return { success: true, ki_mode: mode, message: `KI-Modus gesetzt: ${mode}` };
+  }
+
+  // Externe KI-URL aktualisieren (Fallback wenn Auto-Discovery fehlschlaegt)
+  static async updateKIExternalUrl(url) {
+    const value = url || null;
+    const result = await runAsync(
+      `UPDATE werkstatt_einstellungen SET ki_external_url = ? WHERE id = 1`,
+      [value]
+    );
+
+    if (result.changes === 0) {
+      await runAsync(
+        `INSERT OR REPLACE INTO werkstatt_einstellungen (id, ki_external_url) VALUES (1, ?)`,
+        [value]
+      );
+    }
+
+    return { success: true, ki_external_url: value, message: 'Externe KI-URL gespeichert' };
   }
 
   // Echtzeit-Updates aktivieren/deaktivieren

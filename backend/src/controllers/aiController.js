@@ -8,6 +8,8 @@
 
 const openaiService = require('../services/openaiService');
 const localAiService = require('../services/localAiService');
+const externalAiService = require('../services/externalAiService');
+const kiDiscoveryService = require('../services/kiDiscoveryService');
 const EinstellungenModel = require('../models/einstellungenModel');
 
 async function getKISettings() {
@@ -17,11 +19,16 @@ async function getKISettings() {
   if (!mode) {
     mode = settings?.chatgpt_api_key ? 'openai' : 'local';
   }
+  if (settings?.ki_external_url !== undefined) {
+    kiDiscoveryService.setManualUrl(settings.ki_external_url);
+  }
   return { enabled, mode, settings };
 }
 
 function getKIService(mode) {
-  return mode === 'openai' ? openaiService : localAiService;
+  if (mode === 'openai') return openaiService;
+  if (mode === 'external') return externalAiService;
+  return localAiService;
 }
 
 // =============================================================================
@@ -51,6 +58,22 @@ async function getStatus(req, res) {
         configured: true,
         mode: 'local',
         message: 'Lokale KI aktiv'
+      });
+    }
+
+    if (mode === 'external') {
+      const health = await externalAiService.checkHealth();
+      const connection = externalAiService.getConnectionStatus();
+      const message = health.success
+        ? 'Externe KI aktiv'
+        : (health.configured ? 'Externe KI nicht erreichbar' : 'Externe KI nicht konfiguriert');
+      return res.json({
+        enabled: true,
+        configured: health.configured,
+        mode: 'external',
+        message,
+        health,
+        connection
       });
     }
 
@@ -105,6 +128,24 @@ async function testConnection(req, res) {
         success: true,
         message: 'Lokale KI ist aktiv',
         mode: 'local'
+      });
+    }
+
+    if (mode === 'external') {
+      const result = await externalAiService.testConnection();
+      if (result.success) {
+        return res.json({
+          success: true,
+          message: 'Externe KI erreichbar',
+          mode: 'external',
+          health: result
+        });
+      }
+      return res.status(400).json({
+        success: false,
+        error: result.error || 'Externe KI nicht erreichbar',
+        configured: result.configured,
+        mode: 'external'
       });
     }
 
@@ -574,6 +615,53 @@ async function getTrainingData(req, res) {
   try {
     const { allAsync, runAsync } = require('../utils/dbHelper');
 
+    const sinceIdParam = req.query.since_id;
+    const lookbackParam = req.query.lookback_days;
+    let sinceId = 0;
+    if (sinceIdParam !== undefined) {
+      const parsed = parseInt(sinceIdParam, 10);
+      if (Number.isFinite(parsed) && parsed > 0) {
+        sinceId = parsed;
+      }
+    }
+    let lookbackDays = 0;
+    if (lookbackParam !== undefined) {
+      const parsed = parseInt(lookbackParam, 10);
+      if (Number.isFinite(parsed) && parsed > 0) {
+        lookbackDays = parsed;
+      }
+    }
+
+    const limitParam = req.query.limit;
+    let limit = 100;
+    if (limitParam !== undefined) {
+      if (String(limitParam).toLowerCase() === 'all') {
+        limit = 0;
+      } else {
+        const parsed = parseInt(limitParam, 10);
+        if (Number.isFinite(parsed)) {
+          limit = parsed;
+        }
+      }
+    }
+    const limitClause = limit > 0 ? 'LIMIT ?' : '';
+    const limitParams = limit > 0 ? [limit] : [];
+
+    const deltaConditions = [];
+    const deltaParams = [];
+    if (sinceId > 0) {
+      deltaConditions.push('t.id > ?');
+      deltaParams.push(sinceId);
+    }
+    if (lookbackDays > 0) {
+      deltaConditions.push('t.datum >= date(\'now\', ?)');
+      deltaParams.push(`-${lookbackDays} day`);
+    }
+    const deltaClause = deltaConditions.length ? `AND (${deltaConditions.join(' OR ')})` : '';
+    const orderByClause = deltaConditions.length
+      ? 'ORDER BY t.id DESC'
+      : 'ORDER BY t.tatsaechliche_zeit DESC';
+
     // Alle relevanten Termine für Training
     const termine = await allAsync(`
       SELECT
@@ -592,9 +680,10 @@ async function getTrainingData(req, res) {
         AND t.arbeit IS NOT NULL
         AND t.tatsaechliche_zeit IS NOT NULL
         AND t.tatsaechliche_zeit > 0
-      ORDER BY t.tatsaechliche_zeit DESC
-      LIMIT 100
-    `);
+      ${deltaClause}
+      ${orderByClause}
+      ${limitClause}
+    `, [...deltaParams, ...limitParams]);
 
     // Statistiken berechnen
     const stats = await allAsync(`
@@ -611,6 +700,16 @@ async function getTrainingData(req, res) {
         AND tatsaechliche_zeit IS NOT NULL
         AND tatsaechliche_zeit > 0
     `);
+
+    const maxIdRow = await allAsync(`
+      SELECT MAX(id) as max_id
+      FROM termine
+      WHERE geloescht_am IS NULL
+        AND arbeit IS NOT NULL
+        AND tatsaechliche_zeit IS NOT NULL
+        AND tatsaechliche_zeit > 0
+    `);
+    const maxId = maxIdRow?.[0]?.max_id || 0;
 
     // Ausreißer erkennen (IQR-Methode)
     const zeiten = termine.map(t => t.tatsaechliche_zeit).sort((a, b) => a - b);
@@ -639,7 +738,12 @@ async function getTrainingData(req, res) {
         })),
         stats: stats[0],
         outlierCount: outliers.length,
-        outlierIds: outliers
+        outlierIds: outliers,
+        meta: {
+          max_id: maxId,
+          since_id: sinceId || null,
+          lookback_days: lookbackDays || null
+        }
       }
     });
 

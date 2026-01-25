@@ -1,4 +1,6 @@
 {
+  "name": "werkstatt-terminplaner",
+  "version": "1.4.0",
   "dependencies": {
     "dotenv": "^17.2.3",
     "openai": "^6.16.0"

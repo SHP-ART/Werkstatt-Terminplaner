@@ -61,6 +61,11 @@ logStartup('Lade localAiService...');
 const localAiService = require('./services/localAiService');
 logStartup('localAiService geladen ✓');
 
+logStartup('Lade kiDiscoveryService...');
+const kiDiscoveryService = require('./services/kiDiscoveryService');
+kiDiscoveryService.start();
+logStartup('kiDiscoveryService gestartet ✓');
+
 logStartup('Lade ws (WebSocket)...');
 const { WebSocketServer } = require('ws');
 logStartup('ws geladen ✓');

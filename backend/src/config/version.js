@@ -1,7 +1,7 @@
 // Zentrale Versionsverwaltung für Werkstatt-Terminplaner
 // Diese Datei ist die "Single Source of Truth" für die Programmversion
 
-const VERSION = '1.3.0';
+const VERSION = '1.4.0';
 
 module.exports = {
   VERSION,

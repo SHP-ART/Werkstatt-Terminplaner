@@ -27,7 +27,7 @@ class KIPlanungController {
       if (settings?.smart_scheduling_enabled === 0) {
         return res.status(403).json({ error: 'Smart Scheduling ist deaktiviert.' });
       }
-      if (mode === 'local') {
+      if (mode === 'local' || mode === 'external') {
         const [mitarbeiter, lehrlinge, termine, schwebendeTermine, abwesenheiten] = await Promise.all([
           KIPlanungController.getMitarbeiterMitDetails(),
           KIPlanungController.getLehrlingeMitDetails(),
@@ -128,7 +128,7 @@ class KIPlanungController {
       if (settings?.smart_scheduling_enabled === 0) {
         return res.status(403).json({ error: 'Smart Scheduling ist deaktiviert.' });
       }
-      if (mode === 'local') {
+      if (mode === 'local' || mode === 'external') {
         const wochentage = KIPlanungController.getWochentage(startDatum);
         const wochenDaten = await Promise.all(wochentage.map(async (tag) => {
           const [termine, abwesenheiten] = await Promise.all([

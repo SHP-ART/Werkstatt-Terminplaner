@@ -662,6 +662,11 @@ class App {
     const kiModeSelect = document.getElementById('kiModeSelect');
     this.bindEventListenerOnce(kiModeSelect, 'change', (e) => this.handleKIModeChange(e), 'KIModeChange');
 
+    const externalKiForm = document.getElementById('externalKiForm');
+    this.bindEventListenerOnce(externalKiForm, 'submit', (e) => this.handleExternalKiSubmit(e), 'ExternalKiSubmit');
+    const testExternalKiBtn = document.getElementById('testExternalKiBtn');
+    this.bindEventListenerOnce(testExternalKiBtn, 'click', () => this.checkKIStatus(true), 'TestExternalKi');
+
     // KI-Trainingsdaten Buttons
     const btnExcludeOutliers = document.getElementById('btnExcludeOutliers');
     this.bindEventListenerOnce(btnExcludeOutliers, 'click', () => this.handleExcludeOutliers(), 'ExcludeOutliers');
@@ -11658,11 +11663,13 @@ class App {
     try {
       const einstellungen = await EinstellungenService.getWerkstatt();
       this.prefillWerkstattSettings(einstellungen);
+      this.prefillKIExternalSettings(einstellungen);
       this.updateApiKeyStatus(einstellungen); // Setzt this._hasOpenAIKey
       this.updateRealtimeEnabledStatus(einstellungen?.realtime_enabled !== false);
       this.updateKIModeStatus(einstellungen?.ki_mode || 'local', !!einstellungen?.chatgpt_api_key_configured);
       this.updateSmartSchedulingStatus(einstellungen?.smart_scheduling_enabled !== false);
       this.updateAnomalyDetectionStatus(einstellungen?.anomaly_detection_enabled !== false);
+      this.checkKIStatus();
       // KI-Trainingsdaten laden
       this.loadKITrainingData();
     } catch (error) {
@@ -11697,6 +11704,13 @@ class App {
     const mittagspauseField = document.getElementById('mittagspause_minuten');
     if (mittagspauseField) {
       mittagspauseField.value = einstellungen.mittagspause_minuten || 30;
+    }
+  }
+
+  prefillKIExternalSettings(einstellungen) {
+    const input = document.getElementById('ki_external_url');
+    if (input) {
+      input.value = einstellungen?.ki_external_url || '';
     }
   }
 
@@ -11763,8 +11777,8 @@ class App {
     this.updateKIModeStatus(this.kiMode);
   }
 
-  // KI-Modus aktualisieren (local/openai)
-  updateKIModeStatus(mode, hasApiKey = null) {
+  // KI-Modus aktualisieren (local/openai/external)
+  updateKIModeStatus(mode, hasApiKey = null, externalStatus = null) {
     const select = document.getElementById('kiModeSelect');
     if (select) {
       select.value = mode || 'local';
@@ -11802,6 +11816,35 @@ class App {
           statusText.textContent = 'OpenAI ausgewählt - API-Key fehlt!';
           statusHint.textContent = 'Bitte konfiguriere unten einen API-Key für OpenAI';
         }
+      } else if (this.kiMode === 'external') {
+        // Externer KI-Service
+        const status = externalStatus || this._externalKIStatus;
+        const deviceInfo = status?.device ? ` Gerät: ${status.device}` : '';
+        if (!status) {
+          statusContainer.style.background = '#ede7f6';
+          statusContainer.style.borderColor = '#b39ddb';
+          statusIcon.textContent = '🟣';
+          statusText.textContent = 'Aktiv: Externe KI';
+          statusHint.textContent = 'Status wird geprüft...';
+        } else if (!status.configured) {
+          statusContainer.style.background = '#f5f5f5';
+          statusContainer.style.borderColor = '#e0e0e0';
+          statusIcon.textContent = '⚪';
+          statusText.textContent = 'Externe KI nicht konfiguriert';
+          statusHint.textContent = 'Bitte Fallback-URL setzen oder Auto-Discovery nutzen';
+        } else if (status.success) {
+          statusContainer.style.background = '#e8f5e9';
+          statusContainer.style.borderColor = '#a5d6a7';
+          statusIcon.textContent = '🟢';
+          statusText.textContent = 'Externe KI erreichbar';
+          statusHint.textContent = `Lokaler KI-Service im Netzwerk.${deviceInfo}`;
+        } else {
+          statusContainer.style.background = '#fff3e0';
+          statusContainer.style.borderColor = '#ffcc80';
+          statusIcon.textContent = '🟠';
+          statusText.textContent = 'Externe KI nicht erreichbar';
+          statusHint.textContent = status.error || 'Bitte Service/Netzwerk prüfen';
+        }
       } else {
         // Lokal Modus
         statusContainer.style.background = '#e8f5e9';
@@ -11813,11 +11856,12 @@ class App {
     }
 
     // Body-Klasse für OpenAI-only Elemente setzen
+    document.body.classList.remove('ki-mode-openai', 'ki-mode-local', 'ki-mode-external');
     if (this.kiEnabled && this.kiMode === 'openai') {
-      document.body.classList.remove('ki-mode-local');
       document.body.classList.add('ki-mode-openai');
+    } else if (this.kiEnabled && this.kiMode === 'external') {
+      document.body.classList.add('ki-mode-external');
     } else {
-      document.body.classList.remove('ki-mode-openai');
       document.body.classList.add('ki-mode-local');
     }
   }
@@ -12030,17 +12074,23 @@ class App {
     }
   }
 
-  // KI-Modus ändern
+    // KI-Modus ändern
   async handleKIModeChange(e) {
     const mode = e.target.value;
     const previous = this.kiMode;
+    const modeLabels = {
+      local: 'Lokal',
+      openai: 'OpenAI',
+      external: 'Extern'
+    };
 
     try {
       const result = await EinstellungenService.updateKIMode(mode);
 
       if (result.success) {
         this.updateKIModeStatus(mode);
-        this.showToast(`🧠 KI-Modus: ${mode === 'local' ? 'Lokal' : 'OpenAI'}`, 'success');
+        this.showToast(`🧠 KI-Modus: ${modeLabels[mode] || mode}`, 'success');
+        this.checkKIStatus();
       } else {
         e.target.value = previous;
         this.showToast('Fehler beim Speichern des KI-Modus', 'error');
@@ -12049,6 +12099,26 @@ class App {
       console.error('Fehler beim Aktualisieren des KI-Modus:', error);
       e.target.value = previous;
       this.showToast('Fehler beim Speichern des KI-Modus', 'error');
+    }
+  }
+
+  async handleExternalKiSubmit(e) {
+    e.preventDefault();
+    const input = document.getElementById('ki_external_url');
+    const url = input?.value?.trim() || '';
+
+    try {
+      const result = await EinstellungenService.updateKIExternalUrl(url);
+      if (result.success) {
+        this.showToast('Externe KI-URL gespeichert', 'success');
+        this.prefillKIExternalSettings({ ki_external_url: result.ki_external_url });
+        this.checkKIStatus();
+      } else {
+        this.showToast('Fehler beim Speichern der URL', 'error');
+      }
+    } catch (error) {
+      console.error('Fehler beim Speichern der externen KI-URL:', error);
+      this.showToast('Fehler beim Speichern der URL', 'error');
     }
   }
 
@@ -21496,16 +21566,32 @@ class App {
   /**
    * Prüft den Status der KI-Integration und passt UI an
    */
-  async checkKIStatus() {
+  async checkKIStatus(showToast = false) {
     try {
       const response = await AIService.getStatus();
       const banner = document.getElementById('kiAssistentBanner');
+
+      if (response.mode === 'external') {
+        this._externalKIStatus = response.health || null;
+        this.updateExternalKIStatus(this._externalKIStatus);
+        if (this.kiMode === 'external') {
+          this.updateKIModeStatus('external', null, this._externalKIStatus);
+        }
+        if (showToast) {
+          const statusText = this._externalKIStatus?.success
+            ? 'Externe KI erreichbar'
+            : (this._externalKIStatus?.configured ? 'Externe KI nicht erreichbar' : 'Externe KI nicht konfiguriert');
+          this.showToast(statusText, this._externalKIStatus?.success ? 'success' : 'warning');
+        }
+      }
       
       if (!response.enabled || !response.configured) {
         // KI nicht konfiguriert - Banner verstecken oder anpassen
         if (banner) {
           banner.style.opacity = '0.5';
-          banner.title = 'KI-Assistent nicht konfiguriert. Bitte API-Key in Einstellungen hinterlegen.';
+          banner.title = response.mode === 'external'
+            ? 'Externe KI nicht erreichbar oder nicht konfiguriert.'
+            : 'KI-Assistent nicht konfiguriert. Bitte API-Key in Einstellungen hinterlegen.';
         }
       }
     } catch (error) {
@@ -21515,7 +21601,55 @@ class App {
       if (banner) {
         banner.style.display = 'none';
       }
+      this.updateExternalKIStatus({
+        success: false,
+        configured: true,
+        error: error.message || 'Status-Abfrage fehlgeschlagen'
+      });
     }
+  }
+
+  updateExternalKIStatus(status) {
+    const statusContainer = document.getElementById('externalKiStatus');
+    const statusIcon = document.getElementById('externalKiStatusIcon');
+    const statusText = document.getElementById('externalKiStatusText');
+
+    if (!statusContainer || !statusIcon || !statusText) return;
+
+    if (!status) {
+      statusContainer.style.background = '#f5f5f5';
+      statusContainer.style.borderColor = '#ddd';
+      statusIcon.textContent = '⚪';
+      statusText.innerHTML = '<strong>Status wird geprüft...</strong>';
+      return;
+    }
+
+    const activeUrl = status.activeUrl || status.discoveredUrl || status.manualUrl || null;
+    const sourceLabel = status.source === 'discovered'
+      ? 'automatisch gefunden'
+      : (status.source === 'manual' ? 'manuell gesetzt' : (status.source === 'env' ? 'aus ENV' : ''));
+    const details = activeUrl ? ` <span style="color:#666;">(${activeUrl}${sourceLabel ? ` · ${sourceLabel}` : ''})</span>` : '';
+
+    if (!status.configured) {
+      statusContainer.style.background = '#f5f5f5';
+      statusContainer.style.borderColor = '#e0e0e0';
+      statusIcon.textContent = '⚪';
+      statusText.innerHTML = `<strong>Externe KI nicht konfiguriert</strong>${details}`;
+      return;
+    }
+
+    if (status.success) {
+      statusContainer.style.background = '#e8f5e9';
+      statusContainer.style.borderColor = '#a5d6a7';
+      statusIcon.textContent = '🟢';
+      statusText.innerHTML = `<strong>Externe KI erreichbar</strong>${details}`;
+      return;
+    }
+
+    statusContainer.style.background = '#fff3e0';
+    statusContainer.style.borderColor = '#ffcc80';
+    statusIcon.textContent = '🟠';
+    statusText.innerHTML = `<strong>Externe KI nicht erreichbar</strong>${details}<div style="font-size:0.85em; color:#666; margin-top:4px;">${status.error || 'Bitte Service/Netzwerk prüfen'}</div>`;
   }
 
   /**

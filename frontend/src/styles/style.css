@@ -11443,8 +11443,15 @@ mark.highlight {
     display: none !important;
 }
 
-/* KI Lokal-Modus - OpenAI-only Elemente ausblenden */
-.ki-mode-local .openai-only {
+/* KI Lokal/Extern-Modus - OpenAI-only Elemente ausblenden */
+.ki-mode-local .openai-only,
+.ki-mode-external .openai-only {
+    display: none !important;
+}
+
+/* Externe KI Sektion nur bei externer KI anzeigen */
+.ki-mode-local .external-only,
+.ki-mode-openai .external-only {
     display: none !important;
 }
 

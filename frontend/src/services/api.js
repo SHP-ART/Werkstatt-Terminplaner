@@ -338,9 +338,14 @@ class EinstellungenService {
     return ApiService.put('/einstellungen/ki-enabled', { enabled });
   }
 
-  // KI-Modus aktualisieren (local/openai)
+  // KI-Modus aktualisieren (local/openai/external)
   static async updateKIMode(mode) {
     return ApiService.put('/einstellungen/ki-mode', { mode });
+  }
+
+  // Externe KI-URL speichern (Fallback)
+  static async updateKIExternalUrl(url) {
+    return ApiService.put('/einstellungen/ki-external-url', { url });
   }
 
   // Echtzeit-Updates aktivieren/deaktivieren

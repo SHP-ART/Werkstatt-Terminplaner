@@ -22,5 +22,7 @@ router.put('/smart-scheduling-enabled', EinstellungenController.updateSmartSched
 router.put('/anomaly-detection-enabled', EinstellungenController.updateAnomalyDetectionEnabled);
 // KI-Modus aktualisieren
 router.put('/ki-mode', EinstellungenController.updateKIMode);
+// Externe KI-URL speichern
+router.put('/ki-external-url', EinstellungenController.updateKIExternalUrl);
 
 module.exports = router;

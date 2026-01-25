@@ -2263,13 +2263,45 @@
                             <label for="kiModeSelect">Betriebsmodus:</label>
                             <select id="kiModeSelect">
                                 <option value="local">Lokal (leicht, ohne Internet)</option>
+                                <option value="external">Extern (lokaler KI-Service im Netzwerk)</option>
                                 <option value="openai">OpenAI (Cloud, benötigt API-Key)</option>
                             </select>
                         </div>
                     </div>
                     <p class="hint" style="margin: 0;">
-                        Lokal nutzt einfache Heuristiken und läuft auf dem Server ohne zusätzliche Hardware.
+                        Lokal nutzt einfache Heuristiken. Extern nutzt einen separaten KI-Service im Netzwerk.
                     </p>
+                </div>
+
+                <div class="form-section external-ki-section external-only" style="margin-bottom: 20px;">
+                    <h3 style="margin: 0 0 10px 0;">🌐 Externe KI (Netzwerk)</h3>
+                    <p class="hint" style="margin-bottom: 10px;">
+                        Der KI-Service wird automatisch per Netzwerk gefunden. Falls er nicht entdeckt wird,
+                        kannst du eine IP/URL als Fallback eintragen.
+                    </p>
+
+                    <div id="externalKiStatus" style="margin-bottom: 12px; padding: 12px 15px; border-radius: 8px; background: #f5f5f5; border: 1px solid #ddd;">
+                        <div style="display: flex; align-items: center; gap: 10px;">
+                            <span id="externalKiStatusIcon" style="font-size: 1.3em;">⚪</span>
+                            <div id="externalKiStatusText">
+                                <strong>Status wird geprüft...</strong>
+                            </div>
+                        </div>
+                    </div>
+
+                    <form id="externalKiForm">
+                        <div class="form-group">
+                            <label for="ki_external_url">Fallback IP/URL:</label>
+                            <input type="text" id="ki_external_url" placeholder="http://192.168.1.50:5000">
+                            <small style="display: block; color: #666; margin-top: 5px;">
+                                Beispiel: <strong>192.168.1.50:5000</strong> (Basis-URL ohne <em>/api</em>)
+                            </small>
+                        </div>
+                        <div class="api-key-actions">
+                            <button type="submit" class="btn btn-primary">💾 Fallback speichern</button>
+                            <button type="button" id="testExternalKiBtn" class="btn btn-secondary">🔍 Status prüfen</button>
+                        </div>
+                    </form>
                 </div>
 
                 <div class="form-section realtime-toggle-section" style="margin-bottom: 20px;">
