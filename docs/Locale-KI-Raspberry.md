@@ -2,21 +2,126 @@
 
 ## Übersicht
 
-Dieses Dokument beschreibt, wie die lokale KI des Werkstatt-Terminplaners mit dedizierter AI-Hardware beschleunigt werden kann - von der günstigen USB-Lösung bis zum leistungsstarken Standalone-System.
+Dieses Dokument beschreibt, wie die lokale KI des Werkstatt-Terminplaners mit dedizierter Hardware beschleunigt werden kann - von der günstigen Mini-PC-Lösung bis zum leistungsstarken System mit AI-Beschleuniger.
 
 ---
 
 ## Hardware-Optionen im Vergleich
 
-| Option | TOPS | Preis | Installation | Empfehlung |
-|--------|------|-------|--------------|------------|
-| 🥇 **Google Coral USB** | 4 | ~60€ | USB einstecken | **Einstieg** |
-| 🥈 **BeagleBone AI-64** | 8 | ~185€ | Standalone | Industrie/Robust |
-| 🥉 **RPi 5 + Hailo-8** | 26 | ~240€ | Standalone | Maximum |
+| Option | Leistung | Preis | Installation | Empfehlung |
+|--------|----------|-------|--------------|------------|
+| 🥇 **Intel N100 Mini-PC** | CPU (AVX2) | ~130€ | Fertig | **Beste Wahl** |
+| 🥈 **Google Coral USB** | 4 TOPS | ~60€ | USB einstecken | Budget |
+| 🥉 **BeagleBone AI-64** | 8 TOPS | ~185€ | Standalone | Industrie |
+| **RPi 5 + Hailo-8** | 26 TOPS | ~240€ | Standalone | Overkill |
 
 ---
 
-## Option 1: Google Coral USB (Empfohlen für Einstieg)
+## Option 1: Intel N100/N95 Mini-PC (EMPFOHLEN)
+
+### Warum Intel N100?
+
+Für die Text-basierten KI-Modelle (Zeitschätzung, Arbeiten-Vorschläge) ist **kein NPU/TPU nötig**. Ein moderner x86-Prozessor mit AVX2-Instruktionen ist schneller und einfacher als ARM + Beschleuniger.
+
+### Vergleich Intel vs Raspberry Pi
+
+| Eigenschaft | Intel N100 | Intel N95 | Raspberry Pi 5 |
+|-------------|------------|-----------|----------------|
+| **Kerne** | 4 (E-Cores) | 4 (E-Cores) | 4 (Cortex-A76) |
+| **Takt** | bis 3.4 GHz | bis 3.4 GHz | 2.4 GHz |
+| **RAM** | bis 16 GB DDR5 | bis 16 GB DDR4 | 4/8 GB |
+| **AVX2** | Ja | Ja | Nein |
+| **TDP** | 6W | 6W | 5W |
+
+### Performance für KI-Modelle
+
+| Aufgabe | RPi 5 | Intel N95 | Intel N100 |
+|---------|-------|-----------|------------|
+| **Text-Embedding (MiniLM)** | ~100 ms | ~45 ms | ~40 ms |
+| **Zeitschätzung** | ~2 ms | <1 ms | <1 ms |
+| **Gesamt pro Anfrage** | ~110 ms | ~50 ms | ~45 ms |
+
+**Intel ist ~2x schneller** dank AVX2-SIMD-Instruktionen!
+
+### Vorteile
+
+- **Schneller** - 2x schneller als RPi 5 ohne Zusatzhardware
+- **Einfacher** - x86 = alle Python-Pakete laufen direkt
+- **Mehr RAM** - bis 16 GB möglich
+- **Leise** - viele Mini-PCs sind passiv gekühlt
+- **SSD-Support** - SATA/NVMe für schnellen Speicher
+
+### Architektur
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                        Lokales Netzwerk                         │
+│                                                                 │
+│  ┌──────────────────────┐         ┌──────────────────────────┐ │
+│  │   Werkstatt-Server   │         │    Intel N100 Mini-PC    │ │
+│  │   (Backend + DB)     │  HTTP   │    (passiv gekühlt)      │ │
+│  │                      │◄───────►│                          │ │
+│  │  - Node.js Backend   │  REST   │  - KI-Service (Python)   │ │
+│  │  - SQLite DB         │   API   │  - AVX2 Beschleunigung   │ │
+│  │  - Frontend          │         │  - mDNS Discovery        │ │
+│  └──────────────────────┘         └──────────────────────────┘ │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### Empfohlene Geräte
+
+| Gerät | Preis | Besonderheiten |
+|-------|-------|----------------|
+| **Trigkey G4** | ~120€ | N95, 8GB, 256GB SSD |
+| **Beelink Mini S12** | ~130€ | N95, 8GB, 256GB SSD |
+| **Minisforum UN100C** | ~150€ | N100, 8GB, 256GB SSD |
+| **GMKtec G3** | ~140€ | N100, 8GB, 512GB SSD |
+
+### Installation
+
+```bash
+# 1. Ubuntu Server 22.04/24.04 oder Debian 12 installieren
+
+# 2. Python-Umgebung einrichten
+sudo apt update
+sudo apt install python3-pip python3-venv
+python3 -m venv ~/werkstatt-ki
+source ~/werkstatt-ki/bin/activate
+
+# 3. KI-Pakete installieren (AVX2 wird automatisch genutzt)
+pip install fastapi uvicorn numpy
+pip install sentence-transformers  # MiniLM für Text-Embeddings
+pip install scikit-learn           # Für Regression/Klassifikation
+pip install onnxruntime            # Optimierte Inferenz
+
+# 4. mDNS für automatische Erkennung
+sudo apt install avahi-daemon
+pip install zeroconf
+
+# 5. KI-Service starten
+python app/main.py
+```
+
+### Warum kein NPU/TPU nötig?
+
+Die KI-Modelle für den Werkstatt-Terminplaner sind klein:
+
+| Modell | Größe | Operationen/Anfrage |
+|--------|-------|---------------------|
+| MiniLM (Embeddings) | ~30 MB | ~20 Mio |
+| Regression (Zeit) | ~2 MB | ~10.000 |
+| Klassifikation | ~5 MB | ~50.000 |
+
+Diese Modelle laufen auf CPUs mit AVX2 sehr schnell. Ein NPU/TPU lohnt sich erst bei:
+- Großen Sprachmodellen (LLMs, >1 GB)
+- Bildverarbeitung (CNNs)
+- Echtzeit-Video-Analyse
+
+**Fazit:** Für Text-KI ist Intel N100 die beste Wahl!
+
+---
+
+## Option 2: Google Coral USB (Budget-Option)
 
 ### Vorteile
 - **Günstigste Lösung** (~60€)
@@ -158,7 +263,7 @@ module.exports = new CoralAiService();
 
 ---
 
-## Option 2: BeagleBone AI-64 (Standalone, Robust)
+## Option 3: BeagleBone AI-64 (Industrie)
 
 ### Vorteile
 - **Integrierter AI-Chip** (TI TDA4VM) - kein extra Modul
@@ -209,7 +314,7 @@ pip install fastapi uvicorn numpy onnxruntime-tidl
 
 ---
 
-## Option 3: Raspberry Pi 5 + Hailo-8 (Maximum)
+## Option 4: Raspberry Pi 5 + Hailo-8 (Overkill)
 
 ### Vorteile
 - **Höchste Leistung** (26 TOPS)
@@ -538,7 +643,8 @@ tidl_import_tool --model zeit_model.onnx
 
 | Option | Einmalig | Strom/Jahr | Amortisation vs. ChatGPT |
 |--------|----------|------------|--------------------------|
-| **Coral USB** | 60€ | ~1€ | < 1 Jahr |
+| **Intel N100 Mini-PC** | 130€ | ~5€ | ~1-2 Jahre |
+| Coral USB | 60€ | ~1€ | < 1 Jahr |
 | BeagleBone AI-64 | 185€ | ~5€ | ~2 Jahre |
 | RPi 5 + Hailo-8 | 240€ | ~3€ | ~2-3 Jahre |
 | ChatGPT API | 0€ | 50-100€ | - |
@@ -549,15 +655,16 @@ tidl_import_tool --model zeit_model.onnx
 
 | Situation | Empfehlung |
 |-----------|------------|
-| **Einstieg / Budget** | 🥇 Google Coral USB (60€) |
-| **Robuster Dauerbetrieb** | 🥈 BeagleBone AI-64 (185€) |
-| **Maximale Leistung** | 🥉 RPi 5 + Hailo-8 (240€) |
+| **Beste Wahl** | 🥇 Intel N100 Mini-PC (~130€) |
+| **Nur USB-Erweiterung** | 🥈 Google Coral USB (~60€) |
+| **Industrie/Robust** | 🥉 BeagleBone AI-64 (~185€) |
 
-**Für die Werkstatt-KI empfohlen: Google Coral USB**
-- Günstigste Option
-- Einfachste Installation (USB einstecken)
-- 4 TOPS reichen für Text-basierte KI
-- Kann später upgraden wenn nötig
+**Für die Werkstatt-KI empfohlen: Intel N100 Mini-PC**
+- Beste Preis-Leistung für Text-KI
+- 2x schneller als Raspberry Pi
+- Einfache x86-Software-Installation
+- Passiv gekühlt, leise
+- Keine Extra-Hardware (NPU/TPU) nötig
 
 ---
 
@@ -589,6 +696,11 @@ tidl_import_tool --model zeit_model.onnx
 
 ## Ressourcen
 
+### Intel N100 Mini-PCs
+- [Intel N100 Specs](https://ark.intel.com/content/www/us/en/ark/products/231803/intel-processor-n100.html)
+- [ONNX Runtime](https://onnxruntime.ai/) - Optimierte CPU-Inferenz
+- [Sentence Transformers](https://www.sbert.net/) - MiniLM Text-Embeddings
+
 ### Google Coral
 - [Coral Dokumentation](https://coral.ai/docs/)
 - [Edge TPU Compiler](https://coral.ai/docs/edgetpu/compiler/)
@@ -605,4 +717,3 @@ tidl_import_tool --model zeit_model.onnx
 ### Allgemein
 - [mDNS/Zeroconf Python](https://python-zeroconf.readthedocs.io/)
 - [FastAPI](https://fastapi.tiangolo.com/)
-- [Sentence Transformers](https://www.sbert.net/)
