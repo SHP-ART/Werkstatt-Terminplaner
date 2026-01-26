@@ -591,11 +591,78 @@ def teile_bedarf_endpoint(request: ArbeitenRequest) -> dict:
 
 @app.post('/api/retrain')
 def retrain_endpoint() -> dict:
+    # Prüfe ob Training bereits läuft
+    with _model_lock:
+        if _model_state.get('training_in_progress', False):
+            return {
+                'success': False,
+                'message': 'Training läuft bereits',
+                'training_in_progress': True,
+                'samples': _model_state.get('samples', 0),
+                'trained_at': _model_state.get('trained_at', 0)
+            }
+        
+        # Merke alte Werte
+        old_samples = _model_state.get('samples', 0)
+        old_trained_at = _model_state.get('trained_at', 0)
+    
+    # Starte Training
     started = train_model()
+    
+    if not started:
+        return {
+            'success': False,
+            'message': 'Training konnte nicht gestartet werden',
+            'training_in_progress': False
+        }
+    
+    # Warte kurz auf Ergebnis (max 5 Sekunden)
+    max_wait = 50  # 50 x 100ms = 5 Sekunden
+    for _ in range(max_wait):
+        with _model_lock:
+            if not _model_state.get('training_in_progress', False):
+                break
+        time.sleep(0.1)
+    
+    # Hole aktuelle Werte
+    with _model_lock:
+        new_samples = _model_state.get('samples', 0)
+        new_trained_at = _model_state.get('trained_at', 0)
+        training_cache = _model_state.get('training_cache', {})
+        still_running = _model_state.get('training_in_progress', False)
+    
+    if still_running:
+        return {
+            'success': True,
+            'message': 'Training läuft noch (kann länger dauern bei vielen Daten)',
+            'training_in_progress': True,
+            'samples': new_samples,
+            'trained_at': new_trained_at
+        }
+    
+    # Training abgeschlossen
+    samples_added = new_samples - old_samples
+    message_parts = []
+    
+    if new_samples == 0:
+        message_parts.append('Keine Trainingsdaten verfügbar')
+    elif samples_added > 0:
+        message_parts.append(f'Training erfolgreich: {samples_added} neue Samples hinzugefügt')
+    elif new_trained_at > old_trained_at:
+        message_parts.append('Modell erfolgreich aktualisiert')
+    else:
+        message_parts.append('Keine neuen Trainingsdaten verfügbar')
+    
+    message_parts.append(f'Gesamt: {new_samples} Samples')
+    if training_cache:
+        message_parts.append(f'{len(training_cache)} Termine im Cache')
+    
     return {
         'success': True,
-        'started': started,
-        'message': 'Training gestartet' if started else 'Training läuft bereits',
-        'trained_at': _model_state.get('trained_at', 0),
-        'samples': _model_state.get('samples', 0)
+        'message': ' • '.join(message_parts),
+        'training_in_progress': False,
+        'samples': new_samples,
+        'samples_added': samples_added,
+        'trained_at': new_trained_at,
+        'cache_size': len(training_cache)
     }

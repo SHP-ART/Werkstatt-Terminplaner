@@ -672,6 +672,8 @@ class App {
     this.bindEventListenerOnce(btnExcludeOutliers, 'click', () => this.handleExcludeOutliers(), 'ExcludeOutliers');
     const btnRetrainModel = document.getElementById('btnRetrainModel');
     this.bindEventListenerOnce(btnRetrainModel, 'click', () => this.handleRetrainModel(), 'RetrainModel');
+    const btnRetrainExternalModel = document.getElementById('btnRetrainExternalModel');
+    this.bindEventListenerOnce(btnRetrainExternalModel, 'click', () => this.handleRetrainExternalModel(), 'RetrainExternalModel');
     const btnShowTrainingDetails = document.getElementById('btnShowTrainingDetails');
     this.bindEventListenerOnce(btnShowTrainingDetails, 'click', () => this.toggleTrainingDetails(), 'ShowTrainingDetails');
 
@@ -11672,6 +11674,8 @@ class App {
       this.checkKIStatus();
       // KI-Trainingsdaten laden
       this.loadKITrainingData();
+      // Stelle sicher dass der externe Training-Container initial korrekt angezeigt wird
+      this.ensureExternalTrainingContainerVisibility();
     } catch (error) {
       console.error('Fehler beim Laden der Werkstatt-Einstellungen:', error);
     }
@@ -11984,6 +11988,67 @@ class App {
       this.showToast('Fehler beim Training', 'error');
     } finally {
       if (btn) btn.disabled = false;
+    }
+  }
+
+  // Externes Modell neu trainieren (Daten abgleichen)
+  async handleRetrainExternalModel() {
+    const btn = document.getElementById('btnRetrainExternalModel');
+    const infoDiv = document.getElementById('externalTrainingInfo');
+    if (btn) {
+      btn.disabled = true;
+      btn.textContent = '⏳ Training läuft...';
+    }
+
+    try {
+      const result = await AIService.retrainExternalModel();
+
+      if (result.success) {
+        const data = result.data || {};
+        const message = data.message || 'Training abgeschlossen';
+        const samples = data.samples || 0;
+        const samplesAdded = data.samples_added || 0;
+        const cacheSize = data.cache_size || 0;
+        
+        // Erstelle detaillierte Nachricht
+        let toastMessage = '✅ ' + message;
+        if (samplesAdded > 0) {
+          toastMessage = `✅ Training erfolgreich: ${samplesAdded} neue Samples trainiert (Gesamt: ${samples})`;
+        } else if (samples > 0) {
+          toastMessage = `ℹ️ Modell aktuell: ${samples} Samples, keine neuen Daten`;
+        }
+        
+        this.showToast(toastMessage, samplesAdded > 0 ? 'success' : 'info', 6000);
+        
+        if (infoDiv) {
+          infoDiv.textContent = `Letzte Synchronisation: ${new Date().toLocaleString('de-DE')} • ${samples} Samples`;
+          infoDiv.style.display = 'block';
+        }
+        
+        // Status aktualisieren
+        await this.checkKIStatus();
+      } else {
+        const message = result.data?.message || 'Training fehlgeschlagen';
+        this.showToast('⚠️ ' + message, 'warning', 6000);
+      }
+    } catch (error) {
+      console.error('Fehler beim externen Training:', error);
+      // Prüfe ob der Endpoint nicht gefunden wurde (404/Not Found)
+      const errorMsg = error.message || String(error);
+      if (errorMsg.includes('Not Found') || errorMsg.includes('404')) {
+        this.showToast('⚠️ Dieser Endpoint ist in der aktuellen Service-Version nicht verfügbar. Bitte externes KI-Gerät aktualisieren (siehe Doku Abschnitt 6).', 'warning', 10000);
+        if (infoDiv) {
+          infoDiv.textContent = 'Service-Update erforderlich für manuelles Training';
+          infoDiv.style.display = 'block';
+        }
+      } else {
+        this.showToast('❌ Training fehlgeschlagen: ' + errorMsg, 'error');
+      }
+    } finally {
+      if (btn) {
+        btn.disabled = false;
+        btn.textContent = '🔄 Modell abgleichen';
+      }
     }
   }
 
@@ -21658,23 +21723,67 @@ class App {
     statusText.innerHTML = `<strong>Externe KI nicht erreichbar</strong>${details}<div style="font-size:0.85em; color:#666; margin-top:4px;">${status.error || 'Bitte Service/Netzwerk prüfen'}</div>`;
   }
 
+  // Stellt sicher dass der Container initial richtig angezeigt wird
+  ensureExternalTrainingContainerVisibility() {
+    const trainingContainer = document.getElementById('externalKiTrainingContainer');
+    const isExternalMode = this.kiMode === 'external';
+    if (trainingContainer) {
+      trainingContainer.style.display = isExternalMode ? 'block' : 'none';
+      console.log('[External Training Container] KI-Modus:', this.kiMode, 'Display:', trainingContainer.style.display);
+    }
+  }
+
   updateExternalTrainingStatus(status) {
     const statusContainer = document.getElementById('externalKiTrainingStatus');
     const statusText = document.getElementById('externalKiTrainingStatusText');
+    const retrainButton = document.getElementById('btnRetrainExternalModel');
+    const trainingContainer = document.getElementById('externalKiTrainingContainer');
+    const trainingHint = document.getElementById('externalKiTrainingHint');
     if (!statusContainer || !statusText) return;
+
+    // Container je nach KI-Modus ein-/ausblenden
+    const isExternalMode = this.kiMode === 'external';
+    if (trainingContainer) {
+      trainingContainer.style.display = isExternalMode ? 'block' : 'none';
+      console.log('[updateExternalTrainingStatus] KI-Modus:', this.kiMode, 'Display:', trainingContainer.style.display);
+    }
 
     if (!status) {
       statusText.innerHTML = '<strong>Externes KI-Training wird geprüft...</strong>';
+      if (retrainButton) {
+        retrainButton.disabled = true;
+        retrainButton.textContent = '🔁 Externes Modell jetzt abgleichen';
+      }
+      if (trainingHint) {
+        trainingHint.textContent = 'Status wird geprüft...';
+        trainingHint.style.color = '#999';
+      }
       return;
     }
 
     if (!status.configured) {
       statusText.innerHTML = '<strong>Externe KI nicht konfiguriert</strong>';
+      if (retrainButton) {
+        retrainButton.disabled = true;
+        retrainButton.textContent = '🔁 Externes Modell jetzt abgleichen';
+      }
+      if (trainingHint) {
+        trainingHint.textContent = 'Bitte externe KI-URL in den Einstellungen konfigurieren.';
+        trainingHint.style.color = '#d32f2f';
+      }
       return;
     }
 
     if (!status.success) {
       statusText.innerHTML = `<strong>Externes KI-Training nicht erreichbar</strong><div style="font-size:0.85em; color:#666; margin-top:4px;">${status.error || 'Bitte Service prüfen'}</div>`;
+      if (retrainButton) {
+        retrainButton.disabled = true;
+        retrainButton.textContent = '🔁 Externes Modell jetzt abgleichen';
+      }
+      if (trainingHint) {
+        trainingHint.textContent = 'Service ist nicht erreichbar. Bitte Netzwerk und Service prüfen.';
+        trainingHint.style.color = '#d32f2f';
+      }
       return;
     }
 
@@ -21683,12 +21792,31 @@ class App {
     const trainedText = trainedAt ? trainedAt.toLocaleString('de-DE') : 'unbekannt';
     const lastId = status.last_id ?? '-';
     const lookback = status.lookback_days ?? '-';
+    const trainingInProgress = !!status.training_in_progress;
+    const lastRequestAt = status.last_train_request_at ? new Date(status.last_train_request_at * 1000) : null;
+    const requestText = lastRequestAt ? lastRequestAt.toLocaleString('de-DE') : 'unbekannt';
+    const progressLine = trainingInProgress
+      ? `<div style="font-size:0.85em; color:#6d4c41; margin-top:4px;">Training laeuft... (Start: ${requestText})</div>`
+      : '';
+
+    if (retrainButton) {
+      retrainButton.disabled = trainingInProgress;
+      retrainButton.textContent = trainingInProgress ? '⏳ Training läuft...' : '🔁 Externes Modell jetzt abgleichen';
+    }
+
+    if (trainingHint) {
+      trainingHint.textContent = trainingInProgress 
+        ? 'Training läuft gerade. Bitte warten...'
+        : 'Synchronisieren Sie die Trainingsdaten mit Ihrem externen KI-Service.';
+      trainingHint.style.color = trainingInProgress ? '#ff9800' : '#666';
+    }
 
     statusText.innerHTML = `
       <strong>Externes Modell: ${samples} Samples</strong>
       <div style="font-size:0.85em; color:#666; margin-top:4px;">
         Letztes Training: ${trainedText} • Letzte ID: ${lastId} • Lookback: ${lookback} Tage
       </div>
+      ${progressLine}
     `;
   }
 
