@@ -19,6 +19,7 @@ APP_DIR = os.path.dirname(os.path.abspath(__file__))
 BASE_DIR = os.path.abspath(os.path.join(APP_DIR, '..'))
 DATA_DIR = os.path.join(BASE_DIR, 'data')
 MODEL_PATH = os.path.join(DATA_DIR, 'model.joblib')
+MODEL_BACKUP_DIR = os.path.join(DATA_DIR, 'backups')
 
 BACKEND_URL = os.environ.get('BACKEND_URL', '').rstrip('/')
 SERVICE_PORT = int(os.environ.get('SERVICE_PORT', '5000'))
@@ -51,7 +52,11 @@ _model_state = {
     'trained_at': 0,
     'samples': 0,
     'training_in_progress': False,
-    'last_train_request_at': 0
+    'last_train_request_at': 0,
+    'last_training_duration': 0,
+    'total_trainings': 0,
+    'last_error': None,
+    'last_backup_at': 0
 }
 
 _zeroconf = None
@@ -134,6 +139,8 @@ def kategorisiere_arbeit(text: str) -> str:
 def ensure_data_dir() -> None:
     if not os.path.isdir(DATA_DIR):
         os.makedirs(DATA_DIR, exist_ok=True)
+    if not os.path.isdir(MODEL_BACKUP_DIR):
+        os.makedirs(MODEL_BACKUP_DIR, exist_ok=True)
 
 
 def set_backend_url(url: str) -> None:
@@ -208,8 +215,47 @@ def save_model_to_disk(state: dict) -> None:
     ensure_data_dir()
     try:
         joblib.dump(state, MODEL_PATH)
+        # Automatisches Backup nach jedem Training
+        backup_model()
     except Exception as err:
         logging.warning('Modell konnte nicht gespeichert werden: %s', err)
+        with _model_lock:
+            _model_state['last_error'] = f'Save failed: {err}'
+
+def backup_model() -> None:
+    """Erstellt ein timestamped Backup des aktuellen Modells"""
+    if not os.path.isfile(MODEL_PATH):
+        return
+    try:
+        timestamp = int(time.time())
+        backup_path = os.path.join(MODEL_BACKUP_DIR, f'model_{timestamp}.joblib')
+        import shutil
+        shutil.copy2(MODEL_PATH, backup_path)
+        
+        with _model_lock:
+            _model_state['last_backup_at'] = timestamp
+        
+        # Lösche alte Backups (behalte nur die letzten 5)
+        cleanup_old_backups()
+        logging.info('Model-Backup erstellt: %s', backup_path)
+    except Exception as err:
+        logging.warning('Backup fehlgeschlagen: %s', err)
+
+def cleanup_old_backups(keep_count: int = 5) -> None:
+    """Behält nur die neuesten N Backups"""
+    try:
+        backups = []
+        for f in os.listdir(MODEL_BACKUP_DIR):
+            if f.startswith('model_') and f.endswith('.joblib'):
+                path = os.path.join(MODEL_BACKUP_DIR, f)
+                backups.append((os.path.getmtime(path), path))
+        
+        backups.sort(reverse=True)
+        for _, path in backups[keep_count:]:
+            os.remove(path)
+            logging.info('Altes Backup gelöscht: %s', path)
+    except Exception as err:
+        logging.warning('Cleanup alter Backups fehlgeschlagen: %s', err)
 
 
 def fetch_training_data_with_retry(since_id: int) -> Optional[tuple]:
@@ -371,12 +417,30 @@ def train_model() -> bool:
         logging.info('Training laeuft bereits.')
         return False
 
+    start_time = time.time()
     try:
         with _model_lock:
             _model_state['training_in_progress'] = True
             _model_state['last_train_request_at'] = int(time.time())
+            _model_state['last_error'] = None
+        
         _train_model_internal()
+        
+        duration = time.time() - start_time
+        with _model_lock:
+            _model_state['last_training_duration'] = duration
+            _model_state['total_trainings'] = _model_state.get('total_trainings', 0) + 1
+        
+        logging.info('Training abgeschlossen in %.2f Sekunden', duration)
         return True
+    except Exception as err:
+        duration = time.time() - start_time
+        error_msg = str(err)
+        logging.error('Training fehlgeschlagen nach %.2f Sekunden: %s', duration, error_msg)
+        with _model_lock:
+            _model_state['last_error'] = error_msg
+            _model_state['last_training_duration'] = duration
+        return False
     finally:
         with _model_lock:
             _model_state['training_in_progress'] = False
@@ -538,19 +602,28 @@ def on_shutdown() -> None:
 
 @app.get('/health')
 def health() -> dict:
-    return {
-        'status': 'ok',
-        'device': socket.gethostname(),
-        'backend_url': get_backend_url() or None,
-        'backend_discovery': BACKEND_DISCOVERY_ENABLED,
-        'model_samples': _model_state.get('samples', 0),
-        'trained_at': _model_state.get('trained_at', 0),
-        'last_id': _model_state.get('last_id', 0),
-        'lookback_days': TRAINING_LOOKBACK_DAYS,
-        'training_in_progress': _model_state.get('training_in_progress', False),
-        'last_train_request_at': _model_state.get('last_train_request_at', 0),
-        'service_port': SERVICE_PORT
-    }
+    with _model_lock:
+        state_copy = {
+            'status': 'ok',
+            'device': socket.gethostname(),
+            'backend_url': get_backend_url() or None,
+            'backend_discovery': BACKEND_DISCOVERY_ENABLED,
+            'model_samples': _model_state.get('samples', 0),
+            'trained_at': _model_state.get('trained_at', 0),
+            'last_id': _model_state.get('last_id', 0),
+            'lookback_days': TRAINING_LOOKBACK_DAYS,
+            'training_in_progress': _model_state.get('training_in_progress', False),
+            'last_train_request_at': _model_state.get('last_train_request_at', 0),
+            'last_training_duration': _model_state.get('last_training_duration', 0),
+            'total_trainings': _model_state.get('total_trainings', 0),
+            'last_error': _model_state.get('last_error'),
+            'last_backup_at': _model_state.get('last_backup_at', 0),
+            'service_port': SERVICE_PORT,
+            'training_interval_minutes': TRAINING_INTERVAL_MINUTES,
+            'model_exists': os.path.isfile(MODEL_PATH),
+            'backup_count': len([f for f in os.listdir(MODEL_BACKUP_DIR) if f.startswith('model_')]) if os.path.isdir(MODEL_BACKUP_DIR) else 0
+        }
+    return state_copy
 
 
 @app.post('/api/configure-backend')
@@ -741,3 +814,70 @@ def retrain_endpoint() -> dict:
         'trained_at': new_trained_at,
         'cache_size': len(training_cache)
     }
+
+
+@app.post('/api/backup')
+def create_backup() -> dict:
+    """Erstellt manuell ein Backup des aktuellen Modells"""
+    try:
+        if not os.path.isfile(MODEL_PATH):
+            return {
+                'success': False,
+                'error': 'Kein Modell vorhanden'
+            }
+        
+        backup_model()
+        
+        with _model_lock:
+            backup_count = len([f for f in os.listdir(MODEL_BACKUP_DIR) if f.startswith('model_')]) if os.path.isdir(MODEL_BACKUP_DIR) else 0
+        
+        return {
+            'success': True,
+            'message': 'Backup erfolgreich erstellt',
+            'backup_count': backup_count,
+            'last_backup_at': _model_state.get('last_backup_at', 0)
+        }
+    except Exception as err:
+        return {
+            'success': False,
+            'error': str(err)
+        }
+
+
+@app.get('/api/stats')
+def get_statistics() -> dict:
+    """Liefert detaillierte Statistiken über den KI-Service"""
+    with _model_lock:
+        stats = {
+            'service': {
+                'device': socket.gethostname(),
+                'port': SERVICE_PORT,
+                'backend_url': get_backend_url(),
+                'uptime_seconds': int(time.time() - _model_state.get('trained_at', time.time()))
+            },
+            'model': {
+                'samples': _model_state.get('samples', 0),
+                'trained_at': _model_state.get('trained_at', 0),
+                'last_id': _model_state.get('last_id', 0),
+                'model_exists': os.path.isfile(MODEL_PATH),
+                'model_size_bytes': os.path.getsize(MODEL_PATH) if os.path.isfile(MODEL_PATH) else 0
+            },
+            'training': {
+                'interval_minutes': TRAINING_INTERVAL_MINUTES,
+                'lookback_days': TRAINING_LOOKBACK_DAYS,
+                'in_progress': _model_state.get('training_in_progress', False),
+                'last_request_at': _model_state.get('last_train_request_at', 0),
+                'last_duration_seconds': _model_state.get('last_training_duration', 0),
+                'total_trainings': _model_state.get('total_trainings', 0),
+                'last_error': _model_state.get('last_error')
+            },
+            'backups': {
+                'count': len([f for f in os.listdir(MODEL_BACKUP_DIR) if f.startswith('model_')]) if os.path.isdir(MODEL_BACKUP_DIR) else 0,
+                'last_backup_at': _model_state.get('last_backup_at', 0),
+                'backup_dir': MODEL_BACKUP_DIR
+            },
+            'cache': {
+                'size': len(_model_state.get('training_cache', {}))
+            }
+        }
+    return stats
