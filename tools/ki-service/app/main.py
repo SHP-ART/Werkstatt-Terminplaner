@@ -648,6 +648,28 @@ def configure_backend(backend_url: str = None) -> dict:
             'success': False,
             'message': 'Keine Backend-URL konfiguriert. Bitte backend_url Parameter übergeben.',
             'example': 'POST /api/configure-backend?backend_url=http://192.168.1.100:3001'
+
+
+@app.post('/api/configure-lookback')
+def configure_lookback(days: int = None) -> dict:
+    """
+    Setzt TRAINING_LOOKBACK_DAYS zur Laufzeit ohne Neustart.
+    """
+    global TRAINING_LOOKBACK_DAYS
+    
+    if days is not None and days > 0:
+        TRAINING_LOOKBACK_DAYS = days
+        return {
+            'success': True,
+            'message': f'Lookback Days auf {days} gesetzt',
+            'lookback_days': TRAINING_LOOKBACK_DAYS
+        }
+    
+    return {
+        'success': False,
+        'message': 'Bitte gültigen days Parameter übergeben (>0)',
+        'current_lookback_days': TRAINING_LOOKBACK_DAYS,
+        'example': 'POST /api/configure-lookback?days=90'
         }
     
     return {
