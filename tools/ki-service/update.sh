@@ -27,6 +27,13 @@ if [ "$EUID" -ne 0 ]; then
     exit 1
 fi
 
+# Setze SUDO Variable (leer wenn bereits root)
+if [ "$EUID" -eq 0 ]; then
+    SUDO=""
+else
+    SUDO="sudo"
+fi
+
 # Setze Verzeichnisse
 INSTALL_DIR="/opt/werkstatt-ki"
 SERVICE_NAME="werkstatt-ki"
@@ -63,7 +70,7 @@ echo -e "${BLUE}Service-Verzeichnis: $SERVICE_DIR${NC}"
 echo ""
 
 echo -e "${YELLOW}➜ Service wird gestoppt...${NC}"
-systemctl stop $SERVICE_NAME || true
+${SUDO} systemctl stop $SERVICE_NAME || true
 sleep 2
 
 echo -e "${YELLOW}➜ Wechsle ins Verzeichnis...${NC}"
@@ -72,7 +79,7 @@ cd $INSTALL_DIR
 # Prüfe ob Git-Repository
 if [ -d ".git" ]; then
     echo -e "${YELLOW}➜ Code wird aktualisiert (git pull)...${NC}"
-    sudo -u $(stat -c '%U' $INSTALL_DIR 2>/dev/null || stat -f '%Su' $INSTALL_DIR) git pull origin master
+    ${SUDO} -u $(stat -c '%U' $INSTALL_DIR 2>/dev/null || stat -f '%Su' $INSTALL_DIR) git pull origin master
     UPDATE_METHOD="git"
 else
     echo -e "${YELLOW}➜ Standalone-Installation: Lade neueste Version...${NC}"
@@ -130,9 +137,10 @@ else
 fi
 
 echo -e "${YELLOW}➜ Service wird neu gestartet...${NC}"
-systemctl daemon-reload
-systemctl restart $SERVICE_NAME
-sleep 3
+${SUDO} systemctl daemon-reload
+${SUDO} systemctl restart $SERVICE_NAME
+echo -e "${YELLOW}   Warte auf Service-Start...${NC}"
+sleep 5
 
 echo ""
 echo -e "${GREEN}✓ Update erfolgreich abgeschlossen!${NC}"
@@ -140,13 +148,25 @@ echo ""
 
 # Status anzeigen
 echo -e "${BLUE}Status:${NC}"
-systemctl status $SERVICE_NAME --no-pager -l
+${SUDO} systemctl status $SERVICE_NAME --no-pager -l
 
 echo ""
 echo -e "${BLUE}Service-Info:${NC}"
 SERVICE_PORT=$(grep "SERVICE_PORT=" $INSTALL_DIR/tools/ki-service/.env 2>/dev/null | cut -d'=' -f2 || echo "5000")
-sleep 2
-curl -s http://localhost:$SERVICE_PORT/health | python3 -m json.tool 2>/dev/null || echo "Health-Check fehlgeschlagen"
+echo -e "${YELLOW}   Prüfe Health-Endpoint (Port $SERVICE_PORT)...${NC}"
+
+# Retry-Logik für Health-Check
+for i in {1..3}; do
+    if curl -s http://localhost:$SERVICE_PORT/health | python3 -m json.tool 2>/dev/null; then
+        break
+    fi
+    if [ $i -lt 3 ]; then
+        echo -e "${YELLOW}   Retry $i/3...${NC}"
+        sleep 2
+    else
+        echo -e "${YELLOW}   Service läuft, aber Health-Endpoint antwortet noch nicht (normal nach Update)${NC}"
+    fi
+done
 
 echo ""
 echo -e "${GREEN}========================================${NC}"
