@@ -681,7 +681,7 @@ def configure_lookback(days: int = None) -> dict:
 
 
 @app.get('/api/predict')
-def predict_time(req: PredictRequest, request: Request) -> dict:
+def predict_time(req: ZeitRequest, request: Request) -> dict:
     detect_backend_from_request(request)
     
     beschreibung = req.beschreibung or ''
