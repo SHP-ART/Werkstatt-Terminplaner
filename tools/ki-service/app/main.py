@@ -648,6 +648,13 @@ def configure_backend(backend_url: str = None) -> dict:
             'success': False,
             'message': 'Keine Backend-URL konfiguriert. Bitte backend_url Parameter übergeben.',
             'example': 'POST /api/configure-backend?backend_url=http://192.168.1.100:3001'
+        }
+    
+    return {
+        'success': True,
+        'message': 'Backend-URL bereits konfiguriert',
+        'backend_url': current_backend
+    }
 
 
 @app.post('/api/configure-lookback')
@@ -670,9 +677,10 @@ def configure_lookback(days: int = None) -> dict:
         'message': 'Bitte gültigen days Parameter übergeben (>0)',
         'current_lookback_days': TRAINING_LOOKBACK_DAYS,
         'example': 'POST /api/configure-lookback?days=90'
-        }
-    
-    return {
+    }
+
+
+@app.get('/api/predict')
         'success': True,
         'message': 'Backend-URL bereits konfiguriert',
         'backend_url': current_backend
