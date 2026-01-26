@@ -117,5 +117,13 @@ $SUDO systemctl daemon-reload
 $SUDO systemctl enable werkstatt-ki.service
 $SUDO systemctl restart werkstatt-ki.service
 
+echo "[6/6] Update-Skript bereitstellen..."
+# Kopiere update.sh in das Installationsverzeichnis
+if [ -f "$INSTALL_DIR/update.sh" ]; then
+    $SUDO chmod +x "$INSTALL_DIR/update.sh"
+    echo "Update-Skript verfügbar unter: $INSTALL_DIR/update.sh"
+    echo "Zukünftige Updates: cd $INSTALL_DIR && sudo ./update.sh"
+fi
+
 echo "Fertig. Status:"
 $SUDO systemctl --no-pager --full status werkstatt-ki.service || true

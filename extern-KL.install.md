@@ -93,7 +93,29 @@ bash <(curl -fsSL https://raw.githubusercontent.com/SHP-ART/Werkstatt-Terminplan
 ```
 ## 6) Service aktualisieren (auf dem externen KI-Gerät)
 
-Um den externen KI-Service auf die neueste Version zu aktualisieren:
+### **Schnellste Methode: Update-Skript (empfohlen)**
+
+Das Update-Skript ist automatisch im Installationsverzeichnis vorhanden:
+
+```bash
+# Auf das KI-Gerät verbinden
+ssh benutzer@<KI-GERAET-IP>
+
+# Ins Verzeichnis wechseln und Update ausführen
+cd /opt/werkstatt-ki
+sudo ./update.sh
+```
+
+Das Skript führt automatisch aus:
+- Service stoppen
+- Code aktualisieren (git pull oder Download)
+- Dependencies aktualisieren
+- Service neu starten
+- Status und Health-Check anzeigen
+
+### **Alternative: Manuelle Schritte**
+
+Um den externen KI-Service manuell auf die neueste Version zu aktualisieren:
 
 ```bash
 # Auf das KI-Gerät verbinden (ersetze IP und Benutzer)

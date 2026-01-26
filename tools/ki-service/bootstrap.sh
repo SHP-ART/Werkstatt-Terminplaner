@@ -60,5 +60,12 @@ DISCOVERY_ENABLED="$DISCOVERY_ENABLED" \
 $SUDO bash "$WORKDIR/repo/tools/ki-service/install_werkstatt_ki.sh"
 
 echo "[4/4] Fertig."
+
+# Update-Skript bereitstellen
+if [ -f "$INSTALL_DIR/update.sh" ]; then
+    $SUDO chmod +x "$INSTALL_DIR/update.sh"
+    echo "Update-Skript verfügbar: cd $INSTALL_DIR && sudo ./update.sh"
+fi
+
 echo "Status:"
 $SUDO systemctl --no-pager --full status werkstatt-ki.service || true
