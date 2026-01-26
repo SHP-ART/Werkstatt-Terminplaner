@@ -681,14 +681,7 @@ def configure_lookback(days: int = None) -> dict:
 
 
 @app.get('/api/predict')
-        'success': True,
-        'message': 'Backend-URL bereits konfiguriert',
-        'backend_url': current_backend
-    }
-
-
-@app.post('/api/suggest-arbeiten')
-def suggest_arbeiten(req: ArbeitenRequest, request: Request) -> dict:
+def predict_time(req: PredictRequest, request: Request) -> dict:
     detect_backend_from_request(request)
     
     beschreibung = req.beschreibung or ''
