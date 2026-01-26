@@ -221,11 +221,20 @@ function getConnectionStatus() {
   };
 }
 
+async function retrainModel() {
+  const payload = await requestJson('/api/retrain', {
+    method: 'POST',
+    body: {}
+  });
+  return unwrapData(payload);
+}
+
 module.exports = {
   isConfigured,
   checkHealth,
   testConnection,
   getConnectionStatus,
+  retrainModel,
   parseTerminFromText,
   suggestArbeiten,
   estimateZeit,

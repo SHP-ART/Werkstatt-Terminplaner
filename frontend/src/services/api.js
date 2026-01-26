@@ -584,6 +584,14 @@ class AIService {
   }
 
   /**
+   * Externes Modell neu trainieren (Daten abgleichen)
+   * @returns {Promise<Object>} Ergebnis des Trainings
+   */
+  static async retrainExternalModel() {
+    return ApiService.post('/ai/external/retrain', {});
+  }
+
+  /**
    * Testet die Verbindung zur OpenAI API
    * @returns {Promise<Object>} Ergebnis des Verbindungstests
    */

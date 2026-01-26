@@ -866,6 +866,32 @@ async function retrainModel(req, res) {
   }
 }
 
+/**
+ * POST /api/ai/external/retrain
+ * Erzwingt Neutraining des externen Modells
+ */
+async function retrainExternalModel(req, res) {
+  try {
+    const { enabled, mode } = await getKISettings();
+    if (!enabled) {
+      return res.status(403).json({ error: 'KI-Funktionen sind deaktiviert' });
+    }
+    if (mode !== 'external') {
+      return res.status(400).json({ error: 'Externer KI-Modus ist nicht aktiv' });
+    }
+
+    const result = await externalAiService.retrainModel();
+    res.json({
+      success: true,
+      data: result,
+      mode: 'external'
+    });
+  } catch (error) {
+    console.error('retrainExternalModel Fehler:', error);
+    res.status(500).json({ error: error.message || 'Externes Training fehlgeschlagen' });
+  }
+}
+
 // =============================================================================
 // EXPORTS
 // =============================================================================
@@ -887,5 +913,6 @@ module.exports = {
   getTrainingData,
   excludeFromTraining,
   excludeAllOutliers,
-  retrainModel
+  retrainModel,
+  retrainExternalModel
 };

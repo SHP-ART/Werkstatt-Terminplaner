@@ -217,6 +217,12 @@ router.post('/training-data/exclude-outliers', aiController.excludeAllOutliers);
  */
 router.post('/retrain', aiController.retrainModel);
 
+/**
+ * POST /api/ai/external/retrain
+ * Erzwingt Neutraining des externen KI-Modells
+ */
+router.post('/external/retrain', aiController.retrainExternalModel);
+
 // =============================================================================
 // EXPORT
 // =============================================================================

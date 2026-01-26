@@ -169,10 +169,59 @@ async function berechneEndzeitFuerTermin(termin, arbeitszeitenDetails) {
       return { startzeit: startzeit || null, endzeit: null };
     }
     
-    // Endzeit berechnen
+    // Mittagspause berücksichtigen
+    const mittagspauseDauer = einstellungen.mittagspause_minuten || 30;
+    
+    // Endzeit berechnen (MIT Pausenberücksichtigung)
     const [startH, startM] = startzeit.split(':').map(Number);
     const startInMinuten = startH * 60 + startM;
-    const endInMinuten = startInMinuten + Math.round(gesamtMinuten);
+    
+    // Ermittle Pausenzeiten vom zugeordneten Mitarbeiter/Lehrling
+    let pausenStart = null;
+    let pausenEnde = null;
+    
+    if (details && mittagspauseDauer > 0) {
+      // Suche die erste Zuordnung mit Pauseninfo
+      for (const [key, value] of Object.entries(details)) {
+        if (key.startsWith('_')) continue;
+        
+        if (typeof value === 'object') {
+          let pauseStartZeit = null;
+          
+          if (value.type === 'lehrling' && value.mitarbeiter_id) {
+            const lehr = lehrlingeMap[value.mitarbeiter_id];
+            pauseStartZeit = lehr?.mittagspause_start || '12:00';
+          } else if (value.mitarbeiter_id) {
+            const ma = mitarbeiterMap[value.mitarbeiter_id];
+            pauseStartZeit = ma?.mittagspause_start || '12:00';
+          }
+          
+          if (pauseStartZeit) {
+            const [pauseH, pauseM] = pauseStartZeit.split(':').map(Number);
+            pausenStart = pauseH * 60 + pauseM;
+            pausenEnde = pausenStart + mittagspauseDauer;
+            break; // Erste gefundene Zuordnung nutzen
+          }
+        }
+      }
+    }
+    
+    // Berechne Endzeit unter Berücksichtigung der Pause
+    let endInMinuten = startInMinuten + Math.round(gesamtMinuten);
+    
+    // Wenn die Arbeit über die Pause geht, addiere die Pausendauer
+    if (pausenStart !== null && pausenEnde !== null) {
+      // Fall 1: Start vor Pause, Ende nach Pause-Start → Pause überspringen
+      if (startInMinuten < pausenStart && endInMinuten > pausenStart) {
+        endInMinuten += mittagspauseDauer;
+      }
+      // Fall 2: Start während Pause → nach Pause verschieben
+      else if (startInMinuten >= pausenStart && startInMinuten < pausenEnde) {
+        const verschiebung = pausenEnde - startInMinuten;
+        endInMinuten += verschiebung;
+      }
+    }
+    
     const endH = Math.floor(endInMinuten / 60);
     const endM = endInMinuten % 60;
     const endzeit = `${String(endH).padStart(2, '0')}:${String(endM).padStart(2, '0')}`;

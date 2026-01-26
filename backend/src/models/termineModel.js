@@ -1463,10 +1463,30 @@ class TermineModel {
   }
 
   // Hilfsfunktion: Berechnet Endzeit aus Startzeit und Dauer
-  static berechneEndzeit(startzeit, dauerMinuten) {
+  static berechneEndzeit(startzeit, dauerMinuten, pausenInfo = null) {
     if (!startzeit) return '08:00';
     const [h, m] = startzeit.split(':').map(Number);
-    const gesamtMinuten = h * 60 + m + (dauerMinuten || 0);
+    let gesamtMinuten = h * 60 + m + (dauerMinuten || 0);
+    
+    // Pausenberücksichtigung (optional)
+    if (pausenInfo && pausenInfo.start && pausenInfo.dauer > 0) {
+      const [pauseH, pauseM] = pausenInfo.start.split(':').map(Number);
+      const pausenStart = pauseH * 60 + pauseM;
+      const pausenEnde = pausenStart + pausenInfo.dauer;
+      const startMinuten = h * 60 + m;
+      const endMinutenOhnePause = startMinuten + (dauerMinuten || 0);
+      
+      // Fall 1: Arbeit beginnt vor Pause und endet nach Pause-Start
+      if (startMinuten < pausenStart && endMinutenOhnePause > pausenStart) {
+        gesamtMinuten += pausenInfo.dauer;
+      }
+      // Fall 2: Arbeit beginnt während der Pause
+      else if (startMinuten >= pausenStart && startMinuten < pausenEnde) {
+        const verschiebung = pausenEnde - startMinuten;
+        gesamtMinuten += verschiebung;
+      }
+    }
+    
     const endH = Math.floor(gesamtMinuten / 60);
     const endM = gesamtMinuten % 60;
     return `${String(endH).padStart(2, '0')}:${String(endM).padStart(2, '0')}`;

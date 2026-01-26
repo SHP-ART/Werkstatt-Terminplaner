@@ -16309,7 +16309,18 @@ class App {
   setupAuslastungKalender() {
     const kalenderTage = document.getElementById('kalenderTage');
     const kalenderMonatJahr = document.getElementById('kalenderMonatJahr');
-    if (!kalenderTage || !kalenderMonatJahr || this.auslastungKalenderInitialized) {
+    if (!kalenderTage || !kalenderMonatJahr) {
+      // Element noch nicht im DOM - wird später beim Tab-Wechsel aufgerufen
+      return;
+    }
+
+    // Prüfe ob bereits initialisiert - wenn ja, nur rendern
+    if (this.auslastungKalenderInitialized) {
+      // Kalender neu rendern falls er leer ist
+      if (kalenderTage.children.length === 0 || !kalenderTage.querySelector('.kalender-tag')) {
+        this.renderAuslastungKalender();
+        this.updateSelectedDatumDisplay();
+      }
       return;
     }
 
@@ -18059,36 +18070,40 @@ class App {
         endMinutes = startMinutes + anzeigeZeit;
       }
       
-      // Prüfe ob der Termin über die Mittagspause geht
-      if (pauseStartMinuten !== null && startMinutes < pauseStartMinuten && endMinutes > pauseStartMinuten) {
-        // Termin überlappt mit der Pause - aufteilen
-        
-        // Teil 1: Vor der Pause
-        const teil1End = pauseStartMinuten;
-        bloeckeHtml += renderBlock(arbeit, startMinutes, teil1End, false);
-        
-        // Teil 2: Nach der Pause (mit der verbleibenden Zeit)
-        const verbrauchteZeit = teil1End - startMinutes;
-        const verbleibendeZeit = anzeigeZeit - verbrauchteZeit;
-        if (verbleibendeZeit > 0) {
-          const teil2Start = pauseEndMinuten;
-          const teil2End = teil2Start + verbleibendeZeit;
-          bloeckeHtml += renderBlock(arbeit, teil2Start, teil2End, true);
-          currentEndMinutes = teil2End;
-        } else {
-          currentEndMinutes = teil1End;
+      // BUG 3 FIX: Prüfe ob der Termin über die Mittagspause geht - aufteilen!
+      if (pauseStartMinuten !== null && pauseEndMinuten !== null) {
+        // Fall 1: Termin beginnt VOR Pause und endet IN oder NACH der Pause
+        if (startMinutes < pauseStartMinuten && endMinutes > pauseStartMinuten) {
+          // Teil 1: Vor der Pause (bis Pause-Start)
+          const teil1End = pauseStartMinuten;
+          bloeckeHtml += renderBlock(arbeit, startMinutes, teil1End, false);
+          
+          // Teil 2: Nach der Pause (mit verbleibender Zeit)
+          const verbrauchteZeit = teil1End - startMinutes;
+          const verbleibendeZeit = anzeigeZeit - verbrauchteZeit;
+          if (verbleibendeZeit > 0) {
+            const teil2Start = pauseEndMinuten;
+            const teil2End = teil2Start + verbleibendeZeit;
+            bloeckeHtml += renderBlock(arbeit, teil2Start, teil2End, true);
+            currentEndMinutes = teil2End;
+          } else {
+            currentEndMinutes = pauseEndMinuten;
+          }
+          continue; // Springe zum nächsten Termin
         }
-      } else {
-        // Termin überlappt nicht mit der Pause - normal rendern
-        bloeckeHtml += renderBlock(arbeit, startMinutes, endMinutes, false);
         
-        // Wenn das Ende in der Pause liegt, nach der Pause fortsetzen
-        if (pauseStartMinuten !== null && endMinutes > pauseStartMinuten && endMinutes <= pauseEndMinuten) {
-          currentEndMinutes = pauseEndMinuten;
-        } else {
-          currentEndMinutes = endMinutes;
+        // Fall 2: Termin beginnt WÄHREND der Pause - wurde oben bereits verschoben
+        // Fall 3: Termin endet WÄHREND der Pause - Pause überspringen für nächsten Block
+        if (endMinutes > pauseStartMinuten && endMinutes <= pauseEndMinuten) {
+          bloeckeHtml += renderBlock(arbeit, startMinutes, endMinutes, false);
+          currentEndMinutes = pauseEndMinuten; // Nächster Block beginnt NACH der Pause
+          continue;
         }
       }
+      
+      // Kein Pausenkonflikt - normal rendern
+      bloeckeHtml += renderBlock(arbeit, startMinutes, endMinutes, false);
+      currentEndMinutes = endMinutes;
     }
 
     bloeckeHtml += '</div>';
@@ -24248,12 +24263,16 @@ class App {
             <div class="zeit-value">${aktuellerAuftrag.startzeit || aktuellerAuftrag.bring_zeit || '--:--'}</div>
           </div>
           <div class="intern-person-zeit-item">
-            <div class="zeit-label">Fertig ca.</div>
+            <div class="zeit-label">${aktuellerAuftrag.status === 'abgeschlossen' ? 'Fertig' : 'Fertig ca.'}</div>
             <div class="zeit-value">${this.berechneEndzeit(aktuellerAuftrag)}</div>
           </div>
           <div class="intern-person-zeit-item">
-            <div class="zeit-label">Rest</div>
-            <div class="zeit-value" style="color: ${isUeberzogen ? '#dc3545' : 'var(--accent)'}">${restzeit}</div>
+            <div class="zeit-label">${aktuellerAuftrag.status === 'abgeschlossen' ? 'Dauer' : 'Rest'}</div>
+            <div class="zeit-value" style="color: ${isUeberzogen ? '#dc3545' : 'var(--accent)'}">
+              ${aktuellerAuftrag.status === 'abgeschlossen' 
+                ? this.formatMinutesToHours(aktuellerAuftrag.tatsaechliche_zeit || aktuellerAuftrag.geschaetzte_zeit || 0)
+                : restzeit}
+            </div>
           </div>
         </div>
         
@@ -24385,13 +24404,23 @@ class App {
    * Berechnet die geplante Endzeit
    */
   berechneEndzeit(termin) {
+    // Für abgeschlossene Termine: Verwende fertigstellung_zeit falls vorhanden
+    if (termin.status === 'abgeschlossen' && termin.fertigstellung_zeit) {
+      return termin.fertigstellung_zeit;
+    }
+    
+    // Für abgeschlossene Termine: Berechne mit tatsaechlicher_zeit
     const startzeit = termin.startzeit || termin.bring_zeit;
     if (!startzeit) return '--:--';
     
-    const geschaetzteZeit = termin.geschaetzte_zeit || 60;
+    // Verwende tatsaechliche_zeit für abgeschlossene Termine, sonst geschaetzte_zeit
+    const dauer = (termin.status === 'abgeschlossen' && termin.tatsaechliche_zeit) 
+      ? termin.tatsaechliche_zeit 
+      : (termin.geschaetzte_zeit || 60);
+    
     const [stunden, minuten] = startzeit.split(':').map(Number);
     
-    const endMinuten = stunden * 60 + minuten + geschaetzteZeit;
+    const endMinuten = stunden * 60 + minuten + dauer;
     const endStunden = Math.floor(endMinuten / 60);
     const endMin = endMinuten % 60;
     
@@ -25348,6 +25377,13 @@ window.switchSubTab = function(tabName) {
   }
   
   // Spezifische Aktionen je nach Tab
+  if (tabName === 'neuerTermin' && window.app) {
+    // Kalender initialisieren/neu rendern falls nötig
+    setTimeout(() => {
+      window.app.setupAuslastungKalender();
+    }, 50);
+  }
+  
   if (tabName === 'terminBearbeiten' && window.app) {
     const datumInput = document.getElementById('editTerminDatum');
     if (datumInput && !datumInput.value) {
