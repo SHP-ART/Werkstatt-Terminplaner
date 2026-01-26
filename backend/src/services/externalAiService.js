@@ -141,6 +141,12 @@ async function checkHealth() {
       configured: true,
       device: payload?.device || payload?.device_name || null,
       status: payload?.status || 'ok',
+      model_samples: payload?.model_samples || payload?.samples || 0,
+      trained_at: payload?.trained_at || 0,
+      last_id: payload?.last_id || 0,
+      lookback_days: payload?.lookback_days || 0,
+      training_in_progress: payload?.training_in_progress || false,
+      last_train_request_at: payload?.last_train_request_at || 0,
       ...config
     };
   } catch (error) {
