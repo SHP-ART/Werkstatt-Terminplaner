@@ -892,6 +892,44 @@ async function retrainExternalModel(req, res) {
   }
 }
 
+/**
+ * POST /api/ai/notify-backend-url
+ * Benachrichtigt die externe KI über die Backend-URL
+ */
+async function notifyBackendUrl(req, res) {
+  try {
+    const { enabled, mode } = await getKISettings();
+
+    if (!enabled || mode !== 'external') {
+      return res.status(400).json({
+        success: false,
+        error: 'Externe KI nicht aktiviert'
+      });
+    }
+
+    const result = await externalAiService.notifyBackendUrl();
+    
+    if (result.success) {
+      res.json({
+        success: true,
+        message: 'Backend-URL erfolgreich an externe KI übermittelt',
+        ...result
+      });
+    } else {
+      res.status(500).json({
+        success: false,
+        error: result.message || 'Fehler beim Benachrichtigen der KI'
+      });
+    }
+  } catch (error) {
+    console.error('Fehler beim Benachrichtigen der externen KI:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Interner Serverfehler'
+    });
+  }
+}
+
 // =============================================================================
 // EXPORTS
 // =============================================================================
@@ -914,5 +952,6 @@ module.exports = {
   excludeFromTraining,
   excludeAllOutliers,
   retrainModel,
-  retrainExternalModel
+  retrainExternalModel,
+  notifyBackendUrl
 };

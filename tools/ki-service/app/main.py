@@ -158,14 +158,29 @@ def detect_backend_from_request(request: Request) -> None:
     if not client_host or client_host in ['127.0.0.1', 'localhost', '::1']:
         return  # Lokale Anfragen ignorieren
     
-    # Vermutete Backend-URL konstruieren
-    backend_url = f'http://{client_host}:3001'
-    
-    # Validiere durch Health-Check
+    # Methode 1: Server-Info API abfragen (bevorzugt)
+    backend_url_candidate = f'http://{client_host}:3001'
     try:
-        response = requests.get(f'{backend_url}/api/health', timeout=2)
+        response = requests.get(f'{backend_url_candidate}/api/server-info', timeout=2)
         if response.status_code == 200:
-            set_backend_url(backend_url)
+            data = response.json()
+            # Nutze die vom Server bereitgestellte API-URL
+            api_url = data.get('apiUrl', '').rstrip('/')
+            if api_url:
+                # Entferne /api Suffix für Backend-URL
+                backend_url = api_url.replace('/api', '')
+                set_backend_url(backend_url)
+                logging.info('Backend-URL via server-info API erkannt: %s', backend_url)
+                return
+    except Exception as e:
+        logging.debug('server-info API nicht erreichbar: %s', e)
+    
+    # Methode 2: Fallback mit Health-Check
+    try:
+        response = requests.get(f'{backend_url_candidate}/api/health', timeout=2)
+        if response.status_code == 200:
+            set_backend_url(backend_url_candidate)
+            logging.info('Backend-URL via health-check erkannt: %s', backend_url_candidate)
     except Exception:
         pass  # Ignorieren wenn Validierung fehlschlägt
 
@@ -535,6 +550,37 @@ def health() -> dict:
         'training_in_progress': _model_state.get('training_in_progress', False),
         'last_train_request_at': _model_state.get('last_train_request_at', 0),
         'service_port': SERVICE_PORT
+    }
+
+
+@app.post('/api/configure-backend')
+def configure_backend(backend_url: str = None) -> dict:
+    """
+    Manueller Endpoint zur Konfiguration der Backend-URL.
+    Kann vom Backend aufgerufen werden, um die eigene URL mitzuteilen.
+    """
+    if backend_url:
+        # Manuelle Konfiguration mit übergebenem URL
+        set_backend_url(backend_url)
+        return {
+            'success': True,
+            'message': 'Backend-URL manuell gesetzt',
+            'backend_url': get_backend_url()
+        }
+    
+    # Keine URL übergeben
+    current_backend = get_backend_url()
+    if not current_backend:
+        return {
+            'success': False,
+            'message': 'Keine Backend-URL konfiguriert. Bitte backend_url Parameter übergeben.',
+            'example': 'POST /api/configure-backend?backend_url=http://192.168.1.100:3001'
+        }
+    
+    return {
+        'success': True,
+        'message': 'Backend-URL bereits konfiguriert',
+        'backend_url': current_backend
     }
 
 

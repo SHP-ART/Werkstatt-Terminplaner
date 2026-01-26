@@ -229,12 +229,54 @@ async function retrainModel() {
   return unwrapData(payload);
 }
 
+async function notifyBackendUrl() {
+  try {
+    const os = require('os');
+    
+    // Ermittle Server-IP
+    function getLocalIPAddress() {
+      const interfaces = os.networkInterfaces();
+      for (const name of Object.keys(interfaces)) {
+        for (const iface of interfaces[name]) {
+          if (iface.family === 'IPv4' && !iface.internal) {
+            return iface.address;
+          }
+        }
+      }
+      return 'localhost';
+    }
+    
+    const port = process.env.PORT || 3001;
+    const ip = getLocalIPAddress();
+    const backendUrl = `http://${ip}:${port}`;
+    
+    // Informiere externe KI über Backend-URL
+    const config = getResolvedConfig();
+    if (!config.activeUrl) {
+      return { success: false, message: 'Externe KI nicht konfiguriert' };
+    }
+    
+    const response = await requestJson('/api/configure-backend', {
+      method: 'POST',
+      body: { backend_url: backendUrl }
+    });
+    
+    return response;
+  } catch (error) {
+    return { 
+      success: false, 
+      message: `Fehler beim Benachrichtigen der KI: ${error.message}` 
+    };
+  }
+}
+
 module.exports = {
   isConfigured,
   checkHealth,
   testConnection,
   getConnectionStatus,
   retrainModel,
+  notifyBackendUrl,
   parseTerminFromText,
   suggestArbeiten,
   estimateZeit,

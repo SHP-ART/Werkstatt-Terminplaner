@@ -223,6 +223,12 @@ router.post('/retrain', aiController.retrainModel);
  */
 router.post('/external/retrain', aiController.retrainExternalModel);
 
+/**
+ * POST /api/ai/external/notify-backend
+ * Benachrichtigt externe KI über Backend-URL
+ */
+router.post('/external/notify-backend', aiController.notifyBackendUrl);
+
 // =============================================================================
 // EXPORT
 // =============================================================================

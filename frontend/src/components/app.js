@@ -12052,6 +12052,40 @@ class App {
     }
   }
 
+  // Benachrichtige externe KI über Backend-URL
+  async notifyExternalBackendUrl() {
+    const btn = document.getElementById('btnNotifyBackendUrl');
+    if (btn) {
+      btn.disabled = true;
+      btn.textContent = '⏳ Übertrage...';
+    }
+
+    try {
+      const response = await fetch('/api/ai/external/notify-backend', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+      });
+      
+      const result = await response.json();
+
+      if (result.success) {
+        this.showToast('✅ Backend-URL erfolgreich an externe KI übermittelt', 'success');
+        // Status aktualisieren
+        await this.checkKIStatus();
+      } else {
+        this.showToast('⚠️ ' + (result.error || 'Fehler beim Übermitteln'), 'warning');
+      }
+    } catch (error) {
+      console.error('Fehler beim Benachrichtigen:', error);
+      this.showToast('❌ Fehler: ' + error.message, 'error');
+    } finally {
+      if (btn) {
+        btn.disabled = false;
+        btn.textContent = '📡 Backend-URL übertragen';
+      }
+    }
+  }
+
   // Details-Tabelle anzeigen/verstecken
   toggleTrainingDetails() {
     const details = document.getElementById('kiTrainingDetails');
