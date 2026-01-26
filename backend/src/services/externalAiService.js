@@ -256,9 +256,9 @@ async function notifyBackendUrl() {
       return { success: false, message: 'Externe KI nicht konfiguriert' };
     }
     
-    const response = await requestJson('/api/configure-backend', {
-      method: 'POST',
-      body: { backend_url: backendUrl }
+    // Sende als Query-Parameter statt Body
+    const response = await requestJson(`/api/configure-backend?backend_url=${encodeURIComponent(backendUrl)}`, {
+      method: 'POST'
     });
     
     return response;
