@@ -130,10 +130,13 @@ ssh benutzer@<KI-GERAET-IP>
 # Service stoppen
 sudo systemctl stop werkstatt-ki
 
-# Neuinstallation (behält Konfiguration)
+# Neuinstallation mit Backend-URL (empfohlen)
+BACKEND_URL=http://<WERKSTATT-SERVER-IP>:3001 \
 SERVICE_PORT=5000 \
 bash <(curl -fsSL https://raw.githubusercontent.com/SHP-ART/Werkstatt-Terminplaner/master/tools/ki-service/standalone-install.sh)
 ```
+
+**Wichtig:** Ersetze `<WERKSTATT-SERVER-IP>` mit der IP-Adresse deines Werkstatt-Servers (nicht localhost!).
 
 **Nach dem Update prüfen:**
 

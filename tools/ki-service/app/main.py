@@ -7,7 +7,7 @@ from typing import List, Optional
 
 import numpy as np
 import requests
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from pydantic import BaseModel
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.linear_model import Ridge
@@ -142,7 +142,32 @@ def set_backend_url(url: str) -> None:
         return
     normalized = url.rstrip('/')
     with _backend_lock:
+        if BACKEND_URL and BACKEND_URL != normalized:
+            logging.info('Backend-URL aktualisiert: %s -> %s', BACKEND_URL, normalized)
+        elif not BACKEND_URL:
+            logging.info('Backend-URL automatisch erkannt: %s', normalized)
         BACKEND_URL = normalized
+
+
+def detect_backend_from_request(request: Request) -> None:
+    """Extrahiert die Backend-URL aus einer eingehenden HTTP-Anfrage."""
+    if get_backend_url():
+        return  # Backend-URL bereits gesetzt
+    
+    client_host = request.client.host if request.client else None
+    if not client_host or client_host in ['127.0.0.1', 'localhost', '::1']:
+        return  # Lokale Anfragen ignorieren
+    
+    # Vermutete Backend-URL konstruieren
+    backend_url = f'http://{client_host}:3001'
+    
+    # Validiere durch Health-Check
+    try:
+        response = requests.get(f'{backend_url}/api/health', timeout=2)
+        if response.status_code == 200:
+            set_backend_url(backend_url)
+    except Exception:
+        pass  # Ignorieren wenn Validierung fehlschlägt
 
 
 def get_backend_url() -> str:
@@ -514,9 +539,11 @@ def health() -> dict:
 
 
 @app.post('/api/suggest-arbeiten')
-def suggest_arbeiten(request: ArbeitenRequest) -> dict:
-    beschreibung = request.beschreibung or ''
-    fahrzeug = request.fahrzeug or ''
+def suggest_arbeiten(req: ArbeitenRequest, request: Request) -> dict:
+    detect_backend_from_request(request)
+    
+    beschreibung = req.beschreibung or ''
+    fahrzeug = req.fahrzeug or ''
 
     suggestions = suggest_tasks(beschreibung)
     arbeiten = []
@@ -546,8 +573,10 @@ def suggest_arbeiten(request: ArbeitenRequest) -> dict:
 
 
 @app.post('/api/estimate-zeit')
-def estimate_zeit(request: ZeitRequest) -> dict:
-    arbeiten = request.arbeiten or []
+def estimate_zeit(req: ZeitRequest, request: Request) -> dict:
+    detect_backend_from_request(request)
+    
+    arbeiten = req.arbeiten or []
     zeiten = []
 
     for arbeit in arbeiten:
