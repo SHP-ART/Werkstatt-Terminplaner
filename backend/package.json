@@ -27,7 +27,7 @@
     "ws": "^8.18.3"
   },
   "devDependencies": {
-    "electron": "^39.2.7",
+    "electron": "^39.3.0",
     "electron-builder": "^26.0.12",
     "nodemon": "^3.0.1",
     "pkg": "^5.8.1"
