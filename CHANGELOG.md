@@ -2,6 +2,23 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.4.0] - 2026-01-28
+
+### Added
+- Neue Hilfsfunktion `getEffektiveArbeitszeit(termin)` für zentrale Arbeitszeitberechnung
+- Unterstützung für manuell eingegebene Arbeitszeiten (`arbeitszeiten_details`) in allen Zeitberechnungen
+
+### Changed
+- `start.bat` angepasst für Electron All-in-One Start (statt separate Server)
+- `berechneEndzeit()` nutzt jetzt `arbeitszeiten_details` mit höherer Priorität als `geschaetzte_zeit`
+- `berechneAuftragFortschritt()` berücksichtigt jetzt die korrekte Arbeitszeit aus `arbeitszeiten_details`
+- `berechneRestzeit()` berücksichtigt jetzt die korrekte Arbeitszeit aus `arbeitszeiten_details`
+- DATENBANK.md aktualisiert mit fehlenden KI-Feldern (Schema Version 11)
+
+### Fixed
+- **Bug-Fix**: "Fertig ca." bei Intern-Ansicht zeigte falsches Feld (`geschaetzte_zeit` statt `arbeitszeiten_details`)
+- Intern-Tab zeigt jetzt korrekt die manuell eingegebene Arbeitszeit als Basis für Endzeit-Berechnung
+
 ## [1.3.0] - 2026-01-21
 
 ### Added

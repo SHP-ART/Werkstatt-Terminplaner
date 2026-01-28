@@ -53,20 +53,20 @@ git push origin v1.4.0
    ```markdown
    ## Werkstatt Terminplaner v1.4.0
    
+   ### Bugfixes
+   - 🐛 "Fertig ca." in Intern-Ansicht zeigt jetzt korrekte Endzeit
+   - ⏱️ Arbeitszeitberechnung berücksichtigt jetzt manuell eingegebene Zeiten
+   - 🚀 `start.bat` repariert für Electron All-in-One Start
+   
    ### Neue Features
-   - 🤖 Externe KI-Service-Integration
-   - 🔍 Backend-Discovery-Service
-   - 📡 Lokale KI-Unterstützung (Raspberry Pi)
+   - ✨ Neue Funktion `getEffektiveArbeitszeit()` für zentrale Arbeitszeitberechnung
+   - 📊 Unterstützung für `arbeitszeiten_details` in allen Zeitberechnungen
    
    ### Verbesserungen
-   - Optimierte KI-Planung
-   - Verbesserte Einstellungen-Verwaltung
-   - Update-Mechanismus optimiert
-   
-   ### Technische Details
-   - Neue Migrations für externe KI-URLs
-   - Services: backendDiscovery, externalAi, kiDiscovery, localAi
-   - Frontend API-Erweiterungen
+   - `berechneEndzeit()` nutzt jetzt `arbeitszeiten_details` mit höherer Priorität
+   - `berechneAuftragFortschritt()` berücksichtigt korrekte Arbeitszeit
+   - `berechneRestzeit()` berücksichtigt korrekte Arbeitszeit
+   - DATENBANK.md aktualisiert (Schema Version 11)
    
    ### Installation
    1. Lade `Werkstatt-Terminplaner-Setup-1.4.0.exe` herunter

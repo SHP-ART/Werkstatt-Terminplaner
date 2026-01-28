@@ -1,5 +1,5 @@
 @echo off
-REM Werkstatt Terminplaner - Start Script
+REM Werkstatt Terminplaner - Start Script (Electron All-in-One)
 REM Für Windows
 
 echo ==========================================
@@ -20,81 +20,32 @@ REM Backend-Dependencies installieren (falls noch nicht geschehen)
 if not exist "backend\node_modules\" (
     echo [INFO] Installiere Backend-Dependencies...
     cd backend
-    call npm install >nul 2>&1
+    call npm install
     cd ..
     echo [OK] Backend-Dependencies installiert
 )
 
-REM Frontend-Dependencies installieren (falls noch nicht geschehen)
-if not exist "frontend\node_modules\" (
-    echo [INFO] Installiere Frontend-Dependencies...
-    cd frontend
-    call npm install >nul 2>&1
-    cd ..
-    echo [OK] Frontend-Dependencies installiert
-)
-
-REM Erstelle Logs-Verzeichnis
-if not exist "logs\" mkdir logs
-
-REM Prüfe ob Ports bereits belegt sind
+REM Prüfe ob Port bereits belegt ist
 netstat -ano | findstr ":3001" >nul
 if %ERRORLEVEL% EQU 0 (
-    echo [WARNUNG] Port 3001 (Backend) ist bereits belegt!
+    echo [WARNUNG] Port 3001 ist bereits belegt!
     echo Stoppen Sie zuerst den laufenden Server mit stop.bat
     pause
     exit /b 1
 )
 
-netstat -ano | findstr ":3000" >nul
-if %ERRORLEVEL% EQU 0 (
-    echo [WARNUNG] Port 3000 (Frontend) ist bereits belegt!
-    echo Stoppen Sie zuerst den laufenden Server mit stop.bat
-    pause
-    exit /b 1
-)
+echo.
+echo [START] Starte Electron App (Server + Frontend)...
+echo.
 
-REM Starte Backend
-echo [START] Starte Backend-Server auf Port 3001...
+REM Starte Electron All-in-One App
 cd backend
-start /B cmd /c "npm start > ..\logs\backend.log 2>&1"
-cd ..
-timeout /t 3 /nobreak >nul
+call npm start
 
-REM Starte Frontend
-echo [START] Starte Frontend-Server auf Port 3000...
-cd frontend
-start /B cmd /c "npm run dev > ..\logs\frontend.log 2>&1"
+REM Falls Electron beendet wird
 cd ..
-timeout /t 2 /nobreak >nul
-
 echo.
 echo ==========================================
-echo   Server erfolgreich gestartet!
+echo   Werkstatt Terminplaner beendet
 echo ==========================================
-echo.
-echo Frontend:  http://localhost:3000
-echo Backend:   http://localhost:3001
-echo API:       http://localhost:3001/api
-echo.
-echo Logs:
-echo   Backend:  logs\backend.log
-echo   Frontend: logs\frontend.log
-echo.
-echo Zum Stoppen: stop.bat
-echo.
-
-REM IP-Adresse anzeigen
-for /f "tokens=2 delims=:" %%a in ('ipconfig ^| findstr /c:"IPv4"') do (
-    set IP=%%a
-    goto :found_ip
-)
-:found_ip
-if defined IP (
-    echo Netzwerkzugriff:
-    echo   http://%IP:~1%:3000
-    echo.
-)
-
-echo Druecken Sie eine Taste um fortzufahren...
-pause >nul
+pause

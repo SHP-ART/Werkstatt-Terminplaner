@@ -24396,7 +24396,7 @@ class App {
     if (!termin.startzeit && !termin.bring_zeit) return 0;
     
     const startzeit = termin.startzeit || termin.bring_zeit;
-    const geschaetzteZeit = termin.geschaetzte_zeit || 60; // Default 60 Min
+    const geschaetzteZeit = this.getEffektiveArbeitszeit(termin);
     
     const jetzt = this.getToday();
     const [stunden, minuten] = startzeit.split(':').map(Number);
@@ -24416,7 +24416,7 @@ class App {
     const startzeit = termin.startzeit || termin.bring_zeit;
     if (!startzeit) return '--:--';
     
-    const geschaetzteZeit = termin.geschaetzte_zeit || 60;
+    const geschaetzteZeit = this.getEffektiveArbeitszeit(termin);
     
     const jetzt = this.getToday();
     const [stunden, minuten] = startzeit.split(':').map(Number);
@@ -24435,6 +24435,50 @@ class App {
   }
 
   /**
+   * Ermittelt die effektive Arbeitszeit eines Termins
+   * Priorität: arbeitszeiten_details > geschaetzte_zeit > 60 Min (Fallback)
+   */
+  getEffektiveArbeitszeit(termin) {
+    // 1. Für abgeschlossene Termine: tatsaechliche_zeit
+    if (termin.status === 'abgeschlossen' && termin.tatsaechliche_zeit) {
+      return termin.tatsaechliche_zeit;
+    }
+    
+    // 2. arbeitszeiten_details (manuell eingegebene Arbeitszeiten) - PRIORITÄT
+    if (termin.arbeitszeiten_details) {
+      try {
+        const details = typeof termin.arbeitszeiten_details === 'string' 
+          ? JSON.parse(termin.arbeitszeiten_details) 
+          : termin.arbeitszeiten_details;
+        
+        let summeMinuten = 0;
+        for (const [key, value] of Object.entries(details)) {
+          if (key.startsWith('_')) continue; // Meta-Felder überspringen
+          if (typeof value === 'number') {
+            summeMinuten += value;
+          } else if (typeof value === 'object' && value.zeit) {
+            summeMinuten += value.zeit;
+          }
+        }
+        
+        if (summeMinuten > 0) {
+          return summeMinuten;
+        }
+      } catch (e) {
+        // JSON-Parse-Fehler ignorieren
+      }
+    }
+    
+    // 3. geschaetzte_zeit (Fallback aus Arbeitskatalog)
+    if (termin.geschaetzte_zeit) {
+      return termin.geschaetzte_zeit;
+    }
+    
+    // 4. Standard-Fallback
+    return 60;
+  }
+
+  /**
    * Berechnet die geplante Endzeit
    */
   berechneEndzeit(termin) {
@@ -24443,14 +24487,17 @@ class App {
       return termin.fertigstellung_zeit;
     }
     
-    // Für abgeschlossene Termine: Berechne mit tatsaechlicher_zeit
+    // Verwende endzeit_berechnet falls vorhanden (vom Server vorberechnet)
+    if (termin.endzeit_berechnet) {
+      return termin.endzeit_berechnet;
+    }
+    
+    // Fallback: Berechne lokal aus Startzeit und Dauer
     const startzeit = termin.startzeit || termin.bring_zeit;
     if (!startzeit) return '--:--';
     
-    // Verwende tatsaechliche_zeit für abgeschlossene Termine, sonst geschaetzte_zeit
-    const dauer = (termin.status === 'abgeschlossen' && termin.tatsaechliche_zeit) 
-      ? termin.tatsaechliche_zeit 
-      : (termin.geschaetzte_zeit || 60);
+    // Hole effektive Arbeitszeit
+    const dauer = this.getEffektiveArbeitszeit(termin);
     
     const [stunden, minuten] = startzeit.split(':').map(Number);
     

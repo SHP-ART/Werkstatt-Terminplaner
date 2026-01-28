@@ -73,6 +73,9 @@ Die Haupttabelle für alle Werkstatt-Termine.
 | `erweiterung_typ` | TEXT | Art der Erweiterung |
 | `teile_status` | TEXT | `vorraetig`, `bestellt`, `bestellen`, `eingetroffen` |
 | `interne_auftragsnummer` | TEXT | Interne Auftragsnummer |
+| `notizen` | TEXT | Zusätzliche Notizen zum Termin |
+| `ki_training_exclude` | INTEGER | 0/1 - Termin vom KI-Training ausschließen |
+| `ki_training_note` | TEXT | Begründung für KI-Training-Ausschluss |
 | `geloescht_am` | DATETIME | Soft-Delete Zeitstempel |
 | `erstellt_am` | DATETIME | Erstellungszeitpunkt |
 
@@ -225,6 +228,13 @@ Globale Werkstatt-Konfiguration (nur 1 Zeile mit id=1).
 | `ersatzauto_anzahl` | INTEGER | Anzahl Ersatzautos (veraltet) |
 | `nebenzeit_prozent` | REAL | Globaler Nebenzeit-Aufschlag % |
 | `mittagspause_minuten` | INTEGER | Dauer der Mittagspause (Standard: 30) |
+| `chatgpt_api_key` | TEXT | OpenAI ChatGPT API-Key |
+| `ki_enabled` | INTEGER | 0/1 - KI-Funktionen aktiviert |
+| `realtime_enabled` | INTEGER | 0/1 - Echtzeit-Funktionen aktiviert |
+| `ki_mode` | TEXT | KI-Modus: `local`, `external` |
+| `smart_scheduling_enabled` | INTEGER | 0/1 - Smart Scheduling aktiviert |
+| `anomaly_detection_enabled` | INTEGER | 0/1 - Anomalie-Erkennung aktiviert |
+| `ki_external_url` | TEXT | URL für externen KI-Service |
 
 ---
 
@@ -329,6 +339,8 @@ Die Tabelle `_schema_meta` speichert die aktuelle Schema-Version:
 | Key | Value |
 |-----|-------|
 | `schema_version` | `2` |
+
+Die Schema-Version wird bei jeder Migration erhöht (aktuell: 11).
 
 Bei jedem Server-Start wird geprüft, ob Migrationen nötig sind.
 
