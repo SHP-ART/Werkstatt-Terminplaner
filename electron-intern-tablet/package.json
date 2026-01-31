@@ -1,0 +1,55 @@
+{
+  "name": "werkstatt-intern-tablet",
+  "version": "1.0.0",
+  "description": "Werkstatt Team-Übersicht für Tablet (Vollbild)",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "build": "electron-builder",
+    "build:win": "electron-builder --win",
+    "build:portable": "electron-builder --win portable"
+  },
+  "author": "Werkstatt",
+  "license": "MIT",
+  "devDependencies": {
+    "electron": "^28.0.0",
+    "electron-builder": "^24.9.1"
+  },
+  "build": {
+    "appId": "com.werkstatt.intern-tablet",
+    "productName": "Werkstatt Intern",
+    "directories": {
+      "output": "dist"
+    },
+    "win": {
+      "target": [
+        {
+          "target": "portable",
+          "arch": ["x64"]
+        },
+        {
+          "target": "nsis",
+          "arch": ["x64"]
+        }
+      ],
+      "icon": "icon.ico"
+    },
+    "nsis": {
+      "oneClick": true,
+      "allowToChangeInstallationDirectory": false
+    },
+    "portable": {
+      "artifactName": "WerkstattIntern-Portable.exe"
+    },
+    "files": [
+      "**/*",
+      "!node_modules/**/*"
+    ],
+    "extraFiles": [
+      {
+        "from": "config.json",
+        "to": "config.json"
+      }
+    ]
+  }
+}

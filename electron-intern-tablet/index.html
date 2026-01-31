@@ -1,0 +1,1043 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Werkstatt - Team-Übersicht</title>
+  <style>
+    /* ========== RESET & GRUNDLAGEN ========== */
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    :root {
+      --primary: #ffffff;
+      --secondary: #f5f5f5;
+      --accent: #1976d2;
+      --highlight: #e94560;
+      --text: #333333;
+      --text-muted: #666666;
+      --success: #28a745;
+      --warning: #ffc107;
+      --danger: #dc3545;
+      --card-bg: #ffffff;
+      --card-border: #e0e0e0;
+    }
+
+    html, body {
+      height: 100%;
+      overflow: hidden;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+      background: #f0f2f5;
+      color: var(--text);
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* ========== HEADER ========== */
+    .header {
+      background: #ffffff;
+      padding: 10px 20px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 2px solid var(--accent);
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+      flex-shrink: 0;
+    }
+
+    .header-title {
+      font-size: 1.4em;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .header-time {
+      font-size: 1.6em;
+      font-weight: 300;
+      color: var(--highlight);
+    }
+
+    .header-date {
+      font-size: 0.9em;
+      color: var(--text-muted);
+    }
+
+    .header-actions {
+      display: flex;
+      gap: 8px;
+    }
+
+    .btn-header {
+      background: var(--accent);
+      color: #ffffff;
+      border: none;
+      padding: 8px 15px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 0.95em;
+      transition: all 0.2s;
+    }
+
+    .btn-header:hover {
+      background: #1565c0;
+    }
+
+    /* ========== MAIN CONTENT ========== */
+    .main-content {
+      flex: 1;
+      padding: 20px 30px;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    /* ========== TEAM GRID - 2x2 Layout ========== */
+    .team-grid {
+      flex: 1;
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      grid-template-rows: repeat(2, 1fr);
+      gap: 20px;
+      min-height: 0;
+      overflow: hidden;
+    }
+
+    /* ========== PERSON KACHEL ========== */
+    .person-kachel {
+      background: var(--card-bg);
+      border-radius: 12px;
+      border: 1px solid var(--card-border);
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    }
+
+    .person-kachel.lehrling {
+      border-left: 4px solid #9c27b0;
+    }
+
+    .person-kachel:not(.lehrling) {
+      border-left: 4px solid #2196f3;
+    }
+
+    .person-header {
+      padding: 10px 15px;
+      background: #f8f9fa;
+      border-bottom: 1px solid var(--card-border);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-shrink: 0;
+    }
+
+    .person-name {
+      font-size: 1.1em;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .person-icon {
+      font-size: 1.3em;
+    }
+
+    .person-badge {
+      padding: 4px 10px;
+      border-radius: 15px;
+      font-size: 0.75em;
+      font-weight: 500;
+    }
+
+    .person-badge.frei {
+      background: var(--success);
+      color: white;
+    }
+
+    .person-badge.in-arbeit {
+      background: var(--warning);
+      color: #333;
+    }
+
+    .person-badge.pause {
+      background: var(--accent);
+      color: white;
+    }
+
+    .person-body {
+      padding: 12px;
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    /* ========== AUFTRAG INFO ========== */
+    .auftrag-info {
+      background: #f8f9fa;
+      border-radius: 8px;
+      padding: 10px;
+      margin-bottom: 10px;
+      border-left: 3px solid var(--highlight);
+    }
+
+    .auftrag-label {
+      font-size: 0.8em;
+      color: var(--text-muted);
+      margin-bottom: 4px;
+    }
+
+    .auftrag-nr {
+      font-size: 1.1em;
+      font-weight: 600;
+      color: var(--highlight);
+    }
+
+    .auftrag-kunde {
+      font-size: 0.95em;
+      margin-top: 3px;
+    }
+
+    .auftrag-kennzeichen {
+      font-size: 0.9em;
+      color: var(--text-muted);
+      font-family: monospace;
+    }
+
+    .auftrag-arbeit {
+      font-size: 0.85em;
+      color: var(--text-muted);
+      margin-top: 4px;
+      font-style: italic;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    /* ========== ZEIT INFO ========== */
+    .zeit-info {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+      margin: 8px 0;
+    }
+
+    .zeit-item {
+      text-align: center;
+      padding: 6px;
+      background: #f0f2f5;
+      border-radius: 6px;
+    }
+
+    .zeit-label {
+      font-size: 0.7em;
+      color: var(--text-muted);
+      margin-bottom: 2px;
+    }
+
+    .zeit-value {
+      font-size: 1em;
+      font-weight: 600;
+      color: var(--accent);
+    }
+
+    .zeit-value.ueberzogen {
+      color: var(--danger);
+    }
+
+    /* ========== FORTSCHRITT ========== */
+    .fortschritt-container {
+      margin-top: 8px;
+    }
+
+    .fortschritt-bar {
+      height: 8px;
+      background: #e0e0e0;
+      border-radius: 4px;
+      overflow: hidden;
+    }
+
+    .fortschritt-fill {
+      height: 100%;
+      background: linear-gradient(90deg, var(--success) 0%, var(--warning) 70%, var(--danger) 100%);
+      border-radius: 4px;
+      transition: width 0.5s ease;
+    }
+
+    .fortschritt-fill.ueberzogen {
+      background: var(--danger);
+    }
+
+    .fortschritt-text {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.75em;
+      color: var(--text-muted);
+      margin-top: 3px;
+    }
+
+    /* ========== NÄCHSTER AUFTRAG ========== */
+    .naechster-auftrag {
+      margin-top: auto;
+      padding: 8px;
+      background: #e8f5e9;
+      border-radius: 6px;
+      border-left: 3px solid var(--success);
+    }
+
+    .naechster-label {
+      font-size: 0.75em;
+      color: var(--success);
+      margin-bottom: 3px;
+    }
+
+    .naechster-info {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 0.85em;
+    }
+
+    /* ========== LEERER ZUSTAND ========== */
+    .leer-zustand {
+      text-align: center;
+      padding: 15px;
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+    }
+
+    .leer-icon {
+      font-size: 2em;
+      margin-bottom: 5px;
+    }
+
+    .leer-text {
+      color: var(--text-muted);
+      font-size: 0.95em;
+    }
+
+    /* ========== BERUFSSCHULE ========== */
+    .schule-info {
+      text-align: center;
+      padding: 15px;
+      background: #f3e5f5;
+      border-radius: 8px;
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+    }
+
+    .schule-icon {
+      font-size: 2em;
+      margin-bottom: 5px;
+    }
+
+    .schule-text {
+      color: #7b1fa2;
+      font-size: 0.95em;
+    }
+
+    /* ========== LOADING ========== */
+    .loading {
+      text-align: center;
+      padding: 40px;
+      color: var(--text-muted);
+      grid-column: 1 / -1;
+      grid-row: 1 / -1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .loading-spinner {
+      display: inline-block;
+      width: 40px;
+      height: 40px;
+      border: 4px solid #e0e0e0;
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    /* ========== ERROR ========== */
+    .error-message {
+      background: rgba(220, 53, 69, 0.1);
+      border: 1px solid var(--danger);
+      border-radius: 10px;
+      padding: 20px;
+      text-align: center;
+      color: var(--danger);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+    }
+
+    /* ========== KEINE DATEN / ERROR ========== */
+    .keine-daten,
+    .error-message {
+      grid-column: 1 / -1;
+      grid-row: 1 / -1;
+    }
+
+    .keine-daten {
+      text-align: center;
+      padding: 30px;
+      color: var(--text-muted);
+      font-size: 1.1em;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    /* ========== RESPONSIVE ========== */
+    @media (max-width: 1024px) {
+      .team-grid {
+        grid-template-columns: repeat(2, 1fr);
+        gap: 15px;
+      }
+
+      .main-content {
+        padding: 15px 20px;
+      }
+    }
+
+    @media (max-width: 768px) {
+      .team-grid {
+        grid-template-columns: 1fr;
+        grid-template-rows: auto;
+      }
+
+      .header {
+        flex-direction: column;
+        gap: 10px;
+        text-align: center;
+        padding: 8px 15px;
+      }
+
+      .header-title {
+        font-size: 1.2em;
+      }
+
+      .header-time {
+        font-size: 1.4em;
+      }
+    }
+
+  </style>
+</head>
+<body>
+  <!-- Header -->
+  <div class="header">
+    <div class="header-title">
+      <span>👷 Team-Übersicht</span>
+      <span class="header-date" id="headerDate">-</span>
+    </div>
+    <div class="header-time" id="headerTime">--:--</div>
+    <div class="header-actions">
+      <button class="btn-header" id="btnRefresh" title="Aktualisieren (F5)">🔄 Aktualisieren</button>
+      <button class="btn-header" id="btnSettings" title="Einstellungen">⚙️</button>
+    </div>
+  </div>
+
+  <!-- Main Content -->
+  <div class="main-content">
+    <div id="teamGrid" class="team-grid">
+      <div class="loading">
+        <div class="loading-spinner"></div>
+        <p>Lade...</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Settings Modal -->
+  <div id="settingsModal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.8); z-index: 1000; justify-content: center; align-items: center;">
+    <div style="background: var(--card-bg); padding: 30px; border-radius: 16px; max-width: 550px; width: 90%;">
+      <h3 style="margin-bottom: 20px;">⚙️ Einstellungen</h3>
+
+      <div style="margin-bottom: 15px;">
+        <label style="display: block; margin-bottom: 5px;">Backend-URL:</label>
+        <input type="text" id="settingsBackendUrl" style="width: 100%; padding: 10px; border-radius: 8px; border: 1px solid var(--card-border); background: var(--primary); color: var(--text);">
+      </div>
+
+      <div style="margin-bottom: 15px;">
+        <label style="display: block; margin-bottom: 5px;">Auto-Refresh (Sekunden):</label>
+        <input type="number" id="settingsRefreshInterval" min="10" max="300" style="width: 100%; padding: 10px; border-radius: 8px; border: 1px solid var(--card-border); background: var(--primary); color: var(--text);">
+      </div>
+
+      <div style="margin-bottom: 15px;">
+        <label style="display: flex; align-items: center; gap: 10px; cursor: pointer;">
+          <input type="checkbox" id="settingsFullscreen" style="width: 18px; height: 18px;">
+          <span>Vollbild beim Start</span>
+        </label>
+      </div>
+
+      <div style="margin-bottom: 15px;" id="autostartOption">
+        <label style="display: flex; align-items: center; gap: 10px; cursor: pointer;">
+          <input type="checkbox" id="settingsAutostart" style="width: 18px; height: 18px;">
+          <span>Autostart bei Windows-Anmeldung</span>
+        </label>
+      </div>
+
+      <div style="margin-bottom: 20px; padding: 10px; background: rgba(0,0,0,0.2); border-radius: 8px; font-size: 0.85em;" id="configPathInfo">
+        <div style="color: var(--text-muted); margin-bottom: 5px;">📁 Konfigurations-Datei:</div>
+        <div id="configPathDisplay" style="font-family: monospace; word-break: break-all; color: var(--accent);">-</div>
+      </div>
+
+      <div style="display: flex; gap: 10px; justify-content: flex-end;">
+        <button id="btnSettingsCancel" style="padding: 10px 20px; border-radius: 8px; border: none; background: var(--accent); color: var(--text); cursor: pointer;">Abbrechen</button>
+        <button id="btnSettingsSave" style="padding: 10px 20px; border-radius: 8px; border: none; background: var(--success); color: white; cursor: pointer;">Speichern</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // ========== KONFIGURATION ==========
+    let CONFIG = {
+      backendUrl: 'http://localhost:3000',
+      refreshInterval: 30,
+      fullscreen: true,
+      autostart: false
+    };
+
+    // Lade gespeicherte Einstellungen
+    const savedConfig = localStorage.getItem('werkstatt-intern-config');
+    if (savedConfig) {
+      try {
+        CONFIG = { ...CONFIG, ...JSON.parse(savedConfig) };
+      } catch (e) {}
+    }
+
+    // Lade Electron-Konfiguration falls vorhanden
+    async function initConfig() {
+      if (window.electronAPI) {
+        try {
+          const electronConfig = await window.electronAPI.getConfig();
+          CONFIG = { ...CONFIG, ...electronConfig };
+          isElectron = true;
+          console.log('Electron-Konfiguration geladen:', CONFIG);
+        } catch (e) {
+          console.warn('Keine Electron-API verfügbar');
+        }
+      }
+    }
+
+    // ========== API SERVICE ==========
+    const ApiService = {
+      async get(endpoint) {
+        const response = await fetch(`${CONFIG.backendUrl}/api${endpoint}`);
+        if (!response.ok) throw new Error(`API Fehler: ${response.status}`);
+        return response.json();
+      }
+    };
+
+    // ========== HILFSFUNKTIONEN ==========
+    function escapeHtml(text) {
+      if (!text) return '';
+      const div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
+    }
+
+    function formatDateLocal(date) {
+      const d = date instanceof Date ? date : new Date();
+      const year = d.getFullYear();
+      const month = String(d.getMonth() + 1).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
+      return `${year}-${month}-${day}`;
+    }
+
+    function formatMinutesToHours(minuten) {
+      if (!minuten || minuten <= 0) return '0h';
+      const h = Math.floor(minuten / 60);
+      const m = Math.round(minuten % 60);
+      if (h === 0) return `${m}min`;
+      if (m === 0) return `${h}h`;
+      return `${h}h ${m}min`;
+    }
+
+    function getKalenderwoche(dateStr) {
+      const date = new Date(dateStr);
+      const dayNum = date.getUTCDay() || 7;
+      date.setUTCDate(date.getUTCDate() + 4 - dayNum);
+      const yearStart = new Date(Date.UTC(date.getUTCFullYear(), 0, 1));
+      return Math.ceil((((date - yearStart) / 86400000) + 1) / 7);
+    }
+
+    function isLehrlingInBerufsschule(lehrling, datum) {
+      if (!lehrling.berufsschul_wochen) return false;
+      try {
+        const wochen = JSON.parse(lehrling.berufsschul_wochen);
+        const kw = getKalenderwoche(datum);
+        return wochen.includes(kw);
+      } catch (e) {
+        return false;
+      }
+    }
+
+    // ========== ZEIT-BERECHNUNGEN ==========
+    function getEffektiveArbeitszeit(termin) {
+      if (termin.status === 'abgeschlossen' && termin.tatsaechliche_zeit) {
+        return termin.tatsaechliche_zeit;
+      }
+
+      if (termin.arbeitszeiten_details) {
+        try {
+          const details = typeof termin.arbeitszeiten_details === 'string'
+            ? JSON.parse(termin.arbeitszeiten_details)
+            : termin.arbeitszeiten_details;
+
+          let summe = 0;
+          for (const [key, value] of Object.entries(details)) {
+            if (key.startsWith('_')) continue;
+            if (typeof value === 'number') summe += value;
+            else if (typeof value === 'object' && value.zeit) summe += value.zeit;
+          }
+          if (summe > 0) return summe;
+        } catch (e) {}
+      }
+
+      return termin.geschaetzte_zeit || 60;
+    }
+
+    function getEffektiveArbeitszeitMitFaktoren(termin, person, isLehrling, globaleNebenzeit) {
+      if (termin.status === 'abgeschlossen' && termin.tatsaechliche_zeit) {
+        return termin.tatsaechliche_zeit;
+      }
+
+      let basisZeit = getEffektiveArbeitszeit(termin);
+
+      // Globale Nebenzeit
+      if (globaleNebenzeit > 0) {
+        basisZeit = basisZeit * (1 + globaleNebenzeit / 100);
+      }
+
+      // Aufgabenbewältigung für Lehrlinge
+      if (isLehrling && person && person.aufgabenbewaeltigung_prozent &&
+          person.aufgabenbewaeltigung_prozent !== 100) {
+        basisZeit = basisZeit * (person.aufgabenbewaeltigung_prozent / 100);
+      }
+
+      return Math.round(basisZeit);
+    }
+
+    function berechneEndzeit(termin, person, isLehrling, globaleNebenzeit) {
+      if (termin.status === 'abgeschlossen' && termin.fertigstellung_zeit) {
+        return termin.fertigstellung_zeit;
+      }
+
+      const startzeit = termin.startzeit || termin.bring_zeit;
+      if (!startzeit) return '--:--';
+
+      const dauer = getEffektiveArbeitszeitMitFaktoren(termin, person, isLehrling, globaleNebenzeit);
+      const [h, m] = startzeit.split(':').map(Number);
+      const endMinuten = h * 60 + m + dauer;
+      const endH = Math.floor(endMinuten / 60);
+      const endM = endMinuten % 60;
+
+      return `${String(endH).padStart(2, '0')}:${String(endM).padStart(2, '0')}`;
+    }
+
+    function berechneRestzeit(termin, person, isLehrling, globaleNebenzeit) {
+      const startzeit = termin.startzeit || termin.bring_zeit;
+      if (!startzeit) return '--:--';
+
+      const dauer = getEffektiveArbeitszeitMitFaktoren(termin, person, isLehrling, globaleNebenzeit);
+      const [h, m] = startzeit.split(':').map(Number);
+      const startDate = new Date();
+      startDate.setHours(h, m, 0, 0);
+
+      const verstricheneMinuten = (new Date() - startDate) / 1000 / 60;
+      const restMinuten = dauer - verstricheneMinuten;
+
+      if (restMinuten <= 0) {
+        return `+${formatMinutesToHours(Math.abs(Math.round(restMinuten)))}`;
+      }
+      return `~${formatMinutesToHours(Math.round(restMinuten))}`;
+    }
+
+    function berechneFortschritt(termin, person, isLehrling, globaleNebenzeit) {
+      const startzeit = termin.startzeit || termin.bring_zeit;
+      if (!startzeit) return 0;
+
+      const dauer = getEffektiveArbeitszeitMitFaktoren(termin, person, isLehrling, globaleNebenzeit);
+      const [h, m] = startzeit.split(':').map(Number);
+      const startDate = new Date();
+      startDate.setHours(h, m, 0, 0);
+
+      const verstricheneMinuten = (new Date() - startDate) / 1000 / 60;
+      return Math.round(Math.max(0, (verstricheneMinuten / dauer) * 100));
+    }
+
+    // ========== TERMIN-ZUORDNUNG PRÜFEN ==========
+    function isTerminFuerPerson(termin, personId, isLehrling) {
+      if (isLehrling) {
+        if (termin.lehrling_id == personId) return true;
+      } else {
+        if (termin.mitarbeiter_id == personId) return true;
+      }
+
+      if (termin.arbeitszeiten_details) {
+        try {
+          const details = typeof termin.arbeitszeiten_details === 'string'
+            ? JSON.parse(termin.arbeitszeiten_details)
+            : termin.arbeitszeiten_details;
+
+          if (details._gesamt_mitarbeiter_id) {
+            const gesamt = details._gesamt_mitarbeiter_id;
+            if (isLehrling && gesamt.type === 'lehrling' && gesamt.id == personId) return true;
+            if (!isLehrling && gesamt.type === 'mitarbeiter' && gesamt.id == personId) return true;
+          }
+
+          for (const key of Object.keys(details)) {
+            if (key.startsWith('_')) continue;
+            const entry = details[key];
+            if (entry && typeof entry === 'object') {
+              if (isLehrling && entry.lehrling_id == personId) return true;
+              if (!isLehrling && entry.mitarbeiter_id == personId) return true;
+            }
+          }
+        } catch (e) {}
+      }
+
+      return false;
+    }
+
+    // ========== KACHEL RENDERN ==========
+    function renderPersonKachel(person, alleTermine, typ, globaleNebenzeit) {
+      const personId = person.id;
+      const personName = person.name;
+      const isLehrling = typ === 'lehrling';
+
+      // Finde Termine für diese Person
+      const personTermine = alleTermine.filter(t => isTerminFuerPerson(t, personId, isLehrling));
+      personTermine.sort((a, b) => {
+        const zeitA = a.startzeit || a.bring_zeit || '23:59';
+        const zeitB = b.startzeit || b.bring_zeit || '23:59';
+        return zeitA.localeCompare(zeitB);
+      });
+
+      const jetzt = new Date();
+      const jetztZeit = `${String(jetzt.getHours()).padStart(2, '0')}:${String(jetzt.getMinutes()).padStart(2, '0')}`;
+
+      // Finde aktuellen Auftrag
+      let aktuellerAuftrag = personTermine.find(t => t.status === 'in_arbeit');
+      if (!aktuellerAuftrag) {
+        aktuellerAuftrag = personTermine.find(t => {
+          if (t.status === 'abgeschlossen' || t.status === 'storniert') return false;
+          const startzeit = t.startzeit || t.bring_zeit;
+          if (!startzeit) return false;
+          const dauer = getEffektiveArbeitszeitMitFaktoren(t, person, isLehrling, globaleNebenzeit);
+          const [h, m] = startzeit.split(':').map(Number);
+          const endMinuten = h * 60 + m + dauer;
+          const endzeit = `${String(Math.floor(endMinuten / 60)).padStart(2, '0')}:${String(endMinuten % 60).padStart(2, '0')}`;
+          return startzeit <= jetztZeit && jetztZeit < endzeit;
+        });
+      }
+
+      // Finde nächsten Auftrag
+      const naechsterAuftrag = personTermine.find(t => {
+        if (t === aktuellerAuftrag) return false;
+        if (t.status === 'abgeschlossen' || t.status === 'storniert') return false;
+        const startzeit = t.startzeit || t.bring_zeit;
+        return !startzeit || startzeit > jetztZeit;
+      });
+
+      // Prüfe Berufsschule
+      let inBerufsschule = false;
+      if (isLehrling && person.berufsschul_wochen) {
+        inBerufsschule = isLehrlingInBerufsschule(person, formatDateLocal(new Date()));
+      }
+
+      // Badge
+      let badgeClass = 'frei';
+      let badgeText = 'Frei';
+      if (inBerufsschule) {
+        badgeClass = 'pause';
+        badgeText = 'Berufsschule';
+      } else if (aktuellerAuftrag) {
+        badgeClass = 'in-arbeit';
+        badgeText = 'In Arbeit';
+      }
+
+      // Body Content
+      let bodyContent = '';
+
+      if (inBerufsschule) {
+        bodyContent = `
+          <div class="schule-info">
+            <div class="schule-icon">📚</div>
+            <div class="schule-text">Heute in der Berufsschule</div>
+          </div>
+        `;
+      } else if (aktuellerAuftrag) {
+        const fortschritt = berechneFortschritt(aktuellerAuftrag, person, isLehrling, globaleNebenzeit);
+        const restzeit = berechneRestzeit(aktuellerAuftrag, person, isLehrling, globaleNebenzeit);
+        const isUeberzogen = fortschritt > 100;
+
+        bodyContent = `
+          <div class="auftrag-info">
+            <div class="auftrag-label">🔧 Aktueller Auftrag</div>
+            <div class="auftrag-nr">${escapeHtml(aktuellerAuftrag.termin_nr) || '-'}</div>
+            <div class="auftrag-kunde">${escapeHtml(aktuellerAuftrag.kunde_name) || '-'}</div>
+            <div class="auftrag-kennzeichen">${escapeHtml(aktuellerAuftrag.kennzeichen) || '-'}</div>
+            <div class="auftrag-arbeit">${escapeHtml(aktuellerAuftrag.arbeit) || '-'}</div>
+          </div>
+
+          <div class="zeit-info">
+            <div class="zeit-item">
+              <div class="zeit-label">Beginn</div>
+              <div class="zeit-value">${aktuellerAuftrag.startzeit || aktuellerAuftrag.bring_zeit || '--:--'}</div>
+            </div>
+            <div class="zeit-item">
+              <div class="zeit-label">Fertig ca.</div>
+              <div class="zeit-value">${berechneEndzeit(aktuellerAuftrag, person, isLehrling, globaleNebenzeit)}</div>
+            </div>
+            <div class="zeit-item">
+              <div class="zeit-label">Rest</div>
+              <div class="zeit-value ${isUeberzogen ? 'ueberzogen' : ''}">${restzeit}</div>
+            </div>
+          </div>
+
+          <div class="fortschritt-container">
+            <div class="fortschritt-bar">
+              <div class="fortschritt-fill ${isUeberzogen ? 'ueberzogen' : ''}" style="width: ${Math.min(fortschritt, 100)}%"></div>
+            </div>
+            <div class="fortschritt-text">
+              <span>Fortschritt</span>
+              <span>${Math.min(fortschritt, 150)}%</span>
+            </div>
+          </div>
+
+          ${naechsterAuftrag ? `
+            <div class="naechster-auftrag">
+              <div class="naechster-label">📋 Danach:</div>
+              <div class="naechster-info">
+                <span>${escapeHtml(naechsterAuftrag.kunde_name) || '-'} • ${escapeHtml(naechsterAuftrag.kennzeichen) || '-'}</span>
+                <span>${naechsterAuftrag.startzeit || naechsterAuftrag.bring_zeit || '--:--'}</span>
+              </div>
+            </div>
+          ` : ''}
+        `;
+      } else if (naechsterAuftrag) {
+        bodyContent = `
+          <div class="leer-zustand">
+            <div class="leer-icon">☕</div>
+            <div class="leer-text">Aktuell kein Auftrag</div>
+          </div>
+
+          <div class="naechster-auftrag">
+            <div class="naechster-label">⏰ Nächster Auftrag:</div>
+            <div class="auftrag-info" style="border-left-color: var(--success);">
+              <div class="auftrag-nr">${escapeHtml(naechsterAuftrag.termin_nr) || '-'}</div>
+              <div class="auftrag-kunde">${escapeHtml(naechsterAuftrag.kunde_name) || '-'}</div>
+              <div class="auftrag-kennzeichen">${escapeHtml(naechsterAuftrag.kennzeichen) || '-'}</div>
+            </div>
+            <div class="zeit-info" style="margin-top: 10px;">
+              <div class="zeit-item">
+                <div class="zeit-label">Start</div>
+                <div class="zeit-value">${naechsterAuftrag.startzeit || naechsterAuftrag.bring_zeit || '--:--'}</div>
+              </div>
+              <div class="zeit-item">
+                <div class="zeit-label">Dauer</div>
+                <div class="zeit-value">${formatMinutesToHours(getEffektiveArbeitszeitMitFaktoren(naechsterAuftrag, person, isLehrling, globaleNebenzeit))}</div>
+              </div>
+            </div>
+          </div>
+        `;
+      } else {
+        bodyContent = `
+          <div class="leer-zustand">
+            <div class="leer-icon">🎉</div>
+            <div class="leer-text">Keine Aufträge für heute</div>
+          </div>
+        `;
+      }
+
+      return `
+        <div class="person-kachel ${isLehrling ? 'lehrling' : ''}">
+          <div class="person-header">
+            <div class="person-name">
+              <span class="person-icon">${isLehrling ? '🎓' : '👷'}</span>
+              <span>${escapeHtml(personName)}</span>
+            </div>
+            <div class="person-badge ${badgeClass}">${badgeText}</div>
+          </div>
+          <div class="person-body">
+            ${bodyContent}
+          </div>
+        </div>
+      `;
+    }
+
+    // ========== DATEN LADEN ==========
+    async function loadTeamUebersicht() {
+      const teamGrid = document.getElementById('teamGrid');
+
+      try {
+        const heute = formatDateLocal(new Date());
+        const [mitarbeiter, lehrlinge, termine, einstellungen] = await Promise.all([
+          ApiService.get('/mitarbeiter'),
+          ApiService.get('/lehrlinge'),
+          ApiService.get(`/termine?datum=${heute}`),
+          ApiService.get('/einstellungen/werkstatt')
+        ]);
+
+        const globaleNebenzeit = einstellungen?.nebenzeit_prozent || 0;
+        const aktiveMitarbeiter = mitarbeiter.filter(m => m.aktiv === 1);
+        const aktiveLehrlinge = lehrlinge.filter(l => l.aktiv === 1);
+
+        const relevanteTermine = termine.filter(t =>
+          t.arbeit !== 'Fahrzeug aus Import' &&
+          t.arbeit !== 'Fahrzeug hinzugefügt'
+        );
+
+        // Alle Personen in einem Grid rendern (Mitarbeiter zuerst, dann Lehrlinge)
+        let allKacheln = [];
+
+        // Mitarbeiter Kacheln
+        aktiveMitarbeiter.forEach(m => {
+          allKacheln.push(renderPersonKachel(m, relevanteTermine, 'mitarbeiter', globaleNebenzeit));
+        });
+
+        // Lehrlinge Kacheln
+        aktiveLehrlinge.forEach(l => {
+          allKacheln.push(renderPersonKachel(l, relevanteTermine, 'lehrling', globaleNebenzeit));
+        });
+
+        if (allKacheln.length > 0) {
+          teamGrid.innerHTML = allKacheln.join('');
+        } else {
+          teamGrid.innerHTML = '<div class="keine-daten">Keine aktiven Mitarbeiter oder Lehrlinge</div>';
+        }
+
+      } catch (error) {
+        console.error('Fehler beim Laden:', error);
+        teamGrid.innerHTML = `
+          <div class="error-message">
+            <p>⚠️ Fehler beim Laden der Daten</p>
+            <p style="font-size: 0.9em; margin-top: 10px;">${escapeHtml(error.message)}</p>
+            <p style="font-size: 0.8em; margin-top: 5px; color: var(--text-muted);">Backend: ${CONFIG.backendUrl}</p>
+          </div>
+        `;
+      }
+    }
+
+    // ========== UHR & DATUM ==========
+    function updateClock() {
+      const now = new Date();
+      document.getElementById('headerTime').textContent =
+        `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+
+      const options = { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' };
+      document.getElementById('headerDate').textContent = now.toLocaleDateString('de-DE', options);
+    }
+
+    // ========== EINSTELLUNGEN ==========
+    let isElectron = false;
+
+    async function openSettings() {
+      document.getElementById('settingsBackendUrl').value = CONFIG.backendUrl;
+      document.getElementById('settingsRefreshInterval').value = CONFIG.refreshInterval;
+      document.getElementById('settingsFullscreen').checked = CONFIG.fullscreen !== false;
+      document.getElementById('settingsAutostart').checked = CONFIG.autostart === true;
+
+      // Autostart-Option nur in Electron anzeigen
+      document.getElementById('autostartOption').style.display = isElectron ? 'block' : 'none';
+
+      // Config-Pfad anzeigen (nur in Electron)
+      if (isElectron && window.electronAPI) {
+        try {
+          const configPath = await window.electronAPI.getConfigPath();
+          document.getElementById('configPathDisplay').textContent = configPath;
+          document.getElementById('configPathInfo').style.display = 'block';
+        } catch (e) {
+          document.getElementById('configPathInfo').style.display = 'none';
+        }
+      } else {
+        document.getElementById('configPathInfo').style.display = 'none';
+      }
+
+      document.getElementById('settingsModal').style.display = 'flex';
+    }
+
+    function closeSettings() {
+      document.getElementById('settingsModal').style.display = 'none';
+    }
+
+    async function saveSettings() {
+      const newConfig = {
+        backendUrl: document.getElementById('settingsBackendUrl').value.trim(),
+        refreshInterval: parseInt(document.getElementById('settingsRefreshInterval').value) || 30,
+        fullscreen: document.getElementById('settingsFullscreen').checked,
+        autostart: document.getElementById('settingsAutostart').checked
+      };
+
+      // In Electron: Über die API speichern
+      if (isElectron && window.electronAPI) {
+        try {
+          CONFIG = await window.electronAPI.saveConfig(newConfig);
+          console.log('Konfiguration gespeichert (Electron)');
+        } catch (e) {
+          console.error('Fehler beim Speichern:', e);
+        }
+      } else {
+        // Browser: In localStorage speichern
+        CONFIG = { ...CONFIG, ...newConfig };
+        localStorage.setItem('werkstatt-intern-config', JSON.stringify(CONFIG));
+      }
+
+      closeSettings();
+      loadTeamUebersicht();
+
+      // Refresh-Intervall neu starten
+      if (window.refreshIntervalId) clearInterval(window.refreshIntervalId);
+      window.refreshIntervalId = setInterval(loadTeamUebersicht, CONFIG.refreshInterval * 1000);
+    }
+
+    // ========== INITIALISIERUNG ==========
+    document.addEventListener('DOMContentLoaded', async () => {
+      // Electron-Konfiguration laden (falls vorhanden)
+      await initConfig();
+
+      // Uhr starten
+      updateClock();
+      setInterval(updateClock, 1000);
+
+      // Daten laden
+      loadTeamUebersicht();
+
+      // Auto-Refresh
+      window.refreshIntervalId = setInterval(loadTeamUebersicht, CONFIG.refreshInterval * 1000);
+
+      // Event Listener
+      document.getElementById('btnRefresh').addEventListener('click', loadTeamUebersicht);
+      document.getElementById('btnSettings').addEventListener('click', openSettings);
+      document.getElementById('btnSettingsCancel').addEventListener('click', closeSettings);
+      document.getElementById('btnSettingsSave').addEventListener('click', saveSettings);
+
+      // Info anzeigen wenn im Browser
+      if (!isElectron) {
+        console.log('Läuft im Browser-Modus. Für Autostart die Electron-App verwenden.');
+      }
+    });
+  </script>
+</body>
+</html>

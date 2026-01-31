@@ -18362,6 +18362,8 @@ class App {
       const nebenzeitProzent = einstellungen?.nebenzeit_prozent || 0;
       // Speichere für spätere Verwendung in getTerminGesamtdauer
       this._planungNebenzeitProzent = nebenzeitProzent;
+      // Speichere Lehrlinge für Aufgabenbewältigung-Berechnung
+      this._planungLehrlinge = lehrlingeListe || [];
 
       // 3c. Auslastungsbalken aktualisieren
       this.updatePlanungAuslastungsbalken(auslastungData, mitarbeiterListe, lehrlingeListe);
@@ -19714,43 +19716,86 @@ class App {
   getTerminGesamtdauer(termin) {
     // Nebenzeit-Prozent aus gespeichertem Wert (wird in loadAuslastungDragDrop gesetzt)
     const nebenzeitProzent = this._planungNebenzeitProzent || 0;
-    
+    const lehrlinge = this._planungLehrlinge || [];
+
+    // Hilfsfunktion: Finde zugeordneten Lehrling aus arbeitszeiten_details
+    const findZugeordnetenLehrling = (details) => {
+      if (!details) return null;
+
+      // Prüfe _gesamt_mitarbeiter_id (Hauptzuordnung)
+      if (details._gesamt_mitarbeiter_id) {
+        const gesamt = details._gesamt_mitarbeiter_id;
+        if (gesamt.type === 'lehrling' && gesamt.id) {
+          return lehrlinge.find(l => l.id === gesamt.id);
+        }
+      }
+
+      // Prüfe individuelle Zuordnungen
+      for (const [key, value] of Object.entries(details)) {
+        if (key.startsWith('_')) continue;
+        if (typeof value === 'object' && value.type === 'lehrling') {
+          const lehrlingId = value.lehrling_id || value.mitarbeiter_id;
+          if (lehrlingId) {
+            return lehrlinge.find(l => l.id === lehrlingId);
+          }
+        }
+      }
+      return null;
+    };
+
     // Versuche zuerst, die Dauer aus arbeitszeiten_details zu berechnen
+    let zugeordneterLehrling = null;
     if (termin.arbeitszeiten_details) {
       try {
-        const details = typeof termin.arbeitszeiten_details === 'string' 
-          ? JSON.parse(termin.arbeitszeiten_details) 
+        const details = typeof termin.arbeitszeiten_details === 'string'
+          ? JSON.parse(termin.arbeitszeiten_details)
           : termin.arbeitszeiten_details;
-        
+
+        // Finde zugeordneten Lehrling für Aufgabenbewältigung
+        zugeordneterLehrling = findZugeordnetenLehrling(details);
+
         let summe = 0;
         for (const [key, value] of Object.entries(details)) {
           // Ignoriere Meta-Felder
           if (key.startsWith('_')) continue;
           if (typeof value === 'number' && value > 0) {
             summe += value;
+          } else if (typeof value === 'object' && value.zeit > 0) {
+            summe += value.zeit;
           }
         }
         if (summe > 0) {
-          // Nebenzeit-Aufschlag anwenden
+          // 1. Nebenzeit-Aufschlag anwenden
           if (nebenzeitProzent > 0) {
-            summe = Math.round(summe * (1 + nebenzeitProzent / 100));
+            summe = summe * (1 + nebenzeitProzent / 100);
           }
-          return summe;
+          // 2. Aufgabenbewältigung für Lehrling anwenden
+          if (zugeordneterLehrling && zugeordneterLehrling.aufgabenbewaeltigung_prozent &&
+              zugeordneterLehrling.aufgabenbewaeltigung_prozent !== 100) {
+            summe = summe * (zugeordneterLehrling.aufgabenbewaeltigung_prozent / 100);
+          }
+          return Math.round(summe);
         }
       } catch (e) {
         console.warn('Fehler beim Parsen von arbeitszeiten_details:', e);
       }
     }
-    
+
     // Fallback: tatsaechliche_zeit oder geschaetzte_zeit
     let dauer = termin.tatsaechliche_zeit || termin.geschaetzte_zeit || 30;
-    
-    // Nebenzeit-Aufschlag auch auf Fallback anwenden
+
+    // 1. Nebenzeit-Aufschlag anwenden
     if (nebenzeitProzent > 0) {
-      dauer = Math.round(dauer * (1 + nebenzeitProzent / 100));
+      dauer = dauer * (1 + nebenzeitProzent / 100);
     }
-    
-    return dauer;
+
+    // 2. Aufgabenbewältigung für Lehrling anwenden (falls zugeordnet)
+    if (zugeordneterLehrling && zugeordneterLehrling.aufgabenbewaeltigung_prozent &&
+        zugeordneterLehrling.aufgabenbewaeltigung_prozent !== 100) {
+      dauer = dauer * (zugeordneterLehrling.aufgabenbewaeltigung_prozent / 100);
+    }
+
+    return Math.round(dauer);
   }
 
   // Erstellt Timeline-Termine mit Berücksichtigung der Mittagspause
@@ -24091,28 +24136,39 @@ class App {
     }
 
     try {
-      // Hole alle Daten parallel
+      // Hole alle Daten parallel (inkl. Einstellungen für Nebenzeit)
       const heute = this.formatDateLocal(this.getToday());
-      const [mitarbeiter, lehrlinge, termineHeute] = await Promise.all([
+      const [mitarbeiter, lehrlinge, termineHeute, einstellungen] = await Promise.all([
         ApiService.get('/mitarbeiter'),
         ApiService.get('/lehrlinge'),
-        ApiService.get(`/termine?datum=${heute}`)
+        ApiService.get(`/termine?datum=${heute}`),
+        EinstellungenService.getWerkstatt()
       ]);
+
+      // Globale Nebenzeit aus Einstellungen
+      const globaleNebenzeitProzent = einstellungen?.nebenzeit_prozent || 0;
 
       // Filtere aktive Mitarbeiter und Lehrlinge
       const aktiveMitarbeiter = mitarbeiter.filter(m => m.aktiv === 1);
       const aktiveLehrlinge = lehrlinge.filter(l => l.aktiv === 1);
 
       // Filtere relevante Termine
-      const relevanteTermine = termineHeute.filter(t => 
-        t.arbeit !== 'Fahrzeug aus Import' && 
+      const relevanteTermine = termineHeute.filter(t =>
+        t.arbeit !== 'Fahrzeug aus Import' &&
         t.arbeit !== 'Fahrzeug hinzugefügt'
       );
 
+      // Kontext für Berechnungen mit Nebenzeit/Aufgabenbewältigung
+      const berechnungsKontext = {
+        globaleNebenzeitProzent,
+        mitarbeiter,
+        lehrlinge
+      };
+
       // Render Mitarbeiter-Kacheln
       if (mitarbeiterContainer) {
-        mitarbeiterContainer.innerHTML = aktiveMitarbeiter.map(m => 
-          this.renderInternPersonKachel(m, relevanteTermine, 'mitarbeiter')
+        mitarbeiterContainer.innerHTML = aktiveMitarbeiter.map(m =>
+          this.renderInternPersonKachel(m, relevanteTermine, 'mitarbeiter', berechnungsKontext)
         ).join('');
       }
 
@@ -24120,8 +24176,8 @@ class App {
       if (lehrlingeContainer) {
         if (aktiveLehrlinge.length > 0) {
           if (keineLehrlingeEl) keineLehrlingeEl.style.display = 'none';
-          lehrlingeContainer.innerHTML = aktiveLehrlinge.map(l => 
-            this.renderInternPersonKachel(l, relevanteTermine, 'lehrling')
+          lehrlingeContainer.innerHTML = aktiveLehrlinge.map(l =>
+            this.renderInternPersonKachel(l, relevanteTermine, 'lehrling', berechnungsKontext)
           ).join('');
         } else {
           lehrlingeContainer.innerHTML = '';
@@ -24192,8 +24248,12 @@ class App {
 
   /**
    * Rendert eine Kachel für einen Mitarbeiter oder Lehrling
+   * @param {Object} person - Mitarbeiter oder Lehrling
+   * @param {Array} alleTermine - Alle Termine für heute
+   * @param {string} typ - 'mitarbeiter' oder 'lehrling'
+   * @param {Object} kontext - Berechnungskontext mit globaleNebenzeitProzent, mitarbeiter, lehrlinge
    */
-  renderInternPersonKachel(person, alleTermine, typ = 'mitarbeiter') {
+  renderInternPersonKachel(person, alleTermine, typ = 'mitarbeiter', kontext = {}) {
     const personId = person.id;
     const personName = person.name;
     const isLehrling = typ === 'lehrling';
@@ -24227,8 +24287,8 @@ class App {
         const startzeit = t.startzeit || t.bring_zeit;
         if (!startzeit) return false;
 
-        // Berechne Endzeit
-        const dauer = t.tatsaechliche_zeit || t.geschaetzte_zeit || 60;
+        // Berechne Endzeit (MIT Nebenzeit/Aufgabenbewältigung)
+        const dauer = this.getEffektiveArbeitszeitMitFaktoren(t, person, isLehrling, kontext);
         const [h, m] = startzeit.split(':').map(Number);
         const endMinuten = h * 60 + m + dauer;
         const endzeit = `${String(Math.floor(endMinuten / 60)).padStart(2, '0')}:${String(endMinuten % 60).padStart(2, '0')}`;
@@ -24277,9 +24337,9 @@ class App {
         </div>
       `;
     } else if (aktuellerAuftrag) {
-      // Berechne Fortschritt
-      const fortschritt = this.berechneAuftragFortschritt(aktuellerAuftrag);
-      const restzeit = this.berechneRestzeit(aktuellerAuftrag);
+      // Berechne Fortschritt (MIT Nebenzeit/Aufgabenbewältigung)
+      const fortschritt = this.berechneAuftragFortschrittMitFaktoren(aktuellerAuftrag, person, isLehrling, kontext);
+      const restzeit = this.berechneRestzeitMitFaktoren(aktuellerAuftrag, person, isLehrling, kontext);
       const isUeberzogen = fortschritt > 100;
 
       bodyContent = `
@@ -24290,7 +24350,7 @@ class App {
           <div class="auftrag-kennzeichen">${this.escapeHtml(aktuellerAuftrag.kennzeichen || '-')}</div>
           <div class="auftrag-arbeit">${this.escapeHtml(aktuellerAuftrag.arbeit || '-')}</div>
         </div>
-        
+
         <div class="intern-person-zeit">
           <div class="intern-person-zeit-item">
             <div class="zeit-label">Beginn</div>
@@ -24298,12 +24358,12 @@ class App {
           </div>
           <div class="intern-person-zeit-item">
             <div class="zeit-label">${aktuellerAuftrag.status === 'abgeschlossen' ? 'Fertig' : 'Fertig ca.'}</div>
-            <div class="zeit-value">${this.berechneEndzeit(aktuellerAuftrag)}</div>
+            <div class="zeit-value">${this.berechneEndzeitMitFaktoren(aktuellerAuftrag, person, isLehrling, kontext)}</div>
           </div>
           <div class="intern-person-zeit-item">
             <div class="zeit-label">${aktuellerAuftrag.status === 'abgeschlossen' ? 'Dauer' : 'Rest'}</div>
             <div class="zeit-value" style="color: ${isUeberzogen ? '#dc3545' : 'var(--accent)'}">
-              ${aktuellerAuftrag.status === 'abgeschlossen' 
+              ${aktuellerAuftrag.status === 'abgeschlossen'
                 ? this.formatMinutesToHours(aktuellerAuftrag.tatsaechliche_zeit || aktuellerAuftrag.geschaetzte_zeit || 0)
                 : restzeit}
             </div>
@@ -24354,7 +24414,7 @@ class App {
             </div>
             <div class="intern-person-zeit-item">
               <div class="zeit-label">Dauer</div>
-              <div class="zeit-value">${this.formatMinutesToHours(naechsterAuftrag.geschaetzte_zeit || 0)}</div>
+              <div class="zeit-value">${this.formatMinutesToHours(this.getEffektiveArbeitszeitMitFaktoren(naechsterAuftrag, person, isLehrling, kontext))}</div>
             </div>
             <div class="intern-person-zeit-item">
               <div class="zeit-label">Wartezeit</div>
@@ -24476,6 +24536,109 @@ class App {
     
     // 4. Standard-Fallback
     return 60;
+  }
+
+  /**
+   * Ermittelt die effektive Arbeitszeit eines Termins MIT Nebenzeit und Aufgabenbewältigung
+   * Wird für die Intern-Ansicht verwendet, wo die Person bekannt ist
+   * @param {Object} termin - Der Termin
+   * @param {Object} person - Mitarbeiter oder Lehrling
+   * @param {boolean} isLehrling - Ob es ein Lehrling ist
+   * @param {Object} kontext - Berechnungskontext mit globaleNebenzeitProzent
+   */
+  getEffektiveArbeitszeitMitFaktoren(termin, person, isLehrling, kontext = {}) {
+    // Für abgeschlossene Termine: tatsaechliche_zeit (keine Faktoren anwenden)
+    if (termin.status === 'abgeschlossen' && termin.tatsaechliche_zeit) {
+      return termin.tatsaechliche_zeit;
+    }
+
+    // Basis-Arbeitszeit ermitteln
+    let basisZeit = this.getEffektiveArbeitszeit(termin);
+
+    // 1. Globale Nebenzeit (Werkstatt-Einstellung)
+    const globaleNebenzeit = kontext.globaleNebenzeitProzent || 0;
+    if (globaleNebenzeit > 0) {
+      basisZeit = basisZeit * (1 + globaleNebenzeit / 100);
+    }
+
+    // 2. Aufgabenbewältigung für Lehrlinge (z.B. 150% = braucht 1.5x so lange)
+    if (isLehrling && person) {
+      if (person.aufgabenbewaeltigung_prozent && person.aufgabenbewaeltigung_prozent !== 100) {
+        basisZeit = basisZeit * (person.aufgabenbewaeltigung_prozent / 100);
+      }
+    }
+
+    return Math.round(basisZeit);
+  }
+
+  /**
+   * Berechnet die geplante Endzeit MIT Nebenzeit/Aufgabenbewältigung
+   */
+  berechneEndzeitMitFaktoren(termin, person, isLehrling, kontext = {}) {
+    // Für abgeschlossene Termine: Verwende fertigstellung_zeit falls vorhanden
+    if (termin.status === 'abgeschlossen' && termin.fertigstellung_zeit) {
+      return termin.fertigstellung_zeit;
+    }
+
+    // Fallback: Berechne lokal aus Startzeit und Dauer MIT Faktoren
+    const startzeit = termin.startzeit || termin.bring_zeit;
+    if (!startzeit) return '--:--';
+
+    // Hole effektive Arbeitszeit MIT Faktoren
+    const dauer = this.getEffektiveArbeitszeitMitFaktoren(termin, person, isLehrling, kontext);
+
+    const [stunden, minuten] = startzeit.split(':').map(Number);
+
+    const endMinuten = stunden * 60 + minuten + dauer;
+    const endStunden = Math.floor(endMinuten / 60);
+    const endMin = endMinuten % 60;
+
+    return `${String(endStunden).padStart(2, '0')}:${String(endMin).padStart(2, '0')}`;
+  }
+
+  /**
+   * Berechnet den Fortschritt basierend auf der verstrichenen Zeit MIT Faktoren
+   */
+  berechneAuftragFortschrittMitFaktoren(termin, person, isLehrling, kontext = {}) {
+    if (!termin.startzeit && !termin.bring_zeit) return 0;
+
+    const startzeit = termin.startzeit || termin.bring_zeit;
+    const geschaetzteZeit = this.getEffektiveArbeitszeitMitFaktoren(termin, person, isLehrling, kontext);
+
+    const jetzt = this.getToday();
+    const [stunden, minuten] = startzeit.split(':').map(Number);
+    const startDate = new Date(jetzt);
+    startDate.setHours(stunden, minuten, 0, 0);
+
+    const verstricheneMinuten = (jetzt - startDate) / 1000 / 60;
+    const fortschritt = (verstricheneMinuten / geschaetzteZeit) * 100;
+
+    return Math.round(Math.max(0, fortschritt));
+  }
+
+  /**
+   * Berechnet die verbleibende Zeit MIT Faktoren
+   */
+  berechneRestzeitMitFaktoren(termin, person, isLehrling, kontext = {}) {
+    const startzeit = termin.startzeit || termin.bring_zeit;
+    if (!startzeit) return '--:--';
+
+    const geschaetzteZeit = this.getEffektiveArbeitszeitMitFaktoren(termin, person, isLehrling, kontext);
+
+    const jetzt = this.getToday();
+    const [stunden, minuten] = startzeit.split(':').map(Number);
+    const startDate = new Date(jetzt);
+    startDate.setHours(stunden, minuten, 0, 0);
+
+    const verstricheneMinuten = (jetzt - startDate) / 1000 / 60;
+    const restMinuten = geschaetzteZeit - verstricheneMinuten;
+
+    if (restMinuten <= 0) {
+      const ueberzogen = Math.abs(Math.round(restMinuten));
+      return `+${this.formatMinutesToHours(ueberzogen)}`;
+    }
+
+    return `~${this.formatMinutesToHours(Math.round(restMinuten))}`;
   }
 
   /**

@@ -1,0 +1,7 @@
+{
+  "backendUrl": "http://localhost:3000",
+  "fullscreen": true,
+  "kiosk": false,
+  "refreshInterval": 30,
+  "autostart": false
+}
