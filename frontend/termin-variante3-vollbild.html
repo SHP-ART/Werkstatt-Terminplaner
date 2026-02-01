@@ -1,0 +1,1009 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Neuer Termin - Variante 3 (Vollbild Test)</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #f5f5f5;
+            height: 100vh;
+            overflow: hidden;
+        }
+        
+        .page-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 15px 30px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        
+        .page-header h1 {
+            font-size: 1.5em;
+            font-weight: 600;
+        }
+        
+        /* Tab Navigation */
+        .tab-navigation {
+            background: white;
+            padding: 0 30px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+            display: flex;
+            gap: 5px;
+            border-bottom: 3px solid #e0e0e0;
+        }
+        
+        .tab-item {
+            padding: 15px 25px;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 1em;
+            color: #666;
+            border-bottom: 3px solid transparent;
+            margin-bottom: -3px;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            position: relative;
+        }
+        
+        .tab-item:hover {
+            color: #4a90e2;
+            background: #f8f9fa;
+        }
+        
+        .tab-item.active {
+            color: #4a90e2;
+            border-bottom-color: #4a90e2;
+            background: linear-gradient(to bottom, #f0f7ff 0%, white 100%);
+        }
+        
+        .tab-item .badge {
+            background: #ff9800;
+            color: white;
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-size: 0.8em;
+            font-weight: 700;
+        }
+        
+        .content-wrapper {
+            height: calc(100vh - 120px);
+            padding: 20px 30px;
+            overflow: hidden;
+        }
+        
+        .two-column-layout {
+            display: grid;
+            grid-template-columns: 1fr 450px;
+            gap: 20px;
+            height: 100%;
+        }
+        
+        .form-column {
+            background: white;
+            border-radius: 12px;
+            padding: 25px;
+            overflow-y: auto;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+        }
+        
+        .calendar-column {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            height: 100%;
+            overflow-y: auto;
+        }
+        
+        /* Form Sections */
+        .form-section {
+            margin-bottom: 20px;
+            padding: 20px;
+            background: #f9f9f9;
+            border-radius: 10px;
+            border: 2px solid #e0e0e0;
+        }
+        
+        .section-header {
+            font-size: 1.1em;
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 15px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #e0e0e0;
+        }
+        
+        /* Kunde Section */
+        .form-section.kunde {
+            background: linear-gradient(135deg, #e8f5e9 0%, #f1f8e9 100%);
+            border-color: #4caf50;
+        }
+        
+        .form-section.kunde .section-header {
+            color: #2e7d32;
+            border-bottom-color: #4caf50;
+        }
+        
+        /* Fahrzeug Section */
+        .form-section.fahrzeug {
+            background: linear-gradient(135deg, #e3f2fd 0%, #f0f7ff 100%);
+            border-color: #2196f3;
+        }
+        
+        .form-section.fahrzeug .section-header {
+            color: #1565c0;
+            border-bottom-color: #2196f3;
+        }
+        
+        /* Arbeiten Section */
+        .form-section.arbeiten {
+            background: linear-gradient(135deg, #fff3e0 0%, #ffe0b2 100%);
+            border-color: #ff9800;
+        }
+        
+        .form-section.arbeiten .section-header {
+            color: #e65100;
+            border-bottom-color: #ff9800;
+        }
+        
+        /* Service Section */
+        .form-section.service {
+            background: linear-gradient(135deg, #f3e5f5 0%, #e1bee7 100%);
+            border-color: #9c27b0;
+        }
+        
+        .form-section.service .section-header {
+            color: #6a1b9a;
+            border-bottom-color: #9c27b0;
+        }
+        
+        .form-group {
+            margin-bottom: 15px;
+        }
+        
+        .form-group:last-child {
+            margin-bottom: 0;
+        }
+        
+        .form-group label {
+            display: block;
+            margin-bottom: 6px;
+            font-weight: 500;
+            color: #333;
+            font-size: 0.95em;
+        }
+        
+        .form-group input,
+        .form-group textarea,
+        .form-group select {
+            width: 100%;
+            padding: 10px 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 6px;
+            font-size: 1em;
+            font-family: inherit;
+            transition: border-color 0.2s;
+        }
+        
+        .form-group input:focus,
+        .form-group textarea:focus,
+        .form-group select:focus {
+            outline: none;
+            border-color: #4a90e2;
+            box-shadow: 0 0 0 3px rgba(74, 144, 226, 0.1);
+        }
+        
+        .form-group textarea {
+            resize: vertical;
+            min-height: 80px;
+        }
+        
+        .form-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+        }
+        
+        .checkbox-group {
+            display: flex;
+            gap: 15px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+        
+        .checkbox-group label {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            cursor: pointer;
+            font-weight: 500;
+        }
+        
+        .checkbox-group input[type="checkbox"],
+        .checkbox-group input[type="radio"] {
+            width: 18px;
+            height: 18px;
+            cursor: pointer;
+        }
+        
+        .oder-trenner {
+            text-align: center;
+            color: #999;
+            margin: 10px 0;
+            font-weight: 600;
+        }
+        
+        .kunde-gefunden {
+            padding: 12px;
+            background: white;
+            border-radius: 6px;
+            border-left: 4px solid #4caf50;
+            margin-top: 10px;
+            font-weight: 600;
+            color: #2e7d32;
+        }
+        
+        /* Kalender */
+        .kalender-card {
+            background: white;
+            border-radius: 12px;
+            padding: 20px;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+            border: 3px solid #2196f3;
+        }
+        
+        .kalender-header {
+            text-align: center;
+            margin-bottom: 15px;
+        }
+        
+        .kalender-header h3 {
+            color: #1565c0;
+            font-size: 1.3em;
+            margin-bottom: 10px;
+        }
+        
+        .selected-date {
+            background: white;
+            padding: 12px;
+            border-radius: 6px;
+            border: 2px solid #2196f3;
+            font-weight: 700;
+            color: #1565c0;
+            font-size: 1.1em;
+        }
+        
+        .kalender-navigation {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin: 15px 0;
+        }
+        
+        .kalender-nav-btn {
+            background: #4a90e2;
+            color: white;
+            border: none;
+            padding: 8px 15px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 1em;
+            font-weight: 600;
+            transition: background 0.2s;
+        }
+        
+        .kalender-nav-btn:hover {
+            background: #357abd;
+        }
+        
+        .kalender-month {
+            font-weight: 600;
+            font-size: 1.1em;
+            color: #333;
+        }
+        
+        .kalender-wochentage {
+            display: grid;
+            grid-template-columns: repeat(7, 1fr);
+            gap: 5px;
+            margin: 15px 0 10px;
+            font-weight: 600;
+            font-size: 0.85em;
+            color: #666;
+            text-align: center;
+        }
+        
+        .kalender-tage {
+            display: grid;
+            grid-template-columns: repeat(7, 1fr);
+            gap: 5px;
+        }
+        
+        .kalender-tag {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            background: #f5f5f5;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 500;
+            transition: all 0.2s;
+            font-size: 0.95em;
+            padding: 8px 4px;
+            min-height: 60px;
+            gap: 4px;
+        }
+        
+        .kalender-tag-number {
+            font-size: 0.95em;
+            font-weight: 600;
+        }
+        
+        .kalender-tag-bar {
+            width: 100%;
+            height: 4px;
+            background: #e0e0e0;
+            border-radius: 2px;
+            overflow: hidden;
+        }
+        
+        .kalender-tag-bar-fill {
+            height: 100%;
+            transition: width 0.3s;
+        }
+        
+        .kalender-tag-bar-fill.low {
+            background: #4caf50;
+        }
+        
+        .kalender-tag-bar-fill.medium {
+            background: #ffc107;
+        }
+        
+        .kalender-tag-bar-fill.high {
+            background: #ff9800;
+        }
+        
+        .kalender-tag-bar-fill.critical {
+            background: #f44336;
+        }
+        
+        .kalender-tag:hover {
+            background: #e3f2fd;
+            transform: scale(1.05);
+        }
+        
+        .kalender-tag.selected {
+            background: #4a90e2;
+            color: white;
+            font-weight: 700;
+        }
+        
+        .kalender-tag.today {
+            border: 2px solid #ff9800;
+        }
+        
+        .kalender-tag.other-month {
+            color: #ccc;
+        }
+        
+        /* Auslastung */
+        .auslastung-card {
+            background: white;
+            border-radius: 12px;
+            padding: 20px;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+        }
+        
+        .auslastung-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+        }
+        
+        .auslastung-header strong {
+            font-size: 1.1em;
+            color: #333;
+        }
+        
+        .auslastung-prozent {
+            font-size: 1.3em;
+            font-weight: 700;
+            color: #4a90e2;
+        }
+        
+        .auslastung-bar-container {
+            background: #e9ecef;
+            height: 24px;
+            border-radius: 12px;
+            overflow: hidden;
+            margin-bottom: 12px;
+        }
+        
+        .auslastung-bar {
+            height: 100%;
+            background: linear-gradient(90deg, #4caf50 0%, #8bc34a 100%);
+            transition: width 0.3s, background 0.3s;
+        }
+        
+        .auslastung-bar.medium {
+            background: linear-gradient(90deg, #ffc107 0%, #ffeb3b 100%);
+        }
+        
+        .auslastung-bar.high {
+            background: linear-gradient(90deg, #ff9800 0%, #ff5722 100%);
+        }
+        
+        .auslastung-bar.critical {
+            background: linear-gradient(90deg, #f44336 0%, #e91e63 100%);
+        }
+        
+        .auslastung-info {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            font-size: 0.9em;
+            color: #666;
+        }
+        
+        /* Termine Liste */
+        .termine-card {
+            background: white;
+            border-radius: 12px;
+            padding: 20px;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+        }
+        
+        .termine-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #e0e0e0;
+        }
+        
+        .termine-header strong {
+            font-size: 1.1em;
+            color: #333;
+        }
+        
+        .termine-anzahl {
+            background: #4a90e2;
+            color: white;
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 0.85em;
+            font-weight: 600;
+        }
+        
+        .termine-liste {
+            max-height: 250px;
+            overflow-y: auto;
+        }
+        
+        .termin-item {
+            padding: 10px;
+            background: #f9f9f9;
+            border-radius: 6px;
+            margin-bottom: 8px;
+            font-size: 0.9em;
+            border-left: 3px solid #4a90e2;
+        }
+        
+        .termin-item:last-child {
+            margin-bottom: 0;
+        }
+        
+        .termin-zeit {
+            font-weight: 700;
+            color: #1565c0;
+            margin-right: 8px;
+        }
+        
+        /* Ersatzauto Verfügbarkeit */
+        .ersatzauto-verfuegbar {
+            padding: 6px 12px;
+            background: white;
+            border-radius: 6px;
+            border: 2px solid #4caf50;
+            font-size: 0.9em;
+        }
+        
+        .ersatzauto-verfuegbar.keine {
+            border-color: #f44336;
+        }
+        
+        .ersatzauto-verfuegbar.wenig {
+            border-color: #ff9800;
+        }
+        
+        /* Submit Button */
+        .submit-btn {
+            width: 100%;
+            padding: 15px;
+            background: linear-gradient(135deg, #4caf50 0%, #66bb6a 100%);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 1.1em;
+            font-weight: 700;
+            cursor: pointer;
+            margin-top: 20px;
+            transition: all 0.3s;
+            box-shadow: 0 4px 12px rgba(76, 175, 80, 0.3);
+        }
+        
+        .submit-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 16px rgba(76, 175, 80, 0.4);
+        }
+        
+        /* Scrollbar */
+        .form-column::-webkit-scrollbar,
+        .calendar-column::-webkit-scrollbar,
+        .termine-liste::-webkit-scrollbar {
+            width: 8px;
+        }
+        
+        .form-column::-webkit-scrollbar-track,
+        .calendar-column::-webkit-scrollbar-track,
+        .termine-liste::-webkit-scrollbar-track {
+            background: #f1f1f1;
+            border-radius: 10px;
+        }
+        
+        .form-column::-webkit-scrollbar-thumb,
+        .calendar-column::-webkit-scrollbar-thumb,
+        .termine-liste::-webkit-scrollbar-thumb {
+            background: #ccc;
+            border-radius: 10px;
+        }
+        
+        .form-column::-webkit-scrollbar-thumb:hover,
+        .calendar-column::-webkit-scrollbar-thumb:hover,
+        .termine-liste::-webkit-scrollbar-thumb:hover {
+            background: #999;
+        }
+        
+        /* Responsive */
+        @media (max-width: 1200px) {
+            .two-column-layout {
+                grid-template-columns: 1fr;
+            }
+            
+            .calendar-column {
+                display: none;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="page-header">
+        <h1>🗓️ Terminplanung - Variante 3 (2-Spalten Layout)</h1>
+    </div>
+    
+    <div class="tab-navigation">
+        <div class="tab-item active">
+            <span>📝</span>
+            <span>Neuer Termin</span>
+        </div>
+        <div class="tab-item">
+            <span>✏️</span>
+            <span>Termin bearbeiten</span>
+        </div>
+        <div class="tab-item">
+            <span>🔧</span>
+            <span>Interner Termin</span>
+        </div>
+        <div class="tab-item">
+            <span>⏳</span>
+            <span>Wartende Aktion</span>
+            <span class="badge">3</span>
+        </div>
+    </div>
+    
+    <div class="content-wrapper">
+        <div class="two-column-layout">
+            
+            <!-- LINKE SPALTE: Formular -->
+            <div class="form-column">
+                
+                <!-- Kunde Section -->
+                <div class="form-section kunde">
+                    <div class="section-header">
+                        <span>👤 Kunde auswählen</span>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>Kundenname suchen:</label>
+                        <input type="text" placeholder="z.B. Mustermann, Max..." autocomplete="off">
+                    </div>
+                    
+                    <div class="oder-trenner">oder</div>
+                    
+                    <div class="form-group">
+                        <label>🚗 Kennzeichen suchen:</label>
+                        <input type="text" placeholder="z.B. B-AB 1234" autocomplete="off">
+                    </div>
+                    
+                    <div class="kunde-gefunden">
+                        ✅ Max Mustermann gefunden
+                    </div>
+                </div>
+                
+                <!-- Fahrzeug Section -->
+                <div class="form-section fahrzeug">
+                    <div class="section-header">
+                        <span>🚗 Fahrzeug</span>
+                    </div>
+                    
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Kennzeichen: *</label>
+                            <input type="text" placeholder="B-AB 1234" required>
+                        </div>
+                        <div class="form-group">
+                            <label>Kilometerstand:</label>
+                            <input type="number" placeholder="128000">
+                        </div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>Fahrzeugtyp:</label>
+                        <input type="text" placeholder="z.B. Citroën C3, Berlingo">
+                    </div>
+                </div>
+                
+                <!-- Arbeiten Section -->
+                <div class="form-section arbeiten">
+                    <div class="section-header">
+                        <span>🔧 Arbeiten & Zeitschätzung</span>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>Arbeiten (jede Zeile eine Arbeit): *</label>
+                        <textarea rows="5" placeholder="z.B.&#10;Ölwechsel&#10;Bremsen vorne&#10;Inspektion" required></textarea>
+                    </div>
+                    
+                    <div style="padding: 12px; background: white; border-radius: 6px; border-left: 4px solid #ff9800; margin-top: 10px;">
+                        <strong>⏱️ Geschätzte Gesamtzeit:</strong> <span style="color: #e65100; font-size: 1.2em; font-weight: 700;">2.5 h</span>
+                    </div>
+                    
+                    <div class="form-group" style="margin-top: 15px;">
+                        <label style="display: flex; align-items: center; gap: 10px; cursor: pointer;">
+                            <input type="checkbox" style="width: 20px; height: 20px;">
+                            <span style="font-weight: 600;">⚠️ Teile bestellen / Bestand prüfen</span>
+                        </label>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>Umfang/Details:</label>
+                        <textarea rows="2" placeholder="Zusätzliche Informationen..."></textarea>
+                    </div>
+                </div>
+                
+                <!-- Service Section -->
+                <div class="form-section service">
+                    <div class="section-header">
+                        <span>🚚 Service-Optionen</span>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>Fahrzeug Abholung/Lieferung:</label>
+                        <div class="checkbox-group">
+                            <label><input type="radio" name="service" checked> 🚗 Holt/bringt selbst</label>
+                            <label><input type="radio" name="service"> 🚚 Hol-/Bring-Service</label>
+                            <label><input type="radio" name="service"> ⏳ Kunde wartet</label>
+                            <label><input type="radio" name="service"> 📞 Rücksprache</label>
+                        </div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <div style="display: flex; align-items: center; justify-content: space-between; gap: 15px;">
+                            <label style="display: flex; align-items: center; gap: 10px; cursor: pointer;">
+                                <input type="checkbox" id="ersatzautoCheckbox" style="width: 20px; height: 20px; cursor: pointer;">
+                                <span style="font-weight: 600;">🚗 Ersatzauto gewünscht</span>
+                            </label>
+                            <div class="ersatzauto-verfuegbar">
+                                <span style="color: #4caf50; font-weight: 700;">✓ 3 verfügbar</span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Ersatzauto-Zeitraum Details (nur sichtbar wenn gewünscht) -->
+                    <div id="ersatzautoDetails" style="display: none; margin-top: 15px; padding: 15px; background: white; border-radius: 8px; border: 2px solid #2196f3;">
+                        <div style="font-weight: 600; color: #1565c0; margin-bottom: 12px; font-size: 1.05em;">
+                            🚗 Ersatzauto-Zeitraum
+                        </div>
+                        
+                        <div class="form-group" style="margin-bottom: 12px;">
+                            <label>Dauer (Tage):</label>
+                            <input type="number" min="1" value="1" placeholder="z.B. 2" style="width: 150px;">
+                        </div>
+                        
+                        <div style="padding: 10px; background: #fff3e0; border-left: 4px solid #ff9800; border-radius: 4px; margin-bottom: 10px;">
+                            <strong style="color: #e65100;">⚠️ Ersatzwagen wird blockiert</strong>
+                        </div>
+                        
+                        <div style="padding: 10px; background: #e3f2fd; border-left: 4px solid #2196f3; border-radius: 4px; font-size: 0.9em;">
+                            <strong>💡 Hinweis:</strong> Bei tel. Rücksprache Tage angeben, sonst Abholdatum.
+                        </div>
+                    </div>
+                    
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>⏰ Bringzeit:</label>
+                            <input type="time" value="08:00">
+                        </div>
+                        <div class="form-group">
+                            <label>📞 Telefon (bei neuem Kunden):</label>
+                            <input type="tel" placeholder="Optional">
+                        </div>
+                    </div>
+                </div>
+                
+                <button class="submit-btn">✓ Termin anlegen</button>
+            </div>
+            
+            <!-- RECHTE SPALTE: Kalender & Infos (sticky) -->
+            <div class="calendar-column">
+                
+                <!-- Kalender -->
+                <div class="kalender-card">
+                    <div class="kalender-header">
+                        <h3>📅 Termin-Datum wählen</h3>
+                        <div class="selected-date">29. Januar 2026</div>
+                    </div>
+                    
+                    <div class="kalender-navigation">
+                        <button class="kalender-nav-btn">◀</button>
+                        <span class="kalender-month">Januar 2026</span>
+                        <button class="kalender-nav-btn">▶</button>
+                    </div>
+                    
+                    <div class="kalender-wochentage">
+                        <span>Mo</span><span>Di</span><span>Mi</span><span>Do</span><span>Fr</span><span>Sa</span><span>So</span>
+                    </div>
+                    
+                    <div class="kalender-tage" id="kalenderTage">
+                        <!-- Wird dynamisch generiert -->
+                    </div>
+                </div>
+                
+                <!-- Auslastung -->
+                <div class="auslastung-card">
+                    <div class="auslastung-header">
+                        <strong>📊 Auslastung</strong>
+                        <span class="auslastung-prozent" id="auslastungProzent">65%</span>
+                    </div>
+                    <div class="auslastung-bar-container">
+                        <div class="auslastung-bar medium" id="auslastungBar" style="width: 65%;"></div>
+                    </div>
+                    <div class="auslastung-info">
+                        <div><span style="color: #666;">Verfügbar:</span> <strong id="auslastungVerfuegbar">3.5 h</strong></div>
+                        <div><span style="color: #666;">Gesamt:</span> <strong id="auslastungGesamt">10 h</strong></div>
+                    </div>
+                </div>
+                
+                <!-- Termine an diesem Tag -->
+                <div class="termine-card">
+                    <div class="termine-header">
+                        <strong>📋 Termine</strong>
+                        <span class="termine-anzahl" id="termineAnzahl">3</span>
+                    </div>
+                    <div class="termine-liste" id="termineListe">
+                        <!-- Wird dynamisch aktualisiert -->
+                    </div>
+                </div>
+                
+            </div>
+            
+        </div>
+    </div>
+    
+    <script>
+        // Mock-Daten für Termine an verschiedenen Tagen
+        const termineDaten = {
+            '2026-01-29': {
+                auslastung: 65,
+                verfuegbar: 3.5,
+                gesamt: 10,
+                termine: [
+                    { zeit: '08:00', beschreibung: 'Ölwechsel - M. Mustermann' },
+                    { zeit: '10:30', beschreibung: 'Inspektion - A. Schmidt' },
+                    { zeit: '14:00', beschreibung: 'Bremsen vorne - K. Müller' }
+                ]
+            },
+            '2026-01-30': {
+                auslastung: 85,
+                verfuegbar: 1.5,
+                gesamt: 10,
+                termine: [
+                    { zeit: '08:00', beschreibung: 'Große Inspektion - B. Weber' },
+                    { zeit: '11:00', beschreibung: 'Reifenwechsel - T. Fischer' },
+                    { zeit: '13:30', beschreibung: 'Klimaanlage - R. Klein' },
+                    { zeit: '15:00', beschreibung: 'TÜV Vorbereitung - J. Schneider' }
+                ]
+            },
+            '2026-01-31': {
+                auslastung: 45,
+                verfuegbar: 5.5,
+                gesamt: 10,
+                termine: [
+                    { zeit: '09:00', beschreibung: 'Ölwechsel - S. Meyer' },
+                    { zeit: '14:00', beschreibung: 'Bremsen prüfen - L. Wolf' }
+                ]
+            },
+            '2026-02-03': {
+                auslastung: 95,
+                verfuegbar: 0.5,
+                gesamt: 10,
+                termine: [
+                    { zeit: '08:00', beschreibung: 'Motorschaden Diagnose - P. Bauer' },
+                    { zeit: '10:00', beschreibung: 'Getriebe Inspektion - M. Hoffmann' },
+                    { zeit: '13:00', beschreibung: 'Auspuff Reparatur - K. Koch' },
+                    { zeit: '15:00', beschreibung: 'Elektrik Problem - F. Richter' },
+                    { zeit: '16:30', beschreibung: 'Schnelle Kontrolle - D. Braun' }
+                ]
+            },
+            '2026-02-05': {
+                auslastung: 30,
+                verfuegbar: 7,
+                gesamt: 10,
+                termine: [
+                    { zeit: '10:00', beschreibung: 'Reifenwechsel - A. Zimmermann' }
+                ]
+            },
+            '2026-02-07': {
+                auslastung: 70,
+                verfuegbar: 3,
+                gesamt: 10,
+                termine: [
+                    { zeit: '08:30', beschreibung: 'Bremsen Komplettservice - H. Krüger' },
+                    { zeit: '11:00', beschreibung: 'Ölwechsel - N. Schulz' },
+                    { zeit: '14:00', beschreibung: 'Inspektion - G. Lange' }
+                ]
+            }
+        };
+        
+        // Kalender generieren
+        function generiereKalender() {
+            const kalenderTage = document.getElementById('kalenderTage');
+            kalenderTage.innerHTML = '';
+            
+            // Vorherige Monatstage (Dezember)
+            const vorherigeMonatTage = ['29', '30', '31'];
+            vorherigeMonatTage.forEach(tag => {
+                const tagDiv = document.createElement('div');
+                tagDiv.className = 'kalender-tag other-month';
+                tagDiv.innerHTML = `<div class="kalender-tag-number">${tag}</div>`;
+                kalenderTage.appendChild(tagDiv);
+            });
+            
+            // Januar Tage
+            for (let i = 1; i <= 31; i++) {
+                const datum = `2026-01-${i.toString().padStart(2, '0')}`;
+                const daten = termineDaten[datum] || { auslastung: 0, termine: [] };
+                
+                const tagDiv = document.createElement('div');
+                tagDiv.className = 'kalender-tag';
+                tagDiv.dataset.datum = datum;
+                
+                if (i === 29) {
+                    tagDiv.classList.add('selected', 'today');
+                }
+                
+                let barClass = 'low';
+                if (daten.auslastung >= 90) barClass = 'critical';
+                else if (daten.auslastung >= 70) barClass = 'high';
+                else if (daten.auslastung >= 50) barClass = 'medium';
+                
+                tagDiv.innerHTML = `
+                    <div class="kalender-tag-number">${i}</div>
+                    <div class="kalender-tag-bar">
+                        <div class="kalender-tag-bar-fill ${barClass}" style="width: ${daten.auslastung}%"></div>
+                    </div>
+                `;
+                
+                tagDiv.addEventListener('click', function() {
+                    if (!this.classList.contains('other-month')) {
+                        aktualisiereDatum(this.dataset.datum, i);
+                    }
+                });
+                
+                kalenderTage.appendChild(tagDiv);
+            }
+        }
+        
+        // Datum aktualisieren und Termine anzeigen
+        function aktualisiereDatum(datum, tag) {
+            // Ausgewählten Tag markieren
+            document.querySelectorAll('.kalender-tag').forEach(t => t.classList.remove('selected'));
+            document.querySelector(`[data-datum="${datum}"]`).classList.add('selected');
+            
+            // Datum anzeigen
+            document.querySelector('.selected-date').textContent = `${tag}. Januar 2026`;
+            
+            // Daten für diesen Tag holen
+            const daten = termineDaten[datum] || { 
+                auslastung: 0, 
+                verfuegbar: 10, 
+                gesamt: 10, 
+                termine: [] 
+            };
+            
+            // Auslastung aktualisieren
+            const auslastungProzent = document.getElementById('auslastungProzent');
+            const auslastungBar = document.getElementById('auslastungBar');
+            const auslastungVerfuegbar = document.getElementById('auslastungVerfuegbar');
+            const auslastungGesamt = document.getElementById('auslastungGesamt');
+            
+            auslastungProzent.textContent = `${daten.auslastung}%`;
+            auslastungBar.style.width = `${daten.auslastung}%`;
+            auslastungVerfuegbar.textContent = `${daten.verfuegbar} h`;
+            auslastungGesamt.textContent = `${daten.gesamt} h`;
+            
+            // Bar-Klasse aktualisieren
+            auslastungBar.className = 'auslastung-bar';
+            if (daten.auslastung >= 90) auslastungBar.classList.add('critical');
+            else if (daten.auslastung >= 70) auslastungBar.classList.add('high');
+            else if (daten.auslastung >= 50) auslastungBar.classList.add('medium');
+            
+            // Termine aktualisieren
+            const termineListe = document.getElementById('termineListe');
+            const termineAnzahl = document.getElementById('termineAnzahl');
+            
+            termineAnzahl.textContent = daten.termine.length;
+            
+            if (daten.termine.length === 0) {
+                termineListe.innerHTML = '<div style="text-align: center; color: #999; padding: 20px;">📭 Keine Termine an diesem Tag</div>';
+            } else {
+                termineListe.innerHTML = daten.termine.map(termin => `
+                    <div class="termin-item">
+                        <span class="termin-zeit">${termin.zeit}</span>
+                        <span>${termin.beschreibung}</span>
+                    </div>
+                `).join('');
+            }
+        }
+        
+        // Beim Laden initialisieren
+        generiereKalender();
+        
+        // Tab-Navigation
+        document.querySelectorAll('.tab-item').forEach(tab => {
+            tab.addEventListener('click', function() {
+                document.querySelectorAll('.tab-item').forEach(t => t.classList.remove('active'));
+                this.classList.add('active');
+                // Hier würde der Content gewechselt werden
+                console.log('Tab gewechselt:', this.textContent.trim());
+            });
+        });
+        
+        // Ersatzauto-Checkbox Toggle
+        document.getElementById('ersatzautoCheckbox').addEventListener('change', function() {
+            const details = document.getElementById('ersatzautoDetails');
+            if (this.checked) {
+                details.style.display = 'block';
+            } else {
+                details.style.display = 'none';
+            }
+        });
+    </script>
+</body>
+</html>

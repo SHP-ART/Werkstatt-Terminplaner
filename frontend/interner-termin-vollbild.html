@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🔧 Interner Termin - Test</title>
+    <link rel="stylesheet" href="termin-variante3-vollbild.html">
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #f5f5f5; margin: 0; }
+        /* ... Tab- und Grid-Styles wie in Variante 3 ... */
+    </style>
+</head>
+<body>
+    <div class="page-header">
+        <h1>🔧 Interner Termin</h1>
+    </div>
+    <div class="tab-navigation">
+        <div class="tab-item">📝 Neuer Termin</div>
+        <div class="tab-item">✏️ Termin bearbeiten</div>
+        <div class="tab-item active">🔧 Interner Termin</div>
+        <div class="tab-item">⏳ Wartende Aktion <span class="badge">3</span></div>
+    </div>
+    <div class="content-wrapper">
+        <div class="two-column-layout">
+            <!-- LINKE SPALTE: Interner Termin Formular -->
+            <div class="form-column">
+                <div class="form-section arbeiten">
+                    <div class="section-header">🔧 Interner Termin anlegen</div>
+                    <div class="form-group">
+                        <label>Betreff:</label>
+                        <input type="text" placeholder="z.B. Werkstattbesprechung">
+                    </div>
+                    <div class="form-group">
+                        <label>Beschreibung:</label>
+                        <textarea rows="3" placeholder="z.B. Inventur, Teammeeting ..."></textarea>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Datum:</label>
+                            <input type="date" value="2026-01-29">
+                        </div>
+                        <div class="form-group">
+                            <label>Uhrzeit:</label>
+                            <input type="time" value="09:00">
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label>Beteiligte Mitarbeiter:</label>
+                        <input type="text" placeholder="z.B. Max, Anna, Sven">
+                    </div>
+                    <button style="margin-top:15px; background:#4caf50; color:white; padding:10px 20px; border:none; border-radius:6px; font-weight:600;">Speichern</button>
+                </div>
+            </div>
+            <!-- RECHTE SPALTE: Kalender & Tages-Termine -->
+            <div class="calendar-column">
+                <!-- Kalender, Auslastung, Termine wie in Variante 3 -->
+                <iframe src="termin-variante3-vollbild.html" style="width:100%;height:600px;border:none;"></iframe>
+            </div>
+        </div>
+    </div>
+</body>
+</html>
