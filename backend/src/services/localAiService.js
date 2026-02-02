@@ -596,6 +596,11 @@ function erkenneFremdmarke(text) {
 function scheduleDailyTraining() {
   const run = async () => {
     try {
+      // Warte auf Datenbank-Connection (wichtig beim Server-Start)
+      const { dbWrapper } = require('../config/database');
+      if (dbWrapper && dbWrapper.readyPromise) {
+        await dbWrapper.readyPromise;
+      }
       await trainZeitModel(true);
     } catch (err) {
       console.warn('Lokales KI-Training fehlgeschlagen:', err.message);

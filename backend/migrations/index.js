@@ -16,7 +16,8 @@ const migrations = [
   require('./010_ki_training_quality'),
   require('./011_ki_external_url'),
   require('./012_berechnete_zeiten'),
-  require('./013_create_termine_arbeiten_table')
+  require('./013_create_termine_arbeiten_table'),
+  require('./015_create_arbeitszeiten_plan')
 ];
 
 /**

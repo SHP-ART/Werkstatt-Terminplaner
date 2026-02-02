@@ -53,10 +53,6 @@ logStartup('Lade version.js...');
 const { VERSION, APP_NAME } = require('./config/version');
 logStartup(`Version: ${VERSION} ✓`);
 
-logStartup('Lade routes...');
-const routes = require('./routes');
-logStartup('routes geladen ✓');
-
 logStartup('Lade localAiService...');
 const localAiService = require('./services/localAiService');
 logStartup('localAiService geladen ✓');
@@ -269,6 +265,31 @@ async function startServer(clientCountCallback, requestLogCallback) {
         logStartup(dbError.stack, 'ERROR');
         throw dbError;
     }
+
+    // Health-Check-Endpoint SOFORT verfügbar (vor anderen Routes)
+    const { dbWrapper } = require('./config/database');
+    app.get('/api/health', (req, res) => {
+        if (dbWrapper && dbWrapper.ready) {
+            res.status(200).json({ 
+                status: 'ok', 
+                database: 'connected',
+                timestamp: new Date().toISOString()
+            });
+        } else {
+            res.status(503).json({ 
+                status: 'unavailable', 
+                database: 'initializing',
+                message: 'Datenbank wird initialisiert, bitte warten...',
+                timestamp: new Date().toISOString()
+            });
+        }
+    });
+    logStartup('Health-Check-Endpoint registriert ✓');
+
+    // JETZT erst Routes laden - nachdem DB bereit ist
+    logStartup('Lade routes (nach DB-Init)...');
+    const routes = require('./routes');
+    logStartup('routes geladen ✓');
 
     // Lokales KI-Training (täglich)
     localAiService.scheduleDailyTraining();

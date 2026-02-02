@@ -11,13 +11,15 @@ router.get('/range', AbwesenheitenController.getByDateRange);
 router.get('/datum/:datum', AbwesenheitenController.getForDate);
 router.get('/mitarbeiter/:id', AbwesenheitenController.getByMitarbeiterId);
 router.get('/lehrling/:id', AbwesenheitenController.getByLehrlingId);
+
+// Legacy-Routes für alte Abwesenheiten-Tabelle (MÜSSEN vor /:id stehen!)
+router.get('/legacy/:datum', AbwesenheitenController.getByDatum);
+router.put('/legacy/:datum', AbwesenheitenController.upsert);
+
+// Generische Parameter-Routes (MÜSSEN als LETZTES stehen!)
 router.post('/', AbwesenheitenController.create);
 router.put('/:id', AbwesenheitenController.update);
 router.delete('/:id', AbwesenheitenController.delete);
 router.get('/:id', AbwesenheitenController.getById);
-
-// Legacy-Routes für alte Abwesenheiten-Tabelle
-router.get('/legacy/:datum', AbwesenheitenController.getByDatum);
-router.put('/legacy/:datum', AbwesenheitenController.upsert);
 
 module.exports = router;

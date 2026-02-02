@@ -1582,14 +1582,6 @@
                         <thead>
                             <tr>
                                 <th>Name</th>
-                                <th title="Stunden pro normalen Arbeitstag (Mo-Fr)">Std/Tag</th>
-                                <th title="Gesamtarbeitszeit pro Woche">Woche (h)</th>
-                                <th title="Anzahl Arbeitstage Mo-Fr">Arbeitstage</th>
-                                <th title="Pausenzeit pro Tag in Minuten">Pause (Min)</th>
-                                <th title="Samstag als Arbeitstag aktivieren">Sa aktiv</th>
-                                <th title="Samstag Startzeit">Sa Start</th>
-                                <th title="Samstag Endzeit">Sa Ende</th>
-                                <th title="Samstag Pausenzeit in Minuten">Sa Pause</th>
                                 <th>Mittagspause</th>
                                 <th>Nur Service</th>
                                 <th>Aktiv</th>
@@ -1598,6 +1590,9 @@
                         </thead>
                         <tbody></tbody>
                     </table>
+                    <p class="hint" style="margin-top: 10px;">
+                        <strong>Hinweis:</strong> Arbeitszeiten werden jetzt unter "📅 Flexible Arbeitszeiten" konfiguriert.
+                    </p>
                 </div>
 
                 <div class="form-section">
@@ -1610,13 +1605,6 @@
                             <tr>
                                 <th>Name</th>
                                 <th title="Prozentuale Aufgabenbewältigung">Aufgabe (%)</th>
-                                <th title="Gesamtarbeitszeit pro Woche">Woche (h)</th>
-                                <th title="Anzahl Arbeitstage Mo-Fr">Arbeitstage</th>
-                                <th title="Pausenzeit pro Tag in Minuten">Pause (Min)</th>
-                                <th title="Samstag als Arbeitstag aktivieren">Sa aktiv</th>
-                                <th title="Samstag Startzeit">Sa Start</th>
-                                <th title="Samstag Endzeit">Sa Ende</th>
-                                <th title="Samstag Pausenzeit in Minuten">Sa Pause</th>
                                 <th>Mittagspause</th>
                                 <th>📚 Berufsschul-KW</th>
                                 <th>Aktiv</th>
@@ -1626,9 +1614,168 @@
                         <tbody></tbody>
                     </table>
                     <p class="hint" style="margin-top: 10px;">
+                        Arbeitszeiten werden jetzt unter "📅 Flexible Arbeitszeiten" konfiguriert.<br>
                         Aufgabenbewältigung: 100% = Standardzeit, 200% = doppelte Zeit<br>
                         📚 Berufsschul-KW: Klicken Sie auf die KW-Spalte oder gehen Sie zu "Abwesenheiten → Berufsschule"
                     </p>
+                </div>
+
+                <div class="form-section">
+                    <h3>📅 Flexible Arbeitszeiten</h3>
+                    <p class="hint" style="margin-bottom: 15px;">
+                        Hier können Sie individuelle Arbeitszeiten pro Wochentag oder für spezifische Zeiträume festlegen.<br>
+                        <strong>Priorität:</strong> Spezifisches Datum > Wochentag-Muster > Standard-Wochenarbeitszeit
+                    </p>
+
+                    <!-- Person auswählen -->
+                    <div class="form-row" style="margin-bottom: 20px;">
+                        <div class="form-group">
+                            <label for="arbeitszeitenPersonSelect">Person auswählen:</label>
+                            <select id="arbeitszeitenPersonSelect" class="form-control" onchange="app.loadArbeitszeitenForPerson()">
+                                <option value="">-- Person wählen --</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- Wochenmuster Gitter -->
+                    <div id="arbeitszeitenWochenGrid" style="display: none;">
+                        <h4>🗓️ Wochentag-Muster</h4>
+                        <p class="hint" style="margin-bottom: 10px; font-size: 0.9em;">
+                            Standard-Arbeitszeiten pro Wochentag. Diese gelten, wenn kein spezifisches Datum definiert ist.
+                        </p>
+                        
+                        <!-- Schicht-Schnellauswahl -->
+                        <div style="margin-bottom: 15px; padding: 10px; background: #f8f9fa; border-radius: 8px;">
+                            <label style="font-weight: 600; margin-bottom: 8px; display: block;">⚡ Schicht-Schnellauswahl:</label>
+                            <div id="schichtTemplateButtons" style="display: flex; gap: 8px; flex-wrap: wrap;">
+                                <button class="btn btn-secondary btn-sm" onclick="app.loadSchichtTemplates()">Lade Schichten...</button>
+                            </div>
+                            <p class="hint" style="margin-top: 8px; margin-bottom: 0; font-size: 0.85em;">
+                                Wählen Sie eine Schicht-Vorlage, um alle Zeiten für Mo-Fr automatisch zu setzen.
+                            </p>
+                        </div>
+                        
+                        <div class="arbeitszeiten-grid">
+                            <div class="arbeitszeiten-grid-row arbeitszeiten-grid-header">
+                                <div>Wochentag</div>
+                                <div>Beginn</div>
+                                <div>Ende</div>
+                                <div>Stunden</div>
+                                <div>Frei</div>
+                            </div>
+                            <div class="arbeitszeiten-grid-row" data-wochentag="1">
+                                <div class="wochentag-label">Montag</div>
+                                <div><input type="time" class="form-control" id="wochentag_1_start" value="08:00" onchange="app.updateWochentagEndzeit(1)"></div>
+                                <div><input type="time" class="form-control" id="wochentag_1_ende" value="16:30" onchange="app.updateWochentagStunden(1)"></div>
+                                <div><input type="number" class="form-control" id="wochentag_1_stunden" min="0" max="24" step="0.25" value="8" readonly style="background: #f8f9fa;"></div>
+                                <div><input type="checkbox" id="wochentag_1_frei" onchange="app.updateWochentagStundenStatus(1)"></div>
+                            </div>
+                            <div class="arbeitszeiten-grid-row" data-wochentag="2">
+                                <div class="wochentag-label">Dienstag</div>
+                                <div><input type="time" class="form-control" id="wochentag_2_start" value="08:00" onchange="app.updateWochentagEndzeit(2)"></div>
+                                <div><input type="time" class="form-control" id="wochentag_2_ende" value="16:30" onchange="app.updateWochentagStunden(2)"></div>
+                                <div><input type="number" class="form-control" id="wochentag_2_stunden" min="0" max="24" step="0.25" value="8" readonly style="background: #f8f9fa;"></div>
+                                <div><input type="checkbox" id="wochentag_2_frei" onchange="app.updateWochentagStundenStatus(2)"></div>
+                            </div>
+                            <div class="arbeitszeiten-grid-row" data-wochentag="3">
+                                <div class="wochentag-label">Mittwoch</div>
+                                <div><input type="time" class="form-control" id="wochentag_3_start" value="08:00" onchange="app.updateWochentagEndzeit(3)"></div>
+                                <div><input type="time" class="form-control" id="wochentag_3_ende" value="16:30" onchange="app.updateWochentagStunden(3)"></div>
+                                <div><input type="number" class="form-control" id="wochentag_3_stunden" min="0" max="24" step="0.25" value="8" readonly style="background: #f8f9fa;"></div>
+                                <div><input type="checkbox" id="wochentag_3_frei" onchange="app.updateWochentagStundenStatus(3)"></div>
+                            </div>
+                            <div class="arbeitszeiten-grid-row" data-wochentag="4">
+                                <div class="wochentag-label">Donnerstag</div>
+                                <div><input type="time" class="form-control" id="wochentag_4_start" value="08:00" onchange="app.updateWochentagEndzeit(4)"></div>
+                                <div><input type="time" class="form-control" id="wochentag_4_ende" value="16:30" onchange="app.updateWochentagStunden(4)"></div>
+                                <div><input type="number" class="form-control" id="wochentag_4_stunden" min="0" max="24" step="0.25" value="8" readonly style="background: #f8f9fa;"></div>
+                                <div><input type="checkbox" id="wochentag_4_frei" onchange="app.updateWochentagStundenStatus(4)"></div>
+                            </div>
+                            <div class="arbeitszeiten-grid-row" data-wochentag="5">
+                                <div class="wochentag-label">Freitag</div>
+                                <div><input type="time" class="form-control" id="wochentag_5_start" value="08:00" onchange="app.updateWochentagEndzeit(5)"></div>
+                                <div><input type="time" class="form-control" id="wochentag_5_ende" value="16:30" onchange="app.updateWochentagStunden(5)"></div>
+                                <div><input type="number" class="form-control" id="wochentag_5_stunden" min="0" max="24" step="0.25" value="8" readonly style="background: #f8f9fa;"></div>
+                                <div><input type="checkbox" id="wochentag_5_frei" onchange="app.updateWochentagStundenStatus(5)"></div>
+                            </div>
+                            <div class="arbeitszeiten-grid-row" data-wochentag="6">
+                                <div class="wochentag-label">Samstag</div>
+                                <div><input type="time" class="form-control" id="wochentag_6_start" value="08:00" onchange="app.updateWochentagEndzeit(6)"></div>
+                                <div><input type="time" class="form-control" id="wochentag_6_ende" value="08:00" onchange="app.updateWochentagStunden(6)"></div>
+                                <div><input type="number" class="form-control" id="wochentag_6_stunden" min="0" max="24" step="0.25" value="0" readonly style="background: #f8f9fa;"></div>
+                                <div><input type="checkbox" id="wochentag_6_frei" checked onchange="app.updateWochentagStundenStatus(6)"></div>
+                            </div>
+                            <div class="arbeitszeiten-grid-row" data-wochentag="7">
+                                <div class="wochentag-label">Sonntag</div>
+                                <div><input type="time" class="form-control" id="wochentag_7_start" value="08:00" onchange="app.updateWochentagEndzeit(7)"></div>
+                                <div><input type="time" class="form-control" id="wochentag_7_ende" value="08:00" onchange="app.updateWochentagStunden(7)"></div>
+                                <div><input type="number" class="form-control" id="wochentag_7_stunden" min="0" max="24" step="0.25" value="0" readonly style="background: #f8f9fa;"></div>
+                                <div><input type="checkbox" id="wochentag_7_frei" checked onchange="app.updateWochentagStundenStatus(7)"></div>
+                            </div>
+                        </div>
+                        <div style="margin-top: 15px;">
+                            <button class="btn btn-primary" onclick="app.saveWochenMuster()">💾 Wochenmuster speichern</button>
+                            <button class="btn btn-secondary" onclick="app.resetArbeitszeitenToStandard()" title="Setzt Wochenmuster auf Standard-Wochenarbeitszeit zurück">🔄 Auf Standard zurücksetzen</button>
+                        </div>
+                    </div>
+
+                    <!-- Spezifische Zeiträume -->
+                    <div id="arbeitszeitenDateForm" style="display: none; margin-top: 30px;">
+                        <h4>📆 Spezifischer Zeitraum</h4>
+                        <p class="hint" style="margin-bottom: 10px; font-size: 0.9em;">
+                            Definieren Sie abweichende Arbeitszeiten für einen bestimmten Zeitraum (z.B. reduzierte Stunden, freie Tage).<br>
+                            <strong>Hinweis:</strong> Nur zukünftige Daten können bearbeitet werden.
+                        </p>
+                        <form id="arbeitszeitenDateRangeForm" onsubmit="app.saveArbeitszeitenDateRange(event)">
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label for="arbeitszeitenDatumVon">Von Datum:</label>
+                                    <input type="date" id="arbeitszeitenDatumVon" class="form-control" required>
+                                </div>
+                                <div class="form-group">
+                                    <label for="arbeitszeitenDatumBis">Bis Datum:</label>
+                                    <input type="date" id="arbeitszeitenDatumBis" class="form-control" required>
+                                </div>
+                                <div class="form-group">
+                                    <label for="arbeitszeitenDateStunden">Arbeitsstunden/Tag:</label>
+                                    <input type="number" id="arbeitszeitenDateStunden" class="form-control" min="0" max="24" step="0.25" value="8">
+                                </div>
+                            </div>
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label for="arbeitszeitenDateFrei">
+                                        <input type="checkbox" id="arbeitszeitenDateFrei" onchange="app.toggleDateRangeFreiStatus()">
+                                        Freie Tage (keine Arbeitszeit)
+                                    </label>
+                                </div>
+                                <div class="form-group">
+                                    <label for="arbeitszeitenDateBeschreibung">Beschreibung (optional):</label>
+                                    <input type="text" id="arbeitszeitenDateBeschreibung" class="form-control" placeholder="z.B. Kurzarbeit, Teilzeit">
+                                </div>
+                            </div>
+                            <div style="margin-top: 10px;">
+                                <button type="submit" class="btn btn-primary">➕ Zeitraum hinzufügen</button>
+                            </div>
+                        </form>
+
+                        <!-- Liste bestehender Zeiträume -->
+                        <div id="arbeitszeitenDateList" style="margin-top: 20px;">
+                            <h5>Definierte Zeiträume</h5>
+                            <table id="arbeitszeitenDateTable" style="font-size: 0.9em; width: 100%;">
+                                <thead>
+                                    <tr>
+                                        <th>Von</th>
+                                        <th>Bis</th>
+                                        <th>Stunden/Tag</th>
+                                        <th>Status</th>
+                                        <th>Beschreibung</th>
+                                        <th>Aktionen</th>
+                                    </tr>
+                                </thead>
+                                <tbody></tbody>
+                            </table>
+                        </div>
+                    </div>
                 </div>
 
                 <div class="form-section">
@@ -2089,6 +2236,10 @@
                     <span class="tab-icon">👥</span>
                     <span class="tab-label">Kundenverwaltung</span>
                 </button>
+                <button class="sub-tab-button" data-subtab="settingsSchichten">
+                    <span class="tab-icon">⚡</span>
+                    <span class="tab-label">Schicht-Vorlagen</span>
+                </button>
                 <button class="sub-tab-button" data-subtab="settingsApi">
                     <span class="tab-icon">🤖</span>
                     <span class="tab-label">KI / API</span>
@@ -2300,6 +2451,74 @@
                             </tr>
                         </thead>
                         <tbody></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div id="settingsSchichten" class="sub-tab-content">
+                <h3>⚡ Schicht-Vorlagen verwalten</h3>
+                <p>Erstellen und bearbeiten Sie wiederverwendbare Schichtmuster für schnelle Arbeitszeitplanung.</p>
+
+                <div class="form-section" style="margin-bottom: 20px;">
+                    <h4>Neue Schicht-Vorlage erstellen</h4>
+                    <form id="schichtTemplateForm" class="form-row">
+                        <div class="form-group">
+                            <label>Name:</label>
+                            <input type="text" id="schichtName" placeholder="z.B. Frühschicht" required>
+                        </div>
+                        <div class="form-group">
+                            <label>Beschreibung:</label>
+                            <input type="text" id="schichtBeschreibung" placeholder="Optional">
+                        </div>
+                        <div class="form-group">
+                            <label>Arbeitszeit Start:</label>
+                            <input type="time" id="schichtStart" value="08:00" required>
+                        </div>
+                        <div class="form-group">
+                            <label>Arbeitszeit Ende:</label>
+                            <input type="time" id="schichtEnde" value="16:30" required>
+                        </div>
+                        <div class="form-group">
+                            <label>Farbe:</label>
+                            <input type="color" id="schichtFarbe" value="#10b981">
+                        </div>
+                        <div class="form-group">
+                            <label>Sortierung:</label>
+                            <input type="number" id="schichtSortierung" value="1" min="1" max="99">
+                        </div>
+                        <div class="form-group" style="align-self: flex-end;">
+                            <button type="submit" class="btn btn-primary">
+                                <span id="schichtFormButtonText">➕ Erstellen</span>
+                            </button>
+                            <button type="button" class="btn btn-secondary" id="schichtFormCancel" style="display:none; margin-left: 10px;">
+                                Abbrechen
+                            </button>
+                        </div>
+                    </form>
+                </div>
+
+                <div class="form-section">
+                    <h4>Vorhandene Schichten</h4>
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th style="width: 30px;">#</th>
+                                <th>Name</th>
+                                <th>Beschreibung</th>
+                                <th style="width: 100px;">Start</th>
+                                <th style="width: 100px;">Ende</th>
+                                <th style="width: 80px;">Farbe</th>
+                                <th style="width: 80px;">Sort.</th>
+                                <th style="width: 120px;">Aktionen</th>
+                            </tr>
+                        </thead>
+                        <tbody id="schichtTemplateTableBody">
+                            <tr>
+                                <td colspan="8" style="text-align: center; padding: 20px; color: #999;">
+                                    Lade Schicht-Vorlagen...
+                                </td>
+                            </tr>
+                        </tbody>
                     </table>
                 </div>
             </div>

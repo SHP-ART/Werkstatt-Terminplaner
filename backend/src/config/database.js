@@ -77,28 +77,39 @@ if (!fs.existsSync(dbDir)) {
 
 // Datenbankverbindung als Objekt-Wrapper, damit Referenzen nach Reconnect aktualisiert werden
 const dbWrapper = {
-  connection: null
+  connection: null,
+  ready: false,
+  readyPromise: null
 };
 
-// Initiale Verbindung herstellen
-dbWrapper.connection = new sqlite3.Database(dbPath, (err) => {
-  if (err) {
-    console.error('Fehler beim Öffnen der Datenbank:', err);
-  } else {
-    console.log('Datenbank verbunden:', dbPath);
-    // Performance-Optimierungen
-    dbWrapper.connection.run('PRAGMA journal_mode = WAL;');
-    dbWrapper.connection.run('PRAGMA synchronous = NORMAL;');
-  }
-});
-
 // Proxy für abwärtskompatiblen Zugriff auf db-Methoden
+// WICHTIG: Proxy SOFORT erstellen, BEVOR wir die Connection herstellen
 const db = new Proxy({}, {
   get(target, prop) {
     // Spezialfall: Wenn connection selbst abgefragt wird
     if (prop === '_connection') {
       return dbWrapper.connection;
     }
+    
+    // Prüfe ob Connection existiert
+    if (!dbWrapper.connection) {
+      const errorMsg = `❌ Datenbank-Zugriff auf '${prop}' fehlgeschlagen: Connection ist noch nicht bereit. Race-Condition: Code versucht DB-Zugriff bevor initializeDatabaseWithBackup() abgeschlossen ist.`;
+      console.error(errorMsg);
+      console.error('💡 Tipp: Stelle sicher, dass Routes erst NACH dbWrapper.readyPromise geladen werden.');
+      const error = new Error('Datenbankverbindung noch nicht bereit - bitte auf readyPromise warten');
+      error.code = 'DB_NOT_READY';
+      throw error;
+    }
+    
+    // Debug: Was ist dbWrapper.connection?
+    if (prop === 'get' || prop === 'all' || prop === 'run') {
+      console.log(`[DB-Proxy] Zugriff auf '${prop}':`, {
+        connectionType: typeof dbWrapper.connection,
+        hasMethod: typeof dbWrapper.connection[prop],
+        connectionKeys: Object.keys(dbWrapper.connection).slice(0, 5)
+      });
+    }
+    
     // Alle anderen Props/Methoden vom aktuellen Connection-Objekt holen
     const value = dbWrapper.connection[prop];
     if (typeof value === 'function') {
@@ -106,6 +117,26 @@ const db = new Proxy({}, {
     }
     return value;
   }
+});
+
+// Promise für Connection-Bereitschaft - NACH Proxy-Erstellung
+dbWrapper.readyPromise = new Promise((resolve, reject) => {
+  // Initiale Verbindung herstellen
+  const dbInstance = new sqlite3.Database(dbPath, (err) => {
+    if (err) {
+      console.error('Fehler beim Öffnen der Datenbank:', err);
+      reject(err);
+    } else {
+      console.log('Datenbank verbunden:', dbPath);
+      // Performance-Optimierungen
+      dbInstance.run('PRAGMA journal_mode = WAL;');
+      dbInstance.run('PRAGMA synchronous = NORMAL;');
+      // JETZT erst Connection setzen - nachdem der Callback ausgeführt wurde
+      dbWrapper.connection = dbInstance;
+      dbWrapper.ready = true;
+      resolve();
+    }
+  });
 });
 
 // Funktion zum Neuladen der Datenbank-Verbindung (nach Backup-Restore)
@@ -239,6 +270,10 @@ async function initializeDatabaseWithBackup() {
   try {
     console.log('🔧 Starte Datenbank-Initialisierung...');
 
+    // 0. Warte auf Datenbank-Connection (wichtig für async sqlite3.Database)
+    await dbWrapper.readyPromise;
+    console.log('✅ Datenbank-Connection bereit');
+
     // 1. Schema-Version prüfen
     const currentVersion = await getSchemaVersion();
     const latestVersion = getLatestVersion();
@@ -275,8 +310,15 @@ function initializeDatabase() {
 // Schema-Version exportieren (basiert auf Migrations-Anzahl)
 const DB_SCHEMA_VERSION = getLatestVersion();
 
+// Helper-Funktion für explizites Warten auf DB-Bereitschaft
+function waitForDb() {
+  return dbWrapper.readyPromise;
+}
+
 module.exports = {
   db,
+  dbWrapper,  // Exportiere dbWrapper damit andere Module auf readyPromise zugreifen können
+  waitForDb,
   getDb,
   initializeDatabase,
   initializeDatabaseWithBackup,

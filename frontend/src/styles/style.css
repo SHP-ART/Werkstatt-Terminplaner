@@ -13709,3 +13709,106 @@ body.intern-tablet-mode-active #intern {
     color: #666;
     font-style: italic;
 }
+/* ======== FLEXIBLE ARBEITSZEITEN GRID ======== */
+.arbeitszeiten-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    background: #dee2e6;
+    border: 1px solid #dee2e6;
+    border-radius: 8px;
+    overflow: hidden;
+    margin-bottom: 15px;
+}
+
+.arbeitszeiten-grid-row {
+    display: grid;
+    grid-template-columns: 150px 100px 100px 90px 80px;
+    gap: 1px;
+    background: #fff;
+}
+
+.arbeitszeiten-grid-header {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    font-weight: 600;
+    font-size: 0.9em;
+}
+
+.arbeitszeiten-grid-header > div {
+    padding: 12px 15px;
+    text-align: center;
+}
+
+.arbeitszeiten-grid-row > div {
+    padding: 10px 15px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.arbeitszeiten-grid-row .wochentag-label {
+    justify-content: flex-start;
+    font-weight: 500;
+    color: #495057;
+}
+
+.arbeitszeiten-grid-row input[type="number"] {
+    width: 100%;
+    max-width: 120px;
+}
+
+.arbeitszeiten-grid-row input[type="checkbox"] {
+    width: 20px;
+    height: 20px;
+    cursor: pointer;
+    accent-color: var(--accent, #f59e0b);
+}
+
+.arbeitszeiten-grid-row:hover {
+    background: #f8f9fa;
+}
+
+.arbeitszeiten-grid-row[data-wochentag="6"],
+.arbeitszeiten-grid-row[data-wochentag="7"] {
+    background: #f8f9fa;
+}
+
+.arbeitszeiten-grid-row.ist-frei {
+    opacity: 0.5;
+}
+
+.arbeitszeiten-grid-row.ist-frei input[type="number"] {
+    background: #e9ecef;
+    color: #6c757d;
+}
+
+#arbeitszeitenDateTable {
+    border-collapse: collapse;
+}
+
+#arbeitszeitenDateTable th {
+    background: #f8f9fa;
+    padding: 10px;
+    text-align: left;
+    border-bottom: 2px solid #dee2e6;
+}
+
+#arbeitszeitenDateTable td {
+    padding: 8px 10px;
+    border-bottom: 1px solid #e9ecef;
+}
+
+#arbeitszeitenDateTable tbody tr:hover {
+    background: #f8f9fa;
+}
+
+.arbeitszeiten-status-frei {
+    color: #dc3545;
+    font-weight: 600;
+}
+
+.arbeitszeiten-status-arbeitszeit {
+    color: #28a745;
+    font-weight: 600;
+}

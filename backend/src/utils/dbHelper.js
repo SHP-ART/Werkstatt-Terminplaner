@@ -10,7 +10,7 @@
  * - Batch Operations Support
  */
 
-const { db } = require('../config/database');
+const { db, dbWrapper } = require('../config/database');
 
 // ============================================================
 // === PERFORMANCE-KONFIGURATION ===
@@ -154,7 +154,12 @@ function clearStatementCache() {
  * @param {Array} params - Query Parameter
  * @returns {Promise<Object>} Erste Zeile des Ergebnisses
  */
-function getAsync(sql, params = []) {
+async function getAsync(sql, params = []) {
+  // Warte auf Datenbank-Bereitschaft
+  if (dbWrapper && dbWrapper.readyPromise) {
+    await dbWrapper.readyPromise;
+  }
+  
   const startTime = Date.now();
   return new Promise((resolve, reject) => {
     db.get(sql, params, (err, row) => {
@@ -175,7 +180,12 @@ function getAsync(sql, params = []) {
  * @param {Array} params - Query Parameter
  * @returns {Promise<Array>} Alle Zeilen des Ergebnisses
  */
-function allAsync(sql, params = []) {
+async function allAsync(sql, params = []) {
+  // Warte auf Datenbank-Bereitschaft
+  if (dbWrapper && dbWrapper.readyPromise) {
+    await dbWrapper.readyPromise;
+  }
+  
   const startTime = Date.now();
   return new Promise((resolve, reject) => {
     db.all(sql, params, (err, rows) => {
@@ -196,7 +206,12 @@ function allAsync(sql, params = []) {
  * @param {Array} params - Query Parameter
  * @returns {Promise<Object>} { lastID, changes }
  */
-function runAsync(sql, params = []) {
+async function runAsync(sql, params = []) {
+  // Warte auf Datenbank-Bereitschaft
+  if (dbWrapper && dbWrapper.readyPromise) {
+    await dbWrapper.readyPromise;
+  }
+  
   const startTime = Date.now();
   return new Promise((resolve, reject) => {
     db.run(sql, params, function(err) {

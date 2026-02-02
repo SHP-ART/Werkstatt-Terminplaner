@@ -6,13 +6,20 @@
  * Migriert automatisch alle existierenden Daten.
  */
 
-const { berechneArbeitszeitFuerSpeicherung } = require('../src/utils/zeitBerechnung');
+// WICHTIG: Lazy Loading um zirkuläre Abhängigkeit zu vermeiden
+// zeitBerechnung wird erst in der up()-Funktion geladen, nicht beim Modulimport
+let berechneArbeitszeitFuerSpeicherung = null;
 
 module.exports = {
   version: 13,
   description: 'Erstellt termine_arbeiten Tabelle für relationale Arbeitszeit-Speicherung + Datenmigration',
   
   up: (db) => {
+    // Lazy load zeitBerechnung hier, nicht beim Modulimport
+    if (!berechneArbeitszeitFuerSpeicherung) {
+      berechneArbeitszeitFuerSpeicherung = require('../src/utils/zeitBerechnung').berechneArbeitszeitFuerSpeicherung;
+    }
+    
     return new Promise((resolve, reject) => {
       db.serialize(() => {
         // Erstelle termine_arbeiten Tabelle mit vollständiger Struktur

@@ -1,14 +1,15 @@
 const { getAsync, allAsync, runAsync } = require('../utils/dbHelper');
 
 class AbwesenheitenModel {
-  // Legacy-Methoden für alte Abwesenheiten-Tabelle
+  // Legacy-Methoden für alte Abwesenheiten-Tabelle (abwesenheiten_legacy)
+  // Diese Tabelle hat: datum (PRIMARY KEY), urlaub (INTEGER), krank (INTEGER)
   static async getByDatum(datum) {
-    return await getAsync('SELECT * FROM abwesenheiten WHERE datum = ?', [datum]);
+    return await getAsync('SELECT * FROM abwesenheiten_legacy WHERE datum = ?', [datum]);
   }
 
   static async upsert(datum, urlaub, krank) {
     return await runAsync(
-      `INSERT INTO abwesenheiten (datum, urlaub, krank)
+      `INSERT INTO abwesenheiten_legacy (datum, urlaub, krank)
        VALUES (?, ?, ?)
        ON CONFLICT(datum) DO UPDATE SET urlaub = excluded.urlaub, krank = excluded.krank`,
       [datum, urlaub, krank]
@@ -16,6 +17,7 @@ class AbwesenheitenModel {
   }
 
   // Neue Methoden für individuelle Mitarbeiter-/Lehrlinge-Abwesenheiten
+  // Diese Tabelle (abwesenheiten) hat: datum_von, datum_bis, typ, mitarbeiter_id, lehrling_id
   static async getAll() {
     const query = `
       SELECT

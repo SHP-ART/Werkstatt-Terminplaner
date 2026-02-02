@@ -1,4 +1,87 @@
 class ApiService {
+  /**
+   * Retry-Konfiguration für Backend-Verfügbarkeit
+   */
+  static RETRY_CONFIG = {
+    maxRetries: 3,
+    initialDelay: 500,    // 500ms
+    maxDelay: 4000,       // 4s
+    backoffMultiplier: 2
+  };
+
+  /**
+   * Prüft ob Backend bereit ist (Health-Check)
+   */
+  static async checkHealth(maxAttempts = 5) {
+    const baseUrl = CONFIG.API_URL.endsWith('/') ? CONFIG.API_URL.slice(0, -1) : CONFIG.API_URL;
+    const healthUrl = `${baseUrl}/api/health`;
+    
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      try {
+        const response = await fetch(healthUrl, { 
+          method: 'GET',
+          headers: { 'Content-Type': 'application/json' }
+        });
+        
+        if (response.status === 200) {
+          return true; // Backend ist bereit
+        }
+        
+        if (response.status === 503) {
+          // Backend läuft, aber DB initialisiert noch
+          console.log(`⏳ Backend initialisiert noch (Versuch ${attempt}/${maxAttempts})...`);
+          await new Promise(resolve => setTimeout(resolve, 1000));
+          continue;
+        }
+        
+        return false; // Unerwarteter Status
+      } catch (error) {
+        console.log(`🔄 Health-Check Versuch ${attempt}/${maxAttempts} fehlgeschlagen`);
+        if (attempt < maxAttempts) {
+          await new Promise(resolve => setTimeout(resolve, 1000));
+        }
+      }
+    }
+    return false;
+  }
+
+  /**
+   * Führt Request mit Retry-Logik durch
+   */
+  static async requestWithRetry(endpoint, options = {}, retryCount = 0) {
+    try {
+      return await this.request(endpoint, options);
+    } catch (error) {
+      const shouldRetry = (
+        (error.status === 503) || // Service Unavailable
+        (error.isNetworkError) ||  // Netzwerkfehler
+        (error.code === 'DB_NOT_READY') // DB noch nicht bereit
+      );
+      
+      if (shouldRetry && retryCount < this.RETRY_CONFIG.maxRetries) {
+        const delay = Math.min(
+          this.RETRY_CONFIG.initialDelay * Math.pow(this.RETRY_CONFIG.backoffMultiplier, retryCount),
+          this.RETRY_CONFIG.maxDelay
+        );
+        
+        console.log(`🔄 Retry ${retryCount + 1}/${this.RETRY_CONFIG.maxRetries} nach ${delay}ms...`);
+        
+        // Bei 503 zusätzlich Health-Check machen
+        if (error.status === 503) {
+          const isHealthy = await this.checkHealth(2);
+          if (!isHealthy) {
+            throw new Error('Backend bleibt nicht verfügbar - bitte Backend prüfen');
+          }
+        }
+        
+        await new Promise(resolve => setTimeout(resolve, delay));
+        return this.requestWithRetry(endpoint, options, retryCount + 1);
+      }
+      
+      throw error; // Keine Retries mehr oder nicht retry-fähiger Fehler
+    }
+  }
+
   static async request(endpoint, options = {}) {
     // Prüfe ob CONFIG verfügbar ist
     if (typeof CONFIG === 'undefined' || typeof CONFIG.API_URL === 'undefined') {
@@ -60,25 +143,25 @@ class ApiService {
   }
 
   static async get(endpoint) {
-    return this.request(endpoint, { method: 'GET' });
+    return this.requestWithRetry(endpoint, { method: 'GET' });
   }
 
   static async post(endpoint, data) {
-    return this.request(endpoint, {
+    return this.requestWithRetry(endpoint, {
       method: 'POST',
       body: JSON.stringify(data)
     });
   }
 
   static async put(endpoint, data) {
-    return this.request(endpoint, {
+    return this.requestWithRetry(endpoint, {
       method: 'PUT',
       body: JSON.stringify(data)
     });
   }
 
   static async delete(endpoint) {
-    return this.request(endpoint, { method: 'DELETE' });
+    return this.requestWithRetry(endpoint, { method: 'DELETE' });
   }
 }
 
@@ -363,12 +446,13 @@ class EinstellungenService {
     return ApiService.put('/einstellungen/anomaly-detection-enabled', { enabled });
   }
 
+  // Legacy-Methoden für alte Abwesenheiten-Tabelle
   static async getAbwesenheit(datum) {
-    return ApiService.get(`/abwesenheiten/${datum}`);
+    return ApiService.get(`/abwesenheiten/legacy/${datum}`);
   }
 
   static async updateAbwesenheit(datum, data) {
-    return ApiService.put(`/abwesenheiten/${datum}`, data);
+    return ApiService.put(`/abwesenheiten/legacy/${datum}`, data);
   }
 
   // Neue Methoden für individuelle Mitarbeiter-/Lehrlinge-Abwesenheiten
@@ -390,6 +474,75 @@ class EinstellungenService {
 
   static async getAbwesenheitById(id) {
     return ApiService.get(`/abwesenheiten/${id}`);
+  }
+}
+
+class ArbeitszeitenPlanService {
+  // Alle Arbeitszeitenmuster
+  static async getAll() {
+    return ApiService.get('/arbeitszeiten-plan');
+  }
+
+  // Arbeitszeitenmuster für einen Mitarbeiter
+  static async getByMitarbeiterId(mitarbeiterId) {
+    return ApiService.get(`/arbeitszeiten-plan/mitarbeiter/${mitarbeiterId}`);
+  }
+
+  // Arbeitszeitenmuster für einen Lehrling
+  static async getByLehrlingId(lehrlingId) {
+    return ApiService.get(`/arbeitszeiten-plan/lehrling/${lehrlingId}`);
+  }
+
+  // Effektive Arbeitszeit für ein spezifisches Datum
+  static async getForDate(mitarbeiterId, lehrlingId, datum) {
+    const params = datum ? `&datum=${datum}` : '';
+    if (mitarbeiterId) {
+      return ApiService.get(`/arbeitszeiten-plan/for-date?mitarbeiter_id=${mitarbeiterId}${params}`);
+    } else if (lehrlingId) {
+      return ApiService.get(`/arbeitszeiten-plan/for-date?lehrling_id=${lehrlingId}${params}`);
+    }
+    throw new Error('Entweder mitarbeiterId oder lehrlingId erforderlich');
+  }
+
+  // Arbeitszeitenmuster für Zeitraum
+  static async getByDateRange(mitarbeiterId, lehrlingId, datumVon, datumBis) {
+    const params = `datum_von=${datumVon}&datum_bis=${datumBis}`;
+    if (mitarbeiterId) {
+      return ApiService.get(`/arbeitszeiten-plan/range?mitarbeiter_id=${mitarbeiterId}&${params}`);
+    } else if (lehrlingId) {
+      return ApiService.get(`/arbeitszeiten-plan/range?lehrling_id=${lehrlingId}&${params}`);
+    }
+    throw new Error('Entweder mitarbeiterId oder lehrlingId erforderlich');
+  }
+
+  // Wochentag-Muster erstellen/aktualisieren
+  static async upsertWochentagMuster(data) {
+    return ApiService.post('/arbeitszeiten-plan/muster', data);
+  }
+
+  // Spezifischen Datumseintrag erstellen
+  static async createDateEntry(data) {
+    return ApiService.post('/arbeitszeiten-plan/datum', data);
+  }
+
+  // Eintrag aktualisieren
+  static async update(id, data) {
+    return ApiService.put(`/arbeitszeiten-plan/${id}`, data);
+  }
+
+  // Eintrag löschen
+  static async delete(id) {
+    return ApiService.delete(`/arbeitszeiten-plan/${id}`);
+  }
+
+  // Auf Standard zurücksetzen
+  static async resetToStandard(typ, id) {
+    return ApiService.delete(`/arbeitszeiten-plan/reset/${typ}/${id}`);
+  }
+
+  // Einzelnen Eintrag laden
+  static async getById(id) {
+    return ApiService.get(`/arbeitszeiten-plan/${id}`);
   }
 }
 
@@ -806,6 +959,28 @@ class KIPlanungService {
   }
 }
 
+class SchichtTemplateService {
+  static async getAll() {
+    return ApiService.get('/schicht-templates');
+  }
+
+  static async getById(id) {
+    return ApiService.get(`/schicht-templates/${id}`);
+  }
+
+  static async create(template) {
+    return ApiService.post('/schicht-templates', template);
+  }
+
+  static async update(id, template) {
+    return ApiService.put(`/schicht-templates/${id}`, template);
+  }
+
+  static async delete(id) {
+    return ApiService.delete(`/schicht-templates/${id}`);
+  }
+}
+
 // Global verfügbar machen (für Vite-Kompatibilität)
 window.ApiService = ApiService;
 window.KundenService = KundenService;
@@ -821,3 +996,4 @@ window.PhasenService = PhasenService;
 window.AIService = AIService;
 window.TeileBestellService = TeileBestellService;
 window.KIPlanungService = KIPlanungService;
+window.SchichtTemplateService = SchichtTemplateService;

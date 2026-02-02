@@ -467,19 +467,14 @@ class KundenController {
    */
   static async getDropdownData(req, res) {
     try {
-      const { db } = require('../config/database');
+      const { allAsync } = require('../utils/dbHelper');
       
-      const kunden = await new Promise((resolve, reject) => {
-        db.all(`
-          SELECT id, name, kennzeichen
-          FROM kunden
-          ORDER BY name ASC
-          LIMIT 200
-        `, [], (err, rows) => {
-          if (err) reject(err);
-          else resolve(rows || []);
-        });
-      });
+      const kunden = await allAsync(`
+        SELECT id, name, kennzeichen
+        FROM kunden
+        ORDER BY name ASC
+        LIMIT 200
+      `, []);
       
       res.json(kunden);
     } catch (err) {
