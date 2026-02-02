@@ -14,7 +14,8 @@ const migrations = [
   require('./008_ersatzautos_sperren'),
   require('./009_performance_indizes'),
   require('./010_ki_training_quality'),
-  require('./011_ki_external_url')
+  require('./011_ki_external_url'),
+  require('./012_berechnete_zeiten')
 ];
 
 /**
