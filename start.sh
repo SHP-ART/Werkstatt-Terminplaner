@@ -1,10 +1,9 @@
 #!/bin/bash
 
-# Werkstatt Terminplaner - Frontend Start Script (Vite, Port 3000)
-# Für macOS und Linux
+# Werkstatt Terminplaner - Backend Start Script (Port 3001)
 
 echo "=========================================="
-echo "  Werkstatt Terminplaner Frontend       "
+echo "  Backend-Server wird gestartet (3001)   "
 echo "=========================================="
 echo ""
 
@@ -29,9 +28,18 @@ if ! command -v npm &> /dev/null; then
     exit 1
 fi
 
-# Prüfe ob Frontend-Port bereits belegt ist
-if lsof -Pi :3000 -sTCP:LISTEN -t >/dev/null 2>&1 ; then
-    echo -e "${YELLOW}[WARNUNG]${NC} Port 3000 (Frontend) ist bereits belegt!"
+# Backend-Dependencies installieren (falls noch nicht geschehen)
+if [ ! -d "backend/node_modules" ]; then
+    echo -e "${YELLOW}[INFO]${NC} Installiere Backend-Dependencies..."
+    cd backend
+    npm install > /dev/null 2>&1
+    cd ..
+    echo -e "${GREEN}[OK]${NC} Backend-Dependencies installiert"
+fi
+
+# Prüfe ob Port bereits belegt ist
+if lsof -Pi :3001 -sTCP:LISTEN -t >/dev/null 2>&1 ; then
+    echo -e "${YELLOW}[WARNUNG]${NC} Port 3001 (Backend) ist bereits belegt!"
     echo "Stoppen Sie zuerst den laufenden Server mit ./stop.sh"
     exit 1
 fi
@@ -39,55 +47,80 @@ fi
 # Erstelle Logs-Verzeichnis
 mkdir -p logs
 
-# Frontend-Dependencies installieren (falls noch nicht geschehen)
-if [ ! -d "frontend/node_modules" ]; then
-    echo -e "${YELLOW}[INFO]${NC} Installiere Frontend-Dependencies..."
+# Frontend bauen (nur wenn dist fehlt)
+if [ ! -f "frontend/dist/index.html" ]; then
+    echo -e "${YELLOW}[INFO]${NC} Frontend-Build (Vite) wird erstellt..."
+    if [ ! -d "frontend/node_modules" ]; then
+        echo -e "${YELLOW}[INFO]${NC} Installiere Frontend-Dependencies..."
+        cd frontend
+        npm install > /dev/null 2>&1
+        cd ..
+        echo -e "${GREEN}[OK]${NC} Frontend-Dependencies installiert"
+    fi
     cd frontend
-    npm install > /dev/null 2>&1
+    npm run build > /dev/null 2>&1
+    BUILD_STATUS=$?
     cd ..
-    echo -e "${GREEN}[OK]${NC} Frontend-Dependencies installiert"
+    if [ $BUILD_STATUS -ne 0 ]; then
+        echo -e "${RED}[ERROR]${NC} Frontend-Build fehlgeschlagen!"
+        exit 1
+    fi
+    echo -e "${GREEN}[OK]${NC} Frontend-Build erstellt"
 fi
 
-# Starte Frontend
-echo -e "${BLUE}[START]${NC} Starte Frontend-Server auf Port 3000..."
-cd frontend
-nohup npm run dev > ../logs/frontend.log 2>&1 &
-FRONTEND_PID=$!
-echo $FRONTEND_PID > ../logs/frontend.pid
+# Speichere aktuelles Verzeichnis für DATA_DIR
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+BACKEND_DIR="$SCRIPT_DIR/backend"
+
+# Starte Backend mit DATA_DIR auf das Backend-Verzeichnis gesetzt (dort liegt die Datenbank)
+echo -e "${BLUE}[START]${NC} Starte Backend-Server auf Port 3001..."
+echo -e "${BLUE}[INFO]${NC} Daten-Verzeichnis: $BACKEND_DIR"
+cd backend
+# WICHTIG: node src/server.js statt npm start (npm start startet Electron!)
+DATA_DIR="$BACKEND_DIR" nohup node src/server.js > ../logs/backend.log 2>&1 &
+BACKEND_PID=$!
+echo $BACKEND_PID > ../logs/backend.pid
 cd ..
 sleep 2
 
-# Prüfe ob Frontend läuft
-if ps -p $FRONTEND_PID > /dev/null; then
-    echo -e "${GREEN}[OK]${NC} Frontend läuft (PID: $FRONTEND_PID)"
+# Prüfe ob Backend läuft
+if ps -p $BACKEND_PID > /dev/null; then
+    echo -e "${GREEN}[OK]${NC} Backend läuft (PID: $BACKEND_PID)"
 else
-    echo -e "${RED}[ERROR]${NC} Frontend konnte nicht gestartet werden!"
-    echo "Siehe logs/frontend.log für Details"
-    # Stoppe Backend wenn Frontend fehlschlägt
-    kill $BACKEND_PID 2>/dev/null
+    echo -e "${RED}[ERROR]${NC} Backend konnte nicht gestartet werden!"
+    echo "Siehe logs/backend.log für Details"
     exit 1
 fi
 
 echo ""
 echo -e "${GREEN}=========================================="
-echo "  Frontend erfolgreich gestartet!        "
+echo "  Backend erfolgreich gestartet!         "
 echo "==========================================${NC}"
 echo ""
-echo "Frontend:  http://localhost:3000"
-echo ""
-echo "Logs:"
-echo "  Frontend: logs/frontend.log"
-echo ""
-echo "Zum Stoppen: ./stop.sh"
-echo "Backend separat starten: ./start_server.sh"
+echo "Backend:   http://localhost:3001"
+echo "API:       http://localhost:3001/api"
 echo ""
 
-# IP-Adresse anzeigen (für Netzwerkzugriff)
-if command -v ifconfig &> /dev/null; then
-    IP=$(ifconfig | grep "inet " | grep -v 127.0.0.1 | awk '{print $2}' | head -1)
-    if [ ! -z "$IP" ]; then
-        echo "Netzwerkzugriff:"
-        echo "  http://$IP:3000"
-        echo ""
-    fi
+# Starte Electron App
+echo -e "${BLUE}[START]${NC} Starte Electron-Oberfläche..."
+cd backend
+nohup ./node_modules/.bin/electron . > ../logs/electron.log 2>&1 &
+ELECTRON_PID=$!
+echo $ELECTRON_PID > ../logs/electron.pid
+cd ..
+sleep 2
+
+if ps -p $ELECTRON_PID > /dev/null; then
+    echo -e "${GREEN}[OK]${NC} Electron läuft (PID: $ELECTRON_PID)"
+else
+    echo -e "${YELLOW}[WARNUNG]${NC} Electron konnte nicht gestartet werden"
+    echo "Die Anwendung ist trotzdem unter http://localhost:3001 erreichbar"
 fi
+
+echo ""
+echo "Logs:"
+echo "  Backend:  logs/backend.log"
+echo "  Electron: logs/electron.log"
+echo ""
+echo "Zum Stoppen: ./stop.sh"
+echo ""

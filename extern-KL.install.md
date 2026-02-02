@@ -57,7 +57,7 @@ Damit die Auto-Erkennung (mDNS) funktioniert und die neue UI sichtbar ist:
 ```bash
 cd backend && npm install
 cd ../frontend && npm run build
-./start_server.sh
+./start.sh
 ```
 
 Hinweis: Die Auto-Erkennung der KI zum Backend nutzt mDNS (`_werkstatt-backend._tcp`).

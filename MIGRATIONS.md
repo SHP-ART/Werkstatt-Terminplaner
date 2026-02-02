@@ -36,7 +36,7 @@ Schema-Version aktuell: X
 Stop the backend and restore the backup:
 
 ```bash
-./stop_server.sh
+./stop.sh
 cp backup_YYYYMMDD.db backend/database/werkstatt.db
 ```
 

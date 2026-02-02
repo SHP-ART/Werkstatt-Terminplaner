@@ -143,7 +143,7 @@ node test-sql-injection-verify.js
 
 ### Server-Start mit neuen Features
 ```bash
-./start_server.sh
+./start.sh
 ```
 **Ergebnis:** ✅ Server startet erfolgreich
 - Environment Check funktioniert

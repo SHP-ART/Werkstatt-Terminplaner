@@ -461,6 +461,6 @@ apiRequest('GET', '/api/kunden')
   })
   .catch(err => {
     log('red', '✗ Server nicht erreichbar');
-    log('red', '  Bitte starte den Server: ./start_server.sh\n');
+    log('red', '  Bitte starte den Server: ./start.sh\n');
     process.exit(1);
   });

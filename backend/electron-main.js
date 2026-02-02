@@ -22,7 +22,7 @@ let BackupController = null;
 let mainWindow;
 let statsInterval;
 let server = null;
-let serverExternal = false; // Flag: Server läuft extern (z.B. über start_server.sh)
+let serverExternal = false; // Flag: Server läuft extern (z.B. über start.sh)
 let serverStats = {
   totalRequests: 0,
   requestsLastMinute: [],

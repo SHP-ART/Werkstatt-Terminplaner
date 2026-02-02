@@ -269,6 +269,6 @@ apiRequest('GET', '/api/kunden')
   })
   .catch(err => {
     log('red', '✗ Server not running');
-    log('red', '  Start with: ./start_server.sh\n');
+    log('red', '  Start with: ./start.sh\n');
     process.exit(1);
   });

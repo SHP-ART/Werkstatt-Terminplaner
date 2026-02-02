@@ -9,9 +9,10 @@ Kurzleitfaden für neue Beiträge zum Werkstatt-Terminplaner. Fokus: Klarheit, k
 - Start-/Stop-Skripte im Repo-Wurzelverzeichnis (`start.sh`, `stop.sh`, `.bat`-Varianten) kapseln Setup und Ports.
 
 ## Build, Test, and Development Commands
-- Komplettstart: `./start.sh` (macOS/Linux) oder `start.bat` (Windows) – installiert fehlende Dependencies, startet Backend (3001) und Frontend (3000) und schreibt Logs.
+- Komplettstart: `./start.sh` (macOS/Linux) oder `start.bat` (Windows) – installiert fehlende Dependencies, startet Backend (3001) mit Electron-UI und schreibt Logs.
+- Backend isoliert: `./start_server_only.sh` (nur Backend ohne Electron)
 - Backend: `cd backend && npm install` (erstmalig), danach `npm start` für Produktion oder `npm run dev` mit nodemon-Reload.
-- Frontend: `cd frontend && python3 -m http.server 3000` (Windows: `python -m http.server 3000`); alternativ über die Root-Skripte starten.
+- Stop: `./stop.sh` (stoppt Backend + Electron)
 
 ## Coding Style & Naming
 - JavaScript mit 2 Leerzeichen, Semikolons beibehalten; CommonJS (`require/module.exports`) im Backend.

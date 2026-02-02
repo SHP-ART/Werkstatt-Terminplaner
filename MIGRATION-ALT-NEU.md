@@ -158,7 +158,7 @@ Die Migration prüft, ob Felder bereits existieren und überspringt sie.
 
 **Oder Server neu starten:**
 ```bash
-./start_server.sh
+./start.sh
 ```
 
 ### Problem: "Keine Kapazität angezeigt"

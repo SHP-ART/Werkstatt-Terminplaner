@@ -295,6 +295,6 @@ apiRequest('GET', '/api/kunden')
   })
   .catch(err => {
     log('red', '✗ Server not running or not reachable');
-    log('red', '  Please start the server first: ./start_server.sh\n');
+    log('red', '  Please start the server first: ./start.sh\n');
     process.exit(1);
   });

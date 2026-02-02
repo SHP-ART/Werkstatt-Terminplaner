@@ -244,12 +244,12 @@ Entwickelt für den täglichen Werkstatt-Einsatz mit Fokus auf Benutzerfreundlic
 
 **Installation:**
 ```bash
-./start_server.sh
+./start.sh
 ```
 
 **Update von v1.0-1.3:**
 ```bash
-./start_server.sh  # Migration läuft automatisch
+./start.sh  # Migration läuft automatisch
 cd backend
 node convert-old-data.js  # Optional: Alte Daten konvertieren
 ```
