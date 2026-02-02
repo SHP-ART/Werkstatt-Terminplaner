@@ -1,13 +1,16 @@
 /**
- * Migration 013: Erstellt die termine_arbeiten Tabelle
+ * Migration 013: Erstellt die termine_arbeiten Tabelle + automatische Datenmigration
  * 
  * Ersetzt das JSON-basierte arbeitszeiten_details Feld durch eine relationale Struktur.
  * Enthält alle Felder für Arbeitsdetails plus die 6 berechneten Zeitfelder.
+ * Migriert automatisch alle existierenden Daten.
  */
+
+const { berechneArbeitszeitFuerSpeicherung } = require('../src/utils/zeitBerechnung');
 
 module.exports = {
   version: 13,
-  description: 'Erstellt termine_arbeiten Tabelle für relationale Arbeitszeit-Speicherung',
+  description: 'Erstellt termine_arbeiten Tabelle für relationale Arbeitszeit-Speicherung + Datenmigration',
   
   up: (db) => {
     return new Promise((resolve, reject) => {
@@ -86,7 +89,19 @@ module.exports = {
                 }
                 
                 console.log('✓ termine_arbeiten Tabelle mit Indizes erstellt');
-                resolve();
+                
+                // AUTOMATISCHE DATENMIGRATION
+                migrateExistingData(db)
+                  .then(() => {
+                    console.log('✓ Datenmigration abgeschlossen');
+                    resolve();
+                  })
+                  .catch((migrateErr) => {
+                    console.error('❌ Fehler bei Datenmigration:', migrateErr);
+                    // Migration trotzdem als erfolgreich markieren - Tabelle ist erstellt
+                    // Daten können manuell migriert werden
+                    resolve();
+                  });
               });
             });
           });
@@ -110,3 +125,194 @@ module.exports = {
     });
   }
 };
+
+/**
+ * Migriert existierende Daten von arbeitszeiten_details → termine_arbeiten
+ */
+async function migrateExistingData(db) {
+  return new Promise((resolve, reject) => {
+    // Prüfe ob schon Daten existieren
+    db.get('SELECT COUNT(*) as count FROM termine_arbeiten', (err, row) => {
+      if (err) {
+        reject(err);
+        return;
+      }
+      
+      if (row.count > 0) {
+        console.log(`ℹ️  Datenmigration übersprungen: ${row.count} Einträge bereits vorhanden`);
+        resolve();
+        return;
+      }
+      
+      // Lade Termine mit arbeitszeiten_details
+      db.all(`
+        SELECT id, arbeitszeiten_details 
+        FROM termine 
+        WHERE arbeitszeiten_details IS NOT NULL 
+          AND arbeitszeiten_details != ''
+          AND arbeitszeiten_details != '[]'
+      `, (err, termine) => {
+        if (err) {
+          reject(err);
+          return;
+        }
+        
+        if (!termine || termine.length === 0) {
+          console.log('ℹ️  Keine Arbeitszeitdaten zum Migrieren gefunden');
+          resolve();
+          return;
+        }
+        
+        console.log(`🔄 Migriere ${termine.length} Termine...`);
+        
+        // Lade Personen-Daten für Berechnungen
+        loadPersonenData(db).then(personen => {
+          let migratedCount = 0;
+          let errorCount = 0;
+          
+          const insertStmt = db.prepare(`
+            INSERT INTO termine_arbeiten (
+              termin_id, arbeit, zeit, mitarbeiter_id, lehrling_id,
+              startzeit, reihenfolge,
+              berechnete_dauer_minuten, berechnete_endzeit,
+              faktor_nebenzeit, faktor_aufgabenbewaeltigung,
+              pause_enthalten, pause_minuten
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          `);
+          
+          termine.forEach(termin => {
+            try {
+              const arbeitszeitenObj = JSON.parse(termin.arbeitszeiten_details || '{}');
+              const arbeitKeys = Object.keys(arbeitszeitenObj).filter(key => !key.startsWith('_'));
+              
+              if (arbeitKeys.length === 0) return;
+              
+              // Standard-Person aus Meta-Daten
+              const gesamtPerson = arbeitszeitenObj._gesamt_mitarbeiter_id || null;
+              let defaultMitarbeiterId = null;
+              let defaultLehrlingId = null;
+              
+              if (gesamtPerson) {
+                if (gesamtPerson.type === 'mitarbeiter') {
+                  defaultMitarbeiterId = gesamtPerson.id;
+                } else if (gesamtPerson.type === 'lehrling') {
+                  defaultLehrlingId = gesamtPerson.id;
+                }
+              }
+              
+              let reihenfolge = 0;
+              arbeitKeys.forEach(arbeitName => {
+                const arbeitData = arbeitszeitenObj[arbeitName];
+                
+                let zeit = 0;
+                let mitarbeiterId = defaultMitarbeiterId;
+                let lehrlingId = defaultLehrlingId;
+                let startzeit = arbeitszeitenObj._gesamt_startzeit || null;
+                
+                if (typeof arbeitData === 'number') {
+                  zeit = arbeitData;
+                } else if (typeof arbeitData === 'object' && arbeitData !== null) {
+                  zeit = arbeitData.zeit || 0;
+                  mitarbeiterId = arbeitData.mitarbeiter_id || defaultMitarbeiterId;
+                  lehrlingId = arbeitData.lehrling_id || defaultLehrlingId;
+                  startzeit = arbeitData.startzeit || startzeit;
+                  
+                  if (arbeitData.type === 'mitarbeiter' && arbeitData.mitarbeiter_id) {
+                    mitarbeiterId = arbeitData.mitarbeiter_id;
+                    lehrlingId = null;
+                  } else if (arbeitData.type === 'lehrling' && arbeitData.lehrling_id) {
+                    lehrlingId = arbeitData.lehrling_id;
+                    mitarbeiterId = null;
+                  }
+                }
+                
+                if ((!mitarbeiterId && !lehrlingId) || !zeit || zeit <= 0) {
+                  errorCount++;
+                  return;
+                }
+                
+                // Berechne Zeiten
+                let berechneteWerte = {
+                  berechnete_dauer_minuten: zeit,
+                  berechnete_endzeit: null,
+                  faktor_nebenzeit: null,
+                  faktor_aufgabenbewaeltigung: null,
+                  pause_enthalten: 0,
+                  pause_minuten: 0
+                };
+                
+                let person = null;
+                if (mitarbeiterId) {
+                  person = personen.mitarbeiter.find(m => m.id === mitarbeiterId);
+                } else if (lehrlingId) {
+                  person = personen.lehrlinge.find(l => l.id === lehrlingId);
+                }
+                
+                if (person && startzeit && zeit) {
+                  try {
+                    berechneteWerte = berechneArbeitszeitFuerSpeicherung(person, startzeit, zeit);
+                  } catch (calcErr) {
+                    // Verwende Default-Werte bei Berechnungsfehlern
+                  }
+                }
+                
+                insertStmt.run(
+                  termin.id, arbeitName, zeit, mitarbeiterId, lehrlingId,
+                  startzeit, reihenfolge++,
+                  berechneteWerte.berechnete_dauer_minuten,
+                  berechneteWerte.berechnete_endzeit,
+                  berechneteWerte.faktor_nebenzeit,
+                  berechneteWerte.faktor_aufgabenbewaeltigung,
+                  berechneteWerte.pause_enthalten ? 1 : 0,
+                  berechneteWerte.pause_minuten,
+                  (err) => {
+                    if (err) errorCount++;
+                    else migratedCount++;
+                  }
+                );
+              });
+            } catch (parseErr) {
+              errorCount++;
+            }
+          });
+          
+          insertStmt.finalize((err) => {
+            if (err) {
+              reject(err);
+              return;
+            }
+            
+            console.log(`✅ Migriert: ${migratedCount} Arbeitszeiten (${errorCount} Fehler)`);
+            resolve();
+          });
+        }).catch(reject);
+      });
+    });
+  });
+}
+
+/**
+ * Lädt alle Personen-Daten
+ */
+function loadPersonenData(db) {
+  return new Promise((resolve, reject) => {
+    const personen = { mitarbeiter: [], lehrlinge: [] };
+    
+    db.all('SELECT * FROM mitarbeiter', (err, mitarbeiter) => {
+      if (err) {
+        reject(err);
+        return;
+      }
+      personen.mitarbeiter = mitarbeiter || [];
+      
+      db.all('SELECT * FROM lehrlinge', (err, lehrlinge) => {
+        if (err) {
+          reject(err);
+          return;
+        }
+        personen.lehrlinge = lehrlinge || [];
+        resolve(personen);
+      });
+    });
+  });
+}
