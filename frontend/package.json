@@ -1,6 +1,6 @@
 {
   "name": "werkstatt-terminplaner-frontend",
-  "version": "1.4.0",
+  "version": "1.4.1",
   "description": "Frontend für Werkstatt Terminplaner",
   "main": "main.js",
   "scripts": {

@@ -655,6 +655,52 @@
       return `${String(endH).padStart(2, '0')}:${String(endM).padStart(2, '0')}`;
     }
 
+    /**
+     * Prüft ob eine Person aktuell in der Mittagspause ist
+     * Berücksichtigt die 6h-Regel: Pause nur bei >= 6h Arbeitszeit pro Tag
+     */
+    function istPersonAktuellInPause(person, aktuelleZeit = null) {
+      if (!person) return false;
+
+      // Berechne tägliche Arbeitszeit
+      const wochenStunden = person.wochenarbeitszeit_stunden || person.arbeitsstunden_pro_tag * (person.arbeitstage_pro_woche || 5);
+      const arbeitstage = person.arbeitstage_pro_woche || 5;
+      const taeglicheStunden = wochenStunden / arbeitstage;
+
+      // 6h-Regel: Keine Pause bei unter 6h Arbeitszeit pro Tag
+      if (taeglicheStunden < 6) {
+        return false;
+      }
+
+      // Prüfe ob Pausenzeiten definiert sind
+      const pauseStart = person.mittagspause_start;
+      const pauseDauer = person.pausenzeit_minuten || 30;
+
+      if (!pauseStart || pauseDauer <= 0) {
+        return false;
+      }
+
+      // Aktuelle Zeit bestimmen
+      let jetztZeit = aktuelleZeit;
+      if (!jetztZeit) {
+        const jetzt = new Date();
+        const h = jetzt.getHours();
+        const m = jetzt.getMinutes();
+        jetztZeit = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+      }
+
+      // Berechne Pause-Ende
+      const [pauseH, pauseM] = pauseStart.split(':').map(Number);
+      const pauseStartMinuten = pauseH * 60 + pauseM;
+      const pauseEndeMinuten = pauseStartMinuten + pauseDauer;
+      const pauseEndeH = Math.floor(pauseEndeMinuten / 60);
+      const pauseEndeM = pauseEndeMinuten % 60;
+      const pauseEnde = `${String(pauseEndeH).padStart(2, '0')}:${String(pauseEndeM).padStart(2, '0')}`;
+
+      // Prüfe ob aktuelle Zeit innerhalb des Pausenfensters liegt
+      return jetztZeit >= pauseStart && jetztZeit < pauseEnde;
+    }
+
     function berechneRestzeit(termin, person, isLehrling, globaleNebenzeit) {
       const startzeit = termin.startzeit || termin.bring_zeit;
       if (!startzeit) return '--:--';
@@ -766,10 +812,16 @@
         inBerufsschule = isLehrlingInBerufsschule(person, formatDateLocal(new Date()));
       }
 
+      // Prüfe Mittagspause (6h-Regel)
+      const inPause = istPersonAktuellInPause(person, jetztZeit);
+
       // Badge
       let badgeClass = 'frei';
       let badgeText = 'Frei';
-      if (inBerufsschule) {
+      if (inPause) {
+        badgeClass = 'pause';
+        badgeText = '🍽️ Pause';
+      } else if (inBerufsschule) {
         badgeClass = 'pause';
         badgeText = 'Berufsschule';
       } else if (aktuellerAuftrag) {
@@ -780,7 +832,14 @@
       // Body Content
       let bodyContent = '';
 
-      if (inBerufsschule) {
+      if (inPause) {
+        bodyContent = `
+          <div class="schule-info">
+            <div class="schule-icon">🍽️</div>
+            <div class="schule-text">Mittagspause</div>
+          </div>
+        `;
+      } else if (inBerufsschule) {
         bodyContent = `
           <div class="schule-info">
             <div class="schule-icon">📚</div>

@@ -35,15 +35,45 @@ class AbwesenheitenController {
     }
   }
 
+  static async getByMitarbeiterId(req, res) {
+    try {
+      const { id } = req.params;
+      const rows = await AbwesenheitenModel.getByMitarbeiterId(id);
+      res.json(rows || []);
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  }
+
+  static async getByLehrlingId(req, res) {
+    try {
+      const { id } = req.params;
+      const rows = await AbwesenheitenModel.getByLehrlingId(id);
+      res.json(rows || []);
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  }
+
   static async getByDateRange(req, res) {
     try {
-      const { von_datum, bis_datum } = req.query;
+      const { datum_von, datum_bis } = req.query;
 
-      if (!von_datum || !bis_datum) {
-        return res.status(400).json({ error: 'von_datum und bis_datum sind erforderlich' });
+      if (!datum_von || !datum_bis) {
+        return res.status(400).json({ error: 'datum_von und datum_bis sind erforderlich' });
       }
 
-      const rows = await AbwesenheitenModel.getByDateRange(von_datum, bis_datum);
+      const rows = await AbwesenheitenModel.getByDateRange(datum_von, datum_bis);
+      res.json(rows || []);
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  }
+
+  static async getForDate(req, res) {
+    try {
+      const { datum } = req.params;
+      const rows = await AbwesenheitenModel.getForDate(datum);
       res.json(rows || []);
     } catch (err) {
       res.status(500).json({ error: err.message });
@@ -52,25 +82,49 @@ class AbwesenheitenController {
 
   static async create(req, res) {
     try {
-      const { mitarbeiter_id, lehrling_id, typ, von_datum, bis_datum } = req.body;
+      const { mitarbeiter_id, lehrling_id, typ, datum_von, datum_bis, beschreibung } = req.body;
 
       // Validierung
-      if (!typ || !von_datum || !bis_datum) {
-        return res.status(400).json({ error: 'typ, von_datum und bis_datum sind erforderlich' });
+      if (!typ || !datum_von || !datum_bis) {
+        return res.status(400).json({ error: 'typ, datum_von und datum_bis sind erforderlich' });
       }
 
       if (!mitarbeiter_id && !lehrling_id) {
         return res.status(400).json({ error: 'Entweder mitarbeiter_id oder lehrling_id muss angegeben werden' });
       }
 
-      if (typ !== 'urlaub' && typ !== 'krank') {
-        return res.status(400).json({ error: 'typ muss "urlaub" oder "krank" sein' });
+      const validTypes = ['urlaub', 'krank', 'berufsschule', 'lehrgang'];
+      if (!validTypes.includes(typ)) {
+        return res.status(400).json({ error: `typ muss einer von ${validTypes.join(', ')} sein` });
       }
 
       const result = await AbwesenheitenModel.create(req.body);
       res.json({
         message: 'Abwesenheit erstellt',
-        id: result.lastID
+        id: result.id
+      });
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  }
+
+  static async update(req, res) {
+    try {
+      const { id } = req.params;
+      const { typ } = req.body;
+
+      // Typ-Validierung wenn angegeben
+      if (typ) {
+        const validTypes = ['urlaub', 'krank', 'berufsschule', 'lehrgang'];
+        if (!validTypes.includes(typ)) {
+          return res.status(400).json({ error: `typ muss einer von ${validTypes.join(', ')} sein` });
+        }
+      }
+
+      const result = await AbwesenheitenModel.update(id, req.body);
+      res.json({
+        message: 'Abwesenheit aktualisiert',
+        changes: result.changes
       });
     } catch (err) {
       res.status(500).json({ error: err.message });
@@ -80,8 +134,11 @@ class AbwesenheitenController {
   static async delete(req, res) {
     try {
       const { id } = req.params;
-      await AbwesenheitenModel.delete(id);
-      res.json({ message: 'Abwesenheit gelöscht' });
+      const result = await AbwesenheitenModel.delete(id);
+      res.json({ 
+        message: 'Abwesenheit gelöscht',
+        changes: result.changes 
+      });
     } catch (err) {
       res.status(500).json({ error: err.message });
     }

@@ -1578,11 +1578,18 @@
                     <div style="margin-bottom: 15px;">
                         <button class="btn btn-primary" onclick="app.addMitarbeiter()">➕ Neuer Mitarbeiter</button>
                     </div>
-                    <table id="mitarbeiterTable">
+                    <table id="mitarbeiterTable" style="font-size: 0.9em;">
                         <thead>
                             <tr>
                                 <th>Name</th>
-                                <th>Arbeitsstunden/Tag</th>
+                                <th title="Stunden pro normalen Arbeitstag (Mo-Fr)">Std/Tag</th>
+                                <th title="Gesamtarbeitszeit pro Woche">Woche (h)</th>
+                                <th title="Anzahl Arbeitstage Mo-Fr">Arbeitstage</th>
+                                <th title="Pausenzeit pro Tag in Minuten">Pause (Min)</th>
+                                <th title="Samstag als Arbeitstag aktivieren">Sa aktiv</th>
+                                <th title="Samstag Startzeit">Sa Start</th>
+                                <th title="Samstag Endzeit">Sa Ende</th>
+                                <th title="Samstag Pausenzeit in Minuten">Sa Pause</th>
                                 <th>Mittagspause</th>
                                 <th>Nur Service</th>
                                 <th>Aktiv</th>
@@ -1598,11 +1605,18 @@
                     <div style="margin-bottom: 15px;">
                         <button class="btn btn-primary" onclick="app.addLehrling()">➕ Neuer Lehrling</button>
                     </div>
-                    <table id="lehrlingeTable">
+                    <table id="lehrlingeTable" style="font-size: 0.9em;">
                         <thead>
                             <tr>
                                 <th>Name</th>
-                                <th>Aufgabenbewältigung (%)</th>
+                                <th title="Prozentuale Aufgabenbewältigung">Aufgabe (%)</th>
+                                <th title="Gesamtarbeitszeit pro Woche">Woche (h)</th>
+                                <th title="Anzahl Arbeitstage Mo-Fr">Arbeitstage</th>
+                                <th title="Pausenzeit pro Tag in Minuten">Pause (Min)</th>
+                                <th title="Samstag als Arbeitstag aktivieren">Sa aktiv</th>
+                                <th title="Samstag Startzeit">Sa Start</th>
+                                <th title="Samstag Endzeit">Sa Ende</th>
+                                <th title="Samstag Pausenzeit in Minuten">Sa Pause</th>
                                 <th>Mittagspause</th>
                                 <th>📚 Berufsschul-KW</th>
                                 <th>Aktiv</th>
@@ -1621,8 +1635,9 @@
                     <h3>Abwesenheiten</h3>
 
                     <div class="sub-tabs">
-                        <button class="sub-tab-button active" data-subtab="urlaubAbwesenheit">Urlaub</button>
-                        <button class="sub-tab-button" data-subtab="krankAbwesenheit">Krank</button>
+                        <button class="sub-tab-button active" data-subtab="urlaubAbwesenheit">🏖️ Urlaub</button>
+                        <button class="sub-tab-button" data-subtab="krankAbwesenheit">🤒 Krank</button>
+                        <button class="sub-tab-button" data-subtab="lehrgangAbwesenheit">📖 Lehrgang</button>
                         <button class="sub-tab-button" data-subtab="berufsschuleAbwesenheit">📚 Berufsschule</button>
                     </div>
 
@@ -1647,6 +1662,10 @@
                                     <input type="date" id="urlaubBisDatum" required>
                                 </div>
                             </div>
+                            <div class="form-group">
+                                <label>Beschreibung (optional):</label>
+                                <textarea id="urlaubBeschreibung" rows="2" placeholder="z.B. Sommerurlaub, Familienfeier"></textarea>
+                            </div>
                             <button type="submit" class="btn btn-primary">Urlaub eintragen</button>
                         </form>
 
@@ -1658,6 +1677,7 @@
                                         <th>Person</th>
                                         <th>Von</th>
                                         <th>Bis</th>
+                                        <th>Beschreibung</th>
                                         <th>Aktionen</th>
                                     </tr>
                                 </thead>
@@ -1687,7 +1707,10 @@
                                     <input type="date" id="krankBisDatum" required>
                                 </div>
                             </div>
-                            <p class="hint">Krankmeldungen können nur für die nächsten 7 Tage eingetragen werden.</p>
+                            <div class="form-group">
+                                <label>Beschreibung (optional):</label>
+                                <textarea id="krankBeschreibung" rows="2" placeholder="z.B. Grippe, Arzttermin"></textarea>
+                            </div>
                             <button type="submit" class="btn btn-primary">Krankmeldung eintragen</button>
                         </form>
 
@@ -1699,6 +1722,52 @@
                                         <th>Person</th>
                                         <th>Von</th>
                                         <th>Bis</th>
+                                        <th>Beschreibung</th>
+                                        <th>Aktionen</th>
+                                    </tr>
+                                </thead>
+                                <tbody></tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <div id="lehrgangAbwesenheit" class="sub-tab-content">
+                        <h4>Lehrgang/Fortbildung eintragen</h4>
+                        <form id="lehrgangForm">
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label>Mitarbeiter/Lehrling: *</label>
+                                    <select id="lehrgangPerson" required>
+                                        <option value="">-- Bitte wählen --</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label>Von Datum: *</label>
+                                    <input type="date" id="lehrgangVonDatum" required>
+                                </div>
+                                <div class="form-group">
+                                    <label>Bis Datum: *</label>
+                                    <input type="date" id="lehrgangBisDatum" required>
+                                </div>
+                            </div>
+                            <div class="form-group">
+                                <label>Beschreibung (optional):</label>
+                                <textarea id="lehrgangBeschreibung" rows="2" placeholder="z.B. Schweißlehrgang, Diagnoseschulung"></textarea>
+                            </div>
+                            <button type="submit" class="btn btn-primary">Lehrgang eintragen</button>
+                        </form>
+
+                        <div id="lehrgangListe" style="margin-top: 30px;">
+                            <h4>Eingetragene Lehrgänge</h4>
+                            <table id="lehrgangTable">
+                                <thead>
+                                    <tr>
+                                        <th>Person</th>
+                                        <th>Von</th>
+                                        <th>Bis</th>
+                                        <th>Beschreibung</th>
                                         <th>Aktionen</th>
                                     </tr>
                                 </thead>
@@ -1708,31 +1777,47 @@
                     </div>
 
                     <div id="berufsschuleAbwesenheit" class="sub-tab-content">
-                        <h4>📚 Berufsschul-Turnus für Lehrlinge</h4>
-                        <p class="hint" style="margin-bottom: 20px;">
-                            Hier können Sie für jeden Lehrling die Kalenderwochen hinterlegen, in denen er in der Berufsschule ist.
-                            Der Lehrling wird dann automatisch als "abwesend" markiert.
-                        </p>
-                        
-                        <div id="berufsschulLehrlingeListe">
-                            <table id="berufsschulTable">
+                        <h4>Berufsschule eintragen</h4>
+                        <form id="berufsschuleForm">
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label>Lehrling: *</label>
+                                    <select id="berufsschulePerson" required>
+                                        <option value="">-- Bitte wählen --</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label>Von Datum: *</label>
+                                    <input type="date" id="berufsschuleVonDatum" required>
+                                </div>
+                                <div class="form-group">
+                                    <label>Bis Datum: *</label>
+                                    <input type="date" id="berufsschuleBisDatum" required>
+                                </div>
+                            </div>
+                            <div class="form-group">
+                                <label>Beschreibung (optional):</label>
+                                <textarea id="berufsschuleBeschreibung" rows="2" placeholder="z.B. Blockunterricht, Prüfungswoche"></textarea>
+                            </div>
+                            <button type="submit" class="btn btn-primary">Berufsschule eintragen</button>
+                        </form>
+
+                        <div id="berufsschuleListe" style="margin-top: 30px;">
+                            <h4>Eingetragene Berufsschul-Zeiten</h4>
+                            <table id="berufsschuleTable">
                                 <thead>
                                     <tr>
                                         <th>Lehrling</th>
-                                        <th>Berufsschul-Wochen (KW)</th>
+                                        <th>Von</th>
+                                        <th>Bis</th>
+                                        <th>Beschreibung</th>
                                         <th>Aktionen</th>
                                     </tr>
                                 </thead>
                                 <tbody></tbody>
                             </table>
-                        </div>
-                        
-                        <div style="margin-top: 20px; padding: 15px; background: #e3f2fd; border-radius: 8px;">
-                            <h5 style="margin: 0 0 10px 0;">💡 Hinweis zur Eingabe</h5>
-                            <p style="margin: 0; font-size: 0.9em;">
-                                Geben Sie die Kalenderwochen komma-getrennt ein, z.B. <strong>2,4,6,8,10,12</strong> für einen 2-Wochen-Turnus.<br>
-                                Die aktuelle Kalenderwoche wird in der Zeitleiste automatisch erkannt.
-                            </p>
                         </div>
                     </div>
                 </div>

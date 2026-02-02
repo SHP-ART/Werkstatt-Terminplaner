@@ -373,11 +373,11 @@ class EinstellungenService {
 
   // Neue Methoden für individuelle Mitarbeiter-/Lehrlinge-Abwesenheiten
   static async getAllAbwesenheiten() {
-    return ApiService.get('/abwesenheiten/liste');
+    return ApiService.get('/abwesenheiten');
   }
 
-  static async getAbwesenheitenByDateRange(vonDatum, bisDatum) {
-    return ApiService.get(`/abwesenheiten/range?von_datum=${vonDatum}&bis_datum=${bisDatum}`);
+  static async getAbwesenheitenByDateRange(datumVon, datumBis) {
+    return ApiService.get(`/abwesenheiten/range?datum_von=${datumVon}&datum_bis=${datumBis}`);
   }
 
   static async createAbwesenheit(data) {
@@ -385,11 +385,11 @@ class EinstellungenService {
   }
 
   static async deleteAbwesenheit(id) {
-    return ApiService.delete(`/abwesenheiten/item/${id}`);
+    return ApiService.delete(`/abwesenheiten/${id}`);
   }
 
   static async getAbwesenheitById(id) {
-    return ApiService.get(`/abwesenheiten/item/${id}`);
+    return ApiService.get(`/abwesenheiten/${id}`);
   }
 }
 

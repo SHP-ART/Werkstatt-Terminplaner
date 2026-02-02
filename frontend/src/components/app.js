@@ -687,6 +687,8 @@ class App {
 
     this.bindEventListenerOnce(document.getElementById('urlaubForm'), 'submit', (e) => this.handleUrlaubSubmit(e), 'UrlaubFormSubmit');
     this.bindEventListenerOnce(document.getElementById('krankForm'), 'submit', (e) => this.handleKrankSubmit(e), 'KrankFormSubmit');
+    this.bindEventListenerOnce(document.getElementById('lehrgangForm'), 'submit', (e) => this.handleLehrgangSubmit(e), 'LehrgangFormSubmit');
+    this.bindEventListenerOnce(document.getElementById('berufsschuleForm'), 'submit', (e) => this.handleBerufsschuleSubmit(e), 'BerufsschuleFormSubmit');
 
     const arbeitEingabe = document.getElementById('arbeitEingabe');
     this.bindEventListenerOnce(arbeitEingabe, 'input', (e) => {
@@ -2693,11 +2695,16 @@ class App {
     if (subTabName === 'krankAbwesenheit') {
       this.loadAbwesenheitenPersonen();
       this.loadKrankListe();
-      this.validateKrankDatum();
+    }
+
+    if (subTabName === 'lehrgangAbwesenheit') {
+      this.loadAbwesenheitenPersonen();
+      this.loadLehrgangListe();
     }
 
     if (subTabName === 'berufsschuleAbwesenheit') {
-      this.loadBerufsschulLehrlinge();
+      this.loadAbwesenheitenPersonen();
+      this.loadBerufsschuleListe();
     }
 
     if (subTabName === 'settingsBackup') {
@@ -13886,7 +13893,25 @@ class App {
 
       // Krank-Dropdown befüllen (gleiche Struktur)
       const krankSelect = document.getElementById('krankPerson');
-      krankSelect.innerHTML = urlaubSelect.innerHTML;
+      if (krankSelect) krankSelect.innerHTML = urlaubSelect.innerHTML;
+
+      // Lehrgang-Dropdown befüllen (gleiche Struktur)
+      const lehrgangSelect = document.getElementById('lehrgangPerson');
+      if (lehrgangSelect) lehrgangSelect.innerHTML = urlaubSelect.innerHTML;
+
+      // Berufsschule-Dropdown befüllen (nur Lehrlinge)
+      const berufsschuleSelect = document.getElementById('berufsschulePerson');
+      if (berufsschuleSelect) {
+        berufsschuleSelect.innerHTML = '<option value="">-- Bitte wählen --</option>';
+        if (lehrlinge.length > 0) {
+          lehrlinge.forEach(l => {
+            const option = document.createElement('option');
+            option.value = `l_${l.id}`;
+            option.textContent = l.name;
+            berufsschuleSelect.appendChild(option);
+          });
+        }
+      }
 
     } catch (error) {
       console.error('Fehler beim Laden der Mitarbeiter/Lehrlinge:', error);
@@ -13899,6 +13924,7 @@ class App {
     const personValue = document.getElementById('urlaubPerson').value;
     const vonDatum = document.getElementById('urlaubVonDatum').value;
     const bisDatum = document.getElementById('urlaubBisDatum').value;
+    const beschreibung = document.getElementById('urlaubBeschreibung')?.value || '';
 
     if (!personValue || !vonDatum || !bisDatum) {
       alert('Bitte füllen Sie alle Pflichtfelder aus.');
@@ -13909,8 +13935,9 @@ class App {
     const [typ, id] = personValue.split('_');
     const data = {
       typ: 'urlaub',
-      von_datum: vonDatum,
-      bis_datum: bisDatum
+      datum_von: vonDatum,
+      datum_bis: bisDatum,
+      beschreibung: beschreibung
     };
 
     if (typ === 'ma') {
@@ -13921,7 +13948,7 @@ class App {
 
     try {
       await EinstellungenService.createAbwesenheit(data);
-      alert('Urlaub eingetragen.');
+      this.showToast('Urlaub eingetragen!', 'success');
 
       // Formular zurücksetzen
       document.getElementById('urlaubForm').reset();
@@ -13931,7 +13958,7 @@ class App {
       this.loadDashboard();
     } catch (error) {
       console.error('Fehler beim Eintragen des Urlaubs:', error);
-      alert('Urlaub konnte nicht eingetragen werden: ' + (error.message || 'Unbekannter Fehler'));
+      this.showToast('Urlaub konnte nicht eingetragen werden: ' + (error.message || 'Unbekannter Fehler'), 'error');
     }
   }
 
@@ -13941,23 +13968,10 @@ class App {
     const personValue = document.getElementById('krankPerson').value;
     const vonDatum = document.getElementById('krankVonDatum').value;
     const bisDatum = document.getElementById('krankBisDatum').value;
+    const beschreibung = document.getElementById('krankBeschreibung')?.value || '';
 
     if (!personValue || !vonDatum || !bisDatum) {
       alert('Bitte füllen Sie alle Pflichtfelder aus.');
-      return;
-    }
-
-    // 7-Tage-Validierung
-    const heute = new Date();
-    heute.setHours(0, 0, 0, 0);
-    const maxDatum = new Date(heute);
-    maxDatum.setDate(maxDatum.getDate() + 7);
-
-    const vonDatumDate = new Date(vonDatum);
-    const bisDatumDate = new Date(bisDatum);
-
-    if (vonDatumDate > maxDatum || bisDatumDate > maxDatum) {
-      alert('Krankmeldungen können nur für die nächsten 7 Tage eingetragen werden.');
       return;
     }
 
@@ -13965,8 +13979,9 @@ class App {
     const [typ, id] = personValue.split('_');
     const data = {
       typ: 'krank',
-      von_datum: vonDatum,
-      bis_datum: bisDatum
+      datum_von: vonDatum,
+      datum_bis: bisDatum,
+      beschreibung: beschreibung
     };
 
     if (typ === 'ma') {
@@ -13977,7 +13992,7 @@ class App {
 
     try {
       await EinstellungenService.createAbwesenheit(data);
-      alert('Krankmeldung eingetragen.');
+      this.showToast('Krankmeldung eingetragen!', 'success');
 
       // Formular zurücksetzen
       document.getElementById('krankForm').reset();
@@ -13987,7 +14002,90 @@ class App {
       this.loadDashboard();
     } catch (error) {
       console.error('Fehler beim Eintragen der Krankmeldung:', error);
-      alert('Krankmeldung konnte nicht eingetragen werden: ' + (error.message || 'Unbekannter Fehler'));
+      this.showToast('Krankmeldung konnte nicht eingetragen werden: ' + (error.message || 'Unbekannter Fehler'), 'error');
+    }
+  }
+
+  async handleLehrgangSubmit(e) {
+    e.preventDefault();
+
+    const personValue = document.getElementById('lehrgangPerson').value;
+    const vonDatum = document.getElementById('lehrgangVonDatum').value;
+    const bisDatum = document.getElementById('lehrgangBisDatum').value;
+    const beschreibung = document.getElementById('lehrgangBeschreibung')?.value || '';
+
+    if (!personValue || !vonDatum || !bisDatum) {
+      alert('Bitte füllen Sie alle Pflichtfelder aus.');
+      return;
+    }
+
+    // Person-ID und Typ extrahieren
+    const [typ, id] = personValue.split('_');
+    const data = {
+      typ: 'lehrgang',
+      datum_von: vonDatum,
+      datum_bis: bisDatum,
+      beschreibung: beschreibung
+    };
+
+    if (typ === 'ma') {
+      data.mitarbeiter_id = parseInt(id, 10);
+    } else if (typ === 'l') {
+      data.lehrling_id = parseInt(id, 10);
+    }
+
+    try {
+      await EinstellungenService.createAbwesenheit(data);
+      this.showToast('Lehrgang eingetragen!', 'success');
+
+      // Formular zurücksetzen
+      document.getElementById('lehrgangForm').reset();
+
+      // Liste neu laden
+      this.loadLehrgangListe();
+      this.loadDashboard();
+    } catch (error) {
+      console.error('Fehler beim Eintragen des Lehrgangs:', error);
+      this.showToast('Lehrgang konnte nicht eingetragen werden: ' + (error.message || 'Unbekannter Fehler'), 'error');
+    }
+  }
+
+  async handleBerufsschuleSubmit(e) {
+    e.preventDefault();
+
+    const personValue = document.getElementById('berufsschulePerson').value;
+    const vonDatum = document.getElementById('berufsschuleVonDatum').value;
+    const bisDatum = document.getElementById('berufsschuleBisDatum').value;
+    const beschreibung = document.getElementById('berufsschuleBeschreibung')?.value || '';
+
+    if (!personValue || !vonDatum || !bisDatum) {
+      alert('Bitte füllen Sie alle Pflichtfelder aus.');
+      return;
+    }
+
+    // Person-ID und Typ extrahieren (nur Lehrlinge)
+    const [typ, id] = personValue.split('_');
+    const data = {
+      typ: 'berufsschule',
+      datum_von: vonDatum,
+      datum_bis: bisDatum,
+      beschreibung: beschreibung,
+      lehrling_id: parseInt(id, 10)
+    };
+
+    try {
+      await EinstellungenService.createAbwesenheit(data);
+      this.showToast('Berufsschul-Zeit eingetragen!', 'success');
+
+      // Formular zurücksetzen
+      document.getElementById('berufsschuleForm').reset();
+
+      // Liste neu laden
+      this.loadBerufsschuleListe();
+      this.loadDashboard();
+    } catch (error) {
+      console.error('Fehler beim Eintragen der Berufsschul-Zeit:', error);
+      this.showToast('Berufsschul-Zeit konnte nicht eingetragen werden: ' + (error.message || 'Unbekannter Fehler'), 'error');
     }
   }
 
@@ -14030,10 +14128,11 @@ class App {
       const urlaube = abwesenheiten.filter(a => a.typ === 'urlaub');
 
       const tbody = document.querySelector('#urlaubTable tbody');
+      if (!tbody) return;
       tbody.innerHTML = '';
 
       if (urlaube.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="4" style="text-align: center; color: #666;">Keine Urlaube eingetragen</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; color: #666;">Keine Urlaube eingetragen</td></tr>';
         return;
       }
 
@@ -14043,8 +14142,9 @@ class App {
 
         row.innerHTML = `
           <td>${personName}</td>
-          <td>${this.formatDatum(urlaub.von_datum)}</td>
-          <td>${this.formatDatum(urlaub.bis_datum)}</td>
+          <td>${this.formatDatum(urlaub.datum_von)}</td>
+          <td>${this.formatDatum(urlaub.datum_bis)}</td>
+          <td>${urlaub.beschreibung || '-'}</td>
           <td>
             <button class="btn btn-danger" onclick="app.deleteAbwesenheit(${urlaub.id}, 'urlaub')">Löschen</button>
           </td>
@@ -14062,10 +14162,11 @@ class App {
       const krankmeldungen = abwesenheiten.filter(a => a.typ === 'krank');
 
       const tbody = document.querySelector('#krankTable tbody');
+      if (!tbody) return;
       tbody.innerHTML = '';
 
       if (krankmeldungen.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="4" style="text-align: center; color: #666;">Keine Krankmeldungen eingetragen</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; color: #666;">Keine Krankmeldungen eingetragen</td></tr>';
         return;
       }
 
@@ -14075,8 +14176,9 @@ class App {
 
         row.innerHTML = `
           <td>${personName}</td>
-          <td>${this.formatDatum(krank.von_datum)}</td>
-          <td>${this.formatDatum(krank.bis_datum)}</td>
+          <td>${this.formatDatum(krank.datum_von)}</td>
+          <td>${this.formatDatum(krank.datum_bis)}</td>
+          <td>${krank.beschreibung || '-'}</td>
           <td>
             <button class="btn btn-danger" onclick="app.deleteAbwesenheit(${krank.id}, 'krank')">Löschen</button>
           </td>
@@ -14088,19 +14190,99 @@ class App {
     }
   }
 
+  async loadLehrgangListe() {
+    try {
+      const abwesenheiten = await EinstellungenService.getAllAbwesenheiten();
+      const lehrgaenge = abwesenheiten.filter(a => a.typ === 'lehrgang');
+
+      const tbody = document.querySelector('#lehrgangTable tbody');
+      if (!tbody) return;
+      tbody.innerHTML = '';
+
+      if (lehrgaenge.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; color: #666;">Keine Lehrgänge eingetragen</td></tr>';
+        return;
+      }
+
+      lehrgaenge.forEach(lehrgang => {
+        const row = document.createElement('tr');
+        const personName = lehrgang.mitarbeiter_name || lehrgang.lehrling_name || 'Unbekannt';
+
+        row.innerHTML = `
+          <td>${personName}</td>
+          <td>${this.formatDatum(lehrgang.datum_von)}</td>
+          <td>${this.formatDatum(lehrgang.datum_bis)}</td>
+          <td>${lehrgang.beschreibung || '-'}</td>
+          <td>
+            <button class="btn btn-danger" onclick="app.deleteAbwesenheit(${lehrgang.id}, 'lehrgang')">Löschen</button>
+          </td>
+        `;
+        tbody.appendChild(row);
+      });
+    } catch (error) {
+      console.error('Fehler beim Laden der Lehrgänge:', error);
+    }
+  }
+
+  async loadBerufsschuleListe() {
+    try {
+      const abwesenheiten = await EinstellungenService.getAllAbwesenheiten();
+      const berufsschule = abwesenheiten.filter(a => a.typ === 'berufsschule');
+
+      const tbody = document.querySelector('#berufsschuleTable tbody');
+      if (!tbody) return;
+      tbody.innerHTML = '';
+
+      if (berufsschule.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; color: #666;">Keine Berufsschul-Zeiten eingetragen</td></tr>';
+        return;
+      }
+
+      berufsschule.forEach(bs => {
+        const row = document.createElement('tr');
+        const lehrlingName = bs.lehrling_name || 'Unbekannt';
+
+        row.innerHTML = `
+          <td>${lehrlingName}</td>
+          <td>${this.formatDatum(bs.datum_von)}</td>
+          <td>${this.formatDatum(bs.datum_bis)}</td>
+          <td>${bs.beschreibung || '-'}</td>
+          <td>
+            <button class="btn btn-danger" onclick="app.deleteAbwesenheit(${bs.id}, 'berufsschule')">Löschen</button>
+          </td>
+        `;
+        tbody.appendChild(row);
+      });
+    } catch (error) {
+      console.error('Fehler beim Laden der Berufsschul-Zeiten:', error);
+    }
+  }
+
   async deleteAbwesenheit(id, typ) {
-    if (!confirm(`Möchten Sie diese ${typ === 'urlaub' ? 'Urlaubseintrag' : 'Krankmeldung'} wirklich löschen?`)) {
+    const typLabels = {
+      'urlaub': 'Urlaubseintrag',
+      'krank': 'Krankmeldung',
+      'lehrgang': 'Lehrgang',
+      'berufsschule': 'Berufsschul-Zeit'
+    };
+    
+    if (!confirm(`Möchten Sie diesen ${typLabels[typ] || 'Eintrag'} wirklich löschen?`)) {
       return;
     }
 
     try {
       await EinstellungenService.deleteAbwesenheit(id);
-      alert(`${typ === 'urlaub' ? 'Urlaub' : 'Krankmeldung'} gelöscht.`);
+      alert(`${typLabels[typ] || 'Eintrag'} gelöscht.`);
 
+      // Liste neu laden
       if (typ === 'urlaub') {
         this.loadUrlaubListe();
-      } else {
+      } else if (typ === 'krank') {
         this.loadKrankListe();
+      } else if (typ === 'lehrgang') {
+        this.loadLehrgangListe();
+      } else if (typ === 'berufsschule') {
+        this.loadBerufsschuleListe();
       }
 
       this.loadDashboard();
@@ -14393,21 +14575,29 @@ class App {
       tbody.innerHTML = '';
 
       if (mitarbeiter.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="6" class="loading">Keine Mitarbeiter vorhanden</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="13" class="loading">Keine Mitarbeiter vorhanden</td></tr>';
         return;
       }
 
       mitarbeiter.forEach(ma => {
         const row = tbody.insertRow();
+        const samstagAktiv = ma.samstag_aktiv === 1 || ma.samstag_aktiv === true;
         row.innerHTML = `
-          <td><input type="text" id="mitarbeiter_name_${ma.id}" value="${ma.name || ''}" style="width: 100%; padding: 5px;"></td>
-          <td><input type="number" id="mitarbeiter_stunden_${ma.id}" value="${ma.arbeitsstunden_pro_tag || 8}" min="1" max="24" style="width: 100%; padding: 5px;"></td>
-          <td><input type="text" id="mitarbeiter_mittagspause_${ma.id}" value="${ma.mittagspause_start || '12:00'}" style="width: 100%; padding: 5px; text-align: center;" placeholder="HH:MM" pattern="[0-2][0-9]:[0-5][0-9]" maxlength="5" title="24h-Format (z.B. 12:00)" oninput="this.value = this.value.replace(/[^0-9:]/g, ''); if(this.value.length === 2 && !this.value.includes(':')) this.value += ':';"></td>
+          <td><input type="text" id="mitarbeiter_name_${ma.id}" value="${ma.name || ''}" style="width: 120px; padding: 5px;"></td>
+          <td><input type="number" id="mitarbeiter_stunden_${ma.id}" value="${ma.arbeitsstunden_pro_tag || 8}" min="1" max="24" style="width: 60px; padding: 5px;"></td>
+          <td><input type="number" id="mitarbeiter_wochenarbeitszeit_${ma.id}" value="${ma.wochenarbeitszeit_stunden || 40}" min="1" max="168" step="0.5" style="width: 70px; padding: 5px;"></td>
+          <td><input type="number" id="mitarbeiter_arbeitstage_${ma.id}" value="${ma.arbeitstage_pro_woche || 5}" min="1" max="6" style="width: 60px; padding: 5px;"></td>
+          <td><input type="number" id="mitarbeiter_pausenzeit_${ma.id}" value="${ma.pausenzeit_minuten || 30}" min="0" max="120" style="width: 60px; padding: 5px;"></td>
+          <td><input type="checkbox" id="mitarbeiter_samstag_aktiv_${ma.id}" ${samstagAktiv ? 'checked' : ''} onchange="app.toggleSamstagFelder(${ma.id})"></td>
+          <td><input type="time" id="mitarbeiter_samstag_start_${ma.id}" value="${ma.samstag_start || '09:00'}" style="width: 90px; padding: 5px;" ${!samstagAktiv ? 'disabled' : ''}></td>
+          <td><input type="time" id="mitarbeiter_samstag_ende_${ma.id}" value="${ma.samstag_ende || '12:00'}" style="width: 90px; padding: 5px;" ${!samstagAktiv ? 'disabled' : ''}></td>
+          <td><input type="number" id="mitarbeiter_samstag_pause_${ma.id}" value="${ma.samstag_pausenzeit_minuten || 0}" min="0" max="120" style="width: 60px; padding: 5px;" ${!samstagAktiv ? 'disabled' : ''}></td>
+          <td><input type="text" id="mitarbeiter_mittagspause_${ma.id}" value="${ma.mittagspause_start || '12:00'}" style="width: 70px; padding: 5px; text-align: center;" placeholder="HH:MM" pattern="[0-2][0-9]:[0-5][0-9]" maxlength="5" title="24h-Format (z.B. 12:00)" oninput="this.value = this.value.replace(/[^0-9:]/g, ''); if(this.value.length === 2 && !this.value.includes(':')) this.value += ':';"></td>
           <td><input type="checkbox" id="mitarbeiter_nur_service_${ma.id}" ${ma.nur_service === 1 || ma.nur_service === true ? 'checked' : ''} title="Nur Service (Annahme/Rechnung)"></td>
           <td><input type="checkbox" id="mitarbeiter_aktiv_${ma.id}" ${ma.aktiv !== 0 ? 'checked' : ''}></td>
           <td>
-            <button class="btn btn-primary" onclick="app.saveMitarbeiter(${ma.id})">💾</button>
-            <button class="btn btn-danger" onclick="app.deleteMitarbeiter(${ma.id})">🗑️</button>
+            <button class="btn btn-primary" onclick="app.saveMitarbeiter(${ma.id})" style="padding: 5px 10px;">💾</button>
+            <button class="btn btn-danger" onclick="app.deleteMitarbeiter(${ma.id})" style="padding: 5px 10px;">🗑️</button>
           </td>
         `;
       });
@@ -14423,7 +14613,7 @@ class App {
       tbody.innerHTML = '';
 
       if (lehrlinge.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="6" class="loading">Keine Lehrlinge vorhanden</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="13" class="loading">Keine Lehrlinge vorhanden</td></tr>';
         return;
       }
 
@@ -14441,15 +14631,23 @@ class App {
           schulAnzeige = `<span style="color: #1565c0; font-weight: bold;">📚 ${schulwochen}</span>`;
         }
         
+        const samstagAktiv = l.samstag_aktiv === 1 || l.samstag_aktiv === true;
         row.innerHTML = `
-          <td><input type="text" id="lehrling_name_${l.id}" value="${l.name || ''}" style="width: 100%; padding: 5px;"></td>
-          <td><input type="number" id="lehrling_aufgabe_${l.id}" value="${l.aufgabenbewaeltigung_prozent || 100}" min="0" max="500" step="1" style="width: 100%; padding: 5px;"></td>
-          <td><input type="text" id="lehrling_mittagspause_${l.id}" value="${l.mittagspause_start || '12:00'}" style="width: 100%; padding: 5px; text-align: center;" placeholder="HH:MM" pattern="[0-2][0-9]:[0-5][0-9]" maxlength="5" title="24h-Format (z.B. 12:00)" oninput="this.value = this.value.replace(/[^0-9:]/g, ''); if(this.value.length === 2 && !this.value.includes(':')) this.value += ':';"></td>
+          <td><input type="text" id="lehrling_name_${l.id}" value="${l.name || ''}" style="width: 120px; padding: 5px;"></td>
+          <td><input type="number" id="lehrling_aufgabe_${l.id}" value="${l.aufgabenbewaeltigung_prozent || 100}" min="0" max="500" step="1" style="width: 70px; padding: 5px;"></td>
+          <td><input type="number" id="lehrling_wochenarbeitszeit_${l.id}" value="${l.wochenarbeitszeit_stunden || 40}" min="1" max="168" step="0.5" style="width: 70px; padding: 5px;"></td>
+          <td><input type="number" id="lehrling_arbeitstage_${l.id}" value="${l.arbeitstage_pro_woche || 5}" min="1" max="6" style="width: 60px; padding: 5px;"></td>
+          <td><input type="number" id="lehrling_pausenzeit_${l.id}" value="${l.pausenzeit_minuten || 30}" min="0" max="120" style="width: 60px; padding: 5px;"></td>
+          <td><input type="checkbox" id="lehrling_samstag_aktiv_${l.id}" ${samstagAktiv ? 'checked' : ''} onchange="app.toggleSamstagFelderLehrling(${l.id})"></td>
+          <td><input type="time" id="lehrling_samstag_start_${l.id}" value="${l.samstag_start || '09:00'}" style="width: 90px; padding: 5px;" ${!samstagAktiv ? 'disabled' : ''}></td>
+          <td><input type="time" id="lehrling_samstag_ende_${l.id}" value="${l.samstag_ende || '12:00'}" style="width: 90px; padding: 5px;" ${!samstagAktiv ? 'disabled' : ''}></td>
+          <td><input type="number" id="lehrling_samstag_pause_${l.id}" value="${l.samstag_pausenzeit_minuten || 0}" min="0" max="120" style="width: 60px; padding: 5px;" ${!samstagAktiv ? 'disabled' : ''}></td>
+          <td><input type="text" id="lehrling_mittagspause_${l.id}" value="${l.mittagspause_start || '12:00'}" style="width: 70px; padding: 5px; text-align: center;" placeholder="HH:MM" pattern="[0-2][0-9]:[0-5][0-9]" maxlength="5" title="24h-Format (z.B. 12:00)" oninput="this.value = this.value.replace(/[^0-9:]/g, ''); if(this.value.length === 2 && !this.value.includes(':')) this.value += ':';"></td>
           <td style="text-align: center; cursor: pointer;" onclick="app.showSubTab('berufsschuleAbwesenheit')" title="Zum Bearbeiten: Klicken Sie hier oder gehen Sie zu Abwesenheiten → Berufsschule">${schulAnzeige}</td>
           <td><input type="checkbox" id="lehrling_aktiv_${l.id}" ${l.aktiv !== 0 ? 'checked' : ''}></td>
           <td>
-            <button class="btn btn-primary" onclick="app.saveLehrling(${l.id})">💾</button>
-            <button class="btn btn-danger" onclick="app.deleteLehrling(${l.id})">🗑️</button>
+            <button class="btn btn-primary" onclick="app.saveLehrling(${l.id})" style="padding: 5px 10px;">💾</button>
+            <button class="btn btn-danger" onclick="app.deleteLehrling(${l.id})" style="padding: 5px 10px;">🗑️</button>
           </td>
         `;
       });
@@ -14514,6 +14712,13 @@ class App {
   async saveMitarbeiter(id) {
     const name = document.getElementById(`mitarbeiter_name_${id}`).value.trim();
     const stunden = parseInt(document.getElementById(`mitarbeiter_stunden_${id}`).value, 10);
+    const wochenarbeitszeit = parseFloat(document.getElementById(`mitarbeiter_wochenarbeitszeit_${id}`).value);
+    const arbeitstage = parseInt(document.getElementById(`mitarbeiter_arbeitstage_${id}`).value, 10);
+    const pausenzeit = parseInt(document.getElementById(`mitarbeiter_pausenzeit_${id}`).value, 10);
+    const samstagAktiv = document.getElementById(`mitarbeiter_samstag_aktiv_${id}`).checked;
+    const samstagStart = document.getElementById(`mitarbeiter_samstag_start_${id}`).value || '09:00';
+    const samstagEnde = document.getElementById(`mitarbeiter_samstag_ende_${id}`).value || '12:00';
+    const samstagPause = parseInt(document.getElementById(`mitarbeiter_samstag_pause_${id}`).value, 10);
     const mittagspause = document.getElementById(`mitarbeiter_mittagspause_${id}`).value || '12:00';
     const nurService = document.getElementById(`mitarbeiter_nur_service_${id}`).checked;
     const aktiv = document.getElementById(`mitarbeiter_aktiv_${id}`).checked;
@@ -14527,17 +14732,40 @@ class App {
       await MitarbeiterService.update(id, {
         name,
         arbeitsstunden_pro_tag: stunden || 8,
+        wochenarbeitszeit_stunden: wochenarbeitszeit || 40,
+        arbeitstage_pro_woche: arbeitstage || 5,
+        pausenzeit_minuten: pausenzeit || 30,
+        samstag_aktiv: samstagAktiv ? 1 : 0,
+        samstag_start: samstagStart,
+        samstag_ende: samstagEnde,
+        samstag_pausenzeit_minuten: samstagPause || 0,
         mittagspause_start: mittagspause,
         nur_service: nurService,
         aktiv: aktiv ? 1 : 0
       });
       await this.loadMitarbeiter();
-      alert('Mitarbeiter aktualisiert!');
+      this.showToast('Mitarbeiter aktualisiert!', 'success');
       this.loadAuslastung();
     } catch (error) {
       console.error('Fehler beim Aktualisieren:', error);
-      alert('Fehler beim Aktualisieren des Mitarbeiters.');
+      this.showToast('Fehler beim Aktualisieren des Mitarbeiters.', 'error');
     }
+  }
+
+  toggleSamstagFelder(id) {
+    const checkbox = document.getElementById(`mitarbeiter_samstag_aktiv_${id}`);
+    const isChecked = checkbox.checked;
+    document.getElementById(`mitarbeiter_samstag_start_${id}`).disabled = !isChecked;
+    document.getElementById(`mitarbeiter_samstag_ende_${id}`).disabled = !isChecked;
+    document.getElementById(`mitarbeiter_samstag_pause_${id}`).disabled = !isChecked;
+  }
+
+  toggleSamstagFelderLehrling(id) {
+    const checkbox = document.getElementById(`lehrling_samstag_aktiv_${id}`);
+    const isChecked = checkbox.checked;
+    document.getElementById(`lehrling_samstag_start_${id}`).disabled = !isChecked;
+    document.getElementById(`lehrling_samstag_ende_${id}`).disabled = !isChecked;
+    document.getElementById(`lehrling_samstag_pause_${id}`).disabled = !isChecked;
   }
 
   async deleteMitarbeiter(id) {
@@ -14611,6 +14839,13 @@ class App {
   async saveLehrling(id) {
     const name = document.getElementById(`lehrling_name_${id}`).value.trim();
     const aufgabe = parseFloat(document.getElementById(`lehrling_aufgabe_${id}`).value);
+    const wochenarbeitszeit = parseFloat(document.getElementById(`lehrling_wochenarbeitszeit_${id}`).value);
+    const arbeitstage = parseInt(document.getElementById(`lehrling_arbeitstage_${id}`).value, 10);
+    const pausenzeit = parseInt(document.getElementById(`lehrling_pausenzeit_${id}`).value, 10);
+    const samstagAktiv = document.getElementById(`lehrling_samstag_aktiv_${id}`).checked;
+    const samstagStart = document.getElementById(`lehrling_samstag_start_${id}`).value || '09:00';
+    const samstagEnde = document.getElementById(`lehrling_samstag_ende_${id}`).value || '12:00';
+    const samstagPause = parseInt(document.getElementById(`lehrling_samstag_pause_${id}`).value, 10);
     const mittagspause = document.getElementById(`lehrling_mittagspause_${id}`).value || '12:00';
     // berufsschul_wochen wird über den Abwesenheits-Tab gepflegt, nicht hier ändern
     const aktiv = document.getElementById(`lehrling_aktiv_${id}`).checked;
@@ -14624,15 +14859,22 @@ class App {
       await LehrlingeService.update(id, {
         name,
         aufgabenbewaeltigung_prozent: aufgabe || 100,
+        wochenarbeitszeit_stunden: wochenarbeitszeit || 40,
+        arbeitstage_pro_woche: arbeitstage || 5,
+        pausenzeit_minuten: pausenzeit || 30,
+        samstag_aktiv: samstagAktiv ? 1 : 0,
+        samstag_start: samstagStart,
+        samstag_ende: samstagEnde,
+        samstag_pausenzeit_minuten: samstagPause || 0,
         mittagspause_start: mittagspause,
         aktiv: aktiv ? 1 : 0
       });
       await this.loadLehrlinge();
-      alert('Lehrling aktualisiert!');
+      this.showToast('Lehrling aktualisiert!', 'success');
       this.loadAuslastung();
     } catch (error) {
       console.error('Fehler beim Aktualisieren:', error);
-      alert('Fehler beim Aktualisieren des Lehrlings.');
+      this.showToast('Fehler beim Aktualisieren des Lehrlings.', 'error');
     }
   }
 
@@ -17490,6 +17732,24 @@ class App {
               zeitMinuten = Math.round(zeitMinuten * (1 + nebenzeitProzent / 100));
             }
             
+            // Aufgabenbewältigung für Lehrlinge hinzufügen (z.B. 150% = braucht 50% länger)
+            // Prüfe ob diese Arbeit einem Lehrling zugeordnet ist
+            let arbeitLehrlingIdFuerBerechnung = null;
+            if (arbeitDetails.type === 'lehrling' && (arbeitDetails.lehrling_id || arbeitDetails.mitarbeiter_id)) {
+              arbeitLehrlingIdFuerBerechnung = arbeitDetails.lehrling_id || arbeitDetails.mitarbeiter_id;
+            } else if (!arbeitDetails.mitarbeiter_id && details._gesamt_mitarbeiter_id?.type === 'lehrling') {
+              arbeitLehrlingIdFuerBerechnung = details._gesamt_mitarbeiter_id.id;
+            } else if (!arbeitDetails.mitarbeiter_id && defaultZuordnungsTyp === 'lehrling' && defaultLehrlingId) {
+              arbeitLehrlingIdFuerBerechnung = defaultLehrlingId;
+            }
+            
+            if (arbeitLehrlingIdFuerBerechnung) {
+              const lehrling = (lehrlinge || []).find(l => l.id === arbeitLehrlingIdFuerBerechnung);
+              if (lehrling && lehrling.aufgabenbewaeltigung_prozent && lehrling.aufgabenbewaeltigung_prozent !== 100) {
+                zeitMinuten = Math.round(zeitMinuten * (lehrling.aufgabenbewaeltigung_prozent / 100));
+              }
+            }
+            
             // Feature 10: Bei abgeschlossenen Terminen die ANGEZEIGTE Zeit auf tatsächliche Zeit kürzen
             let anzeigeZeitMinuten = zeitMinuten;
             if (termin.status === 'abgeschlossen' && termin.tatsaechliche_zeit && termin.tatsaechliche_zeit > 0) {
@@ -17628,6 +17888,26 @@ class App {
             // Nebenzeit-Aufschlag hinzufügen (z.B. 20% = zeitMinuten * 1.2)
             if (nebenzeitProzent > 0) {
               zeitMinuten = Math.round(zeitMinuten * (1 + nebenzeitProzent / 100));
+            }
+            
+            // Aufgabenbewältigung für Lehrlinge hinzufügen (z.B. 150% = braucht 50% länger)
+            // Prüfe Zuordnung für diese Arbeit
+            let arbeitLehrlingIdFuerBerechnung = null;
+            if (typeof arbeitDetails === 'object') {
+              if (arbeitDetails.type === 'lehrling' && (arbeitDetails.lehrling_id || arbeitDetails.mitarbeiter_id)) {
+                arbeitLehrlingIdFuerBerechnung = arbeitDetails.lehrling_id || arbeitDetails.mitarbeiter_id;
+              } else if (!arbeitDetails.mitarbeiter_id && details._gesamt_mitarbeiter_id?.type === 'lehrling') {
+                arbeitLehrlingIdFuerBerechnung = details._gesamt_mitarbeiter_id.id;
+              } else if (!arbeitDetails.mitarbeiter_id && terminZuordnungsTyp === 'lehrling' && terminLehrlingId) {
+                arbeitLehrlingIdFuerBerechnung = terminLehrlingId;
+              }
+            }
+            
+            if (arbeitLehrlingIdFuerBerechnung) {
+              const lehrling = (lehrlinge || []).find(l => l.id === arbeitLehrlingIdFuerBerechnung);
+              if (lehrling && lehrling.aufgabenbewaeltigung_prozent && lehrling.aufgabenbewaeltigung_prozent !== 100) {
+                zeitMinuten = Math.round(zeitMinuten * (lehrling.aufgabenbewaeltigung_prozent / 100));
+              }
             }
             
             gesamtZeitMinuten += zeitMinuten;
@@ -18357,6 +18637,15 @@ class App {
       // 3. Echte Auslastung laden (für korrekte Kapazitäten)
       const auslastungData = await AuslastungService.getByDatum(datum);
       
+      // 3a. Abwesenheiten für dieses Datum laden (für Kapazitätsberechnung)
+      let abwesenheitenFuerDatum = [];
+      try {
+        abwesenheitenFuerDatum = await fetch(`${window.API_BASE_URL}/api/abwesenheiten/datum/${selectedDatum}`)
+          .then(res => res.json());
+      } catch (error) {
+        console.error('Fehler beim Laden der Abwesenheiten:', error);
+      }
+      
       // 3b. Werkstatt-Einstellungen laden (für Nebenzeit)
       const einstellungen = await EinstellungenService.getWerkstatt();
       const nebenzeitProzent = einstellungen?.nebenzeit_prozent || 0;
@@ -18410,23 +18699,52 @@ class App {
       
       // === MITARBEITER ===
       mitarbeiterListe.forEach(ma => {
-        const maxMinuten = (ma.arbeitsstunden_pro_tag || 8) * 60;
+        // Kapazität berechnen mit neuer Wochenarbeitszeit-Logik (synchron mit vorgeladenen Abwesenheiten)
+        const maxMinuten = this.calculateTageskapazitaetMinutenSync(ma, selectedDatum, abwesenheitenFuerDatum);
         
         // Aktuelle Auslastung aus API holen (belegt_minuten_roh = reine Arbeitszeit ohne Nebenzeit)
         let currentMinuten = 0;
         let istAbwesend = false;
+        let abwesenheitsTyp = '';
         if (auslastungData && auslastungData.mitarbeiter_auslastung) {
           const maAuslastung = auslastungData.mitarbeiter_auslastung.find(m => m.mitarbeiter_id === ma.id);
           if (maAuslastung) {
             currentMinuten = maAuslastung.belegt_minuten_roh || maAuslastung.belegt_minuten || 0;
             istAbwesend = maAuslastung.ist_abwesend === true;
+            abwesenheitsTyp = maAuslastung.abwesenheits_typ || '';
           }
         }
 
+        // Auslastungsprozent berechnen
+        const auslastungProzent = maxMinuten > 0 ? Math.round((currentMinuten / maxMinuten) * 100) : 0;
+        
+        // Badge-Farbe basierend auf Auslastung
+        let auslastungClass = '';
+        if (auslastungProzent < 70) auslastungClass = 'auslastung-low';
+        else if (auslastungProzent < 90) auslastungClass = 'auslastung-medium';
+        else auslastungClass = 'auslastung-high';
+
         const row = document.createElement('div');
         row.className = 'timeline-row' + (istAbwesend ? ' abwesend' : '');
-        const abwesendBadge = istAbwesend ? '<span class="abwesend-badge">🏥 Abwesend</span>' : '';
-        const kapazitaetText = istAbwesend ? '0/0 min (abwesend)' : `${currentMinuten}/${maxMinuten} min`;
+        
+        // Abwesenheits-Badge mit Typ
+        let abwesendBadge = '';
+        if (istAbwesend) {
+          const abwesenheitsLabels = {
+            'urlaub': '🏖️ URLAUB',
+            'krank': '🤒 KRANK',
+            'lehrgang': '📖 LEHRGANG',
+            'berufsschule': '📚 BERUFSSCHULE'
+          };
+          abwesendBadge = `<span class="abwesend-badge">${abwesenheitsLabels[abwesenheitsTyp] || '🏥 ABWESEND'}</span>`;
+        }
+        
+        // Kapazität mit Stunden und Prozent
+        const stundenText = `${(currentMinuten / 60).toFixed(1)}h / ${(maxMinuten / 60).toFixed(1)}h`;
+        const kapazitaetText = istAbwesend 
+          ? '<span class="kapazitaet-abwesend">0h / 0h (0%)</span>' 
+          : `<span class="kapazitaet-wert ${auslastungClass}">⏱️ ${stundenText} (${auslastungProzent}%)</span>`;
+          
         row.innerHTML = `
           <div class="timeline-mitarbeiter">
             <div class="timeline-mitarbeiter-name">👷 ${ma.name}${abwesendBadge}</div>
@@ -18449,23 +18767,52 @@ class App {
 
       // === LEHRLINGE ===
       lehrlingeListe.forEach(lehrling => {
-        const maxMinuten = (lehrling.arbeitsstunden_pro_tag || 8) * 60;
+        // Kapazität berechnen mit neuer Wochenarbeitszeit-Logik (synchron mit vorgeladenen Abwesenheiten)
+        const maxMinuten = this.calculateTageskapazitaetMinutenSync(lehrling, selectedDatum, abwesenheitenFuerDatum);
         
         // Aktuelle Auslastung aus API holen (belegt_minuten_roh = reine Arbeitszeit ohne Nebenzeit)
         let currentMinuten = 0;
         let istAbwesend = false;
+        let abwesenheitsTyp = '';
         if (auslastungData && auslastungData.lehrlinge_auslastung) {
           const lAuslastung = auslastungData.lehrlinge_auslastung.find(l => l.lehrling_id === lehrling.id);
           if (lAuslastung) {
             currentMinuten = lAuslastung.belegt_minuten_roh || lAuslastung.belegt_minuten || 0;
             istAbwesend = lAuslastung.ist_abwesend === true;
+            abwesenheitsTyp = lAuslastung.abwesenheits_typ || '';
           }
         }
 
+        // Auslastungsprozent berechnen
+        const auslastungProzent = maxMinuten > 0 ? Math.round((currentMinuten / maxMinuten) * 100) : 0;
+        
+        // Badge-Farbe basierend auf Auslastung
+        let auslastungClass = '';
+        if (auslastungProzent < 70) auslastungClass = 'auslastung-low';
+        else if (auslastungProzent < 90) auslastungClass = 'auslastung-medium';
+        else auslastungClass = 'auslastung-high';
+
         const row = document.createElement('div');
         row.className = 'timeline-row timeline-row-lehrling' + (istAbwesend ? ' abwesend' : '');
-        const abwesendBadge = istAbwesend ? '<span class="abwesend-badge">🏥 Abwesend</span>' : '';
-        const kapazitaetText = istAbwesend ? '0/0 min (abwesend)' : `${currentMinuten}/${maxMinuten} min`;
+        
+        // Abwesenheits-Badge mit Typ
+        let abwesendBadge = '';
+        if (istAbwesend) {
+          const abwesenheitsLabels = {
+            'urlaub': '🏖️ URLAUB',
+            'krank': '🤒 KRANK',
+            'lehrgang': '📖 LEHRGANG',
+            'berufsschule': '📚 BERUFSSCHULE'
+          };
+          abwesendBadge = `<span class="abwesend-badge">${abwesenheitsLabels[abwesenheitsTyp] || '🏥 ABWESEND'}</span>`;
+        }
+        
+        // Kapazität mit Stunden und Prozent
+        const stundenText = `${(currentMinuten / 60).toFixed(1)}h / ${(maxMinuten / 60).toFixed(1)}h`;
+        const kapazitaetText = istAbwesend 
+          ? '<span class="kapazitaet-abwesend">0h / 0h (0%)</span>' 
+          : `<span class="kapazitaet-wert ${auslastungClass}">⏱️ ${stundenText} (${auslastungProzent}%)</span>`;
+          
         row.innerHTML = `
           <div class="timeline-mitarbeiter timeline-lehrling">
             <div class="timeline-mitarbeiter-name">🎓 ${lehrling.name}${abwesendBadge}</div>
@@ -20262,8 +20609,38 @@ class App {
           // Einzelnen Arbeitsblock verschieben
           await this.moveArbeitBlockToMitarbeiter(terminId, arbeitName, parseInt(arbeitIndex), mitarbeiterId, lehrlingId, targetType, newStartzeit);
         } else {
-          // Ganzen Termin verschieben (alte Logik)
-          await this.moveTerminToMitarbeiterWithTime(terminId, mitarbeiterId, lehrlingId, targetType, newStartzeit);
+          // Vor dem Verschieben: Kapazitäts-Prüfung durchführen
+          const person = targetType === 'mitarbeiter' 
+            ? await MitarbeiterService.getById(mitarbeiterId)
+            : await LehrlingeService.getById(lehrlingId);
+          
+          const selectedDatum = document.getElementById('auslastungDragDropDatum').value;
+          const terminDaten = await TermineService.getById(terminId);
+          
+          const kapazitaetWarnung = await this.checkKapazitaetVorZuweisung(
+            person, 
+            selectedDatum, 
+            dauer, 
+            targetType,
+            parseInt(mitarbeiterId || lehrlingId)
+          );
+          
+          if (kapazitaetWarnung.ueberlastet) {
+            // Zeige Warnung mit Optionen
+            await this.showVerschiebeWarnung(
+              person,
+              terminDaten,
+              kapazitaetWarnung,
+              selectedDatum,
+              mitarbeiterId,
+              lehrlingId,
+              targetType,
+              newStartzeit
+            );
+          } else {
+            // Keine Überlastung - direkt zuweisen
+            await this.moveTerminToMitarbeiterWithTime(terminId, mitarbeiterId, lehrlingId, targetType, newStartzeit);
+          }
         }
       }
     });
@@ -24315,10 +24692,16 @@ class App {
       inBerufsschule = schulCheck.inSchule;
     }
 
+    // Prüfe ob Person gerade in Mittagspause ist (6h-Regel)
+    const inPause = this.istPersonAktuellInPause(person, jetztZeit);
+
     // Status Badge bestimmen
     let badgeClass = 'frei';
     let badgeText = 'Frei';
-    if (inBerufsschule) {
+    if (inPause) {
+      badgeClass = 'pause';
+      badgeText = '🍽️ Pause';
+    } else if (inBerufsschule) {
       badgeClass = 'pause';
       badgeText = 'Berufsschule';
     } else if (aktuellerAuftrag) {
@@ -24329,7 +24712,14 @@ class App {
     // Body Content
     let bodyContent = '';
     
-    if (inBerufsschule) {
+    if (inPause) {
+      bodyContent = `
+        <div class="intern-person-schule">
+          <div class="schule-icon">🍽️</div>
+          <div class="schule-text">Mittagspause</div>
+        </div>
+      `;
+    } else if (inBerufsschule) {
       bodyContent = `
         <div class="intern-person-schule">
           <div class="schule-icon">📚</div>
@@ -24669,6 +25059,55 @@ class App {
     const endMin = endMinuten % 60;
     
     return `${String(endStunden).padStart(2, '0')}:${String(endMin).padStart(2, '0')}`;
+  }
+
+  /**
+   * Prüft ob eine Person aktuell in der Mittagspause ist
+   * Berücksichtigt die 6h-Regel: Pause nur bei >= 6h Arbeitszeit pro Tag
+   * @param {Object} person - Mitarbeiter oder Lehrling Objekt mit wochenarbeitszeit_stunden, arbeitstage_pro_woche, mittagspause_start, pausenzeit_minuten
+   * @param {string|null} aktuelleZeit - Aktuelle Zeit im Format HH:MM (optional, default: jetzt)
+   * @returns {boolean} - true wenn Person gerade in Pause ist
+   */
+  istPersonAktuellInPause(person, aktuelleZeit = null) {
+    if (!person) return false;
+
+    // Berechne tägliche Arbeitszeit
+    const wochenStunden = person.wochenarbeitszeit_stunden || person.arbeitsstunden_pro_tag * (person.arbeitstage_pro_woche || 5);
+    const arbeitstage = person.arbeitstage_pro_woche || 5;
+    const taeglicheStunden = wochenStunden / arbeitstage;
+
+    // 6h-Regel: Keine Pause bei unter 6h Arbeitszeit pro Tag
+    if (taeglicheStunden < 6) {
+      return false;
+    }
+
+    // Prüfe ob Pausenzeiten definiert sind
+    const pauseStart = person.mittagspause_start;
+    const pauseDauer = person.pausenzeit_minuten || 30;
+
+    if (!pauseStart || pauseDauer <= 0) {
+      return false;
+    }
+
+    // Aktuelle Zeit bestimmen
+    let jetztZeit = aktuelleZeit;
+    if (!jetztZeit) {
+      const jetzt = new Date();
+      const h = jetzt.getHours();
+      const m = jetzt.getMinutes();
+      jetztZeit = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+    }
+
+    // Berechne Pause-Ende
+    const [pauseH, pauseM] = pauseStart.split(':').map(Number);
+    const pauseStartMinuten = pauseH * 60 + pauseM;
+    const pauseEndeMinuten = pauseStartMinuten + pauseDauer;
+    const pauseEndeH = Math.floor(pauseEndeMinuten / 60);
+    const pauseEndeM = pauseEndeMinuten % 60;
+    const pauseEnde = `${String(pauseEndeH).padStart(2, '0')}:${String(pauseEndeM).padStart(2, '0')}`;
+
+    // Prüfe ob aktuelle Zeit innerhalb des Pausenfensters liegt
+    return jetztZeit >= pauseStart && jetztZeit < pauseEnde;
   }
 
   /**
@@ -25579,6 +26018,232 @@ class App {
   }
 
   // === ENDE FUZZY SEARCH FUNKTIONEN ===
+
+  // === WOCHENARBEITSZEITVERWALTUNG ===
+
+  /**
+   * Berechnet die verfügbare Tageskapazität eines Mitarbeiters/Lehrlings in Minuten
+   * Berücksichtigt: Wochenarbeitszeit, Arbeitstage, Pausenzeiten, Samstag-Regelung, Sonntage und Abwesenheiten
+   * 
+   * @param {Object} person - Mitarbeiter- oder Lehrlinge-Objekt
+   * @param {String} datum - Datum im Format YYYY-MM-DD
+   * @param {Array} abwesenheiten - Optional: Liste aller Abwesenheiten (wird geladen falls nicht übergeben)
+   * @returns {Promise<Number>} Verfügbare Minuten (0 bei Abwesenheit/Sonntag)
+   */
+  async calculateTageskapazitaetMinuten(person, datum, abwesenheiten = null) {
+    if (!person || !datum) {
+      return 0;
+    }
+
+    // 1. Abwesenheiten prüfen
+    if (!abwesenheiten) {
+      try {
+        abwesenheiten = await fetch(`${window.API_BASE_URL}/api/abwesenheiten/datum/${datum}`)
+          .then(res => res.json());
+      } catch (error) {
+        console.error('Fehler beim Laden von Abwesenheiten:', error);
+        abwesenheiten = [];
+      }
+    }
+
+    // Prüfe ob person an diesem Datum abwesend ist
+    const istAbwesend = abwesenheiten.some(ab => {
+      if (person.id) {
+        // person.id könnte mitarbeiter_id oder lehrling_id sein - prüfe beide
+        return (ab.mitarbeiter_id === person.id || ab.lehrling_id === person.id);
+      }
+      return false;
+    });
+
+    if (istAbwesend) {
+      return 0; // Bei Abwesenheit keine Kapazität
+    }
+
+    // 2. Wochentag ermitteln (0 = Sonntag, 6 = Samstag)
+    const date = new Date(datum + 'T12:00:00');
+    const wochentag = date.getDay();
+
+    // Sonntag = immer 0 Minuten
+    if (wochentag === 0) {
+      return 0;
+    }
+
+    // 3. Samstag - prüfe ob aktiv
+    if (wochentag === 6) {
+      const samstagAktiv = person.samstag_aktiv === 1 || person.samstag_aktiv === true;
+      if (!samstagAktiv) {
+        return 0; // Samstag nicht aktiv
+      }
+
+      // Berechne Samstags-Kapazität aus Zeitfenster
+      const start = person.samstag_start || '09:00';
+      const ende = person.samstag_ende || '12:00';
+      const pause = person.samstag_pausenzeit_minuten || 0;
+
+      const [startH, startM] = start.split(':').map(Number);
+      const [endeH, endeM] = ende.split(':').map(Number);
+      const startMinuten = startH * 60 + startM;
+      const endeMinuten = endeH * 60 + endeM;
+      const arbeitszeit = endeMinuten - startMinuten - pause;
+
+      // Nebenzeit berücksichtigen (nur bei Mitarbeitern relevant)
+      const nebenzeit = person.nebenzeit_prozent || 0;
+      const mitNebenzeit = arbeitszeit * (1 + nebenzeit / 100);
+
+      return Math.max(0, mitNebenzeit);
+    }
+
+    // 4. Mo-Fr: Berechne aus Wochenarbeitszeit
+    const wochenarbeitszeit = person.wochenarbeitszeit_stunden || 40;
+    const arbeitstage = person.arbeitstage_pro_woche || 5;
+    const pausenzeit = person.pausenzeit_minuten || 30;
+
+    // Tageskapazität = (Wochenarbeitszeit / Arbeitstage × 60) - Pausenzeit
+    const tagesStunden = wochenarbeitszeit / arbeitstage;
+    const tagesMinuten = (tagesStunden * 60) - pausenzeit;
+
+    // Nebenzeit berücksichtigen
+    const nebenzeit = person.nebenzeit_prozent || 0;
+    const mitNebenzeit = tagesMinuten * (1 + nebenzeit / 100);
+
+    // Fallback: Wenn Wochenarbeitszeit nicht gesetzt, nutze alte arbeitsstunden_pro_tag
+    if (!person.wochenarbeitszeit_stunden && person.arbeitsstunden_pro_tag) {
+      const altesSystem = (person.arbeitsstunden_pro_tag * 60) - pausenzeit;
+      const mitNebenzeit = altesSystem * (1 + nebenzeit / 100);
+      return Math.max(0, mitNebenzeit);
+    }
+
+    return Math.max(0, mitNebenzeit);
+  }
+
+  /**
+   * Synchrone Version: Berechnet Tageskapazität ohne API-Aufruf
+   * Verwendet bereits geladene Abwesenheiten
+   * 
+   * @param {Object} person - Mitarbeiter- oder Lehrling-Objekt
+   * @param {String} datum - Datum im Format YYYY-MM-DD
+   * @param {Array} abwesenheiten - Liste aller Abwesenheiten
+   * @returns {Number} Verfügbare Minuten (0 bei Abwesenheit/Sonntag)
+   */
+  calculateTageskapazitaetMinutenSync(person, datum, abwesenheiten = []) {
+    if (!person || !datum) {
+      return 0;
+    }
+
+    // 1. Prüfe ob person an diesem Datum abwesend ist
+    const istAbwesend = abwesenheiten.some(ab => {
+      if (person.id) {
+        return (ab.mitarbeiter_id === person.id || ab.lehrling_id === person.id);
+      }
+      return false;
+    });
+
+    if (istAbwesend) {
+      return 0; // Bei Abwesenheit keine Kapazität
+    }
+
+    // 2. Wochentag ermitteln (0 = Sonntag, 6 = Samstag)
+    const date = new Date(datum + 'T12:00:00');
+    const wochentag = date.getDay();
+
+    // Sonntag = immer 0 Minuten
+    if (wochentag === 0) {
+      return 0;
+    }
+
+    // 3. Samstag - prüfe ob aktiv
+    if (wochentag === 6) {
+      const samstagAktiv = person.samstag_aktiv === 1 || person.samstag_aktiv === true;
+      if (!samstagAktiv) {
+        return 0; // Samstag nicht aktiv
+      }
+
+      // Berechne Samstags-Kapazität aus Zeitfenster
+      const start = person.samstag_start || '09:00';
+      const ende = person.samstag_ende || '12:00';
+      const pause = person.samstag_pausenzeit_minuten || 0;
+
+      const [startH, startM] = start.split(':').map(Number);
+      const [endeH, endeM] = ende.split(':').map(Number);
+      const startMinuten = startH * 60 + startM;
+      const endeMinuten = endeH * 60 + endeM;
+      const arbeitszeit = endeMinuten - startMinuten - pause;
+
+      // Nebenzeit berücksichtigen (nur bei Mitarbeitern relevant)
+      const nebenzeit = person.nebenzeit_prozent || 0;
+      const mitNebenzeit = arbeitszeit * (1 + nebenzeit / 100);
+
+      return Math.max(0, mitNebenzeit);
+    }
+
+    // 4. Mo-Fr: Berechne aus Wochenarbeitszeit
+    const wochenarbeitszeit = person.wochenarbeitszeit_stunden || 40;
+    const arbeitstage = person.arbeitstage_pro_woche || 5;
+    const pausenzeit = person.pausenzeit_minuten || 30;
+
+    // Tageskapazität = (Wochenarbeitszeit / Arbeitstage × 60) - Pausenzeit
+    const tagesStunden = wochenarbeitszeit / arbeitstage;
+    const tagesMinuten = (tagesStunden * 60) - pausenzeit;
+
+    // Nebenzeit berücksichtigen
+    const nebenzeit = person.nebenzeit_prozent || 0;
+    const mitNebenzeit = tagesMinuten * (1 + nebenzeit / 100);
+
+    // Fallback: Wenn Wochenarbeitszeit nicht gesetzt, nutze alte arbeitsstunden_pro_tag
+    if (!person.wochenarbeitszeit_stunden && person.arbeitsstunden_pro_tag) {
+      const altesSystem = (person.arbeitsstunden_pro_tag * 60) - pausenzeit;
+      const mitNebenzeit = altesSystem * (1 + nebenzeit / 100);
+      return Math.max(0, mitNebenzeit);
+    }
+
+    return Math.max(0, mitNebenzeit);
+  }
+
+  /**
+   * Findet den nächsten verfügbaren Arbeitstag mit ausreichender Kapazität
+   * 
+   * @param {Object} person - Mitarbeiter oder Lehrling
+   * @param {String} startDatum - Start-Datum für Suche (YYYY-MM-DD)
+   * @param {Number} benoetigteMinuten - Benötigte Kapazität in Minuten
+   * @param {Number} maxTage - Maximale Anzahl Tage vorausschauend (Standard: 14)
+   * @returns {Promise<Object>} { datum, verfuegbareMinuten } oder null
+   */
+  async findeNaechstenVerfuegbarenTag(person, startDatum, benoetigteMinuten, maxTage = 14) {
+    const startDate = new Date(startDatum + 'T12:00:00');
+    
+    // Abwesenheiten für Zeitraum laden
+    const endDate = new Date(startDate);
+    endDate.setDate(endDate.getDate() + maxTage);
+    const endDatumStr = this.formatDateLocal(endDate);
+    
+    let abwesenheiten = [];
+    try {
+      abwesenheiten = await fetch(`${window.API_BASE_URL}/api/abwesenheiten/range?datum_von=${startDatum}&datum_bis=${endDatumStr}`)
+        .then(res => res.json());
+    } catch (error) {
+      console.error('Fehler beim Laden von Abwesenheiten:', error);
+    }
+
+    // Iteriere durch die nächsten Tage
+    for (let i = 1; i <= maxTage; i++) {
+      const checkDate = new Date(startDate);
+      checkDate.setDate(checkDate.getDate() + i);
+      const checkDatumStr = this.formatDateLocal(checkDate);
+
+      const kapazitaet = await this.calculateTageskapazitaetMinuten(person, checkDatumStr, abwesenheiten);
+
+      if (kapazitaet >= benoetigteMinuten) {
+        return {
+          datum: checkDatumStr,
+          verfuegbareMinuten: kapazitaet
+        };
+      }
+    }
+
+    return null; // Kein passender Tag gefunden
+  }
+
+  // === ENDE WOCHENARBEITSZEITVERWALTUNG ===
 }
 
 
@@ -25649,4 +26314,190 @@ window.switchSubTab = function(tabName) {
   if (tabName === 'wartendeAktionen' && window.app) {
     window.app.loadWartendeAktionen();
   }
+};
+// Export für globale Verwendung
+window.App = App;
+
+// ============================================================================
+// KAPAZITÄTSPRÜFUNG UND VERSCHIEBE-WARNUNG
+// ============================================================================
+
+/**
+ * Prüft ob die Zuweisung eines Termins die Tageskapazität überschreitet
+ * @param {Object} person - Mitarbeiter oder Lehrling
+ * @param {String} datum - Datum (YYYY-MM-DD)
+ * @param {Number} terminDauer - Dauer in Minuten
+ * @param {String} targetType - 'mitarbeiter' oder 'lehrling'
+ * @param {Number} personId - ID der Person
+ * @returns {Promise<Object>} { ueberlastet, maxKapazitaet, aktuelleAuslastung, neueAuslastung, prozent }
+ */
+App.prototype.checkKapazitaetVorZuweisung = async function(person, datum, terminDauer, targetType, personId) {
+  try {
+    // 1. Tageskapazität berechnen
+    const maxKapazitaet = await this.calculateTageskapazitaetMinuten(person, datum);
+    
+    // 2. Aktuelle Auslastung laden
+    const auslastungData = await AuslastungService.getByDatum(datum);
+    let aktuelleAuslastung = 0;
+    
+    if (targetType === 'mitarbeiter' && auslastungData.mitarbeiter_auslastung) {
+      const maAuslastung = auslastungData.mitarbeiter_auslastung.find(m => m.mitarbeiter_id === personId);
+      if (maAuslastung) {
+        aktuelleAuslastung = maAuslastung.belegt_minuten_roh || maAuslastung.belegt_minuten || 0;
+      }
+    } else if (targetType === 'lehrling' && auslastungData.lehrlinge_auslastung) {
+      const lAuslastung = auslastungData.lehrlinge_auslastung.find(l => l.lehrling_id === personId);
+      if (lAuslastung) {
+        aktuelleAuslastung = lAuslastung.belegt_minuten_roh || lAuslastung.belegt_minuten || 0;
+      }
+    }
+    
+    // 3. Neue Auslastung berechnen
+    const neueAuslastung = aktuelleAuslastung + terminDauer;
+    const prozent = maxKapazitaet > 0 ? Math.round((neueAuslastung / maxKapazitaet) * 100) : 0;
+    
+    return {
+      ueberlastet: neueAuslastung > maxKapazitaet && maxKapazitaet > 0,
+      maxKapazitaet,
+      aktuelleAuslastung,
+      neueAuslastung,
+      prozent,
+      ueberlauf: Math.max(0, neueAuslastung - maxKapazitaet)
+    };
+  } catch (error) {
+    console.error('Fehler bei Kapazitätsprüfung:', error);
+    return {
+      ueberlastet: false,
+      maxKapazitaet: 0,
+      aktuelleAuslastung: 0,
+      neueAuslastung: terminDauer,
+      prozent: 0,
+      ueberlauf: 0
+    };
+  }
+};
+
+/**
+ * Zeigt eine modale Warnung mit Optionen bei Überlastung
+ * @param {Object} person - Mitarbeiter oder Lehrling
+ * @param {Object} termin - Termin-Objekt
+ * @param {Object} kapazitaetWarnung - Ergebnis von checkKapazitaetVorZuweisung
+ * @param {String} datum - Datum (YYYY-MM-DD)
+ * @param {Number} mitarbeiterId - ID wenn Mitarbeiter
+ * @param {Number} lehrlingId - ID wenn Lehrling
+ * @param {String} targetType - 'mitarbeiter' oder 'lehrling'
+ * @param {String} startzeit - Startzeit (HH:MM)
+ */
+App.prototype.showVerschiebeWarnung = async function(person, termin, kapazitaetWarnung, datum, mitarbeiterId, lehrlingId, targetType, startzeit) {
+  // Finde nächsten verfügbaren Tag
+  const naechsterTag = await this.findeNaechstenVerfuegbarenTag(person, datum, termin.geschaetzte_zeit || 30, 14);
+  
+  const modal = document.createElement('div');
+  modal.className = 'modal-overlay';
+  modal.style.cssText = `
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.6);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 10000;
+  `;
+  
+  const naechsterTagHtml = naechsterTag 
+    ? `<button class="btn btn-success" id="verschiebeOptionVerschieben" style="flex: 1;">
+        📅 Auf ${this.formatDatum(naechsterTag.datum)} verschieben<br>
+        <small style="opacity: 0.8;">✓ ${(naechsterTag.verfuegbareMinuten / 60).toFixed(1)}h verfügbar</small>
+      </button>`
+    : '<p style="color: #d32f2f; margin: 10px 0;"><strong>⚠️ Kein freier Tag in den nächsten 14 Tagen gefunden!</strong></p>';
+  
+  modal.innerHTML = `
+    <div style="background: white; padding: 25px; border-radius: 12px; max-width: 550px; box-shadow: 0 4px 20px rgba(0,0,0,0.3);">
+      <h3 style="margin-top: 0; color: #d32f2f; display: flex; align-items: center; gap: 8px;">
+        ⚠️ Überlastungswarnung
+      </h3>
+      
+      <div style="background: #fff3e0; padding: 15px; border-radius: 8px; margin: 15px 0; border-left: 4px solid #ff9800;">
+        <p style="margin: 0 0 10px 0;"><strong>${person.name}</strong> am ${this.formatDatum(datum)}:</p>
+        <p style="margin: 5px 0; font-size: 0.95em;">
+          📊 Aktuelle Auslastung: <strong>${(kapazitaetWarnung.aktuelleAuslastung / 60).toFixed(1)}h</strong> / ${(kapazitaetWarnung.maxKapazitaet / 60).toFixed(1)}h
+        </p>
+        <p style="margin: 5px 0; font-size: 0.95em;">
+          ➕ Neuer Termin: <strong>+${(termin.geschaetzte_zeit / 60).toFixed(1)}h</strong>
+        </p>
+        <p style="margin: 5px 0; font-size: 0.95em; color: #d32f2f;">
+          🔴 Neue Auslastung: <strong>${(kapazitaetWarnung.neueAuslastung / 60).toFixed(1)}h (${kapazitaetWarnung.prozent}%)</strong>
+        </p>
+        <p style="margin: 10px 0 0 0; font-size: 0.9em; color: #e65100;">
+          ⚡ <strong>Überlauf: ${(kapazitaetWarnung.ueberlauf / 60).toFixed(1)}h</strong>
+        </p>
+      </div>
+      
+      <p style="margin: 15px 0 20px 0; font-size: 0.95em; color: #555;">
+        <strong>Kunde:</strong> ${termin.kunde_name || 'Unbekannt'}<br>
+        <strong>Fahrzeug:</strong> ${termin.kennzeichen || '-'} ${termin.fahrzeug || ''}
+      </p>
+      
+      <div style="display: flex; gap: 10px; flex-direction: column;">
+        <div style="display: flex; gap: 10px;">
+          ${naechsterTagHtml}
+          <button class="btn btn-warning" id="verschiebeOptionTrotzdem" style="flex: 1;">
+            ⚠️ Trotzdem zuweisen<br>
+            <small style="opacity: 0.8;">(Überlastung ignorieren)</small>
+          </button>
+        </div>
+        <button class="btn btn-secondary" id="verschiebeOptionAbbrechen" style="width: 100%;">
+          ❌ Abbrechen
+        </button>
+      </div>
+    </div>
+  `;
+  
+  document.body.appendChild(modal);
+  
+  // Event Listener
+  return new Promise((resolve) => {
+    const cleanup = () => {
+      document.body.removeChild(modal);
+    };
+    
+    document.getElementById('verschiebeOptionAbbrechen')?.addEventListener('click', () => {
+      cleanup();
+      resolve('abbrechen');
+    });
+    
+    document.getElementById('verschiebeOptionTrotzdem')?.addEventListener('click', async () => {
+      cleanup();
+      await this.moveTerminToMitarbeiterWithTime(termin.id, mitarbeiterId, lehrlingId, targetType, startzeit);
+      this.showToast('⚠️ Termin trotz Überlastung zugewiesen!', 'warning');
+      resolve('trotzdem');
+    });
+    
+    document.getElementById('verschiebeOptionVerschieben')?.addEventListener('click', async () => {
+      cleanup();
+      if (naechsterTag) {
+        // Verschiebe Termin auf nächsten verfügbaren Tag
+        await TermineService.update(termin.id, { 
+          datum_termin: naechsterTag.datum,
+          mitarbeiter_id: targetType === 'mitarbeiter' ? mitarbeiterId : null,
+          lehrling_id: targetType === 'lehrling' ? lehrlingId : null,
+          startzeit: startzeit
+        });
+        this.showToast(`📅 Termin auf ${this.formatDatum(naechsterTag.datum)} verschoben!`, 'success');
+        this.loadAuslastungDragDrop();
+        resolve('verschoben');
+      }
+    });
+    
+    // Schließen bei Klick außerhalb
+    modal.addEventListener('click', (e) => {
+      if (e.target === modal) {
+        cleanup();
+        resolve('abbrechen');
+      }
+    });
+  });
 };

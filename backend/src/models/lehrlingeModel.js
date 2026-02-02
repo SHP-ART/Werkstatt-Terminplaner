@@ -14,16 +14,25 @@ class LehrlingeModel {
   }
 
   static async create(data) {
-    const { name, nebenzeit_prozent, aufgabenbewaeltigung_prozent, aktiv, mittagspause_start, berufsschul_wochen } = data;
+    const { name, nebenzeit_prozent, aufgabenbewaeltigung_prozent, aktiv, mittagspause_start, berufsschul_wochen,
+            wochenarbeitszeit_stunden, arbeitstage_pro_woche, pausenzeit_minuten,
+            samstag_aktiv, samstag_start, samstag_ende, samstag_pausenzeit_minuten } = data;
     const result = await runAsync(
-      'INSERT INTO lehrlinge (name, nebenzeit_prozent, aufgabenbewaeltigung_prozent, aktiv, mittagspause_start, berufsschul_wochen) VALUES (?, ?, ?, ?, ?, ?)',
-      [name, nebenzeit_prozent || 0, aufgabenbewaeltigung_prozent || 100, aktiv !== undefined ? aktiv : 1, mittagspause_start || '12:00', berufsschul_wochen || null]
+      `INSERT INTO lehrlinge (name, nebenzeit_prozent, aufgabenbewaeltigung_prozent, aktiv, mittagspause_start, berufsschul_wochen,
+       wochenarbeitszeit_stunden, arbeitstage_pro_woche, pausenzeit_minuten,
+       samstag_aktiv, samstag_start, samstag_ende, samstag_pausenzeit_minuten)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [name, nebenzeit_prozent || 0, aufgabenbewaeltigung_prozent || 100, aktiv !== undefined ? aktiv : 1, mittagspause_start || '12:00', berufsschul_wochen || null,
+       wochenarbeitszeit_stunden || 40, arbeitstage_pro_woche || 5, pausenzeit_minuten || 30,
+       samstag_aktiv || 0, samstag_start || '09:00', samstag_ende || '12:00', samstag_pausenzeit_minuten || 0]
     );
     return { id: result.lastID, ...data };
   }
 
   static async update(id, data) {
-    const { name, nebenzeit_prozent, aufgabenbewaeltigung_prozent, aktiv, mittagspause_start, berufsschul_wochen } = data;
+    const { name, nebenzeit_prozent, aufgabenbewaeltigung_prozent, aktiv, mittagspause_start, berufsschul_wochen,
+            wochenarbeitszeit_stunden, arbeitstage_pro_woche, pausenzeit_minuten,
+            samstag_aktiv, samstag_start, samstag_ende, samstag_pausenzeit_minuten } = data;
     const updates = [];
     const values = [];
 
@@ -50,6 +59,34 @@ class LehrlingeModel {
     if (berufsschul_wochen !== undefined) {
       updates.push('berufsschul_wochen = ?');
       values.push(berufsschul_wochen);
+    }
+    if (wochenarbeitszeit_stunden !== undefined) {
+      updates.push('wochenarbeitszeit_stunden = ?');
+      values.push(wochenarbeitszeit_stunden);
+    }
+    if (arbeitstage_pro_woche !== undefined) {
+      updates.push('arbeitstage_pro_woche = ?');
+      values.push(arbeitstage_pro_woche);
+    }
+    if (pausenzeit_minuten !== undefined) {
+      updates.push('pausenzeit_minuten = ?');
+      values.push(pausenzeit_minuten);
+    }
+    if (samstag_aktiv !== undefined) {
+      updates.push('samstag_aktiv = ?');
+      values.push(samstag_aktiv ? 1 : 0);
+    }
+    if (samstag_start !== undefined) {
+      updates.push('samstag_start = ?');
+      values.push(samstag_start);
+    }
+    if (samstag_ende !== undefined) {
+      updates.push('samstag_ende = ?');
+      values.push(samstag_ende);
+    }
+    if (samstag_pausenzeit_minuten !== undefined) {
+      updates.push('samstag_pausenzeit_minuten = ?');
+      values.push(samstag_pausenzeit_minuten);
     }
 
     if (updates.length === 0) {

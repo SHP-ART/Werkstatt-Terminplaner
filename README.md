@@ -1,6 +1,6 @@
 # Werkstatt Terminplaner
 
-[![Version](https://img.shields.io/badge/version-1.4.0-blue.svg)](https://github.com/SHP-ART/Werkstatt-Terminplaner/releases)
+[![Version](https://img.shields.io/badge/version-1.4.5-blue.svg)](https://github.com/SHP-ART/Werkstatt-Terminplaner/releases)
 [![Node.js](https://img.shields.io/badge/node-%3E%3D14.0.0-brightgreen.svg)](https://nodejs.org)
 [![License](https://img.shields.io/badge/license-Proprietary-red.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey.svg)](README.md)
@@ -257,6 +257,50 @@ Die Skripte erledigen automatisch:
 - **Frontend**: http://localhost:3000
 - **Backend**: http://localhost:3001
 - **API**: http://localhost:3001/api
+
+## 🔄 Update von älteren Versionen
+
+### Automatische Migration (ab v1.4.0)
+
+Das System ist **vollständig abwärtskompatibel**! Beim ersten Start nach dem Update:
+
+1. **Server starten** (Migration läuft automatisch):
+   ```bash
+   ./start_server.sh
+   ```
+   - Database-Migration läuft automatisch beim ersten Start
+   - Neue Felder werden hinzugefügt
+   - Bestehende Daten bleiben erhalten
+
+2. **Alte Arbeitsstunden automatisch umrechnen** (optional aber empfohlen):
+   ```bash
+   cd backend
+   node convert-old-data.js
+   ```
+   
+   Das Script konvertiert:
+   - `arbeitsstunden_pro_tag` (8h) → `wochenarbeitszeit_stunden` (40h)
+   - Setzt Standardwerte für neue Felder
+   - Erhält alte Tabellen als Backup
+
+3. **Bestehende Features prüfen**:
+   - ✅ Termine bleiben unverändert
+   - ✅ Kunden und Fahrzeuge bleiben erhalten
+   - ✅ Mitarbeiter arbeiten weiterhin mit alten ODER neuen Werten
+   - ✅ Alte Abwesenheiten → `abwesenheiten_legacy` (als Backup)
+
+### Was ist neu in v1.4.0?
+
+**Wochenarbeitszeit-Management:**
+- Flexible Arbeitszeitmodelle (Teilzeit, Vollzeit, individuelle Wochenstunden)
+- Samstagsarbeit mit Zeitfenstern (z.B. 9-12 Uhr)
+- Erweiterte Abwesenheitsverwaltung (Urlaub, Krank, Lehrgang, Berufsschule)
+- Intelligente Kapazitätsberechnung mit Überlastungswarnung
+- Automatische Terminverschiebung auf nächsten freien Tag
+
+📖 **Detaillierte Migrations-Anleitung:** Siehe [MIGRATION-ALT-NEU.md](MIGRATION-ALT-NEU.md)
+
+---
 
 ## Manuelle Installation
 

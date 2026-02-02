@@ -8868,6 +8868,34 @@ mark.highlight {
     margin-top: 4px;
 }
 
+/* Kapazitäts-Anzeige mit Farben */
+.kapazitaet-wert {
+    display: inline-block;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-weight: 600;
+}
+
+.kapazitaet-wert.auslastung-low {
+    background: #e8f5e9;
+    color: #2e7d32;
+}
+
+.kapazitaet-wert.auslastung-medium {
+    background: #fff3e0;
+    color: #ef6c00;
+}
+
+.kapazitaet-wert.auslastung-high {
+    background: #ffebee;
+    color: #c62828;
+}
+
+.kapazitaet-abwesend {
+    color: #c62828;
+    font-style: italic;
+}
+
 .timeline-track {
     flex: 1;
     position: relative;

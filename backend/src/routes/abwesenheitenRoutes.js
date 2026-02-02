@@ -8,18 +8,16 @@ const AbwesenheitenController = require('../controllers/abwesenheitenController'
 router.get('/', AbwesenheitenController.getAll);
 router.get('/liste', AbwesenheitenController.getAll);
 router.get('/range', AbwesenheitenController.getByDateRange);
+router.get('/datum/:datum', AbwesenheitenController.getForDate);
+router.get('/mitarbeiter/:id', AbwesenheitenController.getByMitarbeiterId);
+router.get('/lehrling/:id', AbwesenheitenController.getByLehrlingId);
 router.post('/', AbwesenheitenController.create);
+router.put('/:id', AbwesenheitenController.update);
+router.delete('/:id', AbwesenheitenController.delete);
+router.get('/:id', AbwesenheitenController.getById);
 
 // Legacy-Routes für alte Abwesenheiten-Tabelle
 router.get('/legacy/:datum', AbwesenheitenController.getByDatum);
 router.put('/legacy/:datum', AbwesenheitenController.upsert);
-
-// DELETE und einzelne ID-Abfrage für neue Abwesenheiten
-router.delete('/item/:id', AbwesenheitenController.delete);
-router.get('/item/:id', AbwesenheitenController.getById);
-
-// Backward compatibility - alte Routes für Datum-basiert (MUSS am Ende stehen!)
-router.get('/:datum', AbwesenheitenController.getByDatum);
-router.put('/:datum', AbwesenheitenController.upsert);
 
 module.exports = router;

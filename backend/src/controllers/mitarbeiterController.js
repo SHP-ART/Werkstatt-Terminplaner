@@ -37,10 +37,26 @@ class MitarbeiterController {
   }
 
   static async create(req, res) {
-    const { name, arbeitsstunden_pro_tag, nebenzeit_prozent, aktiv, nur_service, mittagspause_start } = req.body;
+    const { name, arbeitsstunden_pro_tag, nebenzeit_prozent, aktiv, nur_service, mittagspause_start,
+            wochenarbeitszeit_stunden, arbeitstage_pro_woche, pausenzeit_minuten,
+            samstag_aktiv, samstag_start, samstag_ende, samstag_pausenzeit_minuten } = req.body;
 
     if (!name || name.trim() === '') {
       return res.status(400).json({ error: 'Name ist erforderlich' });
+    }
+
+    // Validierung Wochenarbeitszeit
+    if (wochenarbeitszeit_stunden !== undefined && (wochenarbeitszeit_stunden < 1 || wochenarbeitszeit_stunden > 168)) {
+      return res.status(400).json({ error: 'Wochenarbeitszeit muss zwischen 1 und 168 Stunden liegen' });
+    }
+    if (arbeitstage_pro_woche !== undefined && (arbeitstage_pro_woche < 1 || arbeitstage_pro_woche > 6)) {
+      return res.status(400).json({ error: 'Arbeitstage pro Woche müssen zwischen 1 und 6 liegen' });
+    }
+    if (pausenzeit_minuten !== undefined && (pausenzeit_minuten < 0 || pausenzeit_minuten > 120)) {
+      return res.status(400).json({ error: 'Pausenzeit muss zwischen 0 und 120 Minuten liegen' });
+    }
+    if (samstag_pausenzeit_minuten !== undefined && (samstag_pausenzeit_minuten < 0 || samstag_pausenzeit_minuten > 120)) {
+      return res.status(400).json({ error: 'Samstag-Pausenzeit muss zwischen 0 und 120 Minuten liegen' });
     }
 
     const data = {
@@ -49,7 +65,14 @@ class MitarbeiterController {
       nebenzeit_prozent: nebenzeit_prozent !== undefined ? parseFloat(nebenzeit_prozent) : 0,
       aktiv: aktiv !== undefined ? (aktiv ? 1 : 0) : 1,
       nur_service: nur_service !== undefined ? (nur_service ? 1 : 0) : 0,
-      mittagspause_start: mittagspause_start || '12:00'
+      mittagspause_start: mittagspause_start || '12:00',
+      wochenarbeitszeit_stunden: wochenarbeitszeit_stunden !== undefined ? parseFloat(wochenarbeitszeit_stunden) : 40,
+      arbeitstage_pro_woche: arbeitstage_pro_woche !== undefined ? parseInt(arbeitstage_pro_woche, 10) : 5,
+      pausenzeit_minuten: pausenzeit_minuten !== undefined ? parseInt(pausenzeit_minuten, 10) : 30,
+      samstag_aktiv: samstag_aktiv !== undefined ? (samstag_aktiv ? 1 : 0) : 0,
+      samstag_start: samstag_start || '09:00',
+      samstag_ende: samstag_ende || '12:00',
+      samstag_pausenzeit_minuten: samstag_pausenzeit_minuten !== undefined ? parseInt(samstag_pausenzeit_minuten, 10) : 0
     };
 
     try {
@@ -73,7 +96,9 @@ class MitarbeiterController {
         return res.status(404).json({ error: 'Mitarbeiter nicht gefunden' });
       }
 
-      const { name, arbeitsstunden_pro_tag, nebenzeit_prozent, aktiv, nur_service, mittagspause_start } = req.body;
+      const { name, arbeitsstunden_pro_tag, nebenzeit_prozent, aktiv, nur_service, mittagspause_start,
+              wochenarbeitszeit_stunden, arbeitstage_pro_woche, pausenzeit_minuten,
+              samstag_aktiv, samstag_start, samstag_ende, samstag_pausenzeit_minuten } = req.body;
       const data = {};
 
       if (name !== undefined) {
@@ -93,6 +118,39 @@ class MitarbeiterController {
       }
       if (mittagspause_start !== undefined) {
         data.mittagspause_start = mittagspause_start;
+      }
+      if (wochenarbeitszeit_stunden !== undefined) {
+        if (wochenarbeitszeit_stunden < 1 || wochenarbeitszeit_stunden > 168) {
+          return res.status(400).json({ error: 'Wochenarbeitszeit muss zwischen 1 und 168 Stunden liegen' });
+        }
+        data.wochenarbeitszeit_stunden = parseFloat(wochenarbeitszeit_stunden);
+      }
+      if (arbeitstage_pro_woche !== undefined) {
+        if (arbeitstage_pro_woche < 1 || arbeitstage_pro_woche > 6) {
+          return res.status(400).json({ error: 'Arbeitstage pro Woche müssen zwischen 1 und 6 liegen' });
+        }
+        data.arbeitstage_pro_woche = parseInt(arbeitstage_pro_woche, 10);
+      }
+      if (pausenzeit_minuten !== undefined) {
+        if (pausenzeit_minuten < 0 || pausenzeit_minuten > 120) {
+          return res.status(400).json({ error: 'Pausenzeit muss zwischen 0 und 120 Minuten liegen' });
+        }
+        data.pausenzeit_minuten = parseInt(pausenzeit_minuten, 10);
+      }
+      if (samstag_aktiv !== undefined) {
+        data.samstag_aktiv = samstag_aktiv ? 1 : 0;
+      }
+      if (samstag_start !== undefined) {
+        data.samstag_start = samstag_start;
+      }
+      if (samstag_ende !== undefined) {
+        data.samstag_ende = samstag_ende;
+      }
+      if (samstag_pausenzeit_minuten !== undefined) {
+        if (samstag_pausenzeit_minuten < 0 || samstag_pausenzeit_minuten > 120) {
+          return res.status(400).json({ error: 'Samstag-Pausenzeit muss zwischen 0 und 120 Minuten liegen' });
+        }
+        data.samstag_pausenzeit_minuten = parseInt(samstag_pausenzeit_minuten, 10);
       }
 
       const result = await MitarbeiterModel.update(id, data);
