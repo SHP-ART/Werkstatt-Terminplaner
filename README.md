@@ -1,6 +1,6 @@
 # Werkstatt Terminplaner
 
-[![Version](https://img.shields.io/badge/version-1.4.5-blue.svg)](https://github.com/SHP-ART/Werkstatt-Terminplaner/releases)
+[![Version](https://img.shields.io/badge/version-1.5.0-blue.svg)](https://github.com/SHP-ART/Werkstatt-Terminplaner/releases)
 [![Node.js](https://img.shields.io/badge/node-%3E%3D14.0.0-brightgreen.svg)](https://nodejs.org)
 [![License](https://img.shields.io/badge/license-Proprietary-red.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey.svg)](README.md)
@@ -260,24 +260,67 @@ Die Skripte erledigen automatisch:
 
 ## 🔄 Update von älteren Versionen
 
-### Automatische Migration (ab v1.4.0)
+### Automatische Migration (ab v1.5.0)
 
-Das System ist **vollständig abwärtskompatibel**! Beim ersten Start nach dem Update:
+Das System ist **vollständig abwärtskompatibel** und führt alle Migrationen automatisch durch!
 
-1. **Server starten** (Migration läuft automatisch):
+#### Update-Prozess für alle Installationen:
+
+1. **Neuen Code herunterladen**:
    ```bash
-   ./start_server.sh
+   git pull origin master
    ```
-   - Database-Migration läuft automatisch beim ersten Start
-   - Neue Felder werden hinzugefügt
-   - Bestehende Daten bleiben erhalten
 
-2. **Alte Arbeitsstunden automatisch umrechnen** (optional aber empfohlen):
+2. **Server starten** - das war's! 🎉
    ```bash
-   cd backend
-   node convert-old-data.js
+   ./start.sh        # macOS/Linux
+   start.bat         # Windows
    ```
-   
+
+**Was passiert automatisch:**
+- ✅ **Automatisches Backup** vor jeder Migration
+- ✅ **Schema-Migration** auf aktuelle Version
+- ✅ **Datenmigration** von JSON → Relational (ab v1.5.0)
+- ✅ **Berechnung aller Zeitwerte** (Nebenzeit, Pausen, Faktoren)
+- ✅ **Performance-Indizes** werden erstellt
+- ✅ **Alte Daten bleiben erhalten**
+
+#### Migration-Status prüfen:
+
+```bash
+# macOS/Linux
+tail -100 logs/backend.log | grep -i migration
+
+# Windows
+type logs\backend.log | findstr /i migration
+```
+
+**Erfolgreiche Migration** zeigt:
+```
+✓ termine_arbeiten Tabelle mit Indizes erstellt
+🔄 Migriere 59 Termine...
+✅ Migriert: 38 Arbeitszeiten
+✓ Datenmigration abgeschlossen
+✅ Schema-Version aktualisiert auf: 13
+```
+
+#### Detaillierte Dokumentation:
+
+Siehe [AUTOMATISCHE-MIGRATION.md](AUTOMATISCHE-MIGRATION.md) für:
+- Technische Details zur Migration
+- Fehlerbehebung
+- Rollback-Anleitung
+- Entwickler-Informationen
+
+### Manuelle Migration (nur bei Problemen):
+
+Falls die automatische Migration nicht funktioniert:
+
+```bash
+cd backend
+node migrate-arbeitszeiten-to-table.js
+```
+
    Das Script konvertiert:
    - `arbeitsstunden_pro_tag` (8h) → `wochenarbeitszeit_stunden` (40h)
    - Setzt Standardwerte für neue Felder
