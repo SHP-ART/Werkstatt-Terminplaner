@@ -188,9 +188,19 @@ function createAutoBackup() {
         fs.mkdirSync(backupDir, { recursive: true });
       }
 
-      // Backup-Dateiname mit Zeitstempel
+      // Backup-Dateiname mit Zeitstempel (lokale Zeit, nicht UTC)
       const now = new Date();
-      const timestamp = now.toISOString().replace(/[:.]/g, '-').slice(0, 19);
+      const timestamp = [
+        now.getFullYear(),
+        String(now.getMonth() + 1).padStart(2, '0'),
+        String(now.getDate()).padStart(2, '0'),
+        'T',
+        String(now.getHours()).padStart(2, '0'),
+        '-',
+        String(now.getMinutes()).padStart(2, '0'),
+        '-',
+        String(now.getSeconds()).padStart(2, '0')
+      ].join('');
       const backupFileName = `werkstatt_backup_${timestamp}.db`;
       const backupPath = path.join(backupDir, backupFileName);
 
