@@ -20646,19 +20646,11 @@ class App {
       const draggingArbeitIndex = draggingEl ? draggingEl.dataset.arbeitIndex : null;
       const excludeArbeitIdx = draggingArbeitIndex !== undefined ? parseInt(draggingArbeitIndex) : null;
       
-      // Berechne optimale Position (mit automatischem Anhängen bei nahen Terminen)
-      const optimalePosition = this.berechneOptimaleStartzeit(element, snappedMinutes, dauer, draggingTerminId, excludeArbeitIdx);
+      // Prüfe nur auf Kollision für visuelles Feedback (ohne automatische Korrektur)
+      const kollisionCheck = this.checkDropKollision(element, snappedMinutes, dauer, draggingTerminId, excludeArbeitIdx);
       
       let anzeigeMinuten = snappedMinutes;
-      let hatKollision = false;
-      
-      if (optimalePosition) {
-        anzeigeMinuten = optimalePosition.startMinutes;
-        newHour = Math.floor(anzeigeMinuten / 60);
-        newMinute = anzeigeMinuten % 60;
-      } else {
-        hatKollision = true;
-      }
+      let hatKollision = kollisionCheck.hatKollision && kollisionCheck.typ === 'termin'; // Nur echte Termin-Überlappungen rot markieren
       
       const zeit = `${String(newHour).padStart(2, '0')}:${String(newMinute).padStart(2, '0')}`;
       const endMinutes = anzeigeMinuten + dauer;
@@ -20666,14 +20658,14 @@ class App {
       const endMinute = endMinutes % 60;
       const endzeit = `${String(endHour).padStart(2, '0')}:${String(endMinute).padStart(2, '0')}`;
       
-      // Indikator aktualisieren (mit Anpassungshinweis)
-      if (optimalePosition && optimalePosition.angepasst) {
-        this.updateDragTimeIndicator(e.clientX, e.clientY, `→ ${zeit}`, endzeit);
+      // Indikator aktualisieren (mit Warnzeichen bei Überlappung)
+      if (hatKollision) {
+        this.updateDragTimeIndicator(e.clientX, e.clientY, `⚠️ ${zeit}`, endzeit);
       } else {
         this.updateDragTimeIndicator(e.clientX, e.clientY, zeit, endzeit);
       }
       
-      // Positionslinie an der optimalen Position anzeigen
+      // Positionslinie an der gewünschten Position anzeigen (rot bei Kollision)
       const snappedLeftPx = ((newHour - startHour) * 60 + newMinute) * (pixelPerHour / 60);
       
       this.showDragPositionLine(element, snappedLeftPx, hatKollision ? { hatKollision: true } : null);
@@ -20725,22 +20717,38 @@ class App {
         dauer = parseInt(draggingEl.dataset.dauer);
       }
       
-      // Nutze die neue optimierte Kollisionsprüfung mit automatischem Anhängen
+      // Prüfe nur auf Mittagspausen-Kollision und verschiebe automatisch nach der Pause
       const excludeArbeitIdx = istArbeitBlock ? parseInt(arbeitIndex) : null;
-      const optimalePosition = this.berechneOptimaleStartzeit(element, snappedMinutes, dauer, terminId, excludeArbeitIdx);
+      const kollisionCheck = this.checkDropKollision(element, snappedMinutes, dauer, terminId, excludeArbeitIdx);
       
-      if (!optimalePosition) {
-        // Kein freier Slot gefunden
-        this.showToast(`❌ Kein freier Platz für diesen Termin gefunden`, 'error');
-        return;
-      }
-      
-      snappedMinutes = optimalePosition.startMinutes;
-      newHour = Math.floor(snappedMinutes / 60);
-      newMinute = snappedMinutes % 60;
-      
-      if (optimalePosition.angepasst) {
-        this.showToast(`⏱️ ${String(newHour).padStart(2, '0')}:${String(newMinute).padStart(2, '0')} (${optimalePosition.grund})`, 'info');
+      // Nur bei Pause-Kollision automatisch korrigieren
+      if (kollisionCheck.hatKollision && (kollisionCheck.typ === 'pause-start' || kollisionCheck.typ === 'pause-komplett')) {
+        const nachPause = Math.ceil(kollisionCheck.pauseEndMinutes / raster) * raster;
+        snappedMinutes = nachPause;
+        newHour = Math.floor(snappedMinutes / 60);
+        newMinute = snappedMinutes % 60;
+        this.showToast(`⏱️ ${String(newHour).padStart(2, '0')}:${String(newMinute).padStart(2, '0')} (nach Mittagspause verschoben)`, 'info');
+      } else if (kollisionCheck.naheTermine && kollisionCheck.naheTermine.length > 0) {
+        // Smart-Anhängen bei nahen Terminen
+        const termineVorher = kollisionCheck.naheTermine.filter(t => t.position === 'vorher');
+        if (termineVorher.length > 0) {
+          termineVorher.sort((a, b) => a.abstand - b.abstand);
+          const naechsterVorher = termineVorher[0];
+          const NAHE_GRENZE = 45;
+          const AUFRAEUMPAUSE = 10; // 10 Minuten Puffer
+          
+          if (naechsterVorher.abstand < NAHE_GRENZE && naechsterVorher.abstand > 0) {
+            const mitPuffer = Math.ceil((naechsterVorher.terminEnd + AUFRAEUMPAUSE) / raster) * raster;
+            // Prüfe ob Position mit Puffer frei ist
+            const pufferCheck = this.checkDropKollision(element, mitPuffer, dauer, terminId, excludeArbeitIdx);
+            if (!pufferCheck.hatKollision) {
+              snappedMinutes = mitPuffer;
+              newHour = Math.floor(snappedMinutes / 60);
+              newMinute = snappedMinutes % 60;
+              this.showToast(`⏱️ ${String(newHour).padStart(2, '0')}:${String(newMinute).padStart(2, '0')} (an vorherigen Termin angehängt mit 10 Min Puffer)`, 'info');
+            }
+          }
+        }
       }
       
       const newStartzeit = `${String(newHour).padStart(2, '0')}:${String(newMinute).padStart(2, '0')}`;
@@ -20785,6 +20793,111 @@ class App {
         }
       }
     });
+  }
+
+  // Berechnet die Überlappungsdauer zwischen zwei Zeiträumen in Minuten
+  berechneUeberlappungsDauer(start1, end1, start2, end2) {
+    const ueberlappungStart = Math.max(start1, start2);
+    const ueberlappungEnd = Math.min(end1, end2);
+    
+    if (ueberlappungStart >= ueberlappungEnd) {
+      return 0; // Keine Überlappung
+    }
+    
+    return ueberlappungEnd - ueberlappungStart;
+  }
+
+  // Prüft nach Drop auf Überlappungen und zeigt detaillierte Warnung
+  async checkUndWarneBeiUeberlappung(terminId, startzeit, personId, type, arbeitIndex = null) {
+    try {
+      const termin = await TermineService.getById(terminId);
+      const datum = document.getElementById('auslastungDragDropDatum')?.value;
+      
+      // Berechne Startzeit in Minuten
+      const [startH, startM] = startzeit.split(':').map(Number);
+      const startMinutes = startH * 60 + startM;
+      
+      // Hole Dauer des Termins/Arbeitsblocks
+      let dauer = 30;
+      if (arbeitIndex !== null && termin.arbeitszeiten_details) {
+        const details = typeof termin.arbeitszeiten_details === 'string' 
+          ? JSON.parse(termin.arbeitszeiten_details) 
+          : termin.arbeitszeiten_details;
+        
+        const arbeiten = Object.entries(details).filter(([key]) => !key.startsWith('_'));
+        if (arbeiten[arbeitIndex]) {
+          const [, arbeitData] = arbeiten[arbeitIndex];
+          dauer = parseInt(arbeitData.zeit || arbeitData) || 30;
+        }
+      } else {
+        dauer = parseInt(termin.geschaetzte_zeit) || 30;
+      }
+      
+      const endMinutes = startMinutes + dauer;
+      
+      // Hole alle Termine der gleichen Person am gleichen Tag
+      const auslastungData = await AuslastungService.getByDateRange(datum, datum);
+      const personTermine = type === 'mitarbeiter' 
+        ? auslastungData.mitarbeiter.find(m => m.id === parseInt(personId))?.termine || []
+        : auslastungData.lehrlinge.find(l => l.id === parseInt(personId))?.termine || [];
+      
+      // Prüfe auf Überlappungen
+      const ueberlappungen = [];
+      for (const andererTermin of personTermine) {
+        if (andererTermin.id === parseInt(terminId)) continue; // Eigenen Termin überspringen
+        
+        if (andererTermin.startzeit) {
+          const [ah, am] = andererTermin.startzeit.split(':').map(Number);
+          const andererStart = ah * 60 + am;
+          const andererEnd = andererStart + (parseInt(andererTermin.geschaetzte_zeit) || 30);
+          
+          const ueberlappungsDauer = this.berechneUeberlappungsDauer(startMinutes, endMinutes, andererStart, andererEnd);
+          
+          if (ueberlappungsDauer > 0) {
+            const kunde = andererTermin.kunde_vorname && andererTermin.kunde_nachname
+              ? `${andererTermin.kunde_vorname} ${andererTermin.kunde_nachname}`
+              : 'Unbekannt';
+            const fahrzeug = andererTermin.fahrzeug_marke && andererTermin.fahrzeug_modell
+              ? `${andererTermin.fahrzeug_marke} ${andererTermin.fahrzeug_modell}`
+              : '';
+            
+            ueberlappungen.push({
+              terminId: andererTermin.id,
+              kunde,
+              fahrzeug,
+              startzeit: andererTermin.startzeit,
+              endzeit: `${String(Math.floor(andererEnd / 60)).padStart(2, '0')}:${String(andererEnd % 60).padStart(2, '0')}`,
+              dauer: ueberlappungsDauer
+            });
+          }
+        }
+      }
+      
+      // Zeige Warnung wenn Überlappungen gefunden
+      if (ueberlappungen.length > 0) {
+        const aenderung = this.planungAenderungen.get(terminId);
+        if (aenderung) {
+          if (!aenderung.ueberlappungen) {
+            aenderung.ueberlappungen = [];
+          }
+          aenderung.ueberlappungen = ueberlappungen;
+        }
+        
+        // Zeige detaillierte Toast-Warnung
+        for (const ueberlappung of ueberlappungen) {
+          const info = ueberlappung.fahrzeug 
+            ? `${ueberlappung.kunde} - ${ueberlappung.fahrzeug}`
+            : ueberlappung.kunde;
+          this.showToast(
+            `⚠️ ${ueberlappung.dauer} Min Überlappung mit ${info} (${ueberlappung.startzeit}-${ueberlappung.endzeit})`,
+            'warning',
+            5000
+          );
+        }
+      }
+    } catch (error) {
+      console.error('Fehler bei Überlappungsprüfung:', error);
+    }
   }
 
   // Prüft ob ein Drop an dieser Position eine Kollision verursacht
@@ -20962,9 +21075,10 @@ class App {
         termineVorher.sort((a, b) => a.abstand - b.abstand);
         const naechsterVorher = termineVorher[0];
         
-        // Wenn der Abstand klein ist, direkt anhängen
+        // Wenn der Abstand klein ist, direkt anhängen mit 10 Min Aufräumpause
         if (naechsterVorher.abstand < NAHE_GRENZE && naechsterVorher.abstand > 0) {
-          const angepassteStart = Math.ceil(naechsterVorher.terminEnd / raster) * raster;
+          const AUFRAEUMPAUSE = 10; // 10 Minuten Buffer zwischen Terminen
+          const angepassteStart = Math.ceil((naechsterVorher.terminEnd + AUFRAEUMPAUSE) / raster) * raster;
           
           // Prüfe ob die angepasste Position frei ist
           const neueKollision = this.checkDropKollision(track, angepassteStart, dauer, excludeTerminId, excludeArbeitIndex);
@@ -20972,7 +21086,7 @@ class App {
             return {
               startMinutes: angepassteStart,
               angepasst: true,
-              grund: `an vorherigen Termin angehängt`
+              grund: `an vorherigen Termin angehängt (mit 10 Min Puffer)`
             };
           }
         }
@@ -21056,6 +21170,9 @@ class App {
       
       // UI aktualisieren
       await this.updateArbeitBlockUI(terminId, arbeitName, arbeitIndex, startzeit, mitarbeiterId, lehrlingId, type);
+      
+      // Prüfe auf Überlappungen nach dem Verschieben
+      await this.checkUndWarneBeiUeberlappung(terminId, startzeit, type === 'mitarbeiter' ? mitarbeiterId : lehrlingId, type, arbeitIndex);
       
       // Änderungen-Zähler aktualisieren
       this.updatePlanungAenderungenUI();
@@ -21210,6 +21327,9 @@ class App {
       
       // UI aktualisieren (lokale Vorschau) - await da jetzt async
       await this.updatePlanungTerminUI(terminId, startzeit, aenderung.mitarbeiter_id, aenderung.lehrling_id, type);
+      
+      // Prüfe auf Überlappungen nach dem Verschieben
+      await this.checkUndWarneBeiUeberlappung(terminId, startzeit, type === 'mitarbeiter' ? mitarbeiterId : lehrlingId, type, null);
       
       // Änderungen-Zähler aktualisieren
       this.updatePlanungAenderungenUI();
@@ -21499,6 +21619,63 @@ class App {
     if (this.planungAenderungen.size === 0) {
       this.showToast('Keine Änderungen zum Speichern', 'info');
       return;
+    }
+    
+    // === Überlappungs-Prüfung vor dem Speichern ===
+    const alleUeberlappungen = [];
+    
+    for (const [terminId, aenderung] of this.planungAenderungen) {
+      if (aenderung.ueberlappungen && aenderung.ueberlappungen.length > 0) {
+        const termin = await TermineService.getById(terminId);
+        const kunde = termin.kunde_vorname && termin.kunde_nachname
+          ? `${termin.kunde_vorname} ${termin.kunde_nachname}`
+          : 'Unbekannt';
+        const fahrzeug = termin.fahrzeug_marke && termin.fahrzeug_modell
+          ? `${termin.fahrzeug_marke} ${termin.fahrzeug_modell}`
+          : '';
+        
+        for (const ueberlappung of aenderung.ueberlappungen) {
+          alleUeberlappungen.push({
+            terminId,
+            kunde,
+            fahrzeug,
+            ueberlappung
+          });
+        }
+      }
+    }
+    
+    // Wenn Überlappungen vorhanden, Warnung anzeigen
+    if (alleUeberlappungen.length > 0) {
+      let meldung = `<h3>⚠️ ${alleUeberlappungen.length} Überlappung${alleUeberlappungen.length > 1 ? 'en' : ''} gefunden</h3>`;
+      meldung += '<div style="max-height: 300px; overflow-y: auto; margin: 10px 0;">';
+      
+      for (const item of alleUeberlappungen) {
+        const info = item.fahrzeug ? `${item.kunde} - ${item.fahrzeug}` : item.kunde;
+        const gegnerInfo = item.ueberlappung.fahrzeug 
+          ? `${item.ueberlappung.kunde} - ${item.ueberlappung.fahrzeug}`
+          : item.ueberlappung.kunde;
+        
+        meldung += `<div style="margin: 5px 0; padding: 8px; background: #fff3cd; border-radius: 4px;">`;
+        meldung += `<strong>${info}</strong><br>`;
+        meldung += `↔️ ${item.ueberlappung.dauer} Min mit ${gegnerInfo}<br>`;
+        meldung += `<small>(${item.ueberlappung.startzeit}-${item.ueberlappung.endzeit})</small>`;
+        meldung += `</div>`;
+      }
+      
+      meldung += '</div>';
+      meldung += '<p><strong>Trotzdem speichern?</strong></p>';
+      
+      const confirmed = await this.showConfirmDialog(
+        'Überlappungen vorhanden',
+        meldung,
+        'Trotzdem speichern',
+        'Abbrechen'
+      );
+      
+      if (!confirmed) {
+        return; // Benutzer hat abgebrochen
+      }
     }
     
     // === Abholzeit-Prüfung vor dem Speichern ===
@@ -24670,11 +24847,13 @@ class App {
       const aktiveMitarbeiter = mitarbeiter.filter(m => m.aktiv === 1);
       const aktiveLehrlinge = lehrlinge.filter(l => l.aktiv === 1);
 
-      // Filtere relevante Termine
-      const relevanteTermine = termineHeute.filter(t =>
-        t.arbeit !== 'Fahrzeug aus Import' &&
-        t.arbeit !== 'Fahrzeug hinzugefügt'
-      );
+      // Filtere relevante Termine (keine Import-Termine und keine internen Termine)
+      const relevanteTermine = termineHeute.filter(t => {
+        const istIntern = t.ist_intern === 1 || t.ist_intern === true || t.ist_intern === '1';
+        return !istIntern &&
+          t.arbeit !== 'Fahrzeug aus Import' &&
+          t.arbeit !== 'Fahrzeug hinzugefügt';
+      });
 
       // Arbeitszeiten für heute laden (für alle Mitarbeiter und Lehrlinge)
       const arbeitszeitenPromises = [

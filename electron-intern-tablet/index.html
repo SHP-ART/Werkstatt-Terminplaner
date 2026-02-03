@@ -1098,10 +1098,12 @@
         const aktiveMitarbeiter = mitarbeiter.filter(m => m.aktiv === 1);
         const aktiveLehrlinge = lehrlinge.filter(l => l.aktiv === 1);
 
-        const relevanteTermine = termine.filter(t =>
-          t.arbeit !== 'Fahrzeug aus Import' &&
-          t.arbeit !== 'Fahrzeug hinzugefügt'
-        );
+        const relevanteTermine = termine.filter(t => {
+          const istIntern = t.ist_intern === 1 || t.ist_intern === true || t.ist_intern === '1';
+          return !istIntern &&
+            t.arbeit !== 'Fahrzeug aus Import' &&
+            t.arbeit !== 'Fahrzeug hinzugefügt';
+        });
 
         // Arbeitszeiten für heute laden (für alle Mitarbeiter und Lehrlinge)
         const arbeitszeitenPromises = [
