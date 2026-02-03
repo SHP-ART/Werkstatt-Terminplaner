@@ -20119,7 +20119,7 @@ class App {
     let startzeit = termin.startzeit || termin.bring_zeit || '08:00';
     const [startH, startM] = startzeit.split(':').map(Number);
     
-    // Dauer in Minuten
+    // Dauer in Minuten (reine Arbeitszeit ohne Pause)
     const dauer = this.getTerminGesamtdauer(termin);
     
     // Berechne Start- und Endminuten
@@ -20142,7 +20142,7 @@ class App {
       // Termin muss aufgeteilt werden!
       const elements = [];
       
-      // Teil 1: Vor der Pause
+      // Teil 1: Vor der Pause (Dauer bis Pausenbeginn)
       const teil1Dauer = pauseStartMinuten - startMinutes;
       const teil1 = this.createTimelineTerminElement(
         termin, startHour, endHour, type, isSchwebend,
@@ -20151,7 +20151,10 @@ class App {
       if (teil1) elements.push(teil1);
       
       // Teil 2: Nach der Pause
-      const teil2Dauer = endMinutes - pauseEndMinuten;
+      // WICHTIG: Die restliche Arbeitsdauer wird NACH der Pause fortgesetzt
+      // Die Pausenzeit verlängert also die Gesamtdauer des Termins
+      const teil2Dauer = dauer - teil1Dauer; // Verbleibende Arbeitszeit
+      
       if (teil2Dauer > 0) {
         const teil2StartH = Math.floor(pauseEndMinuten / 60);
         const teil2StartM = pauseEndMinuten % 60;
