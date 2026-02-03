@@ -153,6 +153,12 @@ class App {
     this.setupWebSocket();
     this.setupErsatzautoOptionHandlers();
     this.loadServerVersion();
+    
+    // Sicherstellen, dass Abholdetails beim initialen Laden angezeigt werden
+    // Timeout, um sicherzustellen, dass DOM vollständig geladen ist
+    setTimeout(() => {
+      this.toggleAbholungDetails();
+    }, 100);
   }
 
   // === Performance-Optimierung: Tab-Element-Caching ===
