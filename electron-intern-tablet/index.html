@@ -90,6 +90,37 @@
       background: #1565c0;
     }
 
+    /* ========== DISPLAY OFF OVERLAY ========== */
+    #displayOffOverlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: #000000;
+      z-index: 9999;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      flex-direction: column;
+      color: #333;
+    }
+
+    #displayOffOverlay.active {
+      display: flex;
+    }
+
+    .display-off-icon {
+      font-size: 4em;
+      margin-bottom: 20px;
+      opacity: 0.3;
+    }
+
+    .display-off-text {
+      font-size: 1.5em;
+      opacity: 0.3;
+    }
+
     /* ========== MAIN CONTENT ========== */
     .main-content {
       flex: 1;
@@ -468,6 +499,12 @@
   </style>
 </head>
 <body>
+  <!-- Display Off Overlay -->
+  <div id="displayOffOverlay">
+    <div class="display-off-icon">🌙</div>
+    <div class="display-off-text">Display ist außerhalb der Betriebszeiten</div>
+  </div>
+
   <!-- Header -->
   <div class="header">
     <div class="header-title">
@@ -520,6 +557,23 @@
         </label>
       </div>
 
+      <div style="margin-bottom: 15px; padding: 15px; background: rgba(0,0,0,0.1); border-radius: 8px;">
+        <div style="font-weight: 600; margin-bottom: 10px;">🌙 Display-Timer</div>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+          <div>
+            <label style="display: block; margin-bottom: 5px; font-size: 0.9em;">Ausschalten um:</label>
+            <input type="time" id="settingsDisplayOffTime" style="width: 100%; padding: 8px; border-radius: 6px; border: 1px solid var(--card-border); background: var(--primary); color: var(--text);">
+          </div>
+          <div>
+            <label style="display: block; margin-bottom: 5px; font-size: 0.9em;">Einschalten um:</label>
+            <input type="time" id="settingsDisplayOnTime" style="width: 100%; padding: 8px; border-radius: 6px; border: 1px solid var(--card-border); background: var(--primary); color: var(--text);">
+          </div>
+        </div>
+        <div style="font-size: 0.8em; color: var(--text-muted); margin-top: 8px;">
+          ℹ️ Display wird automatisch schwarz geschaltet außerhalb dieser Zeiten. Data-Refresh läuft weiter.
+        </div>
+      </div>
+
       <div style="margin-bottom: 20px; padding: 10px; background: rgba(0,0,0,0.2); border-radius: 8px; font-size: 0.85em;" id="configPathInfo">
         <div style="color: var(--text-muted); margin-bottom: 5px;">📁 Konfigurations-Datei:</div>
         <div id="configPathDisplay" style="font-family: monospace; word-break: break-all; color: var(--accent);">-</div>
@@ -538,7 +592,9 @@
       backendUrl: 'http://localhost:3000',
       refreshInterval: 30,
       fullscreen: true,
-      autostart: false
+      autostart: false,
+      displayOffTime: '18:10',
+      displayOnTime: '07:30'
     };
 
     // Lade gespeicherte Einstellungen
@@ -557,6 +613,18 @@
           CONFIG = { ...CONFIG, ...electronConfig };
           isElectron = true;
           console.log('Electron-Konfiguration geladen:', CONFIG);
+
+          // Display-Status-Listener registrieren
+          window.electronAPI.onDisplayStatus((shouldBeOff) => {
+            const overlay = document.getElementById('displayOffOverlay');
+            if (overlay) {
+              if (shouldBeOff) {
+                overlay.classList.add('active');
+              } else {
+                overlay.classList.remove('active');
+              }
+            }
+          });
         } catch (e) {
           console.warn('Keine Electron-API verfügbar');
         }
@@ -1083,6 +1151,8 @@
       document.getElementById('settingsRefreshInterval').value = CONFIG.refreshInterval;
       document.getElementById('settingsFullscreen').checked = CONFIG.fullscreen !== false;
       document.getElementById('settingsAutostart').checked = CONFIG.autostart === true;
+      document.getElementById('settingsDisplayOffTime').value = CONFIG.displayOffTime || '18:10';
+      document.getElementById('settingsDisplayOnTime').value = CONFIG.displayOnTime || '07:30';
 
       // Autostart-Option nur in Electron anzeigen
       document.getElementById('autostartOption').style.display = isElectron ? 'block' : 'none';
@@ -1112,7 +1182,9 @@
         backendUrl: document.getElementById('settingsBackendUrl').value.trim(),
         refreshInterval: parseInt(document.getElementById('settingsRefreshInterval').value) || 30,
         fullscreen: document.getElementById('settingsFullscreen').checked,
-        autostart: document.getElementById('settingsAutostart').checked
+        autostart: document.getElementById('settingsAutostart').checked,
+        displayOffTime: document.getElementById('settingsDisplayOffTime').value,
+        displayOnTime: document.getElementById('settingsDisplayOnTime').value
       };
 
       // In Electron: Über die API speichern

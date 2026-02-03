@@ -9,6 +9,7 @@ Eigenständige Electron-App für die Team-Übersicht auf Tablets im Vollbild-Mod
 - ⏱️ Echtzeit-Fortschrittsanzeige
 - 🔄 Auto-Refresh alle 30 Sekunden (konfigurierbar)
 - 📺 Vollbild-Modus für Tablets
+- 🌙 **Display-Timer** - automatisches Ausschalten außerhalb der Betriebszeiten
 - ⚙️ Einstellungen direkt in der App änderbar
 - 📁 **Externe config.json** neben der .exe
 - 🚀 **Autostart** bei Windows-Anmeldung
@@ -72,7 +73,9 @@ Inhalt der **config.json**:
   "fullscreen": true,
   "kiosk": false,
   "refreshInterval": 30,
-  "autostart": true
+  "autostart": true,
+  "displayOffTime": "18:10",
+  "displayOnTime": "07:30"
 }
 ```
 
@@ -83,6 +86,23 @@ Inhalt der **config.json**:
 | `kiosk` | `true` = Kiosk-Modus (kein Taskbar, kein Alt+Tab) |
 | `refreshInterval` | Auto-Refresh in Sekunden |
 | `autostart` | `true` = Startet automatisch bei Windows-Anmeldung |
+| `displayOffTime` | Uhrzeit zum Ausschalten (Format: HH:MM) |
+| `displayOnTime` | Uhrzeit zum Einschalten (Format: HH:MM) |
+
+### Display-Timer
+
+Der Display-Timer schaltet das Display automatisch schwarz außerhalb der konfigurierten Betriebszeiten. Die App läuft im Hintergrund weiter und aktualisiert die Daten.
+
+**Beispiel:** Display aus um 18:10, Display an um 07:30
+
+```json
+{
+  "displayOffTime": "18:10",
+  "displayOnTime": "07:30"
+}
+```
+
+Das Display wird zwischen 18:10 Uhr abends und 07:30 Uhr morgens schwarz geschaltet, um Energie zu sparen und das Display zu schonen.
 
 ### Einstellungen in der App ändern
 

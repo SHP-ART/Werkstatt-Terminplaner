@@ -219,5 +219,3 @@ module.exports = {
     console.log('  ✓ Wochenarbeitszeit-Migration erfolgreich abgeschlossen');
   }
 };
-  }
-};

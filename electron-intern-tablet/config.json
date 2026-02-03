@@ -3,5 +3,7 @@
   "fullscreen": true,
   "kiosk": false,
   "refreshInterval": 30,
-  "autostart": false
+  "autostart": false,
+  "displayOffTime": "18:10",
+  "displayOnTime": "07:30"
 }

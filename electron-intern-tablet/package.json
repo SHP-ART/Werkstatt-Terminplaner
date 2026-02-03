@@ -24,22 +24,16 @@
     "win": {
       "target": [
         {
-          "target": "portable",
-          "arch": ["x64"]
-        },
-        {
           "target": "nsis",
-          "arch": ["x64"]
+          "arch": ["ia32", "x64"]
         }
       ],
       "icon": "icon.ico"
     },
     "nsis": {
       "oneClick": true,
-      "allowToChangeInstallationDirectory": false
-    },
-    "portable": {
-      "artifactName": "WerkstattIntern-Portable.exe"
+      "allowToChangeInstallationDirectory": false,
+      "artifactName": "Werkstatt-Intern-Setup-${version}-${arch}.exe"
     },
     "files": [
       "**/*",

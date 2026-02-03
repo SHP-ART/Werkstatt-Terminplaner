@@ -9,7 +9,9 @@ const DEFAULT_CONFIG = {
   fullscreen: true,
   kiosk: false,
   refreshInterval: 30,
-  autostart: false
+  autostart: false,
+  displayOffTime: '18:10',
+  displayOnTime: '07:30'
 };
 
 // Config-Datei Pfad (neben der .exe)
@@ -78,6 +80,7 @@ let CONFIG = loadConfig();
 
 let mainWindow;
 let tray = null;
+let displayTimer = null;
 
 function createWindow() {
   // Bildschirmgröße ermitteln
@@ -126,6 +129,53 @@ function createWindow() {
   mainWindow.on('closed', () => {
     mainWindow = null;
   });
+
+  // Display-Timer starten
+  startDisplayTimer();
+}
+
+// ========== DISPLAY-TIMER ==========
+function startDisplayTimer() {
+  // Bestehenden Timer aufräumen
+  if (displayTimer) {
+    clearInterval(displayTimer);
+  }
+
+  // Prüfe alle 30 Sekunden
+  displayTimer = setInterval(() => {
+    checkDisplaySchedule();
+  }, 30000);
+
+  // Sofort prüfen
+  checkDisplaySchedule();
+}
+
+function checkDisplaySchedule() {
+  if (!mainWindow || !CONFIG.displayOffTime || !CONFIG.displayOnTime) {
+    return;
+  }
+
+  const now = new Date();
+  const currentTime = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+
+  const offTime = CONFIG.displayOffTime;
+  const onTime = CONFIG.displayOnTime;
+
+  let shouldBeOff = false;
+
+  // Prüfe ob wir im "Aus"-Zeitfenster sind
+  if (offTime < onTime) {
+    // Normaler Fall (z.B. 18:10 bis 07:30 nächster Tag)
+    shouldBeOff = currentTime >= offTime || currentTime < onTime;
+  } else {
+    // Falls jemand z.B. 07:30 bis 18:10 als "Aus" definiert (ungewöhnlich)
+    shouldBeOff = currentTime >= offTime && currentTime < onTime;
+  }
+
+  // Display-Status an Renderer senden
+  if (mainWindow && mainWindow.webContents) {
+    mainWindow.webContents.send('display-status', shouldBeOff);
+  }
 }
 
 // App bereit
@@ -165,6 +215,11 @@ ipcMain.handle('save-config', (event, newConfig) => {
 
   // Autostart aktualisieren
   setAutostart(CONFIG.autostart);
+
+  // Display-Timer neu starten wenn Zeiten geändert wurden
+  if (newConfig.displayOffTime || newConfig.displayOnTime) {
+    startDisplayTimer();
+  }
 
   return CONFIG;
 });
