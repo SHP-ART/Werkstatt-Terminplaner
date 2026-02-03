@@ -266,6 +266,21 @@ async function startServer(clientCountCallback, requestLogCallback) {
         throw dbError;
     }
 
+    // Automatische Endzeiten-Migration (einmalig nach Update)
+    logStartup('Prüfe Endzeiten-Migration...');
+    try {
+        const { migrateEndzeitenIfNeeded } = require('./utils/endzeit-migration');
+        const migrationResult = await migrateEndzeitenIfNeeded();
+        if (migrationResult.migrated) {
+            logStartup(`Endzeiten-Migration abgeschlossen: ${migrationResult.migrated} Termine aktualisiert`);
+        } else if (migrationResult.skipped) {
+            logStartup('Endzeiten-Migration übersprungen (bereits durchgeführt)');
+        }
+    } catch (migrationError) {
+        logStartup(`WARNUNG: Endzeiten-Migration fehlgeschlagen: ${migrationError.message}`, 'WARN');
+        // Server trotzdem starten
+    }
+
     // Health-Check-Endpoint SOFORT verfügbar (vor anderen Routes)
     const { dbWrapper } = require('./config/database');
     app.get('/api/health', (req, res) => {

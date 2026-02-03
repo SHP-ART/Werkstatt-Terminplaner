@@ -24697,13 +24697,21 @@ class App {
       const restzeit = this.berechneRestzeitMitFaktoren(aktuellerAuftrag, person, isLehrling, kontext);
       const isUeberzogen = fortschritt > 100;
 
+      // Arbeitszeiten aus arbeitszeiten_details extrahieren
+      const arbeitenDetails = this.getArbeitenDetailsList(aktuellerAuftrag);
+
       bodyContent = `
         <div class="intern-person-auftrag">
           <div class="auftrag-label">🔧 Aktueller Auftrag</div>
           <div class="auftrag-nr">${aktuellerAuftrag.termin_nr || '-'}</div>
           <div class="auftrag-kunde">${this.escapeHtml(aktuellerAuftrag.kunde_name || '-')}</div>
           <div class="auftrag-kennzeichen">${this.escapeHtml(aktuellerAuftrag.kennzeichen || '-')}</div>
-          <div class="auftrag-arbeit">${this.escapeHtml(aktuellerAuftrag.arbeit || '-')}</div>
+          ${arbeitenDetails.length > 0 
+            ? `<div class="auftrag-arbeiten-liste">
+                ${arbeitenDetails.map(a => `<div class="auftrag-arbeit-item">• ${this.escapeHtml(a.name)} ${a.zeit > 0 ? `(${this.formatMinutesToHours(a.zeit)})` : ''}</div>`).join('')}
+              </div>`
+            : `<div class="auftrag-arbeit">${this.escapeHtml(aktuellerAuftrag.arbeit || '-')}</div>`
+          }
         </div>
 
         <div class="intern-person-zeit">
@@ -24994,6 +25002,42 @@ class App {
     }
 
     return `~${this.formatMinutesToHours(Math.round(restMinuten))}`;
+  }
+
+  /**
+   * Extrahiert Arbeiten aus arbeitszeiten_details für die Anzeige
+   * @param {Object} termin - Der Termin
+   * @returns {Array} Array mit {name, zeit}
+   */
+  getArbeitenDetailsList(termin) {
+    const arbeiten = [];
+    
+    if (!termin.arbeitszeiten_details) {
+      return arbeiten;
+    }
+    
+    try {
+      const details = typeof termin.arbeitszeiten_details === 'string' 
+        ? JSON.parse(termin.arbeitszeiten_details) 
+        : termin.arbeitszeiten_details;
+      
+      for (const [key, value] of Object.entries(details)) {
+        // Meta-Felder überspringen
+        if (key.startsWith('_')) continue;
+        
+        if (typeof value === 'number') {
+          // Einfaches Format: "Ölwechsel": 30
+          arbeiten.push({ name: key, zeit: value });
+        } else if (typeof value === 'object' && value.zeit) {
+          // Detailliertes Format: "Bremsen": { zeit: 90, mitarbeiter_id: 2 }
+          arbeiten.push({ name: key, zeit: value.zeit });
+        }
+      }
+    } catch (e) {
+      console.warn('Fehler beim Parsen von arbeitszeiten_details:', e);
+    }
+    
+    return arbeiten;
   }
 
   /**

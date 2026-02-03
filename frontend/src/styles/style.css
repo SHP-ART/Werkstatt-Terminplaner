@@ -12868,6 +12868,9 @@ mark.highlight {
 /* Kachel-Body mit Auftragsinfo */
 .intern-person-body {
     padding: 20px;
+    flex: 1;
+    overflow-y: auto;
+    min-height: 0;
 }
 
 /* Aktiver Auftrag */
@@ -12890,6 +12893,17 @@ mark.highlight {
     text-transform: uppercase;
     letter-spacing: 0.5px;
     margin-bottom: 8px;
+}
+
+.auftrag-arbeiten-liste {
+    margin-top: 10px;
+}
+
+.auftrag-arbeit-item {
+    font-size: 0.9rem;
+    color: #475569;
+    padding: 4px 0;
+    line-height: 1.4;
 }
 
 .intern-person-auftrag .auftrag-nr {

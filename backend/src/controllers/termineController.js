@@ -711,6 +711,13 @@ class TermineController {
         mitarbeiter_id: mitarbeiter_id_wert
       };
 
+      // Wenn arbeitszeiten_details vorhanden, berechne Endzeit
+      if (payload.arbeitszeiten_details) {
+        const { startzeit, endzeit } = await berechneEndzeitFuerTermin(payload, payload.arbeitszeiten_details);
+        if (startzeit) payload.startzeit = startzeit;
+        if (endzeit) payload.endzeit_berechnet = endzeit;
+      }
+
       const result = await TermineModel.create(payload);
       
       // 🚗 AUTO-SPEICHERUNG: Fahrzeugdaten in fahrzeuge-Tabelle speichern
@@ -2079,5 +2086,8 @@ class TermineController {
 
 // Exportiere auch die Cache-Invalidierungsfunktion für andere Controller
 TermineController.invalidateAuslastungCache = invalidateAuslastungCache;
+
+// Exportiere auch die Hilfsfunktion für Migrations
+TermineController.berechneEndzeitFuerTermin = berechneEndzeitFuerTermin;
 
 module.exports = TermineController;
