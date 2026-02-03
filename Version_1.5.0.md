@@ -1,53 +1,297 @@
-# Version 1.5.0 - Automatische Datenmigration
+# Version 1.5.0 - Flexible Arbeitszeiten & Robuste Upgrades
 
-**Release-Datum:** 2. Februar 2026
+**Release-Datum:** 3. Februar 2026  
+**Status:** ✅ Implementiert
 
 ## 🎯 Highlights
 
-### ✨ Automatische Datenmigration
-Beim Update werden jetzt **alle Datenbank-Migrationen vollautomatisch** durchgeführt - kein manuelles Eingreifen mehr nötig!
+### 🕐 Flexible Arbeitszeiten-System
+Umfassendes System für individuelle Arbeitszeiten mit Wochenarbeitszeitverwaltung, Samstagsarbeit und Schicht-Templates.
 
-**Einfachstes Update ever:**
-```bash
-git pull origin master
-./start.sh
-```
-Fertig! 🎉
+### 🔄 Robuste Upgrade-Migration
+Automatische Erkennung und Migration alter Datenbankstrukturen für nahtlose Updates von v1.4.0 und älter.
+
+### ⏱️ Korrekte Kapazitätsberechnung
+Pausenzeit wird nicht mehr von der verfügbaren Arbeitskapazität abgezogen - **8h Arbeitszeit = 8h verfügbar**.
+
+---
+
+## 📑 Inhaltsverzeichnis
+
+1. [🆕 Neue Features](#-neue-features)
+2. [🐛 Bugfixes](#-bugfixes)
+3. [🔧 Technische Verbesserungen](#-technische-verbesserungen)
+4. [📊 Datenbank-Änderungen](#-datenbank-änderungen)
+5. [📝 Upgrade-Hinweise](#-upgrade-hinweise)
+
+---
 
 ## 🆕 Neue Features
 
-### Automatische Migration
-- ✅ **Schema-Migration**: Automatisch beim Serverstart
-- ✅ **Datenmigration**: JSON → Relational automatisch integriert
-- ✅ **Automatische Backups**: Vor jeder Migration
-- ✅ **Idempotenz**: Migrationen können mehrfach ausgeführt werden
-- ✅ **Fehlertoleranz**: System bleibt funktionsfähig auch bei Einzelfehlern
+### Flexible Arbeitszeiten-Verwaltung
+- ✅ **Wochenarbeitszeit**: Individuelle Stunden pro Woche (z.B. 40h, 35h)
+- ✅ **Arbeitstage**: Flexible Anzahl pro Woche (z.B. 5, 4.5)
+- ✅ **Pausenzeit**: Konfigurierbare Pausendauer pro Tag
+- ✅ **Samstagsarbeit**: Separates Zeitfenster mit eigener Pausenregelung
+  - Start-/Endzeit konfigurierbar (z.B. 09:00-12:00)
+  - Eigene Pausenzeit für Samstage
+  - Ein/Aus schaltbar pro Person
 
-### Relationale Arbeitszeiten-Struktur (Phase 1+2)
-- ✅ Neue `termine_arbeiten` Tabelle mit vollständiger Struktur
-- ✅ Individuelle Berechnungen pro Person und Arbeit
-- ✅ Berechnete Zeitwerte werden gespeichert (Nebenzeit, Aufgabenbewältigung, Pausen)
-- ✅ Performance-Indizes für schnelle Abfragen
-- ✅ Automatic data migration from JSON to relational
+### Schicht-Templates
+- ✅ **Vordefinierte Schichten**: Frühschicht, Normalschicht, Spätschicht, Kurzschicht
+- ✅ **Wiederverwendbar**: Templates für häufige Arbeitszeiten
+- ✅ **Farb-Codierung**: Visuelle Unterscheidung
+- ✅ **Erweiterbar**: Neue Templates können hinzugefügt werden
 
-### Migration-System
-- ✅ Migration 013 mit integrierter Datenmigration
-- ✅ Automatische Berechnung aller Zeitfaktoren beim Migrieren
-- ✅ Prüfung auf bereits existierende Daten (Skip if exists)
-- ✅ Detailliertes Migrations-Logging
+### Arbeitszeiten-Planung (arbeitszeiten_plan)
+- ✅ **Individuelle Tages-Arbeitszeiten**: Pro Person und Datum
+- ✅ **Start-/Endzeit**: Exakte Zeitfenster (z.B. 08:00-16:30)
+- ✅ **Automatische Endzeit-Berechnung**: Basierend auf Arbeitsstunden + Pause
+- ✅ **Überschreibt Standard**: Spezielle Arbeitszeiten überschreiben Wochenplan
+
+### Berufsschul-Verwaltung
+- ✅ **Kalenderwochen-Eingabe**: Direkt beim Lehrling eintragbar
+- ✅ **Automatische Prüfung**: System berücksichtigt Berufsschulwochen
+- ✅ **Tablet-Integration**: Auch in Intern-Ansicht verfügbar
+
+### Relationale Arbeitszeiten-Struktur
+- ✅ **termine_arbeiten Tabelle**: Relationale Struktur statt JSON
+- ✅ **Automatische Datenmigration**: Von `arbeitszeiten_details` zu `termine_arbeiten`
+- ✅ **Berechnete Zeiten**: Nebenzeit, Aufgabenbewältigung, Pausen gespeichert
+- ✅ **Individuelle Berechnungen**: Pro Person und Arbeit
+
+---
+
+## 🐛 Bugfixes
+
+### Kritische Fixes
+- ✅ **Pausenzeit-Kapazität**: Pause wird nicht mehr von Arbeitszeit abgezogen
+  - **Vorher**: 8h Arbeitszeit - 0.5h Pause = 7.5h verfügbar ❌
+  - **Jetzt**: 8h Arbeitszeit = 8h verfügbar (Pause ist Teil des Arbeitstags) ✅
+  - Betrifft: Timeline-Darstellung, Auslastungsberechnung, Kapazitätsprüfung
+
+- ✅ **Abholdetails laden**: Werden beim Termin-Laden nun korrekt angezeigt
+- ✅ **Fahrzeug anlegen**: Dialog im Termin-Formular funktioniert wieder
+- ✅ **Migration-Fehler**: Robuste Fehlerbehandlung bei Schema-Updates
+
+### Datenbank-Migration Fixes
+- ✅ **Alte Tabellen-Erkennung**: Automatische Erkennung von v1.4.0 Schema
+- ✅ **Abwesenheiten-Migration**: Alte Struktur (datum, urlaub, krank) wird zu `abwesenheiten_legacy` umbenannt
+- ✅ **Async-Konvertierung**: Alle Migrationen auf async/await umgestellt
+- ✅ **Fehlende Indizes**: Legacy-Tabellen-Indizes werden korrekt entfernt
+
+### UI/UX Fixes
+- ✅ **Berufsschul-Prüfung**: Korrekte Anzeige in Tablet-App
+- ✅ **Arbeitszeit-Anzeige**: Bei Abwesenheit ausgeblendet
+- ✅ **Timeline-Darstellung**: Pausenzeit korrekt berücksichtigt
+- ✅ **Backup-Zeitstempel**: Auf lokale Zeit umgestellt
+
+---
 
 ## 🔧 Technische Verbesserungen
 
-### Datenbank-Architektur
-- **Neue Tabelle**: `termine_arbeiten` mit 16 Feldern
-  - Basis-Felder: termin_id, arbeit, zeit, mitarbeiter_id, lehrling_id
-  - Berechnete Felder: berechnete_dauer_minuten, berechnete_endzeit, faktor_nebenzeit, etc.
-  - Timestamps: created_at, updated_at
-- **Foreign Keys**: Referenzielle Integrität zu termine/mitarbeiter/lehrlinge
-- **Indizes**: Performance-Optimierung für häufige Queries
-- **CHECK Constraints**: Datenintegrität auf DB-Level
+### Migration-System
+- **Version 12** (010_wochenarbeitszeit): 
+  - Wochenarbeitszeit-Felder zu mitarbeiter/lehrlinge
+  - Neue abwesenheiten-Tabelle mit Typ-System
+  - Auto-Migration alter Strukturen
+  
+- **Version 13** (012_berechnete_zeiten):
+  - Berechnete Zeitfelder zu termine_arbeiten
+  - Faktoren für Nebenzeit/Aufgabenbewältigung
+  
+- **Version 14** (013_create_termine_arbeiten_table):
+  - Relationale termine_arbeiten-Struktur
+  - Automatische Datenmigration
+  
+- **Version 15** (015_create_arbeitszeiten_plan):
+  - Individuelle Tages-Arbeitszeiten
+  
+- **Version 16** (016_add_arbeitszeit_start_ende):
+  - Start-/Endzeit-Felder mit automatischer Berechnung
+  
+- **Version 17** (017_create_schicht_templates):
+  - Schicht-Templates Tabelle
+  - Standard-Schichten
+  
+- **Version 18** (018_cleanup_legacy_tables):
+  - Cleanup alter Strukturen
+  - Migration zu neuer Abwesenheiten-Tabelle
 
-### Berechnungs-Modul
+### Code-Qualität
+- ✅ **Async/Await**: Alle Migrationen modernisiert
+- ✅ **Error Handling**: Robuste Fehlerbehandlung in helpers.js
+- ✅ **Idempotenz**: Migrationen können mehrfach ausgeführt werden
+- ✅ **Logging**: Detaillierte Migrations-Logs für Debugging
+
+### Performance
+- ✅ **Indizes optimiert**: Für arbeitszeiten_plan, abwesenheiten, termine_arbeiten
+- ✅ **Batch Operations**: Effiziente Datenmigration
+- ✅ **Caching**: Frontend Element-Caching für Tab-System
+
+---
+
+## 📊 Datenbank-Änderungen
+
+### Neue Felder in `mitarbeiter` und `lehrlinge`
+```sql
+wochenarbeitszeit_stunden REAL DEFAULT 40
+arbeitstage_pro_woche INTEGER DEFAULT 5
+pausenzeit_minuten INTEGER DEFAULT 30
+samstag_aktiv INTEGER DEFAULT 0
+samstag_start TEXT DEFAULT '09:00'
+samstag_ende TEXT DEFAULT '12:00'
+samstag_pausenzeit_minuten INTEGER DEFAULT 0
+```
+
+### Neue Tabelle `abwesenheiten` (ersetzt alte Struktur)
+```sql
+CREATE TABLE abwesenheiten (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  mitarbeiter_id INTEGER,
+  lehrling_id INTEGER,
+  typ TEXT CHECK(typ IN ('urlaub', 'krank', 'berufsschule', 'lehrgang')),
+  datum_von TEXT NOT NULL,
+  datum_bis TEXT NOT NULL,
+  beschreibung TEXT,
+  erstellt_am DATETIME DEFAULT CURRENT_TIMESTAMP
+)
+```
+
+### Neue Tabelle `arbeitszeiten_plan`
+```sql
+CREATE TABLE arbeitszeiten_plan (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  mitarbeiter_id INTEGER,
+  lehrling_id INTEGER,
+  datum TEXT NOT NULL,
+  arbeitsstunden REAL NOT NULL,
+  pausenzeit_minuten INTEGER DEFAULT 30,
+  arbeitszeit_start TEXT DEFAULT '08:00',
+  arbeitszeit_ende TEXT DEFAULT '16:30',
+  erstellt_am DATETIME DEFAULT CURRENT_TIMESTAMP
+)
+```
+
+### Neue Tabelle `schicht_templates`
+```sql
+CREATE TABLE schicht_templates (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  name TEXT NOT NULL UNIQUE,
+  beschreibung TEXT,
+  arbeitszeit_start TEXT NOT NULL,
+  arbeitszeit_ende TEXT NOT NULL,
+  farbe TEXT DEFAULT '#667eea',
+  sortierung INTEGER DEFAULT 0,
+  aktiv INTEGER DEFAULT 1
+)
+```
+
+### Neue Felder in `termine_arbeiten`
+```sql
+berechnete_dauer_minuten INTEGER
+berechnete_endzeit TEXT
+faktor_nebenzeit REAL
+faktor_aufgabenbewaeltigung REAL
+pause_enthalten INTEGER DEFAULT 0
+pause_minuten INTEGER DEFAULT 0
+```
+
+---
+
+## 📝 Upgrade-Hinweise
+
+### Von Version 1.4.0 upgraden
+
+**Automatischer Prozess:**
+```bash
+git pull origin master
+./start.sh  # oder start.bat auf Windows
+```
+
+Das System führt automatisch folgende Schritte aus:
+1. ✅ Erstellt Backup der Datenbank
+2. ✅ Erkennt alte Tabellenstrukturen
+3. ✅ Benennt `abwesenheiten` zu `abwesenheiten_legacy` um
+4. ✅ Erstellt neue Tabellenstrukturen
+5. ✅ Migriert Daten von JSON zu relationaler Struktur
+6. ✅ Erstellt neue Indizes
+7. ✅ Initialisiert Standardwerte
+
+**Nach dem Update:**
+- Alle Mitarbeiter/Lehrlinge haben automatisch:
+  - 40h Wochenarbeitszeit (5 Tage × 8h)
+  - 30min Pausenzeit
+  - Samstag inaktiv
+- Alte Daten bleiben in `abwesenheiten_legacy` erhalten (falls Rückmigration nötig)
+- Alle Termine behalten ihre Arbeitszeit-Details
+
+### Empfohlene Konfiguration nach Update
+
+1. **Arbeitszeiten prüfen**:
+   - Mitarbeiter/Lehrlinge Tab öffnen
+   - Wochenarbeitszeit bei Bedarf anpassen (z.B. Teilzeit: 30h)
+   - Samstagsarbeit aktivieren falls benötigt
+
+2. **Berufsschul-Kalenderwochen**:
+   - Bei Lehrlingen Berufsschulwochen eintragen
+   - Format: Komma-getrennt (z.B. "1,2,5,6,9,10")
+
+3. **Schicht-Templates**:
+   - Standard-Schichten sind bereits angelegt
+   - Bei Bedarf eigene Templates erstellen
+
+---
+
+## 🔄 Änderungsprotokoll
+
+**Features hinzugefügt:**
+- Flexible Arbeitszeiten-System (Migration 012)
+- Schicht-Templates (Migration 017)
+- Arbeitszeiten-Planung (Migration 015-016)
+- Berufsschul-Kalenderwochen bei Lehrlingen
+- Backend-basierte Endzeit-Berechnung
+- Arbeitszeiten in Team-Übersicht (Frontend & Tablet)
+
+**Bugfixes:**
+- Pausenzeit wird nicht mehr von Kapazität abgezogen
+- Abholdetails laden korrekt
+- Fahrzeug anlegen im Termin-Dialog repariert
+- Berufsschul-Prüfung in Tablet-App korrigiert
+- Migration-Fehler bei alten Datenbanken behoben
+
+**Technisch:**
+- Alle Migrationen auf async/await umgestellt
+- Auto-Erkennung alter Tabellenstrukturen
+- Robuste Fehlerbehandlung in Migrationen
+- Cleanup veralteter Tabellen (Migration 018)
+- Start-Skripte vereinfacht
+
+---
+
+## 📦 Installation & Start
+
+### Erstinstallation
+```bash
+git clone https://github.com/SHP-ART/Werkstatt-Terminplaner.git
+cd Werkstatt-Terminplaner
+./start.sh  # oder start.bat auf Windows
+```
+
+### Update von älterer Version
+```bash
+cd Werkstatt-Terminplaner
+git pull origin master
+./start.sh  # Führt automatisch Migrationen aus
+```
+
+---
+
+## 🙏 Danke
+
+Diese Version bringt fundamentale Verbesserungen für flexible Arbeitszeitverwaltung und macht das System robust für zukünftige Updates.
+
+**Feedback & Bug-Reports:** Bitte als GitHub Issue melden!
 - `zeitBerechnung.js`: Zentralisierte Logik für alle Zeitberechnungen
 - `berechneArbeitszeitFuerSpeicherung()`: API-Funktion für alle berechneten Werte
 - Unterstützt Mitarbeiter und Lehrlinge mit individuellen Faktoren
