@@ -958,6 +958,9 @@
         `;
       }
 
+      // Arbeitszeit nur anzeigen, wenn Person nicht abwesend ist (nicht in Pause, nicht in Berufsschule)
+      const zeigeArbeitszeit = !inPause && !inBerufsschule;
+
       return `
         <div class="person-kachel ${isLehrling ? 'lehrling' : ''}">
           <div class="person-header">
@@ -967,7 +970,7 @@
             </div>
             <div class="person-badge ${badgeClass}">${badgeText}</div>
           </div>
-          ${arbeitszeit && arbeitszeit.arbeitszeit_start && arbeitszeit.arbeitszeit_ende ? `
+          ${zeigeArbeitszeit && arbeitszeit && arbeitszeit.arbeitszeit_start && arbeitszeit.arbeitszeit_ende ? `
           <div class="person-arbeitszeit">
             <span class="arbeitszeit-label">⏰ Arbeitszeit:</span>
             <span class="arbeitszeit-wert">${arbeitszeit.arbeitszeit_start} - ${arbeitszeit.arbeitszeit_ende}</span>

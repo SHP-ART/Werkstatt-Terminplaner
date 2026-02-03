@@ -24824,6 +24824,9 @@ class App {
     const arbeitszeitenMap = kontext.arbeitszeitenMap || {};
     const arbeitszeitKey = isLehrling ? `lehrling_${personId}` : `mitarbeiter_${personId}`;
     const arbeitszeit = arbeitszeitenMap[arbeitszeitKey];
+    
+    // Arbeitszeit nur anzeigen, wenn Person nicht abwesend ist (nicht in Pause, nicht in Berufsschule)
+    const zeigeArbeitszeit = !inPause && !inBerufsschule;
 
     return `
       <div class="intern-person-kachel ${isLehrling ? 'lehrling' : ''}">
@@ -24834,7 +24837,7 @@ class App {
           </div>
           <div class="intern-person-badge ${badgeClass}">${badgeText}</div>
         </div>
-        ${arbeitszeit && arbeitszeit.arbeitszeit_start && arbeitszeit.arbeitszeit_ende ? `
+        ${zeigeArbeitszeit && arbeitszeit && arbeitszeit.arbeitszeit_start && arbeitszeit.arbeitszeit_ende ? `
         <div class="intern-person-arbeitszeit">
           <span class="arbeitszeit-label">⏰ Arbeitszeit:</span>
           <span class="arbeitszeit-wert">${arbeitszeit.arbeitszeit_start} - ${arbeitszeit.arbeitszeit_ende}</span>
