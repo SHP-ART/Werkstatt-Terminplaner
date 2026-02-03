@@ -1,0 +1,5 @@
+﻿  ÔÇó electron-builder  version=24.13.3 os=10.0.26200
+  ÔÇó loaded configuration  file=package.json ("build" field)
+  ÔÇó packaging       platform=win32 arch=x64 electron=28.3.3 appOutDir=dist\win-unpacked
+  ÔÇó default Electron icon is used  reason=application icon is not set
+  ÔÇó packaging       platform=win32 arch=ia32 electron=28.3.3 appOutDir=dist\win-ia32-unpacked
