@@ -696,7 +696,7 @@ class App {
     this.bindEventListenerOnce(document.getElementById('urlaubForm'), 'submit', (e) => this.handleUrlaubSubmit(e), 'UrlaubFormSubmit');
     this.bindEventListenerOnce(document.getElementById('krankForm'), 'submit', (e) => this.handleKrankSubmit(e), 'KrankFormSubmit');
     this.bindEventListenerOnce(document.getElementById('lehrgangForm'), 'submit', (e) => this.handleLehrgangSubmit(e), 'LehrgangFormSubmit');
-    this.bindEventListenerOnce(document.getElementById('berufsschuleForm'), 'submit', (e) => this.handleBerufsschuleSubmit(e), 'BerufsschuleFormSubmit');
+    // berufsschuleForm wurde entfernt - jetzt nur noch Kalenderwoche-Verwaltung
 
     const arbeitEingabe = document.getElementById('arbeitEingabe');
     this.bindEventListenerOnce(arbeitEingabe, 'input', (e) => {
@@ -2651,6 +2651,7 @@ class App {
     } else if (tabName === 'einstellungen') {
       this.loadWerkstattSettings();
     } else if (tabName === 'zeitverwaltung') {
+      this.goToToday(); // Setze automatisch auf "Heute"
       this.loadArbeitszeiten();
       this.loadTermineZeiten();
     } else if (tabName === 'papierkorb') {
@@ -2712,8 +2713,8 @@ class App {
     }
 
     if (subTabName === 'berufsschuleAbwesenheit') {
-      this.loadAbwesenheitenPersonen();
-      this.loadBerufsschuleListe();
+      console.log('🔄 Sub-Tab berufsschuleAbwesenheit aktiviert');
+      this.loadBerufsschulLehrlinge(); // Nur Kalenderwochen-Verwaltung
     }
 
     if (subTabName === 'settingsBackup') {
@@ -14309,9 +14310,12 @@ class App {
   async loadBerufsschulLehrlinge() {
     try {
       const lehrlinge = await LehrlingeService.getAktive();
-      const tbody = document.querySelector('#berufsschulTable tbody');
+      const tbody = document.querySelector('#berufsschuleTable tbody');
       
-      if (!tbody) return;
+      if (!tbody) {
+        console.error('❌ Tbody für Berufsschul-Tabelle nicht gefunden!');
+        return;
+      }
       tbody.innerHTML = '';
 
       if (lehrlinge.length === 0) {
@@ -14321,6 +14325,7 @@ class App {
 
       // Aktuelle KW berechnen
       const aktuelleKW = this.getKalenderwoche(new Date());
+      console.log('✅ Tabelle wird gefüllt mit', lehrlinge.length, 'Lehrlingen (aktuelle KW:', aktuelleKW, ')');
 
       lehrlinge.forEach(lehrling => {
         const row = document.createElement('tr');
@@ -18415,6 +18420,12 @@ class App {
     return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
   }
 
+  timeToMinutes(timeString) {
+    if (!timeString || typeof timeString !== 'string') return 0;
+    const [hours, minutes] = timeString.split(':').map(Number);
+    return (hours * 60) + (minutes || 0);
+  }
+
   // ==========================================
   // ZEITLEISTE KONTEXTMENÜ
   // ==========================================
@@ -18628,6 +18639,71 @@ class App {
       // 3c. Auslastungsbalken aktualisieren
       this.updatePlanungAuslastungsbalken(auslastungData, mitarbeiterListe, lehrlingeListe);
 
+      // 3d. Arbeitszeiten für alle Mitarbeiter und Lehrlinge laden
+      const arbeitszeitenMap = new Map(); // Speichert Arbeitszeiten: 'ma-{id}' oder 'l-{id}' -> {arbeitsbeginn, arbeitsende}
+      
+      // Arbeitszeiten für Mitarbeiter laden
+      await Promise.all(mitarbeiterListe.map(async (ma) => {
+        try {
+          const arbeitszeit = await fetch(`${CONFIG.API_URL}/arbeitszeiten-plan/for-date?mitarbeiter_id=${ma.id}&datum=${datum}`)
+            .then(res => res.ok ? res.json() : null);
+          
+          if (arbeitszeit && arbeitszeit.arbeitsstunden !== undefined) {
+            const istFrei = arbeitszeit.ist_frei === 1;
+            if (!istFrei) {
+              // Berechne Arbeitsbeginn und -ende (inklusive Pause)
+              const arbeitsbeginn = '08:00'; // Standard
+              const arbeitsstunden = arbeitszeit.arbeitsstunden || 8;
+              const pausenzeit = arbeitszeit.pausenzeit_minuten || 0;
+              const beginnMinuten = this.timeToMinutes(arbeitsbeginn);
+              // Arbeitsende = Beginn + Arbeitsstunden + Pause
+              const endeMinuten = beginnMinuten + (arbeitsstunden * 60) + pausenzeit;
+              const arbeitsende = this.minutesToTime(endeMinuten);
+              
+              arbeitszeitenMap.set(`ma-${ma.id}`, {
+                arbeitsbeginn,
+                arbeitsende,
+                arbeitsstunden,
+                pausenzeit
+              });
+            }
+          }
+        } catch (error) {
+          console.warn(`Fehler beim Laden der Arbeitszeit für Mitarbeiter ${ma.name}:`, error);
+        }
+      }));
+      
+      // Arbeitszeiten für Lehrlinge laden
+      await Promise.all(lehrlingeListe.map(async (l) => {
+        try {
+          const arbeitszeit = await fetch(`${CONFIG.API_URL}/arbeitszeiten-plan/for-date?lehrling_id=${l.id}&datum=${datum}`)
+            .then(res => res.ok ? res.json() : null);
+          
+          if (arbeitszeit && arbeitszeit.arbeitsstunden !== undefined) {
+            const istFrei = arbeitszeit.ist_frei === 1;
+            if (!istFrei) {
+              // Berechne Arbeitsbeginn und -ende (inklusive Pause)
+              const arbeitsbeginn = '08:00'; // Standard
+              const arbeitsstunden = arbeitszeit.arbeitsstunden || 8;
+              const pausenzeit = arbeitszeit.pausenzeit_minuten || 0;
+              const beginnMinuten = this.timeToMinutes(arbeitsbeginn);
+              // Arbeitsende = Beginn + Arbeitsstunden + Pause
+              const endeMinuten = beginnMinuten + (arbeitsstunden * 60) + pausenzeit;
+              const arbeitsende = this.minutesToTime(endeMinuten);
+              
+              arbeitszeitenMap.set(`l-${l.id}`, {
+                arbeitsbeginn,
+                arbeitsende,
+                arbeitsstunden,
+                pausenzeit
+              });
+            }
+          }
+        } catch (error) {
+          console.warn(`Fehler beim Laden der Arbeitszeit für Lehrling ${l.name}:`, error);
+        }
+      }));
+
       // 4. Container leeren
       const sourceContainer = document.getElementById('dragDropNichtZugeordnet');
       const schwebendeContainer = document.getElementById('schwebendeTermineContainer');
@@ -18715,7 +18791,7 @@ class App {
         const kapazitaetText = istAbwesend 
           ? '<span class="kapazitaet-abwesend">0h / 0h (0%)</span>' 
           : `<span class="kapazitaet-wert ${auslastungClass}">⏱️ ${stundenText} (${auslastungProzent}%)</span>`;
-          
+        
         row.innerHTML = `
           <div class="timeline-mitarbeiter">
             <div class="timeline-mitarbeiter-name">👷 ${ma.name}${abwesendBadge}</div>
@@ -18728,8 +18804,12 @@ class App {
         const track = row.querySelector('.timeline-track');
         mitarbeiterMap[ma.id] = track;
         
-        // Mittagspause hinzufügen (nur wenn nicht abwesend)
+        // Gesperrte Zeitbereiche und Mittagspause hinzufügen (nur wenn nicht abwesend)
         if (!istAbwesend) {
+          const arbeitszeit = arbeitszeitenMap.get(`ma-${ma.id}`);
+          if (arbeitszeit) {
+            this.addGesperrteZeitbereicheToTrack(track, arbeitszeit.arbeitsbeginn, arbeitszeit.arbeitsende, startHour, endHour);
+          }
           this.addMittagspauseToTrack(track, ma.mittagspause_start, startHour);
           // Drop-Events nur für nicht-abwesende registrieren
           this.setupTimelineDropZone(track, startHour);
@@ -18783,7 +18863,7 @@ class App {
         const kapazitaetText = istAbwesend 
           ? '<span class="kapazitaet-abwesend">0h / 0h (0%)</span>' 
           : `<span class="kapazitaet-wert ${auslastungClass}">⏱️ ${stundenText} (${auslastungProzent}%)</span>`;
-          
+        
         row.innerHTML = `
           <div class="timeline-mitarbeiter timeline-lehrling">
             <div class="timeline-mitarbeiter-name">🎓 ${lehrling.name}${abwesendBadge}</div>
@@ -18796,8 +18876,12 @@ class App {
         const track = row.querySelector('.timeline-track');
         lehrlingeMap[lehrling.id] = track;
         
-        // Mittagspause und Drop-Events nur wenn nicht abwesend
+        // Gesperrte Zeitbereiche, Mittagspause und Drop-Events nur wenn nicht abwesend
         if (!istAbwesend) {
+          const arbeitszeit = arbeitszeitenMap.get(`l-${lehrling.id}`);
+          if (arbeitszeit) {
+            this.addGesperrteZeitbereicheToTrack(track, arbeitszeit.arbeitsbeginn, arbeitszeit.arbeitsende, startHour, endHour);
+          }
           this.addMittagspauseToTrack(track, lehrling.mittagspause_start, startHour);
           this.setupTimelineDropZone(track, startHour, 'lehrling');
         }
@@ -19033,6 +19117,71 @@ class App {
     pauseBlock.innerHTML = '🍽️';
     
     track.appendChild(pauseBlock);
+  }
+
+  /**
+   * Fügt gesperrte Zeitbereiche zur Timeline hinzu (vor Arbeitsbeginn und nach Arbeitsende)
+   * @param {HTMLElement} track - Timeline Track Element
+   * @param {string} arbeitsbeginn - Arbeitsbeginn im Format "HH:MM"
+   * @param {string} arbeitsende - Arbeitsende im Format "HH:MM"
+   * @param {number} startHour - Start der Timeline (z.B. 8)
+   * @param {number} endHour - Ende der Timeline (z.B. 18)
+   */
+  addGesperrteZeitbereicheToTrack(track, arbeitsbeginn, arbeitsende, startHour, endHour) {
+    if (!arbeitsbeginn || !arbeitsende) return;
+    
+    const [beginnH, beginnM] = arbeitsbeginn.split(':').map(Number);
+    const [endeH, endeM] = arbeitsende.split(':').map(Number);
+    
+    const pixelPerHour = 100;
+    const pixelPerMinute = pixelPerHour / 60;
+    
+    // Bereich VOR Arbeitsbeginn (von startHour bis arbeitsbeginn)
+    const arbeitsStartMinuten = (beginnH - startHour) * 60 + beginnM;
+    if (arbeitsStartMinuten > 0) {
+      const sperrBlock1 = document.createElement('div');
+      sperrBlock1.className = 'timeline-gesperrt';
+      sperrBlock1.style.left = '0px';
+      sperrBlock1.style.width = `${arbeitsStartMinuten * pixelPerMinute}px`;
+      sperrBlock1.title = `Nicht im Dienst (vor ${arbeitsbeginn})`;
+      sperrBlock1.setAttribute('data-gesperrt', 'true');
+      track.appendChild(sperrBlock1);
+    }
+    
+    // Bereich NACH Arbeitsende (von arbeitsende bis endHour)
+    const arbeitsEndeMinuten = (endeH - startHour) * 60 + endeM;
+    const timelineEndeMinuten = (endHour - startHour) * 60;
+    const nachArbeitMinuten = timelineEndeMinuten - arbeitsEndeMinuten;
+    
+    if (nachArbeitMinuten > 0) {
+      const sperrBlock2 = document.createElement('div');
+      sperrBlock2.className = 'timeline-gesperrt';
+      sperrBlock2.style.left = `${arbeitsEndeMinuten * pixelPerMinute}px`;
+      sperrBlock2.style.width = `${nachArbeitMinuten * pixelPerMinute}px`;
+      sperrBlock2.title = `Nicht im Dienst (nach ${arbeitsende})`;
+      sperrBlock2.setAttribute('data-gesperrt', 'true');
+      track.appendChild(sperrBlock2);
+    }
+  }
+
+  /**
+   * Prüft ob eine Position (in Pixel) in einem gesperrten Bereich liegt
+   * @param {HTMLElement} track - Timeline Track Element
+   * @param {number} posX - X-Position in Pixel relativ zum Track
+   * @returns {boolean} true wenn Position gesperrt ist
+   */
+  isPositionGesperrt(track, posX) {
+    const gesperrteBlocks = track.querySelectorAll('.timeline-gesperrt');
+    for (const block of gesperrteBlocks) {
+      const blockLeft = parseFloat(block.style.left);
+      const blockWidth = parseFloat(block.style.width);
+      const blockRight = blockLeft + blockWidth;
+      
+      if (posX >= blockLeft && posX <= blockRight) {
+        return true;
+      }
+    }
+    return false;
   }
 
   /**
@@ -20459,12 +20608,24 @@ class App {
   setupTimelineDropZone(element, startHour, type = 'mitarbeiter') {
     element.addEventListener('dragover', (e) => {
       e.preventDefault();
+      
+      // Berechne Position und prüfe ob gesperrt
+      const rect = element.getBoundingClientRect();
+      const dropX = e.clientX - rect.left;
+      const gesperrterBereich = this.isPositionGesperrt(element, dropX);
+      
+      if (gesperrterBereich) {
+        e.dataTransfer.dropEffect = 'none';
+        element.classList.remove('drag-over');
+        this.removeDragTimeIndicator();
+        document.querySelectorAll('.drag-position-line').forEach(el => el.remove());
+        return;
+      }
+      
       e.dataTransfer.dropEffect = 'move';
       element.classList.add('drag-over');
       
       // Berechne Zeit für Indikator
-      const rect = element.getBoundingClientRect();
-      const dropX = e.clientX - rect.left;
       const pixelPerHour = 100;
       const hoursFromStart = dropX / pixelPerHour;
       const totalMinutes = Math.round((startHour + hoursFromStart) * 60);
@@ -20531,6 +20692,14 @@ class App {
       this.removeDragTimeIndicator();
       document.querySelectorAll('.drag-position-line').forEach(el => el.remove());
       
+      // Prüfe ob Drop in gesperrtem Bereich erfolgt und berechne Position
+      const rect = element.getBoundingClientRect();
+      const dropX = e.clientX - rect.left;
+      if (this.isPositionGesperrt(element, dropX)) {
+        this.showToast('❌ Termine können nicht außerhalb der Arbeitszeit platziert werden', 'error');
+        return;
+      }
+      
       const terminId = e.dataTransfer.getData('text/plain');
       const arbeitName = e.dataTransfer.getData('application/x-arbeit-name');
       const arbeitIndex = e.dataTransfer.getData('application/x-arbeit-index');
@@ -20540,8 +20709,6 @@ class App {
       const targetType = element.dataset.type || 'mitarbeiter';
       
       // Berechne neue Startzeit basierend auf Drop-Position
-      const rect = element.getBoundingClientRect();
-      const dropX = e.clientX - rect.left;
       const pixelPerHour = 100;
       const hoursFromStart = dropX / pixelPerHour;
       const totalMinutes = Math.round((startHour + hoursFromStart) * 60);
