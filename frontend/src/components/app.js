@@ -10928,7 +10928,7 @@ class App {
     
     try {
       // Fahrzeug zum Kunden hinzufügen
-      await api.addFahrzeugToKunde(kunde.id, { kennzeichen, fahrzeugtyp, vin });
+      await KundenService.addFahrzeug(kunde.id, { kennzeichen, fahrzeugtyp, vin });
       
       // Neues Fahrzeug-Objekt erstellen
       const neuesFahrzeug = { kennzeichen, fahrzeugtyp, vin };
