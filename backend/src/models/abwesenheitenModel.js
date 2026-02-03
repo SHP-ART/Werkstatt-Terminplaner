@@ -3,17 +3,34 @@ const { getAsync, allAsync, runAsync } = require('../utils/dbHelper');
 class AbwesenheitenModel {
   // Legacy-Methoden für alte Abwesenheiten-Tabelle (abwesenheiten_legacy)
   // Diese Tabelle hat: datum (PRIMARY KEY), urlaub (INTEGER), krank (INTEGER)
+  // HINWEIS: Tabelle existiert möglicherweise nicht mehr (Migration 018)
   static async getByDatum(datum) {
-    return await getAsync('SELECT * FROM abwesenheiten_legacy WHERE datum = ?', [datum]);
+    try {
+      return await getAsync('SELECT * FROM abwesenheiten_legacy WHERE datum = ?', [datum]);
+    } catch (err) {
+      // Tabelle existiert nicht mehr - zurück null
+      if (err.message && err.message.includes('no such table')) {
+        return null;
+      }
+      throw err;
+    }
   }
 
   static async upsert(datum, urlaub, krank) {
-    return await runAsync(
-      `INSERT INTO abwesenheiten_legacy (datum, urlaub, krank)
-       VALUES (?, ?, ?)
-       ON CONFLICT(datum) DO UPDATE SET urlaub = excluded.urlaub, krank = excluded.krank`,
-      [datum, urlaub, krank]
-    );
+    try {
+      return await runAsync(
+        `INSERT INTO abwesenheiten_legacy (datum, urlaub, krank)
+         VALUES (?, ?, ?)
+         ON CONFLICT(datum) DO UPDATE SET urlaub = excluded.urlaub, krank = excluded.krank`,
+        [datum, urlaub, krank]
+      );
+    } catch (err) {
+      // Tabelle existiert nicht mehr - Fehler werfen mit Info
+      if (err.message && err.message.includes('no such table')) {
+        throw new Error('Legacy-Tabelle abwesenheiten_legacy wurde mit Migration 018 entfernt. Bitte nutzen Sie die neue API.');
+      }
+      throw err;
+    }
   }
 
   // Neue Methoden für individuelle Mitarbeiter-/Lehrlinge-Abwesenheiten

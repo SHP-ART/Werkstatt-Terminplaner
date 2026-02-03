@@ -390,7 +390,7 @@ async function testDatabaseIntegrity() {
     assert(tables.includes('lehrlinge'), 'Tabelle "lehrlinge" existiert');
     assert(tables.includes('arbeitszeiten'), 'Tabelle "arbeitszeiten" existiert');
     assert(tables.includes('ersatzautos'), 'Tabelle "ersatzautos" existiert');
-    assert(tables.includes('mitarbeiter_abwesenheiten'), 'Tabelle "mitarbeiter_abwesenheiten" existiert');
+    assert(tables.includes('abwesenheiten'), 'Tabelle "abwesenheiten" existiert (neue API)');
     
     log('green', '  ✅ Alle Haupttabellen vorhanden');
   } catch (error) {
