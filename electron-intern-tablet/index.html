@@ -606,14 +606,15 @@
     }
 
     function isLehrlingInBerufsschule(lehrling, datum) {
-      if (!lehrling.berufsschul_wochen) return false;
-      try {
-        const wochen = JSON.parse(lehrling.berufsschul_wochen);
-        const kw = getKalenderwoche(datum);
-        return wochen.includes(kw);
-      } catch (e) {
+      if (!lehrling || !lehrling.berufsschul_wochen || !datum) {
         return false;
       }
+      // berufsschul_wochen ist ein String: "1,5,9,13" oder "1, 5, 9, 13"
+      const kw = getKalenderwoche(datum);
+      const schulwochen = lehrling.berufsschul_wochen.split(',')
+        .map(w => parseInt(w.trim(), 10))
+        .filter(w => !isNaN(w));
+      return schulwochen.includes(kw);
     }
 
     // ========== ZEIT-BERECHNUNGEN ==========
