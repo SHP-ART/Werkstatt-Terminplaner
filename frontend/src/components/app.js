@@ -647,6 +647,12 @@ class App {
     this.bindEventListenerOnce(document.getElementById('schichtTemplateForm'), 'submit', (e) => this.handleSchichtTemplateSubmit(e), 'SchichtTemplateFormSubmit');
     this.bindEventListenerOnce(document.getElementById('schichtFormCancel'), 'click', () => this.cancelSchichtTemplateEdit(), 'SchichtFormCancel');
 
+    // Tablet-Steuerung Event-Listener
+    this.bindEventListenerOnce(document.getElementById('tabletDisplayForm'), 'submit', (e) => this.handleTabletDisplaySubmit(e), 'TabletDisplayFormSubmit');
+    this.bindEventListenerOnce(document.getElementById('tabletDisplayAutoBtn'), 'click', () => this.setTabletDisplayStatus('auto'), 'TabletDisplayAuto');
+    this.bindEventListenerOnce(document.getElementById('tabletDisplayOnBtn'), 'click', () => this.setTabletDisplayStatus('an'), 'TabletDisplayOn');
+    this.bindEventListenerOnce(document.getElementById('tabletDisplayOffBtn'), 'click', () => this.setTabletDisplayStatus('aus'), 'TabletDisplayOff');
+
     const chatgptApiKeyForm = document.getElementById('chatgptApiKeyForm');
     this.bindEventListenerOnce(chatgptApiKeyForm, 'submit', (e) => this.handleChatGPTApiKeySubmit(e), 'ChatGPTApiKeySubmit');
 
@@ -2728,6 +2734,10 @@ class App {
 
     if (subTabName === 'settingsSchichten') {
       this.loadSchichtTemplatesAdmin();
+    }
+
+    if (subTabName === 'settingsTablet') {
+      this.loadTabletEinstellungen();
     }
 
     if (subTabName === 'teileStatus') {
@@ -27425,6 +27435,118 @@ class App {
   }
 
   /**
+   * =================================================================
+   * TABLET-STEUERUNG
+   * =================================================================
+   */
+
+  /**
+   * Tablet-Einstellungen laden und UI aktualisieren
+   */
+  async loadTabletEinstellungen() {
+    try {
+      const data = await TabletService.getEinstellungen();
+      
+      // Formular-Felder aktualisieren
+      document.getElementById('display_einschaltzeit').value = data.display_einschaltzeit || '07:30';
+      document.getElementById('display_ausschaltzeit').value = data.display_ausschaltzeit || '18:10';
+      
+      // Status anzeigen
+      this.updateTabletDisplayStatusUI(data.manueller_display_status || 'auto');
+    } catch (error) {
+      console.error('Fehler beim Laden der Tablet-Einstellungen:', error);
+      this.showError('Fehler beim Laden der Tablet-Einstellungen');
+    }
+  }
+
+  /**
+   * Display-Zeiten speichern
+   */
+  async handleTabletDisplaySubmit(e) {
+    e.preventDefault();
+    
+    const einschaltzeit = document.getElementById('display_einschaltzeit').value;
+    const ausschaltzeit = document.getElementById('display_ausschaltzeit').value;
+    
+    try {
+      await TabletService.updateEinstellungen({
+        display_einschaltzeit: einschaltzeit,
+        display_ausschaltzeit: ausschaltzeit
+      });
+      
+      this.showSuccess('✅ Einschaltzeiten gespeichert');
+    } catch (error) {
+      console.error('Fehler beim Speichern:', error);
+      this.showError('Fehler beim Speichern der Einschaltzeiten');
+    }
+  }
+
+  /**
+   * Manuellen Display-Status setzen
+   */
+  async setTabletDisplayStatus(status) {
+    try {
+      await TabletService.setDisplayManuell(status);
+      this.updateTabletDisplayStatusUI(status);
+      
+      const statusText = {
+        'auto': 'Automatik aktiviert',
+        'an': 'Alle Displays eingeschaltet',
+        'aus': 'Alle Displays ausgeschaltet'
+      };
+      
+      this.showSuccess(`✅ ${statusText[status]}`);
+    } catch (error) {
+      console.error('Fehler beim Setzen des Display-Status:', error);
+      this.showError('Fehler beim Setzen des Display-Status');
+    }
+  }
+
+  /**
+   * Status-UI aktualisieren
+   */
+  updateTabletDisplayStatusUI(status) {
+    const statusIcon = document.getElementById('tabletDisplayStatusIcon');
+    const statusText = document.getElementById('tabletDisplayStatusText');
+    const statusHint = document.getElementById('tabletDisplayStatusHint');
+    const statusContainer = document.getElementById('tabletDisplayStatus');
+    
+    if (!statusIcon || !statusText || !statusHint || !statusContainer) return;
+    
+    const configs = {
+      'auto': {
+        icon: '🔄',
+        text: 'Modus: Automatik',
+        hint: 'Tablets folgen den eingestellten Schaltzeiten',
+        bgColor: '#e3f2fd',
+        borderColor: '#90caf9'
+      },
+      'an': {
+        icon: '💡',
+        text: 'Modus: Manuell EIN',
+        hint: 'Alle Displays sind manuell eingeschaltet',
+        bgColor: '#e8f5e9',
+        borderColor: '#a5d6a7'
+      },
+      'aus': {
+        icon: '🌙',
+        text: 'Modus: Manuell AUS',
+        hint: 'Alle Displays sind manuell ausgeschaltet',
+        bgColor: '#fce4ec',
+        borderColor: '#f48fb1'
+      }
+    };
+    
+    const config = configs[status] || configs['auto'];
+    
+    statusIcon.textContent = config.icon;
+    statusText.textContent = config.text;
+    statusHint.textContent = config.hint;
+    statusContainer.style.background = config.bgColor;
+    statusContainer.style.borderColor = config.borderColor;
+  }
+
+  /**
    * Aktiviert/Deaktiviert Stunden-Felder im Datumsbereichs-Formular
    */
   toggleDateRangeFreiStatus() {
@@ -27704,4 +27826,132 @@ App.prototype.showVerschiebeWarnung = async function(person, termin, kapazitaetW
       }
     });
   });
+};
+
+// ===============================
+// Tablet-Steuerung
+// ===============================
+
+App.prototype.loadTabletEinstellungen = async function() {
+  try {
+    const einstellungen = await TabletService.getEinstellungen();
+    
+    // Formularfelder befüllen
+    const einschaltzeitInput = document.getElementById('display_einschaltzeit');
+    const ausschaltzeitInput = document.getElementById('display_ausschaltzeit');
+    
+    if (einschaltzeitInput) einschaltzeitInput.value = einstellungen.display_einschaltzeit || '07:30';
+    if (ausschaltzeitInput) ausschaltzeitInput.value = einstellungen.display_ausschaltzeit || '18:10';
+    
+    // Status anzeigen
+    this.updateTabletDisplayStatus(einstellungen.manueller_display_status || 'auto');
+    
+    // Event Listener für Formular
+    const form = document.getElementById('tabletDisplayForm');
+    if (form && !form.dataset.listenerAdded) {
+      form.dataset.listenerAdded = 'true';
+      form.addEventListener('submit', (e) => this.saveTabletEinstellungen(e));
+    }
+    
+    // Event Listener für manuelle Steuerung
+    const autoBtn = document.getElementById('tabletDisplayAutoBtn');
+    const onBtn = document.getElementById('tabletDisplayOnBtn');
+    const offBtn = document.getElementById('tabletDisplayOffBtn');
+    
+    if (autoBtn && !autoBtn.dataset.listenerAdded) {
+      autoBtn.dataset.listenerAdded = 'true';
+      autoBtn.addEventListener('click', () => this.setTabletDisplayManuell('auto'));
+    }
+    if (onBtn && !onBtn.dataset.listenerAdded) {
+      onBtn.dataset.listenerAdded = 'true';
+      onBtn.addEventListener('click', () => this.setTabletDisplayManuell('an'));
+    }
+    if (offBtn && !offBtn.dataset.listenerAdded) {
+      offBtn.dataset.listenerAdded = 'true';
+      offBtn.addEventListener('click', () => this.setTabletDisplayManuell('aus'));
+    }
+    
+  } catch (error) {
+    console.error('Fehler beim Laden der Tablet-Einstellungen:', error);
+    this.showToast('Fehler beim Laden der Tablet-Einstellungen', 'error');
+  }
+};
+
+App.prototype.saveTabletEinstellungen = async function(e) {
+  e.preventDefault();
+  
+  const einschaltzeit = document.getElementById('display_einschaltzeit').value;
+  const ausschaltzeit = document.getElementById('display_ausschaltzeit').value;
+  
+  try {
+    await TabletService.updateEinstellungen({
+      display_einschaltzeit: einschaltzeit,
+      display_ausschaltzeit: ausschaltzeit
+    });
+    
+    this.showToast('✅ Einschaltzeiten gespeichert!', 'success');
+  } catch (error) {
+    console.error('Fehler beim Speichern der Tablet-Einstellungen:', error);
+    this.showToast('Fehler beim Speichern der Einstellungen', 'error');
+  }
+};
+
+App.prototype.setTabletDisplayManuell = async function(status) {
+  try {
+    await TabletService.setDisplayManuell(status);
+    
+    this.updateTabletDisplayStatus(status);
+    
+    const statusText = {
+      'auto': '🔄 Automatik aktiviert',
+      'an': '💡 Alle Displays eingeschaltet',
+      'aus': '🌙 Alle Displays ausgeschaltet'
+    };
+    
+    this.showToast(statusText[status] || 'Status aktualisiert', 'success');
+  } catch (error) {
+    console.error('Fehler beim Setzen des Display-Status:', error);
+    this.showToast('Fehler beim Setzen des Status', 'error');
+  }
+};
+
+App.prototype.updateTabletDisplayStatus = function(status) {
+  const statusDiv = document.getElementById('tabletDisplayStatus');
+  const icon = document.getElementById('tabletDisplayStatusIcon');
+  const text = document.getElementById('tabletDisplayStatusText');
+  const hint = document.getElementById('tabletDisplayStatusHint');
+  
+  if (!statusDiv || !icon || !text || !hint) return;
+  
+  const statusConfig = {
+    'auto': {
+      icon: '🔄',
+      text: 'Modus: Automatik',
+      hint: 'Tablets schalten sich nach den definierten Zeiten ein/aus',
+      color: '#e3f2fd',
+      borderColor: '#90caf9'
+    },
+    'an': {
+      icon: '💡',
+      text: 'Modus: Manuell EIN',
+      hint: 'Alle Displays sind manuell eingeschaltet',
+      color: '#e8f5e9',
+      borderColor: '#a5d6a7'
+    },
+    'aus': {
+      icon: '🌙',
+      text: 'Modus: Manuell AUS',
+      hint: 'Alle Displays sind manuell ausgeschaltet',
+      color: '#fff3e0',
+      borderColor: '#ffb74d'
+    }
+  };
+  
+  const config = statusConfig[status] || statusConfig['auto'];
+  
+  icon.textContent = config.icon;
+  text.textContent = config.text;
+  hint.textContent = config.hint;
+  statusDiv.style.background = config.color;
+  statusDiv.style.borderColor = config.borderColor;
 };

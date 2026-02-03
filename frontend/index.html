@@ -2215,6 +2215,10 @@
                     <span class="tab-icon">🤖</span>
                     <span class="tab-label">KI / API</span>
                 </button>
+                <button class="sub-tab-button" data-subtab="settingsTablet">
+                    <span class="tab-icon">📱</span>
+                    <span class="tab-label">Tablet-Steuerung</span>
+                </button>
             </div>
 
             <div id="settingsServer" class="sub-tab-content active">
@@ -2748,6 +2752,82 @@
                         <li>💰 <strong>Kosten:</strong> Die Nutzung der OpenAI API ist kostenpflichtig. Prüfen Sie Ihre Nutzung regelmäßig.</li>
                         <li>🌐 <strong>Verbindung:</strong> Für KI-Funktionen ist eine aktive Internetverbindung erforderlich.</li>
                         <li>📊 <strong>Datenschutz:</strong> Bei KI-Anfragen werden Daten an OpenAI übermittelt. Achten Sie auf sensible Kundendaten.</li>
+                    </ul>
+                </div>
+            </div>
+
+            <div id="settingsTablet" class="sub-tab-content">
+                <h3>📱 Tablet-Steuerung</h3>
+                <p>Zentrale Verwaltung der Tablet-Display-Einstellungen für alle verbundenen Tablet-Apps.</p>
+
+                <div class="form-section" style="margin-bottom: 25px;">
+                    <h3>⏰ Automatische Display-Steuerung</h3>
+                    <p class="hint" style="margin-bottom: 15px;">
+                        Legen Sie fest, wann die Tablet-Displays automatisch ein- und ausgeschaltet werden sollen.
+                        Die Tablets laden die Einstellungen vom Server und aktualisieren sich automatisch.
+                    </p>
+
+                    <form id="tabletDisplayForm">
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="display_einschaltzeit">⏰ Display einschalten um:</label>
+                                <input type="time" id="display_einschaltzeit" value="07:30" required>
+                                <small style="display: block; color: #666; margin-top: 5px;">
+                                    Tablets schalten sich automatisch zur angegebenen Uhrzeit ein
+                                </small>
+                            </div>
+                            <div class="form-group">
+                                <label for="display_ausschaltzeit">🌙 Display ausschalten um:</label>
+                                <input type="time" id="display_ausschaltzeit" value="18:10" required>
+                                <small style="display: block; color: #666; margin-top: 5px;">
+                                    Tablets schalten sich automatisch zur angegebenen Uhrzeit aus
+                                </small>
+                            </div>
+                        </div>
+
+                        <button type="submit" class="btn btn-primary" style="margin-top: 10px;">
+                            💾 Einschaltzeiten speichern
+                        </button>
+                    </form>
+                </div>
+
+                <div class="form-section" style="margin-bottom: 25px;">
+                    <h3>🎮 Manuelle Steuerung</h3>
+                    <p class="hint" style="margin-bottom: 15px;">
+                        Überschreiben Sie die automatische Steuerung und schalten Sie alle Tablets sofort manuell ein oder aus.
+                    </p>
+
+                    <div id="tabletDisplayStatus" style="margin-bottom: 15px; padding: 15px; border-radius: 8px; background: #f5f5f5; border: 1px solid #ddd;">
+                        <div style="display: flex; align-items: center; gap: 12px;">
+                            <span id="tabletDisplayStatusIcon" style="font-size: 1.5em;">⚪</span>
+                            <div>
+                                <strong id="tabletDisplayStatusText">Status wird geladen...</strong>
+                                <div id="tabletDisplayStatusHint" style="font-size: 0.85em; color: #666; margin-top: 3px;"></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="tablet-control-buttons" style="display: flex; gap: 10px;">
+                        <button id="tabletDisplayAutoBtn" class="btn btn-secondary" style="flex: 1;">
+                            🔄 Automatik
+                        </button>
+                        <button id="tabletDisplayOnBtn" class="btn btn-success" style="flex: 1;">
+                            💡 Alle einschalten
+                        </button>
+                        <button id="tabletDisplayOffBtn" class="btn btn-danger" style="flex: 1;">
+                            🌙 Alle ausschalten
+                        </button>
+                    </div>
+                </div>
+
+                <div class="form-section">
+                    <h3>ℹ️ Hinweise</h3>
+                    <ul class="info-list">
+                        <li>🔄 <strong>Synchronisation:</strong> Tablets laden die Einstellungen alle 30 Sekunden vom Server.</li>
+                        <li>⏰ <strong>Automatik:</strong> Im Automatik-Modus schalten sich die Displays nach den definierten Zeiten ein/aus.</li>
+                        <li>🎮 <strong>Manuell:</strong> Manuelle Steuerung überschreibt die Automatik bis "Automatik" wieder aktiviert wird.</li>
+                        <li>📱 <strong>Lokale Einstellungen:</strong> Tablets können weiterhin lokal konfiguriert werden (Fallback bei Server-Ausfall).</li>
+                        <li>🔌 <strong>Offline-Betrieb:</strong> Bei Verbindungsausfall nutzen Tablets ihre lokalen Einstellungen.</li>
                     </ul>
                 </div>
             </div>

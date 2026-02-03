@@ -19,6 +19,7 @@ const aiRoutes = require('./aiRoutes');
 const teileRoutes = require('./teileRoutes');
 const fahrzeugeRoutes = require('./fahrzeuge');
 const kiPlanungRoutes = require('./kiPlanungRoutes');
+const tabletRoutes = require('./tabletRoutes');
 
 router.use('/kunden', kundenRoutes);
 router.use('/termine', termineRoutes);
@@ -37,6 +38,7 @@ router.use('/ai', aiRoutes);
 router.use('/teile-bestellungen', teileRoutes);
 router.use('/fahrzeuge', fahrzeugeRoutes);
 router.use('/ki-planung', kiPlanungRoutes);
+router.use('/tablet', tabletRoutes);
 
 router.get('/health', (req, res) => {
   res.json({ status: 'OK', timestamp: new Date().toISOString() });

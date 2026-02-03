@@ -21,7 +21,8 @@ const migrations = [
   require('./015_create_arbeitszeiten_plan'),  // Version 15
   require('./016_add_arbeitszeit_start_ende'),  // Version 16
   require('./017_create_schicht_templates'),  // Version 17
-  require('./018_cleanup_legacy_tables')  // Version 18
+  require('./018_cleanup_legacy_tables'),  // Version 18
+  require('./019_tablet_einstellungen')  // Version 19 - Tablet-Steuerung
 ];
 
 /**

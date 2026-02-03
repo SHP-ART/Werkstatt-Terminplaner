@@ -234,3 +234,22 @@ ipcMain.handle('restart-app', () => {
   app.relaunch();
   app.exit(0);
 });
+
+// Display-Zeiten aktualisieren (vom Server synchronisiert)
+ipcMain.handle('update-display-times', (event, times) => {
+  if (times.displayOffTime) {
+    CONFIG.displayOffTime = times.displayOffTime;
+  }
+  if (times.displayOnTime) {
+    CONFIG.displayOnTime = times.displayOnTime;
+  }
+  
+  // Optional: Auch in config.json speichern als Cache
+  saveConfig(CONFIG);
+  
+  // Display-Timer neu starten mit neuen Zeiten
+  startDisplayTimer();
+  
+  return { success: true, config: CONFIG };
+});
+

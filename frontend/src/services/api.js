@@ -981,6 +981,37 @@ class SchichtTemplateService {
   }
 }
 
+class TabletService {
+  /**
+   * Tablet-Display-Einstellungen abrufen
+   */
+  static async getEinstellungen() {
+    return ApiService.request('/tablet/einstellungen');
+  }
+
+  /**
+   * Tablet-Display-Einstellungen aktualisieren
+   * @param {Object} data - { display_einschaltzeit, display_ausschaltzeit, manueller_display_status }
+   */
+  static async updateEinstellungen(data) {
+    return ApiService.request('/tablet/einstellungen', {
+      method: 'PUT',
+      body: JSON.stringify(data)
+    });
+  }
+
+  /**
+   * Manuellen Display-Status setzen
+   * @param {string} status - 'auto', 'an' oder 'aus'
+   */
+  static async setDisplayManuell(status) {
+    return ApiService.request('/tablet/display-manuell', {
+      method: 'PUT',
+      body: JSON.stringify({ status })
+    });
+  }
+}
+
 // Global verfügbar machen (für Vite-Kompatibilität)
 window.ApiService = ApiService;
 window.KundenService = KundenService;
@@ -997,3 +1028,4 @@ window.AIService = AIService;
 window.TeileBestellService = TeileBestellService;
 window.KIPlanungService = KIPlanungService;
 window.SchichtTemplateService = SchichtTemplateService;
+window.TabletService = TabletService;

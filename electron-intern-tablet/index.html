@@ -629,7 +629,62 @@
           console.warn('Keine Electron-API verfügbar');
         }
       }
+
+      // Lade Tablet-Einstellungen vom Server
+      await loadTabletEinstellungenFromServer();
     }
+
+    // ========== TABLET-EINSTELLUNGEN VOM SERVER ==========
+    async function loadTabletEinstellungenFromServer() {
+      try {
+        const response = await fetch(`${CONFIG.backendUrl}/api/tablet/einstellungen`);
+        if (response.ok) {
+          const einstellungen = await response.json();
+          
+          // Server-Einstellungen überschreiben lokale Defaults
+          if (einstellungen.display_einschaltzeit) {
+            CONFIG.displayOnTime = einstellungen.display_einschaltzeit;
+          }
+          if (einstellungen.display_ausschaltzeit) {
+            CONFIG.displayOffTime = einstellungen.display_ausschaltzeit;
+          }
+          
+          // Manueller Status hat Vorrang
+          if (einstellungen.manueller_display_status) {
+            if (einstellungen.manueller_display_status === 'an') {
+              // Display sofort einschalten
+              const overlay = document.getElementById('displayOffOverlay');
+              if (overlay) overlay.classList.remove('active');
+            } else if (einstellungen.manueller_display_status === 'aus') {
+              // Display sofort ausschalten
+              const overlay = document.getElementById('displayOffOverlay');
+              if (overlay) overlay.classList.add('active');
+            }
+            // Bei 'auto' wird die normale Zeitsteuerung verwendet
+          }
+          
+          console.log('✅ Tablet-Einstellungen vom Server geladen:', einstellungen);
+          
+          // Informiere Electron-Main-Process über neue Zeiten
+          if (window.electronAPI && window.electronAPI.updateDisplayTimes) {
+            window.electronAPI.updateDisplayTimes({
+              displayOffTime: CONFIG.displayOffTime,
+              displayOnTime: CONFIG.displayOnTime
+            });
+          }
+        } else {
+          console.warn('⚠️ Keine Tablet-Einstellungen vom Server verfügbar, nutze lokale Konfiguration');
+        }
+      } catch (error) {
+        console.warn('⚠️ Fehler beim Laden der Tablet-Einstellungen vom Server:', error.message);
+        console.log('→ Fallback: Nutze lokale Konfiguration');
+      }
+    }
+
+    // Aktualisiere Tablet-Einstellungen regelmäßig (alle 30 Sekunden)
+    setInterval(() => {
+      loadTabletEinstellungenFromServer();
+    }, 30000);
 
     // ========== API SERVICE ==========
     const ApiService = {
