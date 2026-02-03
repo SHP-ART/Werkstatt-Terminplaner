@@ -1,13 +1,12 @@
 {
   "name": "werkstatt-intern-tablet",
-  "version": "1.5.0",
+  "version": "1.5.1",
   "description": "Werkstatt Team-Übersicht für Tablet (Vollbild)",
   "main": "main.js",
   "scripts": {
     "start": "electron .",
     "build": "electron-builder",
-    "build:win": "electron-builder --win",
-    "build:portable": "electron-builder --win portable"
+    "build:win": "electron-builder --win"
   },
   "author": "Werkstatt",
   "license": "MIT",

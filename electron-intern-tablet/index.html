@@ -741,9 +741,41 @@
 
       const dauer = getEffektiveArbeitszeitMitFaktoren(termin, person, isLehrling, globaleNebenzeit);
       const [h, m] = startzeit.split(':').map(Number);
-      const endMinuten = h * 60 + m + dauer;
-      const endH = Math.floor(endMinuten / 60);
-      const endM = endMinuten % 60;
+      const startMinuten = h * 60 + m;
+      let gesamtMinuten = startMinuten + dauer;
+
+      // Pausenberücksichtigung (6h-Regel beachten)
+      if (person) {
+        const wochenStunden = person.wochenarbeitszeit_stunden || person.arbeitsstunden_pro_tag * (person.arbeitstage_pro_woche || 5);
+        const arbeitstage = person.arbeitstage_pro_woche || 5;
+        const taeglicheStunden = wochenStunden / arbeitstage;
+
+        // Nur bei >= 6h Arbeitszeit pro Tag Pause berücksichtigen
+        if (taeglicheStunden >= 6) {
+          const pauseStart = person.mittagspause_start;
+          const pauseDauer = person.pausenzeit_minuten || 30;
+
+          if (pauseStart && pauseDauer > 0) {
+            const [pauseH, pauseM] = pauseStart.split(':').map(Number);
+            const pausenStart = pauseH * 60 + pauseM;
+            const pausenEnde = pausenStart + pauseDauer;
+            const endMinutenOhnePause = startMinuten + dauer;
+
+            // Fall 1: Arbeit beginnt vor Pause und endet nach Pause-Start
+            if (startMinuten < pausenStart && endMinutenOhnePause > pausenStart) {
+              gesamtMinuten += pauseDauer;
+            }
+            // Fall 2: Arbeit beginnt während der Pause
+            else if (startMinuten >= pausenStart && startMinuten < pausenEnde) {
+              const verschiebung = pausenEnde - startMinuten;
+              gesamtMinuten += verschiebung;
+            }
+          }
+        }
+      }
+
+      const endH = Math.floor(gesamtMinuten / 60);
+      const endM = gesamtMinuten % 60;
 
       return `${String(endH).padStart(2, '0')}:${String(endM).padStart(2, '0')}`;
     }
@@ -886,10 +918,8 @@
           if (t.status === 'abgeschlossen' || t.status === 'storniert') return false;
           const startzeit = t.startzeit || t.bring_zeit;
           if (!startzeit) return false;
-          const dauer = getEffektiveArbeitszeitMitFaktoren(t, person, isLehrling, globaleNebenzeit);
-          const [h, m] = startzeit.split(':').map(Number);
-          const endMinuten = h * 60 + m + dauer;
-          const endzeit = `${String(Math.floor(endMinuten / 60)).padStart(2, '0')}:${String(endMinuten % 60).padStart(2, '0')}`;
+          // Verwende berechneEndzeit für korrekte Pausenberücksichtigung
+          const endzeit = berechneEndzeit(t, person, isLehrling, globaleNebenzeit);
           return startzeit <= jetztZeit && jetztZeit < endzeit;
         });
       }

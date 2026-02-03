@@ -25165,10 +25165,41 @@ class App {
     const dauer = this.getEffektiveArbeitszeitMitFaktoren(termin, person, isLehrling, kontext);
 
     const [stunden, minuten] = startzeit.split(':').map(Number);
+    const startMinuten = stunden * 60 + minuten;
+    let gesamtMinuten = startMinuten + dauer;
 
-    const endMinuten = stunden * 60 + minuten + dauer;
-    const endStunden = Math.floor(endMinuten / 60);
-    const endMin = endMinuten % 60;
+    // Pausenberücksichtigung (6h-Regel beachten)
+    if (person) {
+      const wochenStunden = person.wochenarbeitszeit_stunden || person.arbeitsstunden_pro_tag * (person.arbeitstage_pro_woche || 5);
+      const arbeitstage = person.arbeitstage_pro_woche || 5;
+      const taeglicheStunden = wochenStunden / arbeitstage;
+
+      // Nur bei >= 6h Arbeitszeit pro Tag Pause berücksichtigen
+      if (taeglicheStunden >= 6) {
+        const pauseStart = person.mittagspause_start;
+        const pauseDauer = person.pausenzeit_minuten || 30;
+
+        if (pauseStart && pauseDauer > 0) {
+          const [pauseH, pauseM] = pauseStart.split(':').map(Number);
+          const pausenStart = pauseH * 60 + pauseM;
+          const pausenEnde = pausenStart + pauseDauer;
+          const endMinutenOhnePause = startMinuten + dauer;
+
+          // Fall 1: Arbeit beginnt vor Pause und endet nach Pause-Start
+          if (startMinuten < pausenStart && endMinutenOhnePause > pausenStart) {
+            gesamtMinuten += pauseDauer;
+          }
+          // Fall 2: Arbeit beginnt während der Pause
+          else if (startMinuten >= pausenStart && startMinuten < pausenEnde) {
+            const verschiebung = pausenEnde - startMinuten;
+            gesamtMinuten += verschiebung;
+          }
+        }
+      }
+    }
+
+    const endStunden = Math.floor(gesamtMinuten / 60);
+    const endMin = gesamtMinuten % 60;
 
     return `${String(endStunden).padStart(2, '0')}:${String(endMin).padStart(2, '0')}`;
   }
