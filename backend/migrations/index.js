@@ -15,9 +15,13 @@ const migrations = [
   require('./009_performance_indizes'),
   require('./010_ki_training_quality'),
   require('./011_ki_external_url'),
-  require('./012_berechnete_zeiten'),
-  require('./013_create_termine_arbeiten_table'),
-  require('./015_create_arbeitszeiten_plan')
+  require('./010_wochenarbeitszeit'),  // Version 12 - Wochenarbeitszeit-Felder
+  require('./012_berechnete_zeiten'),  // Version 13 - Berechnete Zeiten
+  require('./013_create_termine_arbeiten_table'),  // Version 14
+  require('./015_create_arbeitszeiten_plan'),  // Version 15
+  require('./016_add_arbeitszeit_start_ende'),  // Version 16
+  require('./017_create_schicht_templates'),  // Version 17
+  require('./018_cleanup_legacy_tables')  // Version 18
 ];
 
 /**

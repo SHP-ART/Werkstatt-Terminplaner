@@ -16,7 +16,7 @@
 const { safeAlterTable } = require('./helpers');
 
 module.exports = {
-  version: 12,
+  version: 13,
   description: 'Berechnete Zeiten pro Arbeit',
 
   async up(db) {

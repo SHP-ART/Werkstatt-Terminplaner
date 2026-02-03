@@ -26301,7 +26301,8 @@ class App {
             return 0; // Freier Tag
           }
 
-          const arbeitsMinuten = (arbeitszeitenEintrag.arbeitsstunden * 60) - (arbeitszeitenEintrag.pausenzeit_minuten || 0);
+          // HINWEIS: Pausenzeit wird NICHT abgezogen - 8h Arbeitszeit = 8h verfügbar
+          const arbeitsMinuten = (arbeitszeitenEintrag.arbeitsstunden * 60);
           
           // Nebenzeit berücksichtigen
           const nebenzeit = person.nebenzeit_prozent || 0;
@@ -26333,13 +26334,14 @@ class App {
       // Berechne Samstags-Kapazität aus Zeitfenster
       const start = person.samstag_start || '09:00';
       const ende = person.samstag_ende || '12:00';
+      // HINWEIS: Pausenzeit wird NICHT abgezogen
       const pause = person.samstag_pausenzeit_minuten || 0;
 
       const [startH, startM] = start.split(':').map(Number);
       const [endeH, endeM] = ende.split(':').map(Number);
       const startMinuten = startH * 60 + startM;
       const endeMinuten = endeH * 60 + endeM;
-      const arbeitszeit = endeMinuten - startMinuten - pause;
+      const arbeitszeit = endeMinuten - startMinuten; // Pause NICHT abziehen
 
       // Nebenzeit berücksichtigen (nur bei Mitarbeitern relevant)
       const nebenzeit = person.nebenzeit_prozent || 0;
@@ -26353,9 +26355,10 @@ class App {
     const arbeitstage = person.arbeitstage_pro_woche || 5;
     const pausenzeit = person.pausenzeit_minuten || 30;
 
-    // Tageskapazität = (Wochenarbeitszeit / Arbeitstage × 60) - Pausenzeit
+    // Tageskapazität = (Wochenarbeitszeit / Arbeitstage × 60)
+    // HINWEIS: Pausenzeit wird NICHT abgezogen - 8h Arbeitszeit = 8h verfügbar
     const tagesStunden = wochenarbeitszeit / arbeitstage;
-    const tagesMinuten = (tagesStunden * 60) - pausenzeit;
+    const tagesMinuten = (tagesStunden * 60);
 
     // Nebenzeit berücksichtigen
     const nebenzeit = person.nebenzeit_prozent || 0;
@@ -26363,7 +26366,7 @@ class App {
 
     // Fallback: Wenn Wochenarbeitszeit nicht gesetzt, nutze alte arbeitsstunden_pro_tag
     if (!person.wochenarbeitszeit_stunden && person.arbeitsstunden_pro_tag) {
-      const altesSystem = (person.arbeitsstunden_pro_tag * 60) - pausenzeit;
+      const altesSystem = (person.arbeitsstunden_pro_tag * 60);
       const mitNebenzeit = altesSystem * (1 + nebenzeit / 100);
       return Math.max(0, mitNebenzeit);
     }
@@ -26416,13 +26419,14 @@ class App {
       // Berechne Samstags-Kapazität aus Zeitfenster
       const start = person.samstag_start || '09:00';
       const ende = person.samstag_ende || '12:00';
+      // HINWEIS: Pausenzeit wird NICHT abgezogen
       const pause = person.samstag_pausenzeit_minuten || 0;
 
       const [startH, startM] = start.split(':').map(Number);
       const [endeH, endeM] = ende.split(':').map(Number);
       const startMinuten = startH * 60 + startM;
       const endeMinuten = endeH * 60 + endeM;
-      const arbeitszeit = endeMinuten - startMinuten - pause;
+      const arbeitszeit = endeMinuten - startMinuten; // Pause NICHT abziehen
 
       // Nebenzeit berücksichtigen (nur bei Mitarbeitern relevant)
       const nebenzeit = person.nebenzeit_prozent || 0;
@@ -26436,9 +26440,10 @@ class App {
     const arbeitstage = person.arbeitstage_pro_woche || 5;
     const pausenzeit = person.pausenzeit_minuten || 30;
 
-    // Tageskapazität = (Wochenarbeitszeit / Arbeitstage × 60) - Pausenzeit
+    // Tageskapazität = (Wochenarbeitszeit / Arbeitstage × 60)
+    // HINWEIS: Pausenzeit wird NICHT abgezogen - 8h Arbeitszeit = 8h verfügbar
     const tagesStunden = wochenarbeitszeit / arbeitstage;
-    const tagesMinuten = (tagesStunden * 60) - pausenzeit;
+    const tagesMinuten = (tagesStunden * 60);
 
     // Nebenzeit berücksichtigen
     const nebenzeit = person.nebenzeit_prozent || 0;
@@ -26446,7 +26451,7 @@ class App {
 
     // Fallback: Wenn Wochenarbeitszeit nicht gesetzt, nutze alte arbeitsstunden_pro_tag
     if (!person.wochenarbeitszeit_stunden && person.arbeitsstunden_pro_tag) {
-      const altesSystem = (person.arbeitsstunden_pro_tag * 60) - pausenzeit;
+      const altesSystem = (person.arbeitsstunden_pro_tag * 60);
       const mitNebenzeit = altesSystem * (1 + nebenzeit / 100);
       return Math.max(0, mitNebenzeit);
     }

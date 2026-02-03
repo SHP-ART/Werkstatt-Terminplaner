@@ -11,7 +11,7 @@
 let berechneArbeitszeitFuerSpeicherung = null;
 
 module.exports = {
-  version: 13,
+  version: 14,
   description: 'Erstellt termine_arbeiten Tabelle für relationale Arbeitszeit-Speicherung + Datenmigration',
   
   up: (db) => {

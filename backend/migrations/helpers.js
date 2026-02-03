@@ -80,9 +80,28 @@ function safeCreateIndex(db, sql) {
   });
 }
 
+/**
+ * Hilfsfunktion: Führt SQL-Statement sicher aus (UPDATE, INSERT etc.)
+ * @param {Object} db - SQLite Datenbank-Verbindung
+ * @param {string} sql - SQL Statement
+ * @param {string} description - Beschreibung für Logging
+ * @returns {Promise<void>}
+ */
+function safeRun(db, sql, description) {
+  return new Promise((resolve) => {
+    db.run(sql, (err) => {
+      if (err) {
+        console.error(`Fehler bei ${description}:`, err.message);
+      }
+      resolve();
+    });
+  });
+}
+
 module.exports = {
   safeAlterTable,
   safeCreateTable,
   safeCreateIndex,
-  runSQL
+  runSQL,
+  safeRun
 };
