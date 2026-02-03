@@ -18605,7 +18605,7 @@ class App {
       // 3a. Abwesenheiten für dieses Datum laden (für Kapazitätsberechnung)
       let abwesenheitenFuerDatum = [];
       try {
-        abwesenheitenFuerDatum = await fetch(`${CONFIG.API_URL}/abwesenheiten/datum/${selectedDatum}`)
+        abwesenheitenFuerDatum = await fetch(`${CONFIG.API_URL}/abwesenheiten/datum/${datum}`)
           .then(res => res.json());
       } catch (error) {
         console.error('Fehler beim Laden der Abwesenheiten:', error);
@@ -18665,7 +18665,7 @@ class App {
       // === MITARBEITER ===
       mitarbeiterListe.forEach(ma => {
         // Kapazität berechnen mit neuer Wochenarbeitszeit-Logik (synchron mit vorgeladenen Abwesenheiten)
-        const maxMinuten = this.calculateTageskapazitaetMinutenSync(ma, selectedDatum, abwesenheitenFuerDatum);
+        const maxMinuten = this.calculateTageskapazitaetMinutenSync(ma, datum, abwesenheitenFuerDatum);
         
         // Aktuelle Auslastung aus API holen (belegt_minuten_roh = reine Arbeitszeit ohne Nebenzeit)
         let currentMinuten = 0;
@@ -18733,7 +18733,7 @@ class App {
       // === LEHRLINGE ===
       lehrlingeListe.forEach(lehrling => {
         // Kapazität berechnen mit neuer Wochenarbeitszeit-Logik (synchron mit vorgeladenen Abwesenheiten)
-        const maxMinuten = this.calculateTageskapazitaetMinutenSync(lehrling, selectedDatum, abwesenheitenFuerDatum);
+        const maxMinuten = this.calculateTageskapazitaetMinutenSync(lehrling, datum, abwesenheitenFuerDatum);
         
         // Aktuelle Auslastung aus API holen (belegt_minuten_roh = reine Arbeitszeit ohne Nebenzeit)
         let currentMinuten = 0;
@@ -24500,11 +24500,35 @@ class App {
         t.arbeit !== 'Fahrzeug hinzugefügt'
       );
 
-      // Kontext für Berechnungen mit Nebenzeit/Aufgabenbewältigung
+      // Arbeitszeiten für heute laden (für alle Mitarbeiter und Lehrlinge)
+      const arbeitszeitenPromises = [
+        ...aktiveMitarbeiter.map(m => 
+          ApiService.get(`/arbeitszeiten-plan/for-date?mitarbeiter_id=${m.id}&datum=${heute}`)
+            .then(data => ({ type: 'mitarbeiter', id: m.id, data }))
+            .catch(() => ({ type: 'mitarbeiter', id: m.id, data: null }))
+        ),
+        ...aktiveLehrlinge.map(l =>
+          ApiService.get(`/arbeitszeiten-plan/for-date?lehrling_id=${l.id}&datum=${heute}`)
+            .then(data => ({ type: 'lehrling', id: l.id, data }))
+            .catch(() => ({ type: 'lehrling', id: l.id, data: null }))
+        )
+      ];
+
+      const arbeitszeitenResults = await Promise.all(arbeitszeitenPromises);
+      
+      // Map für schnellen Zugriff auf Arbeitszeiten
+      const arbeitszeitenMap = {};
+      arbeitszeitenResults.forEach(result => {
+        const key = `${result.type}_${result.id}`;
+        arbeitszeitenMap[key] = result.data;
+      });
+
+      // Kontext für Berechnungen mit Nebenzeit/Aufgabenbewältigung + Arbeitszeiten
       const berechnungsKontext = {
         globaleNebenzeitProzent,
         mitarbeiter,
-        lehrlinge
+        lehrlinge,
+        arbeitszeitenMap
       };
 
       // Render Mitarbeiter-Kacheln
@@ -24796,6 +24820,11 @@ class App {
       `;
     }
 
+    // Arbeitszeit für heute ermitteln
+    const arbeitszeitenMap = kontext.arbeitszeitenMap || {};
+    const arbeitszeitKey = isLehrling ? `lehrling_${personId}` : `mitarbeiter_${personId}`;
+    const arbeitszeit = arbeitszeitenMap[arbeitszeitKey];
+
     return `
       <div class="intern-person-kachel ${isLehrling ? 'lehrling' : ''}">
         <div class="intern-person-header">
@@ -24805,6 +24834,12 @@ class App {
           </div>
           <div class="intern-person-badge ${badgeClass}">${badgeText}</div>
         </div>
+        ${arbeitszeit && arbeitszeit.arbeitszeit_start && arbeitszeit.arbeitszeit_ende ? `
+        <div class="intern-person-arbeitszeit">
+          <span class="arbeitszeit-label">⏰ Arbeitszeit:</span>
+          <span class="arbeitszeit-wert">${arbeitszeit.arbeitszeit_start} - ${arbeitszeit.arbeitszeit_ende}</span>
+        </div>
+        ` : ''}
         <div class="intern-person-body">
           ${bodyContent}
         </div>

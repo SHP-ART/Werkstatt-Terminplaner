@@ -173,6 +173,29 @@
       color: white;
     }
 
+    .person-arbeitszeit {
+      padding: 8px 15px;
+      background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%);
+      border-bottom: 1px solid var(--card-border);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 0.9em;
+      flex-shrink: 0;
+    }
+
+    .arbeitszeit-label {
+      color: #1565c0;
+      font-weight: 500;
+    }
+
+    .arbeitszeit-wert {
+      color: #0d47a1;
+      font-weight: 600;
+      font-family: 'Courier New', monospace;
+      font-size: 1.05em;
+    }
+
     .person-body {
       padding: 12px;
       flex: 1;
@@ -768,10 +791,13 @@
     }
 
     // ========== KACHEL RENDERN ==========
-    function renderPersonKachel(person, alleTermine, typ, globaleNebenzeit) {
+    function renderPersonKachel(person, alleTermine, typ, globaleNebenzeit, arbeitszeit) {
       const personId = person.id;
       const personName = person.name;
       const isLehrling = typ === 'lehrling';
+
+      // Debug: Arbeitszeit-Parameter prüfen
+      console.log(`[renderPersonKachel] ${personName} (${typ}_${personId}):`, arbeitszeit);
 
       // Finde Termine für diese Person
       const personTermine = alleTermine.filter(t => isTerminFuerPerson(t, personId, isLehrling));
@@ -940,6 +966,12 @@
             </div>
             <div class="person-badge ${badgeClass}">${badgeText}</div>
           </div>
+          ${arbeitszeit && arbeitszeit.arbeitszeit_start && arbeitszeit.arbeitszeit_ende ? `
+          <div class="person-arbeitszeit">
+            <span class="arbeitszeit-label">⏰ Arbeitszeit:</span>
+            <span class="arbeitszeit-wert">${arbeitszeit.arbeitszeit_start} - ${arbeitszeit.arbeitszeit_ende}</span>
+          </div>
+          ` : ''}
           <div class="person-body">
             ${bodyContent}
           </div>
@@ -969,17 +1001,46 @@
           t.arbeit !== 'Fahrzeug hinzugefügt'
         );
 
+        // Arbeitszeiten für heute laden (für alle Mitarbeiter und Lehrlinge)
+        const arbeitszeitenPromises = [
+          ...aktiveMitarbeiter.map(m => 
+            ApiService.get(`/arbeitszeiten-plan/for-date?mitarbeiter_id=${m.id}&datum=${heute}`)
+              .then(data => ({ type: 'mitarbeiter', id: m.id, data }))
+              .catch(() => ({ type: 'mitarbeiter', id: m.id, data: null }))
+          ),
+          ...aktiveLehrlinge.map(l =>
+            ApiService.get(`/arbeitszeiten-plan/for-date?lehrling_id=${l.id}&datum=${heute}`)
+              .then(data => ({ type: 'lehrling', id: l.id, data }))
+              .catch(() => ({ type: 'lehrling', id: l.id, data: null }))
+          )
+        ];
+
+        const arbeitszeitenResults = await Promise.all(arbeitszeitenPromises);
+        
+        // Map für schnellen Zugriff auf Arbeitszeiten
+        const arbeitszeitenMap = {};
+        arbeitszeitenResults.forEach(result => {
+          const key = `${result.type}_${result.id}`;
+          arbeitszeitenMap[key] = result.data;
+          // Debug: Log der Arbeitszeit-Daten
+          if (result.data) {
+            console.log(`[Arbeitszeit] ${key}:`, result.data.arbeitszeit_start, '-', result.data.arbeitszeit_ende);
+          }
+        });
+
         // Alle Personen in einem Grid rendern (Mitarbeiter zuerst, dann Lehrlinge)
         let allKacheln = [];
 
         // Mitarbeiter Kacheln
         aktiveMitarbeiter.forEach(m => {
-          allKacheln.push(renderPersonKachel(m, relevanteTermine, 'mitarbeiter', globaleNebenzeit));
+          const arbeitszeit = arbeitszeitenMap[`mitarbeiter_${m.id}`];
+          allKacheln.push(renderPersonKachel(m, relevanteTermine, 'mitarbeiter', globaleNebenzeit, arbeitszeit));
         });
 
         // Lehrlinge Kacheln
         aktiveLehrlinge.forEach(l => {
-          allKacheln.push(renderPersonKachel(l, relevanteTermine, 'lehrling', globaleNebenzeit));
+          const arbeitszeit = arbeitszeitenMap[`lehrling_${l.id}`];
+          allKacheln.push(renderPersonKachel(l, relevanteTermine, 'lehrling', globaleNebenzeit, arbeitszeit));
         });
 
         if (allKacheln.length > 0) {

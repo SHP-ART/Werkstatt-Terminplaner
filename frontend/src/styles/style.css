@@ -12865,6 +12865,29 @@ mark.highlight {
     50% { transform: scale(1.05); }
 }
 
+/* Arbeitszeiten-Anzeige unter Header */
+.intern-person-arbeitszeit {
+    padding: 10px 20px;
+    background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%);
+    border-bottom: 1px solid var(--card-border);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 0.9rem;
+}
+
+.arbeitszeit-label {
+    color: #1565c0;
+    font-weight: 600;
+}
+
+.arbeitszeit-wert {
+    color: #0d47a1;
+    font-weight: 700;
+    font-family: 'Courier New', monospace;
+    font-size: 1.05em;
+}
+
 /* Kachel-Body mit Auftragsinfo */
 .intern-person-body {
     padding: 20px;
