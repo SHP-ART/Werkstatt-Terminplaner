@@ -9,18 +9,22 @@
 | Tabelle | Beschreibung |
 |---------|--------------|
 | `termine` | Alle Werkstatt-Termine |
+| `termine_arbeiten` | Relationstabelle: Arbeiten pro Termin (detailliert) |
 | `kunden` | Kundenstammdaten |
 | `fahrzeuge` | Fahrzeugdaten mit VIN-Dekodierung |
 | `teile_bestellungen` | Teile-Bestellungen für Termine |
 | `mitarbeiter` | Mitarbeiter der Werkstatt |
 | `lehrlinge` | Auszubildende/Lehrlinge |
 | `arbeitszeiten` | Vordefinierte Arbeitsschritte mit Zeitschätzungen |
+| `arbeitszeiten_plan` | Individuelle Arbeitszeiten pro Mitarbeiter/Lehrling/Wochentag |
+| `schicht_templates` | Schicht-Vorlagen für Arbeitszeitplanung |
 | `werkstatt_einstellungen` | Globale Einstellungen |
 | `ersatzautos` | Ersatzfahrzeuge für Kunden |
-| `mitarbeiter_abwesenheiten` | Urlaub/Krankheit pro Mitarbeiter/Lehrling |
 | `termin_phasen` | Mehrtägige Termin-Phasen |
-| `abwesenheiten` | (veraltet) Globale Abwesenheiten |
+| `abwesenheiten` | ⚠️ **Aktuell**: Individuelle Mitarbeiter-/Lehrling-Abwesenheiten (aktiv genutzt) |
 | `_schema_meta` | Interne Schema-Versionierung |
+
+**Hinweis:** Die Tabellen `mitarbeiter_abwesenheiten` und `abwesenheiten_legacy` wurden mit Migration 018 entfernt. Alte Daten wurden automatisch migriert.
 
 ---
 
@@ -251,6 +255,92 @@ Vordefinierte Arbeitsschritte für Autovervollständigung.
 
 ---
 
+### ⏰ `arbeitszeiten_plan`
+
+Individuelle Arbeitszeiten pro Mitarbeiter/Lehrling und Wochentag. Ermöglicht flexible Arbeitszeit-Planung mit Ausnahmen für bestimmte Datumsbereiche.
+
+| Feld | Typ | Beschreibung |
+|------|-----|--------------|
+| `id` | INTEGER | Primärschlüssel (auto) |
+| `mitarbeiter_id` | INTEGER | FK → mitarbeiter.id (oder NULL wenn lehrling_id gesetzt) |
+| `lehrling_id` | INTEGER | FK → lehrlinge.id (oder NULL wenn mitarbeiter_id gesetzt) |
+| `wochentag` | INTEGER | Wochentag: 1=Mo, 2=Di, 3=Mi, 4=Do, 5=Fr, 6=Sa, 7=So |
+| `datum_von` | TEXT | Gültig ab Datum (optional, für zeitliche Ausnahmen) |
+| `datum_bis` | TEXT | Gültig bis Datum (optional, für zeitliche Ausnahmen) |
+| `arbeitsstunden` | REAL | Arbeitsstunden für diesen Tag (**Pflicht**) |
+| `pausenzeit_minuten` | INTEGER | Pausenzeit in Minuten (Standard: 30) |
+| `ist_frei` | INTEGER | 0/1 - Ist dieser Tag frei? (Standard: 0) |
+| `beschreibung` | TEXT | Optional: Beschreibung/Grund (z.B. "Sonderurlaub", "Teilzeit") |
+| `arbeitszeit_start` | TEXT | Arbeitsbeginn (z.B. "08:00", Standard: "08:00") |
+| `arbeitszeit_ende` | TEXT | Arbeitsende (z.B. "16:30", Standard: "16:30") |
+| `erstellt_am` | DATETIME | Erstellungszeitpunkt (Standard: CURRENT_TIMESTAMP) |
+| `aktualisiert_am` | DATETIME | Letztes Update (Standard: CURRENT_TIMESTAMP) |
+
+**Hinweise:**
+- Pro Mitarbeiter/Lehrling kann es mehrere Einträge pro Wochentag geben (z.B. für zeitliche Ausnahmen)
+- Wenn `datum_von`/`datum_bis` gesetzt sind, gilt die Regel nur für diesen Zeitraum
+- Ohne Datumsbereich gilt die Regel dauerhaft für den Wochentag
+- `ist_frei=1` markiert einen Tag als arbeitsfreien Tag
+- Wird in der Team-Übersicht und Auslastungsberechnung verwendet
+
+---
+
+### 📋 `schicht_templates`
+
+Wiederverwendbare Schicht-Vorlagen für die Arbeitszeitplanung. Definiert Standard-Schichtmodelle, die schnell Mitarbeitern/Lehrlingen zugewiesen werden können.
+
+| Feld | Typ | Beschreibung |
+|------|-----|--------------|
+| `id` | INTEGER | Primärschlüssel (auto) |
+| `name` | TEXT | Name der Schicht-Vorlage (**Pflicht**, z.B. "Frühschicht", "Spätschicht") |
+| `beschreibung` | TEXT | Beschreibung der Schicht (optional) |
+| `arbeitszeit_start` | TEXT | Schichtbeginn im Format "HH:MM" (**Pflicht**) |
+| `arbeitszeit_ende` | TEXT | Schichtende im Format "HH:MM" (**Pflicht**) |
+| `farbe` | TEXT | Farbe für UI-Darstellung (Hex-Code, Standard: '#667eea') |
+| `sortierung` | INTEGER | Sortierreihenfolge in der UI (Standard: 0) |
+| `aktiv` | INTEGER | 0/1 - Ist die Vorlage aktiv? (Standard: 1) |
+| `erstellt_am` | DATETIME | Erstellungszeitpunkt (Standard: CURRENT_TIMESTAMP) |
+
+**Beispiele:**
+```
+Frühschicht:  07:00 - 15:30
+Normalschicht: 08:00 - 16:30
+Spätschicht:   11:00 - 19:30
+```
+
+---
+
+### 🔨 `termine_arbeiten`
+
+Relationstabelle: Speichert einzelne Arbeiten eines Termins mit detaillierten Zeit- und Zuweisungsinformationen. Ersetzt/ergänzt das JSON-Feld `arbeitszeiten_details` in der `termine`-Tabelle für bessere Abfragen und Auswertungen.
+
+| Feld | Typ | Beschreibung |
+|------|-----|--------------|
+| `id` | INTEGER | Primärschlüssel (auto) |
+| `termin_id` | INTEGER | FK → termine.id (**Pflicht**) |
+| `arbeit` | TEXT | Bezeichnung der Arbeit (**Pflicht**) |
+| `zeit` | INTEGER | Geschätzte Zeit in Minuten (**Pflicht**) |
+| `mitarbeiter_id` | INTEGER | FK → mitarbeiter.id (oder NULL wenn lehrling_id gesetzt) |
+| `lehrling_id` | INTEGER | FK → lehrlinge.id (oder NULL wenn mitarbeiter_id gesetzt) |
+| `startzeit` | TEXT | Geplante Startzeit der Arbeit (Format "HH:MM") |
+| `reihenfolge` | INTEGER | Reihenfolge der Arbeiten im Termin (Standard: 0) |
+| `berechnete_dauer_minuten` | INTEGER | Berechnete Dauer inkl. Nebenzeit/Faktoren |
+| `berechnete_endzeit` | TEXT | Berechnete Endzeit (Format "HH:MM") |
+| `faktor_nebenzeit` | REAL | Angewandter Nebenzeit-Faktor (z.B. 1.15 = +15%) |
+| `faktor_aufgabenbewaeltigung` | REAL | Angewandter Aufgabenbewältigungs-Faktor für Lehrlinge |
+| `pause_enthalten` | INTEGER | 0/1 - Ist eine Pause in dieser Arbeit enthalten? |
+| `pause_minuten` | INTEGER | Dauer der enthaltenen Pause in Minuten |
+| `created_at` | TEXT | Erstellungszeitpunkt (Standard: CURRENT_TIMESTAMP) |
+| `updated_at` | TEXT | Letztes Update (Standard: CURRENT_TIMESTAMP) |
+
+**Vorteile gegenüber JSON:**
+- Bessere Abfragbarkeit und Filterung
+- Einfachere Joins mit Mitarbeiter-/Lehrlings-Tabellen
+- Klare Typisierung und Constraints
+- Bessere Performance bei komplexen Auswertungen
+
+---
+
 ### 🚗 `ersatzautos`
 
 Ersatzfahrzeuge für Kunden.
@@ -268,19 +358,24 @@ Ersatzfahrzeuge für Kunden.
 
 ---
 
-### 🏖️ `mitarbeiter_abwesenheiten`
+### 🏖️ `abwesenheiten`
 
-Urlaub und Krankheit pro Mitarbeiter/Lehrling.
+**Aktuelle Tabelle** für individuelle Urlaube und Krankheiten pro Mitarbeiter/Lehrling mit Datumsbereich.
 
 | Feld | Typ | Beschreibung |
 |------|-----|--------------|
 | `id` | INTEGER | Primärschlüssel (auto) |
-| `mitarbeiter_id` | INTEGER | FK → mitarbeiter.id (oder NULL) |
-| `lehrling_id` | INTEGER | FK → lehrlinge.id (oder NULL) |
+| `mitarbeiter_id` | INTEGER | FK → mitarbeiter.id (oder NULL wenn lehrling_id gesetzt) |
+| `lehrling_id` | INTEGER | FK → lehrlinge.id (oder NULL wenn mitarbeiter_id gesetzt) |
 | `typ` | TEXT | `urlaub` oder `krank` |
-| `von_datum` | DATE | Beginn der Abwesenheit |
-| `bis_datum` | DATE | Ende der Abwesenheit |
+| `datum_von` | DATE | Beginn der Abwesenheit (Format: YYYY-MM-DD) |
+| `datum_bis` | DATE | Ende der Abwesenheit (Format: YYYY-MM-DD) |
+| `beschreibung` | TEXT | Optional: Grund/Notiz zur Abwesenheit |
 | `erstellt_am` | DATETIME | Erstellungszeitpunkt |
+
+**API-Endpunkt:** `/api/abwesenheiten` (aktiv genutzt)
+
+**Migration:** Daten aus der veralteten Tabelle `mitarbeiter_abwesenheiten` wurden automatisch mit Migration 018 übertragen.
 
 ---
 
@@ -321,28 +416,53 @@ Für Performance optimiert:
 | `idx_kunden_kennzeichen` | kunden | kennzeichen |
 | `idx_phasen_termin` | termin_phasen | termin_id |
 | `idx_phasen_datum` | termin_phasen | datum |
-| `idx_ma_abw_mitarbeiter` | mitarbeiter_abwesenheiten | mitarbeiter_id |
-| `idx_ma_abw_lehrling` | mitarbeiter_abwesenheiten | lehrling_id |
-| `idx_ma_abw_datum` | mitarbeiter_abwesenheiten | von_datum, bis_datum |
 | `idx_teile_termin` | teile_bestellungen | termin_id |
 | `idx_teile_status` | teile_bestellungen | status |
 | `idx_fahrzeuge_kennzeichen` | fahrzeuge | kennzeichen |
 | `idx_fahrzeuge_vin` | fahrzeuge | vin |
 | `idx_fahrzeuge_kunde` | fahrzeuge | kunde_id |
+| `idx_arbeiten_termin` | termine_arbeiten | termin_id |
+| `idx_arbeiten_mitarbeiter` | termine_arbeiten | mitarbeiter_id |
+| `idx_arbeiten_lehrling` | termine_arbeiten | lehrling_id |
+| `idx_arbeitszeiten_plan_ma` | arbeitszeiten_plan | mitarbeiter_id |
+| `idx_arbeitszeiten_plan_lehr` | arbeitszeiten_plan | lehrling_id |
+| `idx_arbeitszeiten_plan_tag` | arbeitszeiten_plan | wochentag |
+| `idx_abwesenheiten_mitarbeiter` | abwesenheiten | mitarbeiter_id |
+| `idx_abwesenheiten_lehrling` | abwesenheiten | lehrling_id |
+| `idx_abwesenheiten_datum` | abwesenheiten | datum_von, datum_bis |
 
 ---
 
-## Schema-Versionierung
+## Migration & Versionierung
+
+### Schema-Versionierung
 
 Die Tabelle `_schema_meta` speichert die aktuelle Schema-Version:
 
 | Key | Value |
 |-----|-------|
-| `schema_version` | `2` |
-
-Die Schema-Version wird bei jeder Migration erhöht (aktuell: 11).
+| `schema_version` | `18` |
 
 Bei jedem Server-Start wird geprüft, ob Migrationen nötig sind.
+
+### Migration 018: Cleanup veralteter Tabellen
+
+**Was wurde entfernt:**
+1. ❌ `mitarbeiter_abwesenheiten` - Alte Abwesenheits-Tabelle mit inkonsistenten Spaltennamen
+2. ❌ `abwesenheiten_legacy` - Globale Abwesenheiten (nur Anzahl, nicht individuell)
+
+**Was wurde migriert:**
+- Alle Daten aus `mitarbeiter_abwesenheiten` wurden automatisch nach `abwesenheiten` übertragen
+- Spalten-Mapping: `von_datum` → `datum_von`, `bis_datum` → `datum_bis`
+- Alte Indizes (`idx_ma_abw_*`) wurden entfernt
+- Neue Indizes für `abwesenheiten` wurden erstellt
+
+**Für Entwickler:**
+- Alle Referenzen auf `mitarbeiter_abwesenheiten` wurden auf `abwesenheiten` aktualisiert
+- `kiPlanungController.js` nutzt jetzt die aktuelle Tabelle
+- Legacy-API unter `/api/abwesenheiten/legacy/:datum` bleibt für Rückwärtskompatibilität (falls `abwesenheiten_legacy` Daten enthält)
+
+**Rollback:** Falls nötig, kann die Migration rückgängig gemacht werden (siehe `018_cleanup_legacy_tables.js`)
 
 ---
 
@@ -429,4 +549,30 @@ cp backend/database/werkstatt.db backup_$(date +%Y%m%d).db
 
 ---
 
-*Letzte Aktualisierung: Januar 2026*
+## API-Endpunkte für Arbeitszeiten-Plan
+
+| Methode | Endpunkt | Beschreibung |
+|---------|----------|--------------|
+| GET | `/api/arbeitszeiten-plan` | Alle Arbeitszeiten-Einträge |
+| GET | `/api/arbeitszeiten-plan/mitarbeiter/:id` | Arbeitszeiten für einen Mitarbeiter |
+| GET | `/api/arbeitszeiten-plan/lehrling/:id` | Arbeitszeiten für einen Lehrling |
+| GET | `/api/arbeitszeiten-plan/for-date` | Arbeitszeiten für ein bestimmtes Datum (alle MA/Lehrlinge) |
+| POST | `/api/arbeitszeiten-plan` | Neue Arbeitszeit-Regel anlegen |
+| PUT | `/api/arbeitszeiten-plan/:id` | Arbeitszeit-Regel aktualisieren |
+| DELETE | `/api/arbeitszeiten-plan/:id` | Arbeitszeit-Regel löschen |
+
+---
+
+## API-Endpunkte für Schicht-Templates
+
+| Methode | Endpunkt | Beschreibung |
+|---------|----------|--------------|
+| GET | `/api/schicht-templates` | Alle aktiven Schicht-Vorlagen |
+| GET | `/api/schicht-templates/:id` | Einzelne Schicht-Vorlage |
+| POST | `/api/schicht-templates` | Neue Schicht-Vorlage anlegen |
+| PUT | `/api/schicht-templates/:id` | Schicht-Vorlage aktualisieren |
+| DELETE | `/api/schicht-templates/:id` | Schicht-Vorlage löschen |
+
+---
+
+*Letzte Aktualisierung: Februar 2026*

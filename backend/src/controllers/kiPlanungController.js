@@ -261,8 +261,8 @@ class KIPlanungController {
 
   static async getAbwesenheitenFuerDatum(datum) {
     return await allAsync(`
-      SELECT * FROM mitarbeiter_abwesenheiten
-      WHERE von_datum <= ? AND bis_datum >= ?
+      SELECT * FROM abwesenheiten
+      WHERE datum_von <= ? AND datum_bis >= ?
     `, [datum, datum]);
   }
 
