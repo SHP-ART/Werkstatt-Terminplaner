@@ -2082,6 +2082,161 @@ class TermineController {
       res.status(500).json({ error: err.message });
     }
   }
+
+  /**
+   * Berechnet alle Termine einer Person an einem Tag sequenziell neu
+   * Wird nach früherem Start (Bestätigen-Button) aufgerufen
+   * POST /termine/berechne-zeiten-neu
+   * Body: { personId, personTyp: 'mitarbeiter'|'lehrling', datum, startTerminId }
+   */
+  static async berechneZeitenNeu(req, res) {
+    const { runAsync, allAsync } = require('../utils/dbHelper');
+    
+    try {
+      const { personId, personTyp, datum, startTerminId } = req.body;
+
+      // Validierung
+      if (!personId || !personTyp || !datum) {
+        return res.status(400).json({ error: 'personId, personTyp und datum sind erforderlich' });
+      }
+
+      // Lade Einstellungen für Arbeitsende-Berechnung
+      const einstellungen = await EinstellungenModel.getWerkstatt();
+      const arbeitsstundenProTag = (personTyp === 'lehrling') 
+        ? (await require('../models/lehrlingeModel').getById(personId))?.arbeitsstunden_pro_tag || 8
+        : (await MitarbeiterModel.getById(personId))?.arbeitsstunden_pro_tag || 8;
+
+      // Lade alle Termine dieser Person an diesem Tag (Status: geplant oder in_arbeit)
+      const alleTermine = await allAsync(`
+        SELECT id, startzeit, bring_zeit, geschaetzte_zeit, arbeitszeiten_details, status, verschoben_von_datum
+        FROM termine
+        WHERE datum = ? 
+          AND status IN ('geplant', 'in_arbeit')
+          AND geloescht_am IS NULL
+        ORDER BY erstellt_am ASC
+      `, [datum]);
+
+      // Filtere nur eigene Termine (über _gesamt_mitarbeiter_id in arbeitszeiten_details)
+      const eigeneTermine = alleTermine.filter(t => {
+        if (!t.arbeitszeiten_details) return false;
+        try {
+          const details = JSON.parse(t.arbeitszeiten_details);
+          const gesamt = details._gesamt_mitarbeiter_id;
+          if (!gesamt) return false;
+          
+          if (typeof gesamt === 'object' && gesamt.type === personTyp && gesamt.id === personId) {
+            return true;
+          }
+        } catch (e) {
+          // Parsing-Fehler ignorieren
+        }
+        return false;
+      });
+
+      if (eigeneTermine.length === 0) {
+        return res.json({ 
+          success: true, 
+          aktualisiert: 0, 
+          verschoben: [],
+          message: 'Keine Termine zum Neuberechnen gefunden'
+        });
+      }
+
+      // Berechne Arbeitsende (arbeitsstundenProTag * 60 Minuten ab 08:00)
+      const arbeitsbeginn = '08:00';
+      const arbeitsende = addMinutes(arbeitsbeginn, arbeitsstundenProTag * 60);
+
+      const aktualisierteTermine = [];
+      const verschobeneTermine = [];
+      let laufendeZeit = eigeneTermine[0].startzeit || eigeneTermine[0].bring_zeit || '08:00';
+
+      for (const termin of eigeneTermine) {
+        // Berechne neue Endzeit mit berechneEndzeitFuerTermin
+        const { startzeit: neueStartzeit, endzeit: neueEndzeit } = await berechneEndzeitFuerTermin(
+          { ...termin, startzeit: laufendeZeit, bring_zeit: laufendeZeit },
+          termin.arbeitszeiten_details
+        );
+
+        // Prüfe ob Endzeit über Arbeitsende hinausgeht
+        if (neueEndzeit && compareTime(neueEndzeit, arbeitsende) > 0) {
+          // Overflow: Verschiebe auf nächsten Arbeitstag
+          const naechsterTag = TermineModel.naechsterArbeitstag(datum);
+          
+          await runAsync(`
+            UPDATE termine 
+            SET datum = ?, 
+                startzeit = ?, 
+                bring_zeit = ?,
+                endzeit_berechnet = ?,
+                verschoben_von_datum = ?
+            WHERE id = ?
+          `, [naechsterTag, arbeitsbeginn, arbeitsbeginn, neueEndzeit, datum, termin.id]);
+
+          verschobeneTermine.push({
+            id: termin.id,
+            altesDatum: datum,
+            neuesDatum: naechsterTag,
+            grund: 'Overflow'
+          });
+
+          // Laufende Zeit für nächsten Tag zurücksetzen
+          laufendeZeit = addMinutes(arbeitsbeginn, 0);
+        } else {
+          // Aktualisiere Termin mit neuen Zeiten
+          await runAsync(`
+            UPDATE termine 
+            SET startzeit = ?, 
+                bring_zeit = ?,
+                endzeit_berechnet = ?
+            WHERE id = ?
+          `, [laufendeZeit, laufendeZeit, neueEndzeit, termin.id]);
+
+          aktualisierteTermine.push({
+            id: termin.id,
+            neueStartzeit: laufendeZeit,
+            neueEndzeit: neueEndzeit
+          });
+
+          // Laufende Zeit = Endzeit dieses Termins
+          laufendeZeit = neueEndzeit;
+        }
+      }
+
+      // WebSocket-Broadcast für Aktualisierungen
+      broadcastEvent('termine_updated', { datum });
+
+      res.json({
+        success: true,
+        aktualisiert: aktualisierteTermine.length,
+        verschoben: verschobeneTermine.length,
+        aktualisierteTermine,
+        verschobeneTermine
+      });
+    } catch (err) {
+      console.error('Fehler bei berechneZeitenNeu:', err);
+      res.status(500).json({ error: err.message });
+    }
+  }
+}
+
+// Hilfsfunktion: Addiert Minuten zu HH:MM
+function addMinutes(time, minutes) {
+  const [h, m] = time.split(':').map(Number);
+  const totalMinutes = h * 60 + m + minutes;
+  const newH = Math.floor(totalMinutes / 60);
+  const newM = totalMinutes % 60;
+  return `${String(newH).padStart(2, '0')}:${String(newM).padStart(2, '0')}`;
+}
+
+// Hilfsfunktion: Vergleicht zwei HH:MM Zeiten (-1: t1 < t2, 0: gleich, 1: t1 > t2)
+function compareTime(time1, time2) {
+  const [h1, m1] = time1.split(':').map(Number);
+  const [h2, m2] = time2.split(':').map(Number);
+  const min1 = h1 * 60 + m1;
+  const min2 = h2 * 60 + m2;
+  if (min1 < min2) return -1;
+  if (min1 > min2) return 1;
+  return 0;
 }
 
 // Exportiere auch die Cache-Invalidierungsfunktion für andere Controller

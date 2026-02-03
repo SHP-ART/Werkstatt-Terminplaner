@@ -43,7 +43,8 @@ db.get('SELECT version FROM _schema_meta ORDER BY version DESC LIMIT 1', [], (er
     require('./migrations/015_create_arbeitszeiten_plan'),  // Version 15
     require('./migrations/016_add_arbeitszeit_start_ende'),  // Version 16
     require('./migrations/017_create_schicht_templates'),  // Version 17
-    require('./migrations/018_cleanup_legacy_tables')  // Version 18
+    require('./migrations/018_cleanup_legacy_tables'),  // Version 18
+    require('./migrations/019_add_pause_tracking_and_verschoben')  // Version 19
   ];
   
   console.log(`📦 Verfügbare Migrationen: ${migrations.length}`);

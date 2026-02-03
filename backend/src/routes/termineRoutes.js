@@ -33,6 +33,7 @@ router.get('/bringzeit-ueberschneidungen', TermineController.getBringzeitUebersc
 router.get('/duplikat-check', TermineController.checkDuplikate);
 router.get('/teile-status', TermineController.getTeileStatus);
 router.get('/dropdown', TermineController.getDropdownData);
+router.post('/berechne-zeiten-neu', TermineController.berechneZeitenNeu);
 
 // Standard CRUD-Routes (müssen NACH spezifischen Routes stehen)
 router.get('/', TermineController.getAll);

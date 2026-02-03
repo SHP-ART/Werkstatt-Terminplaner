@@ -309,6 +309,20 @@ async function startServer(clientCountCallback, requestLogCallback) {
     // Lokales KI-Training (täglich)
     localAiService.scheduleDailyTraining();
 
+    // Pause-Cleanup beim Start und alle 5 Minuten
+    logStartup('Starte Pause-Cleanup-Job...');
+    const PauseController = require('./controllers/pauseController');
+    // WICHTIG: Cleanup als async ausführen, damit es den Server-Start nicht blockiert
+    PauseController.cleanupAbgelaufenePausen().catch(err => {
+        logStartup(`WARNUNG: Initiales Pause-Cleanup fehlgeschlagen: ${err.message}`, 'WARN');
+    });
+    setInterval(() => {
+        PauseController.cleanupAbgelaufenePausen().catch(err => {
+            console.warn('Pause-Cleanup Fehler:', err.message);
+        });
+    }, 5 * 60 * 1000); // Alle 5 Minuten
+    logStartup('Pause-Cleanup-Job gestartet ✓');
+
     logStartup('Registriere API-Routen...');
     app.use('/api', routes);
     logStartup('API-Routen registriert ✓');

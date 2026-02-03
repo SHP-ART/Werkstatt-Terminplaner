@@ -399,6 +399,132 @@
       margin-bottom: 5px;
     }
 
+    /* ========== TABLET BUTTONS ========== */
+    .tablet-buttons {
+      display: flex;
+      gap: 8px;
+      padding: 0 15px 10px 15px;
+      flex-wrap: wrap;
+    }
+
+    .tablet-btn {
+      flex: 1;
+      min-width: 120px;
+      padding: 12px 16px;
+      border: none;
+      border-radius: 8px;
+      font-size: 0.95em;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+    }
+
+    .tablet-btn-confirm {
+      background: var(--success);
+      color: white;
+    }
+
+    .tablet-btn-confirm:hover {
+      background: #218838;
+      transform: translateY(-2px);
+      box-shadow: 0 4px 8px rgba(40, 167, 69, 0.3);
+    }
+
+    .tablet-btn-complete {
+      background: var(--accent);
+      color: white;
+    }
+
+    .tablet-btn-complete:hover {
+      background: #1565c0;
+      transform: translateY(-2px);
+      box-shadow: 0 4px 8px rgba(25, 118, 210, 0.3);
+    }
+
+    .tablet-btn-pause {
+      background: var(--warning);
+      color: #333;
+    }
+
+    .tablet-btn-pause:hover {
+      background: #e0a800;
+      transform: translateY(-2px);
+      box-shadow: 0 4px 8px rgba(255, 193, 7, 0.3);
+    }
+
+    .tablet-btn-pause.außerhalb {
+      background: #ffeaa7;
+      border: 2px solid var(--warning);
+    }
+
+    .tablet-btn-pause.aktiv {
+      background: #fdcb6e;
+      cursor: not-allowed;
+      opacity: 0.8;
+    }
+
+    .tablet-btn:disabled {
+      cursor: not-allowed;
+      opacity: 0.6;
+    }
+
+    /* Verschobene Termine */
+    .termin-verschoben {
+      border: 2px solid var(--warning);
+      background: #fff8e1;
+    }
+
+    .termin-verspaetet {
+      border: 2px solid var(--danger);
+      background: #ffebee;
+    }
+
+    .badge-verschoben, .badge-verspaetet {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 0.75em;
+      font-weight: 600;
+      margin-left: 6px;
+    }
+
+    .badge-verschoben {
+      background: var(--warning);
+      color: #333;
+    }
+
+    .badge-verspaetet {
+      background: var(--danger);
+      color: white;
+    }
+
+    /* Toast-Animationen */
+    @keyframes slideIn {
+      from {
+        transform: translateX(400px);
+        opacity: 0;
+      }
+      to {
+        transform: translateX(0);
+        opacity: 1;
+      }
+    }
+
+    @keyframes slideOut {
+      from {
+        transform: translateX(0);
+        opacity: 1;
+      }
+      to {
+        transform: translateX(400px);
+        opacity: 0;
+      }
+    }
+
     .schule-text {
       color: #7b1fa2;
       font-size: 0.95em;
@@ -692,6 +818,24 @@
         const response = await fetch(`${CONFIG.backendUrl}/api${endpoint}`);
         if (!response.ok) throw new Error(`API Fehler: ${response.status}`);
         return response.json();
+      },
+      async put(endpoint, data) {
+        const response = await fetch(`${CONFIG.backendUrl}/api${endpoint}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(data)
+        });
+        if (!response.ok) throw new Error(`API Fehler: ${response.status}`);
+        return response.json();
+      },
+      async post(endpoint, data) {
+        const response = await fetch(`${CONFIG.backendUrl}/api${endpoint}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(data)
+        });
+        if (!response.ok) throw new Error(`API Fehler: ${response.status}`);
+        return response.json();
       }
     };
 
@@ -946,6 +1090,98 @@
       return false;
     }
 
+    // ========== BUTTON HANDLER ==========
+    async function handleBestaetigen(personId, personTyp, terminId, kundeName) {
+      try {
+        const heute = formatDateLocal(new Date());
+        
+        // 1. Status auf in_arbeit setzen
+        await ApiService.put(`/termine/${terminId}`, { status: 'in_arbeit' });
+        
+        // 2. Termine neu berechnen
+        await ApiService.post('/termine/berechne-zeiten-neu', {
+          personId,
+          personTyp,
+          datum: heute,
+          startTerminId: terminId
+        });
+        
+        // 3. UI aktualisieren
+        await loadTeamUebersicht();
+        
+        // Erfolgs-Feedback
+        showToast(`Auftrag bestätigt: ${kundeName}`, 'success');
+      } catch (error) {
+        console.error('Fehler beim Bestätigen:', error);
+        showToast(`Fehler: ${error.message}`, 'error');
+      }
+    }
+
+    async function handleBeenden(terminId, kundeName) {
+      try {
+        await ApiService.put(`/termine/${terminId}`, { 
+          status: 'abgeschlossen',
+          fertigstellung_zeit: new Date().toISOString()
+        });
+        
+        await loadTeamUebersicht();
+        showToast(`Auftrag abgeschlossen: ${kundeName}`, 'success');
+      } catch (error) {
+        console.error('Fehler beim Beenden:', error);
+        showToast(`Fehler: ${error.message}`, 'error');
+      }
+    }
+
+    async function handlePauseStarten(personId, personTyp, datum, imZeitfenster) {
+      try {
+        // Wenn außerhalb Zeitfenster: Bestätigung einholen
+        if (!imZeitfenster) {
+          const bestaetigung = confirm(
+            '⚠️ Die Pausenzeit liegt außerhalb des empfohlenen Zeitfensters (±1h um Mittagszeit).\n\n' +
+            'Möchten Sie trotzdem die Pause starten?'
+          );
+          if (!bestaetigung) return;
+        }
+
+        await ApiService.post('/pause/starten', {
+          personId,
+          personTyp,
+          datum
+        });
+        
+        await loadTeamUebersicht();
+        showToast('Pause gestartet', 'success');
+      } catch (error) {
+        console.error('Fehler beim Pause starten:', error);
+        showToast(`Fehler: ${error.message}`, 'error');
+      }
+    }
+
+    function showToast(message, type = 'info') {
+      // Einfache Toast-Benachrichtigung
+      const toast = document.createElement('div');
+      toast.className = `toast toast-${type}`;
+      toast.textContent = message;
+      toast.style.cssText = `
+        position: fixed;
+        bottom: 20px;
+        right: 20px;
+        padding: 12px 20px;
+        background: ${type === 'success' ? '#28a745' : type === 'error' ? '#dc3545' : '#007bff'};
+        color: white;
+        border-radius: 8px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+        z-index: 10000;
+        animation: slideIn 0.3s ease;
+      `;
+      document.body.appendChild(toast);
+      
+      setTimeout(() => {
+        toast.style.animation = 'slideOut 0.3s ease';
+        setTimeout(() => document.body.removeChild(toast), 300);
+      }, 3000);
+    }
+
     // ========== KACHEL RENDERN ==========
     function renderPersonKachel(person, alleTermine, typ, globaleNebenzeit, arbeitszeit) {
       const personId = person.id;
@@ -957,6 +1193,8 @@
 
       // Finde Termine für diese Person
       const personTermine = alleTermine.filter(t => isTerminFuerPerson(t, personId, isLehrling));
+      console.log(`[DEBUG] ${personName}: ${personTermine.length} Termine gefunden`, personTermine);
+      
       personTermine.sort((a, b) => {
         const zeitA = a.startzeit || a.bring_zeit || '23:59';
         const zeitB = b.startzeit || b.bring_zeit || '23:59';
@@ -979,13 +1217,15 @@
         });
       }
 
-      // Finde nächsten Auftrag
+      // Finde nächsten Auftrag (auch überfällige offene Termine berücksichtigen!)
       const naechsterAuftrag = personTermine.find(t => {
         if (t === aktuellerAuftrag) return false;
         if (t.status === 'abgeschlossen' || t.status === 'storniert') return false;
-        const startzeit = t.startzeit || t.bring_zeit;
-        return !startzeit || startzeit > jetztZeit;
+        // Alle offenen/geplanten Termine als "nächsten" zählen
+        return true;
       });
+
+      console.log(`[DEBUG] ${personName}: aktuellerAuftrag=`, aktuellerAuftrag, 'naechsterAuftrag=', naechsterAuftrag);
 
       // Prüfe Berufsschule
       let inBerufsschule = false;
@@ -995,6 +1235,8 @@
 
       // Prüfe Mittagspause (6h-Regel)
       const inPause = istPersonAktuellInPause(person, jetztZeit);
+      
+      console.log(`[DEBUG] ${personName}: inPause=${inPause}, inBerufsschule=${inBerufsschule}`);
 
       // Badge
       let badgeClass = 'frei';
@@ -1031,10 +1273,19 @@
         const fortschritt = berechneFortschritt(aktuellerAuftrag, person, isLehrling, globaleNebenzeit);
         const restzeit = berechneRestzeit(aktuellerAuftrag, person, isLehrling, globaleNebenzeit);
         const isUeberzogen = fortschritt > 100;
+        
+        // Prüfe verschoben und verspätet
+        const istVerschoben = aktuellerAuftrag.verschoben_von_datum != null;
+        const istVerspaetet = aktuellerAuftrag.endzeit_berechnet && aktuellerAuftrag.abholung_zeit && 
+                              aktuellerAuftrag.endzeit_berechnet > aktuellerAuftrag.abholung_zeit;
+        
+        let badges = '';
+        if (istVerschoben) badges += '<span class="badge-verschoben">📅 Verschoben</span>';
+        if (istVerspaetet) badges += '<span class="badge-verspaetet">⚠️ Verzögerung</span>';
 
         bodyContent = `
-          <div class="auftrag-info">
-            <div class="auftrag-label">🔧 Aktueller Auftrag</div>
+          <div class="auftrag-info ${istVerschoben ? 'termin-verschoben' : ''} ${istVerspaetet ? 'termin-verspaetet' : ''}">
+            <div class="auftrag-label">🔧 Aktueller Auftrag ${badges}</div>
             <div class="auftrag-nr">${escapeHtml(aktuellerAuftrag.termin_nr) || '-'}</div>
             <div class="auftrag-kunde">${escapeHtml(aktuellerAuftrag.kunde_name) || '-'}</div>
             <div class="auftrag-kennzeichen">${escapeHtml(aktuellerAuftrag.kennzeichen) || '-'}</div>
@@ -1114,6 +1365,59 @@
       // Arbeitszeit nur anzeigen, wenn Person nicht abwesend ist (nicht in Pause, nicht in Berufsschule)
       const zeigeArbeitszeit = !inPause && !inBerufsschule;
 
+      // Button-Container (Toggle & Pause)
+      let buttonsHtml = '';
+      
+      // Bestimme den Termin, für den Buttons angezeigt werden sollen
+      const terminMitButtons = aktuellerAuftrag || naechsterAuftrag;
+      
+      // 1. Toggle-Button: Bestätigen/Beenden
+      if (terminMitButtons && !inPause && !inBerufsschule) {
+        if (terminMitButtons.status === 'geplant' || terminMitButtons.status === 'offen') {
+          // Bestätigen-Button (für geplant oder offen)
+          buttonsHtml += `
+            <button class="tablet-btn tablet-btn-confirm" 
+                    onclick="handleBestaetigen(${personId}, '${typ}', ${terminMitButtons.id}, '${escapeHtml(terminMitButtons.kunde_name)}')">
+              ✅ Bestätigen
+            </button>
+          `;
+        } else if (terminMitButtons.status === 'in_arbeit') {
+          // Beenden-Button
+          buttonsHtml += `
+            <button class="tablet-btn tablet-btn-complete" 
+                    onclick="handleBeenden(${terminMitButtons.id}, '${escapeHtml(terminMitButtons.kunde_name)}')">
+              🏁 Beenden
+            </button>
+          `;
+        }
+      }
+
+      // 2. Pause-Button mit Timer
+      if (person.pause_tracking_aktiv) {
+        // Aktive Pause mit verbleibender Zeit
+        const verbleibendeMin = person.pause_verbleibende_minuten || 0;
+        buttonsHtml += `
+          <button class="tablet-btn tablet-btn-pause aktiv" disabled>
+            🍽️ Pause (${verbleibendeMin} Min.)
+          </button>
+        `;
+      } else if (terminMitButtons && !inPause && !inBerufsschule) {
+        // Pause-Button nur wenn Auftrag existiert und im Zeitfenster
+        const jetztMinuten = jetzt.getHours() * 60 + jetzt.getMinutes();
+        const [pauseH, pauseM] = (person.mittagspause_start || '12:00').split(':').map(Number);
+        const pausenStartMinuten = pauseH * 60 + pauseM;
+        const zeitfensterMin = pausenStartMinuten - 60;
+        const zeitfensterMax = pausenStartMinuten + 60;
+        const imZeitfenster = jetztMinuten >= zeitfensterMin && jetztMinuten <= zeitfensterMax;
+
+        buttonsHtml += `
+          <button class="tablet-btn tablet-btn-pause ${imZeitfenster ? '' : 'außerhalb'}" 
+                  onclick="handlePauseStarten(${personId}, '${typ}', '${formatDateLocal(new Date())}', ${imZeitfenster})">
+            🍽️ Pause starten
+          </button>
+        `;
+      }
+
       return `
         <div class="person-kachel ${isLehrling ? 'lehrling' : ''}">
           <div class="person-header">
@@ -1129,6 +1433,7 @@
             <span class="arbeitszeit-wert">${arbeitszeit.arbeitszeit_start} - ${arbeitszeit.arbeitszeit_ende}</span>
           </div>
           ` : ''}
+          ${buttonsHtml ? `<div class="tablet-buttons">${buttonsHtml}</div>` : ''}
           <div class="person-body">
             ${bodyContent}
           </div>
@@ -1142,16 +1447,45 @@
 
       try {
         const heute = formatDateLocal(new Date());
-        const [mitarbeiter, lehrlinge, termine, einstellungen] = await Promise.all([
+        const [mitarbeiter, lehrlinge, termine, einstellungen, aktivePausen] = await Promise.all([
           ApiService.get('/mitarbeiter'),
           ApiService.get('/lehrlinge'),
           ApiService.get(`/termine?datum=${heute}`),
-          ApiService.get('/einstellungen/werkstatt')
+          ApiService.get('/einstellungen/werkstatt'),
+          ApiService.get('/pause/aktive')
         ]);
 
         const globaleNebenzeit = einstellungen?.nebenzeit_prozent || 0;
         const aktiveMitarbeiter = mitarbeiter.filter(m => m.aktiv === 1);
         const aktiveLehrlinge = lehrlinge.filter(l => l.aktiv === 1);
+
+        // Merge Pausen-Daten in Person-Objekte
+        const pausenMap = {};
+        (aktivePausen || []).forEach(pause => {
+          const key = pause.mitarbeiter_id 
+            ? `mitarbeiter_${pause.mitarbeiter_id}` 
+            : `lehrling_${pause.lehrling_id}`;
+          pausenMap[key] = {
+            pause_tracking_aktiv: true,
+            pause_verbleibende_minuten: pause.verbleibende_minuten || 0
+          };
+        });
+
+        aktiveMitarbeiter.forEach(m => {
+          const pauseInfo = pausenMap[`mitarbeiter_${m.id}`];
+          if (pauseInfo) {
+            m.pause_tracking_aktiv = pauseInfo.pause_tracking_aktiv;
+            m.pause_verbleibende_minuten = pauseInfo.pause_verbleibende_minuten;
+          }
+        });
+
+        aktiveLehrlinge.forEach(l => {
+          const pauseInfo = pausenMap[`lehrling_${l.id}`];
+          if (pauseInfo) {
+            l.pause_tracking_aktiv = pauseInfo.pause_tracking_aktiv;
+            l.pause_verbleibende_minuten = pauseInfo.pause_verbleibende_minuten;
+          }
+        });
 
         const relevanteTermine = termine.filter(t => {
           const istIntern = t.ist_intern === 1 || t.ist_intern === true || t.ist_intern === '1';

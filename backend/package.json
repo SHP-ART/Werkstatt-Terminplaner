@@ -1,6 +1,6 @@
 {
   "name": "werkstatt-terminplaner-backend",
-  "version": "1.5.1",
+  "version": "1.5.5",
   "description": "Backend API für Werkstatt Terminplaner",
   "main": "electron-main.js",
   "scripts": {
