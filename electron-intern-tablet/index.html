@@ -149,33 +149,53 @@
       overflow: hidden;
       display: flex;
       flex-direction: column;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+      box-shadow: 0 3px 12px rgba(0,0,0,0.12);
+      transition: all 0.3s ease;
+    }
+
+    .person-kachel:hover {
+      box-shadow: 0 5px 20px rgba(0,0,0,0.18);
+      transform: translateY(-2px);
     }
 
     .person-kachel.lehrling {
-      border-left: 4px solid #9c27b0;
+      border-left: 5px solid #9c27b0;
+      box-shadow: 0 3px 12px rgba(156, 39, 176, 0.15);
     }
 
     .person-kachel:not(.lehrling) {
-      border-left: 4px solid #2196f3;
+      border-left: 5px solid #2196f3;
+      box-shadow: 0 3px 12px rgba(33, 150, 243, 0.15);
     }
 
     .person-header {
-      padding: 10px 15px;
-      background: #f8f9fa;
-      border-bottom: 1px solid var(--card-border);
+      padding: 12px 15px;
+      background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+      border-bottom: 2px solid var(--card-border);
       display: flex;
       justify-content: space-between;
       align-items: center;
       flex-shrink: 0;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .person-header-left {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex: 1;
+      min-width: 0;
     }
 
     .person-name {
-      font-size: 1.1em;
-      font-weight: 600;
+      font-size: 1.15em;
+      font-weight: 700;
       display: flex;
       align-items: center;
-      gap: 8px;
+      gap: 10px;
+      text-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
     }
 
     .person-icon {
@@ -402,74 +422,173 @@
     /* ========== TABLET BUTTONS ========== */
     .tablet-buttons {
       display: flex;
-      gap: 8px;
-      padding: 0 15px 10px 15px;
-      flex-wrap: wrap;
+      gap: 6px;
+      flex-wrap: nowrap;
+    }
+
+    .tablet-buttons.in-header {
+      padding: 0;
+      margin-left: auto;
     }
 
     .tablet-btn {
-      flex: 1;
-      min-width: 120px;
-      padding: 12px 16px;
+      flex: 0 0 auto;
+      min-width: 90px;
+      padding: 8px 12px;
       border: none;
       border-radius: 8px;
-      font-size: 0.95em;
-      font-weight: 600;
+      font-size: 0.8em;
+      font-weight: 700;
       cursor: pointer;
-      transition: all 0.2s ease;
+      transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
       display: flex;
       align-items: center;
       justify-content: center;
-      gap: 6px;
+      gap: 5px;
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+      position: relative;
+      overflow: hidden;
+      text-transform: uppercase;
+      letter-spacing: 0.3px;
+      user-select: none;
+      -webkit-tap-highlight-color: transparent;
+      white-space: nowrap;
+    }
+
+    /* Ripple-Effekt */
+    .tablet-btn::before {
+      content: '';
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      width: 0;
+      height: 0;
+      border-radius: 50%;
+      background: rgba(255, 255, 255, 0.5);
+      transform: translate(-50%, -50%);
+      transition: width 0.6s, height 0.6s;
+    }
+
+    .tablet-btn:active::before {
+      width: 300px;
+      height: 300px;
+    }
+
+    /* Icon Styling */
+    .tablet-btn .btn-icon {
+      font-size: 1.1em;
+      filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.2));
     }
 
     .tablet-btn-confirm {
-      background: var(--success);
+      background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
       color: white;
     }
 
     .tablet-btn-confirm:hover {
-      background: #218838;
-      transform: translateY(-2px);
-      box-shadow: 0 4px 8px rgba(40, 167, 69, 0.3);
+      background: linear-gradient(135deg, #218838 0%, #1ba87e 100%);
+      transform: translateY(-3px) scale(1.02);
+      box-shadow: 0 6px 16px rgba(40, 167, 69, 0.4);
+    }
+
+    .tablet-btn-confirm:active {
+      transform: translateY(-1px) scale(0.98);
+      box-shadow: 0 3px 10px rgba(40, 167, 69, 0.3);
     }
 
     .tablet-btn-complete {
-      background: var(--accent);
+      background: linear-gradient(135deg, #1976d2 0%, #42a5f5 100%);
       color: white;
     }
 
     .tablet-btn-complete:hover {
-      background: #1565c0;
-      transform: translateY(-2px);
-      box-shadow: 0 4px 8px rgba(25, 118, 210, 0.3);
+      background: linear-gradient(135deg, #1565c0 0%, #1e88e5 100%);
+      transform: translateY(-3px) scale(1.02);
+      box-shadow: 0 6px 16px rgba(25, 118, 210, 0.4);
+    }
+
+    .tablet-btn-complete:active {
+      transform: translateY(-1px) scale(0.98);
+      box-shadow: 0 3px 10px rgba(25, 118, 210, 0.3);
     }
 
     .tablet-btn-pause {
-      background: var(--warning);
+      background: linear-gradient(135deg, #ffc107 0%, #ffeb3b 100%);
       color: #333;
     }
 
     .tablet-btn-pause:hover {
-      background: #e0a800;
-      transform: translateY(-2px);
-      box-shadow: 0 4px 8px rgba(255, 193, 7, 0.3);
+      background: linear-gradient(135deg, #e0a800 0%, #fdd835 100%);
+      transform: translateY(-3px) scale(1.02);
+      box-shadow: 0 6px 16px rgba(255, 193, 7, 0.4);
+    }
+
+    .tablet-btn-pause:active {
+      transform: translateY(-1px) scale(0.98);
+      box-shadow: 0 3px 10px rgba(255, 193, 7, 0.3);
     }
 
     .tablet-btn-pause.außerhalb {
-      background: #ffeaa7;
-      border: 2px solid var(--warning);
+      background: linear-gradient(135deg, #fff3cd 0%, #ffe69c 100%);
+      border: 3px solid var(--warning);
+      animation: pulse-warning 2s ease-in-out infinite;
+    }
+
+    @keyframes pulse-warning {
+      0%, 100% {
+        border-color: var(--warning);
+        box-shadow: 0 2px 6px rgba(255, 193, 7, 0.2);
+      }
+      50% {
+        border-color: #ff9800;
+        box-shadow: 0 4px 12px rgba(255, 152, 0, 0.4);
+      }
     }
 
     .tablet-btn-pause.aktiv {
-      background: #fdcb6e;
+      background: linear-gradient(135deg, #fdcb6e 0%, #fab1a0 100%);
       cursor: not-allowed;
       opacity: 0.8;
+      animation: pulse-pause 1.5s ease-in-out infinite;
+    }
+
+    @keyframes pulse-pause {
+      0%, 100% {
+        transform: scale(1);
+      }
+      50% {
+        transform: scale(1.02);
+      }
+    }
+
+    /* Pause-Button kompakt */
+    .tablet-btn-pause {
+      flex: 0 0 auto;
+      min-width: 85px;
+      max-width: 120px;
     }
 
     .tablet-btn:disabled {
       cursor: not-allowed;
-      opacity: 0.6;
+      opacity: 0.4;
+      transform: none !important;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1) !important;
+      filter: grayscale(60%);
+      background: linear-gradient(135deg, #e0e0e0 0%, #bdbdbd 100%) !important;
+      color: #757575 !important;
+    }
+
+    .tablet-btn:disabled .btn-icon {
+      opacity: 0.5;
+    }
+
+
+
+    /* Touch-Feedback für mobile Geräte */
+    @media (hover: none) {
+      .tablet-btn:active {
+        transform: scale(0.95);
+      }
     }
 
     /* Verschobene Termine */
@@ -842,7 +961,12 @@
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(data)
         });
-        if (!response.ok) throw new Error(`API Fehler: ${response.status}`);
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({}));
+          const errorMessage = errorData.error || `API Fehler: ${response.status}`;
+          console.error('Backend-Fehler:', errorMessage, errorData);
+          throw new Error(errorMessage);
+        }
         return response.json();
       }
     };
@@ -1161,6 +1285,15 @@
       }
 
       try {
+        // Validiere Parameter
+        console.log('Pause-Parameter:', { personId, personTyp, datum, imZeitfenster });
+        
+        if (!personId || !personTyp || !datum) {
+          console.error('Fehlende Parameter:', { personId, personTyp, datum });
+          showToast('Fehler: Fehlende Parameter für Pause-Start', 'error');
+          return;
+        }
+
         // Wenn außerhalb des idealen Zeitfensters (nach der eingestellten Pausenzeit): Bestätigung einholen
         if (!imZeitfenster) {
           const bestaetigung = confirm(
@@ -1173,21 +1306,24 @@
           }
         }
 
-        console.log('Starte Pause für:', { personId, personTyp, datum });
+        console.log('Sende Pause-Request:', { personId, personTyp, datum });
         
         // Markiere als "in Bearbeitung"
         pauseStartInProgress.add(key);
         
-        await ApiService.post('/pause/starten', {
-          personId,
-          personTyp,
-          datum
+        const response = await ApiService.post('/pause/starten', {
+          personId: parseInt(personId),
+          personTyp: String(personTyp),
+          datum: String(datum)
         });
+        
+        console.log('Pause-Response:', response);
         
         await loadTeamUebersicht();
         showToast('Pause gestartet', 'success');
       } catch (error) {
         console.error('Fehler beim Pause starten:', error);
+        console.error('Error details:', error.response || error);
         showToast(`Fehler: ${error.message}`, 'error');
       } finally {
         // Entferne "in Bearbeitung" Markierung
@@ -1403,72 +1539,90 @@
       // Arbeitszeit nur anzeigen, wenn Person nicht abwesend ist (nicht in Pause, nicht in Berufsschule)
       const zeigeArbeitszeit = !inPause && !inBerufsschule;
 
-      // Button-Container (Toggle & Pause)
+      // Button-Container (Toggle & Pause) - IMMER ALLE BUTTONS ANZEIGEN
       let buttonsHtml = '';
       
       // Bestimme den Termin, für den Buttons angezeigt werden sollen
       const terminMitButtons = aktuellerAuftrag || naechsterAuftrag;
       
-      // 1. Toggle-Button: Bestätigen/Beenden
-      if (terminMitButtons && !inPause && !inBerufsschule) {
-        if (terminMitButtons.status === 'geplant' || terminMitButtons.status === 'offen') {
-          // Bestätigen-Button (für geplant oder offen)
-          buttonsHtml += `
-            <button class="tablet-btn tablet-btn-confirm" 
-                    onclick="handleBestaetigen(${personId}, '${typ}', ${terminMitButtons.id}, '${escapeHtml(terminMitButtons.kunde_name)}')">
-              ✅ Bestätigen
-            </button>
-          `;
-        } else if (terminMitButtons.status === 'in_arbeit') {
-          // Beenden-Button
-          buttonsHtml += `
-            <button class="tablet-btn tablet-btn-complete" 
-                    onclick="handleBeenden(${terminMitButtons.id}, '${escapeHtml(terminMitButtons.kunde_name)}')">
-              🏁 Beenden
-            </button>
-          `;
-        }
+      // 1. Toggle-Button: Starten/Fertig - IMMER ANZEIGEN
+      const kannStarten = terminMitButtons && !inPause && !inBerufsschule && 
+                         (terminMitButtons.status === 'geplant' || terminMitButtons.status === 'offen');
+      const kannBeenden = terminMitButtons && !inPause && !inBerufsschule && 
+                         terminMitButtons.status === 'in_arbeit';
+      
+      if (kannStarten) {
+        // Starten-Button aktiv
+        buttonsHtml += `
+          <button class="tablet-btn tablet-btn-confirm" 
+                  onclick="handleBestaetigen(${personId}, '${typ}', ${terminMitButtons.id}, '${escapeHtml(terminMitButtons.kunde_name)}')">
+            <span class="btn-icon">▶️</span> Starten
+          </button>
+        `;
+      } else if (kannBeenden) {
+        // Fertig-Button aktiv
+        buttonsHtml += `
+          <button class="tablet-btn tablet-btn-complete" 
+                  onclick="handleBeenden(${terminMitButtons.id}, '${escapeHtml(terminMitButtons.kunde_name)}')">
+            <span class="btn-icon">✓</span> Fertig
+          </button>
+        `;
+      } else {
+        // Deaktivierter Platzhalter-Button
+        buttonsHtml += `
+          <button class="tablet-btn tablet-btn-confirm" disabled>
+            <span class="btn-icon">▶️</span> Starten
+          </button>
+        `;
       }
 
-      // 2. Pause-Button mit Timer
+      // 2. Pause-Button - IMMER ANZEIGEN
+      const jetztMinuten = jetzt.getHours() * 60 + jetzt.getMinutes();
+      const [pauseH, pauseM] = (person.mittagspause_start || '12:00').split(':').map(Number);
+      const pausenStartMinuten = pauseH * 60 + pauseM;
+      const zeitfensterMin = pausenStartMinuten - 60; // 1h vor Pausenzeit
+      const imIdealemZeitfenster = jetztMinuten >= zeitfensterMin && jetztMinuten <= pausenStartMinuten;
+      const imAnzeigeZeitraum = jetztMinuten >= zeitfensterMin;
+      const heuteDatum = formatDateLocal(new Date()); // Datum vorher berechnen
+      
       if (person.pause_tracking_aktiv) {
         // Aktive Pause mit verbleibender Zeit
         const verbleibendeMin = person.pause_verbleibende_minuten || 0;
         buttonsHtml += `
           <button class="tablet-btn tablet-btn-pause aktiv" disabled>
-            🍽️ Pause (${verbleibendeMin} Min.)
+            <span class="btn-icon">⏸️</span> Pause (${verbleibendeMin} Min)
           </button>
         `;
-      } else if (!inPause && !inBerufsschule) {
-        // Pause-Button immer anzeigen (auch ohne Termine) wenn 1h vor Pausenzeit
-        const jetztMinuten = jetzt.getHours() * 60 + jetzt.getMinutes();
-        const [pauseH, pauseM] = (person.mittagspause_start || '12:00').split(':').map(Number);
-        const pausenStartMinuten = pauseH * 60 + pauseM;
-        const zeitfensterMin = pausenStartMinuten - 60; // 1h vor Pausenzeit
-        
-        // Button nur anzeigen wenn 1h vor Pausenzeit oder später, aber vor 1h nach Pausenzeit
-        const imAnzeigeZeitraum = jetztMinuten >= zeitfensterMin;
-        const zeitfensterMax = pausenStartMinuten + 60; // Warnung wenn zu spät
-        const imIdealemZeitfenster = jetztMinuten >= zeitfensterMin && jetztMinuten <= pausenStartMinuten;
-
-        if (imAnzeigeZeitraum) {
-          buttonsHtml += `
-            <button class="tablet-btn tablet-btn-pause ${imIdealemZeitfenster ? '' : 'außerhalb'}" 
-                    onclick="handlePauseStarten(${personId}, '${typ}', '${formatDateLocal(new Date())}', ${imIdealemZeitfenster})">
-              🍽️ Pause starten
-            </button>
-          `;
-        }
+      } else if (imAnzeigeZeitraum && !inPause && !inBerufsschule) {
+        // Pause-Button aktiv
+        const pauseIcon = imIdealemZeitfenster ? '🍽️' : '⚠️';
+        const pauseText = imIdealemZeitfenster ? 'Pause' : 'Pause (spät)';
+        buttonsHtml += `
+          <button class="tablet-btn tablet-btn-pause ${imIdealemZeitfenster ? '' : 'außerhalb'}" 
+                  onclick="handlePauseStarten(${personId}, '${typ}', '${heuteDatum}', ${imIdealemZeitfenster})">
+            <span class="btn-icon">${pauseIcon}</span> ${pauseText}
+          </button>
+        `;
+      } else {
+        // Deaktivierter Pause-Button
+        buttonsHtml += `
+          <button class="tablet-btn tablet-btn-pause" disabled>
+            <span class="btn-icon">🍽️</span> Pause
+          </button>
+        `;
       }
 
       return `
         <div class="person-kachel ${isLehrling ? 'lehrling' : ''}">
           <div class="person-header">
-            <div class="person-name">
-              <span class="person-icon">${isLehrling ? '🎓' : '👷'}</span>
-              <span>${escapeHtml(personName)}</span>
+            <div class="person-header-left">
+              <div class="person-name">
+                <span class="person-icon">${isLehrling ? '🎓' : '👷'}</span>
+                <span>${escapeHtml(personName)}</span>
+              </div>
+              <div class="person-badge ${badgeClass}">${badgeText}</div>
             </div>
-            <div class="person-badge ${badgeClass}">${badgeText}</div>
+            ${buttonsHtml ? `<div class="tablet-buttons in-header">${buttonsHtml}</div>` : ''}
           </div>
           ${zeigeArbeitszeit && arbeitszeit && arbeitszeit.arbeitszeit_start && arbeitszeit.arbeitszeit_ende ? `
           <div class="person-arbeitszeit">
@@ -1476,7 +1630,6 @@
             <span class="arbeitszeit-wert">${arbeitszeit.arbeitszeit_start} - ${arbeitszeit.arbeitszeit_ende}</span>
           </div>
           ` : ''}
-          ${buttonsHtml ? `<div class="tablet-buttons">${buttonsHtml}</div>` : ''}
           <div class="person-body">
             ${bodyContent}
           </div>

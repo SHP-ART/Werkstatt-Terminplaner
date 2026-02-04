@@ -392,7 +392,9 @@ class TermineModel {
     }
     if (ist_schwebend !== undefined) {
       updates.push('ist_schwebend = ?');
-      values.push(ist_schwebend ? 1 : 0);
+      // Explizit auf 0 prüfen (für Zahl 0, String "0", false)
+      const schwebendWert = (ist_schwebend === 0 || ist_schwebend === '0' || ist_schwebend === false) ? 0 : (ist_schwebend ? 1 : 0);
+      values.push(schwebendWert);
     }
     if (schwebend_prioritaet !== undefined) {
       updates.push('schwebend_prioritaet = ?');

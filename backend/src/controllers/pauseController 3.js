@@ -183,11 +183,10 @@ class PauseController {
       }
 
       if (eigeneTermine.length === 0) {
-        console.log('Keine eigenen Termine gefunden - Pause wird trotzdem gestartet (keine Verschiebung nötig)');
-        // Keine Termine zum Verschieben, aber Pause kann trotzdem gestartet werden
+        return res.status(400).json({ error: 'Keine eigenen Termine zum Verschieben gefunden' });
       }
 
-      // 5. Verschiebe eigene Termine um 30 Minuten (falls vorhanden)
+      // 5. Verschiebe eigene Termine um 30 Minuten
       const jetzt = new Date();
       const jetztZeit = `${String(jetzt.getHours()).padStart(2, '0')}:${String(jetzt.getMinutes()).padStart(2, '0')}`;
 

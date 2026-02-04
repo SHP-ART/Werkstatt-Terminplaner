@@ -19646,7 +19646,8 @@ class App {
     
     const neuesDatum = document.getElementById('neuEinplanenDatum').value;
     const statusReset = document.getElementById('neuEinplanenStatusReset').checked;
-    const alsSchwebend = document.getElementById('neuEinplanenAlsSchwebend')?.checked ?? true;
+    // Checkbox 'neuEinplanenAlsNichtZugeordnet' - wenn checked, Mitarbeiter-Zuweisung entfernen
+    const alsNichtZugeordnet = document.getElementById('neuEinplanenAlsNichtZugeordnet')?.checked ?? true;
     
     if (!neuesDatum) {
       this.showToast('Bitte ein Datum auswählen', 'warning');
@@ -19654,14 +19655,23 @@ class App {
     }
     
     try {
+      // WICHTIG: ist_schwebend MUSS 0 sein, damit der Termin in 'Nicht zugeordnet' erscheint (nicht in 'Schwebende Termine')
       const updateData = { 
         datum: neuesDatum,
-        ist_schwebend: alsSchwebend ? 1 : 0,  // Als "Nicht zugeordnet" markieren
-        mitarbeiter_id: alsSchwebend ? null : undefined  // Mitarbeiter-Zuweisung entfernen wenn schwebend
+        ist_schwebend: 0,  // EXPLIZIT 0 = NICHT schwebend, sondern festes Datum
+        startzeit: null    // Startzeit zurücksetzen für Neuplanung
       };
+      
+      // Wenn 'Nicht zugeordnet' gewählt, Mitarbeiter-Zuweisung komplett entfernen
+      if (alsNichtZugeordnet) {
+        updateData.mitarbeiter_id = null;
+        updateData.arbeitszeiten_details = null;
+      }
       if (statusReset) {
         updateData.status = 'offen';
       }
+      
+      console.log('Neu-Einplanen updateData:', updateData);
       
       await ApiService.put(`/termine/${terminId}`, updateData);
       
@@ -19669,7 +19679,7 @@ class App {
         weekday: 'short', day: '2-digit', month: '2-digit'
       });
       
-      const zielText = alsSchwebend ? ' → Nicht zugeordnet' : '';
+      const zielText = alsNichtZugeordnet ? ' → 📋 Nicht zugeordnet' : '';
       this.showToast(`📅 Termin auf ${datumFormatiert} verschoben${zielText}`, 'success');
       
       // Modal schließen
@@ -19679,9 +19689,9 @@ class App {
       this.loadUeberfaelligeTermine();
       this.loadTermine();
       
-      // Falls Drag&Drop-Ansicht aktiv, auch dort aktualisieren
+      // Planung & Zuweisung Ansicht immer aktualisieren (schwebende Termine sind global)
       const datumInput = document.getElementById('auslastungDragDropDatum');
-      if (datumInput && datumInput.value === neuesDatum) {
+      if (datumInput) {
         this.loadAuslastungDragDrop();
       }
       
@@ -20032,25 +20042,26 @@ class App {
     
     const inNichtZugeordnet = document.getElementById('schwebendEinplanenAlsSchwebend').checked;
     
+    console.log('=== SCHWEBEND EINPLANEN START ===');
+    console.log('TerminID:', terminId);
+    console.log('Datum:', datum);
+    console.log('inNichtZugeordnet:', inNichtZugeordnet);
+    
     try {
       const updateData = {
         datum: datum,
-        ist_schwebend: 0  // Termin ist nicht mehr schwebend
+        ist_schwebend: 0,  // Termin ist nicht mehr schwebend - festes Datum
+        mitarbeiter_id: null,  // IMMER Mitarbeiter entfernen = "Nicht zugeordnet"
+        arbeitszeiten_details: null  // IMMER Arbeitszeiten-Details entfernen (enthält Lehrling-Zuordnung)
       };
       
-      if (inNichtZugeordnet) {
-        // Checkbox aktiviert: Termin in "Nicht zugeordnet" (ohne Mitarbeiter)
-        updateData.mitarbeiter_id = null;
-      }
-      // Wenn Checkbox nicht aktiviert, bleibt der vorhandene mitarbeiter_id
+      console.log('Schwebend-Einplanen updateData:', updateData);
+      console.log('Sende API-Request an:', `/termine/${terminId}`);
       
-      await TermineService.update(terminId, updateData);
+      const result = await TermineService.update(terminId, updateData);
+      console.log('API-Response:', result);
       
-      if (inNichtZugeordnet) {
-        this.showToast(`Termin für ${this.formatDatum(datum)} in "Nicht zugeordnet" eingeplant`, 'success');
-      } else {
-        this.showToast(`Termin wurde für ${this.formatDatum(datum)} eingeplant`, 'success');
-      }
+      this.showToast(`📅 Termin für ${this.formatDatum(datum)} eingeplant → 📋 Nicht zugeordnet`, 'success');
       
       // Modal schließen
       this.closeSchwebendEinplanenModal();

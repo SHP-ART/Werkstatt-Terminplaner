@@ -107,10 +107,8 @@ function createWindow() {
   // Lade die HTML-Datei
   mainWindow.loadFile('index.html');
 
-  // DevTools nur in Entwicklung
-  if (process.argv.includes('--dev')) {
-    mainWindow.webContents.openDevTools();
-  }
+  // DevTools öffnen (für Debugging)
+  mainWindow.webContents.openDevTools();
 
   // Vollbild-Toggle mit F11
   mainWindow.webContents.on('before-input-event', (event, input) => {
