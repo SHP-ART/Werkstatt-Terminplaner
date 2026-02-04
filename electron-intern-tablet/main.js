@@ -191,7 +191,8 @@ function checkDisplaySchedule() {
       try {
         const { execSync } = require('child_process');
         // Schalte Monitor aus (sendet Signal an Monitor)
-        execSync('powershell -Command "(Add-Type \'[DllImport(\\"user32.dll\\")]public static extern int SendMessage(int hWnd,int hMsg,int wParam,int lParam);\' -Name a -Pas)::SendMessage(-1,0x0112,0xF170,2)"', {
+        const cmd = 'powershell -Command "(Add-Type \'[DllImport(\\\"user32.dll\\\")]public static extern int SendMessage(int hWnd,int hMsg,int wParam,int lParam);\' -Name a -Pas)::SendMessage(-1,0x0112,0xF170,2)"';
+        execSync(cmd, {
           windowsHide: true,
           timeout: 1000
         });
@@ -312,7 +313,8 @@ ipcMain.handle('set-display-manual', (event, shouldBeOff) => {
     if (process.platform === 'win32') {
       try {
         const { execSync } = require('child_process');
-        execSync('powershell -Command "(Add-Type \'[DllImport(\\"user32.dll\\")]public static extern int SendMessage(int hWnd,int hMsg,int wParam,int lParam);\' -Name a -Pas)::SendMessage(-1,0x0112,0xF170,2)"', {
+        const cmd = 'powershell -Command "(Add-Type \'[DllImport(\\\"user32.dll\\\")]public static extern int SendMessage(int hWnd,int hMsg,int wParam,int lParam);\' -Name a -Pas)::SendMessage(-1,0x0112,0xF170,2)"';
+        execSync(cmd, {
           windowsHide: true,
           timeout: 1000
         });
@@ -340,8 +342,3 @@ ipcMain.handle('set-display-manual', (event, shouldBeOff) => {
   
   return { success: true };
 });
-  startDisplayTimer();
-  
-  return { success: true, config: CONFIG };
-});
-
