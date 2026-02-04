@@ -7463,8 +7463,11 @@ class App {
               continue;
             }
             
-            // Überschneidung wenn current endet nach next startet
-            if (current.endeMin > next.startMin) {
+            // Korrekte Überschneidungsprüfung: Zwei Zeiträume überschneiden sich, wenn
+            // der erste vor Ende des zweiten startet UND nach Beginn des zweiten endet
+            // current: [startMin, endeMin), next: [startMin, endeMin)
+            // Überschneidung wenn: current.startMin < next.endeMin && current.endeMin > next.startMin
+            if (current.startMin < next.endeMin && current.endeMin > next.startMin) {
               // Berechne Vorschlag: Verschiebe next nach Ende von current
               const vorschlagStartMin = current.endeMin;
               const vorschlagStart = `${Math.floor(vorschlagStartMin/60).toString().padStart(2,'0')}:${(vorschlagStartMin%60).toString().padStart(2,'0')}`;
@@ -9205,6 +9208,10 @@ class App {
       
       // Finde Termine ohne Mitarbeiter-Zuordnung
       const nichtZugeordnet = termineAmTag.filter(termin => {
+        // Schwebende Termine gelten immer als "nicht zugeordnet" (konsistent mit Zeitleiste)
+        const istSchwebend = termin.ist_schwebend === 1 || termin.ist_schwebend === true;
+        if (istSchwebend) return true;
+        
         // Prüfe ob mitarbeiter_id gesetzt ist
         if (termin.mitarbeiter_id) return false;
         
@@ -18341,8 +18348,9 @@ class App {
       `;
     };
     
-    // Tracke das Ende von Blöcken pro Termin, um Überlappungen zu vermeiden
+    // Tracke das Ende von Blöcken pro Termin UND global, um Überlappungen zu vermeiden
     const terminEndzeiten = new Map(); // terminId -> letztes Ende in Minuten
+    let globalLastEnd = startHour * 60; // Tracke das Ende des letzten Blocks dieser Person
     
     for (const arbeit of sortedArbeiten) {
       let startMinutes, endMinutes;
@@ -18370,6 +18378,14 @@ class App {
           }
         }
         
+        // NEU: Prüfe auch auf Überlappung mit ALLEN vorherigen Blöcken (andere Termine)
+        // Dies verhindert, dass verschiedene Termine sich überlagern
+        if (startMinutes < globalLastEnd) {
+          // Überlappung mit einem vorherigen Termin! Verschiebe ans Ende
+          startMinutes = globalLastEnd;
+          endMinutes = startMinutes + anzeigeZeit;
+        }
+        
         // Wenn die Startzeit in der Pause liegt, nach der Pause verschieben
         if (pauseStartMinuten !== null && startMinutes >= pauseStartMinuten && startMinutes < pauseEndMinuten) {
           startMinutes = pauseEndMinuten;
@@ -18379,6 +18395,7 @@ class App {
         
         // Speichere das Ende dieses Blocks für Kollisionsvermeidung
         terminEndzeiten.set(terminId, Math.max(terminEndzeiten.get(terminId) || 0, endMinutes));
+        globalLastEnd = Math.max(globalLastEnd, endMinutes);
       } else {
         // Ohne Startzeit: Platziere nach letzter Arbeit (und nach Pause falls nötig)
         startMinutes = currentEndMinutes;
@@ -18407,8 +18424,10 @@ class App {
             const teil2End = teil2Start + verbleibendeZeit;
             bloeckeHtml += renderBlock(arbeit, teil2Start, teil2End, true);
             currentEndMinutes = teil2End;
+            globalLastEnd = Math.max(globalLastEnd, teil2End);
           } else {
             currentEndMinutes = pauseEndMinuten;
+            globalLastEnd = Math.max(globalLastEnd, pauseEndMinuten);
           }
           continue; // Springe zum nächsten Termin
         }
@@ -18418,6 +18437,7 @@ class App {
         if (endMinutes > pauseStartMinuten && endMinutes <= pauseEndMinuten) {
           bloeckeHtml += renderBlock(arbeit, startMinutes, endMinutes, false);
           currentEndMinutes = pauseEndMinuten; // Nächster Block beginnt NACH der Pause
+          globalLastEnd = Math.max(globalLastEnd, pauseEndMinuten);
           continue;
         }
       }
@@ -18425,6 +18445,7 @@ class App {
       // Kein Pausenkonflikt - normal rendern
       bloeckeHtml += renderBlock(arbeit, startMinutes, endMinutes, false);
       currentEndMinutes = endMinutes;
+      globalLastEnd = Math.max(globalLastEnd, endMinutes);
     }
 
     bloeckeHtml += '</div>';
