@@ -1,6 +1,8 @@
 const sqlite3 = require('sqlite3').verbose();
 const path = require('path');
 const fs = require('fs');
+const crypto = require('crypto');
+const os = require('os');
 
 // Migration-Runner importieren
 const { runMigrations, getLatestVersion, hasPendingMigrations } = require('../../migrations');
@@ -234,6 +236,337 @@ function createAutoBackup() {
   });
 }
 
+/**
+ * Migration-Lock: Verhindert parallele Migration-Ausführung
+ */
+const migrationLock = {
+  locked: false,
+  lockedBy: null,
+  lockedAt: null,
+  
+  async acquire() {
+    return new Promise((resolve, reject) => {
+      // Prüfe lokalen Lock-Status (für selben Prozess)
+      if (this.locked) {
+        const error = new Error(`Migration bereits im Gange (gestartet: ${this.lockedAt})`);
+        error.code = 'MIGRATION_LOCKED';
+        return reject(error);
+      }
+      
+      // Erstelle Lock-Tabelle
+      dbWrapper.connection.run(`
+        CREATE TABLE IF NOT EXISTS _migration_lock (
+          id INTEGER PRIMARY KEY CHECK(id = 1),
+          locked_at DATETIME,
+          process_id INTEGER,
+          hostname TEXT
+        )
+      `, (err) => {
+        if (err) return reject(err);
+        
+        const pid = process.pid;
+        const hostname = os.hostname();
+        const now = new Date().toISOString();
+        
+        // Prüfe auf Stale Locks (> 30 Minuten)
+        dbWrapper.connection.get('SELECT * FROM _migration_lock WHERE id = 1', (err, row) => {
+          if (err) return reject(err);
+          
+          if (row) {
+            const lockedAt = new Date(row.locked_at);
+            const ageMinutes = (Date.now() - lockedAt.getTime()) / 1000 / 60;
+            
+            if (ageMinutes > 30) {
+              console.warn(`⚠️ Stale Migration-Lock erkannt (${ageMinutes.toFixed(1)} Min alt) - wird freigegeben`);
+              // Lösche Stale Lock
+              dbWrapper.connection.run('DELETE FROM _migration_lock WHERE id = 1', (err) => {
+                if (err) return reject(err);
+                this.insertLock(now, pid, hostname, resolve, reject);
+              });
+            } else {
+              const error = new Error(`Migration bereits im Gange auf ${row.hostname} (PID: ${row.process_id}, seit ${ageMinutes.toFixed(1)} Min)`);
+              error.code = 'MIGRATION_LOCKED';
+              return reject(error);
+            }
+          } else {
+            this.insertLock(now, pid, hostname, resolve, reject);
+          }
+        });
+      });
+    });
+  },
+  
+  insertLock(now, pid, hostname, resolve, reject) {
+    dbWrapper.connection.run(
+      'INSERT INTO _migration_lock (id, locked_at, process_id, hostname) VALUES (1, ?, ?, ?)',
+      [now, pid, hostname],
+      (err) => {
+        if (err) return reject(err);
+        
+        this.locked = true;
+        this.lockedBy = `${hostname}:${pid}`;
+        this.lockedAt = now;
+        
+        console.log(`🔒 Migration-Lock erworben: ${this.lockedBy}`);
+        resolve();
+      }
+    );
+  },
+  
+  async release() {
+    return new Promise((resolve) => {
+      if (!this.locked) {
+        return resolve();
+      }
+      
+      dbWrapper.connection.run('DELETE FROM _migration_lock WHERE id = 1', (err) => {
+        if (err) {
+          console.error('⚠️ Fehler beim Freigeben des Migration-Locks:', err);
+        } else {
+          console.log(`🔓 Migration-Lock freigegeben: ${this.lockedBy}`);
+        }
+        
+        this.locked = false;
+        this.lockedBy = null;
+        this.lockedAt = null;
+        resolve();
+      });
+    });
+  }
+};
+
+/**
+ * Pre-Migration-Checks: Validiert Voraussetzungen vor Migration
+ */
+async function validateMigrationPreConditions() {
+  const checks = [];
+  const errors = [];
+  
+  console.log('🔍 Pre-Migration-Checks...');
+  
+  // Check 1: Freier Speicherplatz (mindestens 1 GB)
+  try {
+    const stats = fs.statSync(dbPath);
+    const dbSizeMB = stats.size / 1024 / 1024;
+    const requiredFreeMB = Math.max(1024, dbSizeMB * 3); // Mindestens 1GB oder 3x DB-Größe
+    
+    // Prüfe freien Speicher im DB-Verzeichnis
+    const diskSpace = await checkDiskSpace(dbDir);
+    const freeMB = diskSpace.free / 1024 / 1024;
+    
+    if (freeMB < requiredFreeMB) {
+      errors.push(`Unzureichender Speicherplatz: ${freeMB.toFixed(0)} MB frei, ${requiredFreeMB.toFixed(0)} MB benötigt`);
+      checks.push({ name: 'Speicherplatz', status: 'FAIL', detail: `${freeMB.toFixed(0)} MB / ${requiredFreeMB.toFixed(0)} MB` });
+    } else {
+      checks.push({ name: 'Speicherplatz', status: 'OK', detail: `${freeMB.toFixed(0)} MB frei` });
+    }
+  } catch (error) {
+    console.warn('⚠️ Konnte Speicherplatz nicht prüfen:', error.message);
+    checks.push({ name: 'Speicherplatz', status: 'SKIP', detail: 'Prüfung fehlgeschlagen' });
+  }
+  
+  // Check 2: Gültiges Backup vorhanden
+  try {
+    const backupDir = path.join(dataDir, 'backups');
+    if (fs.existsSync(backupDir)) {
+      const backupFiles = fs.readdirSync(backupDir)
+        .filter(f => f.startsWith('werkstatt_backup_') && f.endsWith('.db'))
+        .sort()
+        .reverse();
+      
+      if (backupFiles.length === 0) {
+        console.warn('⚠️ Kein Backup vorhanden - wird vor Migration erstellt');
+        checks.push({ name: 'Backup vorhanden', status: 'WARN', detail: 'Keins gefunden (wird erstellt)' });
+      } else {
+        const newestBackup = backupFiles[0];
+        const backupPath = path.join(backupDir, newestBackup);
+        const backupStats = fs.statSync(backupPath);
+        const ageMinutes = (Date.now() - backupStats.mtimeMs) / 1000 / 60;
+        
+        checks.push({ name: 'Backup vorhanden', status: 'OK', detail: `${newestBackup} (${ageMinutes.toFixed(0)} Min alt)` });
+      }
+    } else {
+      checks.push({ name: 'Backup vorhanden', status: 'WARN', detail: 'Backup-Verzeichnis fehlt (wird erstellt)' });
+    }
+  } catch (error) {
+    console.warn('⚠️ Konnte Backups nicht prüfen:', error.message);
+    checks.push({ name: 'Backup vorhanden', status: 'SKIP', detail: 'Prüfung fehlgeschlagen' });
+  }
+  
+  // Check 3: Datenbank nicht im Read-Only-Modus
+  try {
+    await new Promise((resolve, reject) => {
+      dbWrapper.connection.run('CREATE TABLE IF NOT EXISTS _migration_check_temp (id INTEGER)', (err) => {
+        if (err) {
+          if (err.message.includes('readonly') || err.message.includes('read-only')) {
+            errors.push('Datenbank ist im Read-Only-Modus');
+            checks.push({ name: 'Schreibzugriff', status: 'FAIL', detail: 'Read-Only-Modus' });
+            return reject(err);
+          }
+          return reject(err);
+        }
+        
+        dbWrapper.connection.run('DROP TABLE IF EXISTS _migration_check_temp', (err) => {
+          if (err) return reject(err);
+          checks.push({ name: 'Schreibzugriff', status: 'OK', detail: 'Test-Write erfolgreich' });
+          resolve();
+        });
+      });
+    });
+  } catch (error) {
+    if (!errors.find(e => e.includes('Read-Only'))) {
+      console.warn('⚠️ Konnte Schreibzugriff nicht prüfen:', error.message);
+      checks.push({ name: 'Schreibzugriff', status: 'SKIP', detail: 'Prüfung fehlgeschlagen' });
+    }
+  }
+  
+  // Check 4: Keine offenen Transaktionen (SQLite-spezifisch schwierig zu prüfen)
+  // SQLite hat kein einfaches "SHOW TRANSACTION" - wir loggen nur eine Warnung
+  checks.push({ name: 'Offene Transaktionen', status: 'SKIP', detail: 'Nicht prüfbar (SQLite)' });
+  
+  // Ausgabe der Checks
+  console.log('📋 Pre-Migration-Check Ergebnisse:');
+  checks.forEach(check => {
+    const icon = check.status === 'OK' ? '✅' : check.status === 'FAIL' ? '❌' : '⚠️';
+    console.log(`  ${icon} ${check.name}: ${check.detail}`);
+  });
+  
+  // Bei Fehlern: Exception werfen
+  if (errors.length > 0) {
+    const error = new Error(`Pre-Migration-Checks fehlgeschlagen:\n  - ${errors.join('\n  - ')}`);
+    error.code = 'PRE_CHECK_FAILED';
+    error.checks = checks;
+    throw error;
+  }
+  
+  return checks;
+}
+
+/**
+ * Disk-Space-Check (plattformunabhängig)
+ */
+function checkDiskSpace(dirPath) {
+  return new Promise((resolve) => {
+    // Fallback-Werte falls Prüfung fehlschlägt
+    const fallback = { free: 10 * 1024 * 1024 * 1024, total: 100 * 1024 * 1024 * 1024 };
+    
+    try {
+      // Auf macOS/Linux: df
+      if (process.platform !== 'win32') {
+        const { execSync } = require('child_process');
+        const output = execSync(`df -k "${dirPath}"`, { encoding: 'utf8' });
+        const lines = output.trim().split('\n');
+        if (lines.length >= 2) {
+          const parts = lines[1].split(/\s+/);
+          const available = parseInt(parts[3]) * 1024; // df gibt KB zurück
+          const total = parseInt(parts[1]) * 1024;
+          resolve({ free: available, total });
+          return;
+        }
+      }
+      
+      // Auf Windows: wmic (komplexer, vorerst Fallback)
+      resolve(fallback);
+    } catch (error) {
+      console.warn('⚠️ Disk-Space-Check fehlgeschlagen:', error.message);
+      resolve(fallback);
+    }
+  });
+}
+
+/**
+ * Schema-Checksum: Berechnet Hash der Datenbank-Struktur
+ */
+async function calculateSchemaChecksum() {
+  return new Promise((resolve, reject) => {
+    // Alle Tabellen und ihre Definitionen abfragen
+    dbWrapper.connection.all(
+      `SELECT name, sql FROM sqlite_master 
+       WHERE type IN ('table', 'index', 'view') 
+       AND name NOT LIKE 'sqlite_%' 
+       AND name NOT LIKE '_migration_%'
+       ORDER BY name`,
+      (err, rows) => {
+        if (err) return reject(err);
+        
+        // Konkateniere alle SQL-Statements
+        const schemaString = rows
+          .map(row => `${row.name}:${row.sql || ''}`)
+          .join('|');
+        
+        // SHA256-Hash berechnen
+        const hash = crypto.createHash('sha256')
+          .update(schemaString)
+          .digest('hex');
+        
+        resolve(hash);
+      }
+    );
+  });
+}
+
+/**
+ * Schema-Checksum speichern
+ */
+async function saveSchemaChecksum(checksum) {
+  return new Promise((resolve, reject) => {
+    dbWrapper.connection.run(
+      `INSERT OR REPLACE INTO _schema_meta (key, value) VALUES ('schema_checksum', ?)`,
+      [checksum],
+      (err) => {
+        if (err) return reject(err);
+        console.log(`✅ Schema-Checksum gespeichert: ${checksum.substring(0, 16)}...`);
+        resolve();
+      }
+    );
+  });
+}
+
+/**
+ * Schema-Integrität verifizieren
+ */
+async function verifySchemaIntegrity() {
+  try {
+    // Gespeicherte Checksum laden
+    const storedChecksum = await new Promise((resolve) => {
+      dbWrapper.connection.get(
+        `SELECT value FROM _schema_meta WHERE key = 'schema_checksum'`,
+        (err, row) => {
+          if (err || !row) return resolve(null);
+          resolve(row.value);
+        }
+      );
+    });
+    
+    if (!storedChecksum) {
+      console.log('ℹ️ Keine Schema-Checksum gespeichert - erstelle neue');
+      const checksum = await calculateSchemaChecksum();
+      await saveSchemaChecksum(checksum);
+      return true;
+    }
+    
+    // Aktuelle Checksum berechnen
+    const currentChecksum = await calculateSchemaChecksum();
+    
+    if (currentChecksum !== storedChecksum) {
+      console.warn('⚠️ Schema-Checksum-Mismatch erkannt!');
+      console.warn(`  Gespeichert: ${storedChecksum.substring(0, 16)}...`);
+      console.warn(`  Aktuell:     ${currentChecksum.substring(0, 16)}...`);
+      console.warn('  Möglicherweise wurde das Schema außerhalb des Migrations-Systems geändert.');
+      
+      // Update Checksum auf aktuellen Stand
+      await saveSchemaChecksum(currentChecksum);
+      return false;
+    }
+    
+    console.log(`✅ Schema-Integrität OK: ${currentChecksum.substring(0, 16)}...`);
+    return true;
+  } catch (error) {
+    console.error('❌ Fehler bei Schema-Integritätsprüfung:', error);
+    return false;
+  }
+}
+
 // Schema-Version aus Datenbank auslesen
 function getSchemaVersion() {
   return new Promise((resolve) => {
@@ -290,17 +623,50 @@ async function initializeDatabaseWithBackup() {
 
     console.log(`📊 Schema-Version: ${currentVersion} → ${latestVersion}`);
 
-    // 2. Bei nötiger Migration: Backup erstellen
-    if (hasPendingMigrations(currentVersion)) {
-      console.log('🔄 Migration erkannt - erstelle Sicherheits-Backup...');
-      await createAutoBackup();
+    // 2. Schema-Integrität prüfen (nur wenn Datenbank existiert)
+    if (currentVersion > 0) {
+      await verifySchemaIntegrity();
     }
 
-    // 3. Migrationen ausführen
-    const newVersion = await runMigrations(dbWrapper.connection, currentVersion);
-
-    // 4. Schema-Version aktualisieren
-    await setSchemaVersion(newVersion);
+    // 3. Bei nötiger Migration: Pre-Checks und Lock
+    if (hasPendingMigrations(currentVersion)) {
+      console.log('🔄 Migration erkannt - führe Pre-Checks durch...');
+      
+      try {
+        // Pre-Migration-Checks
+        await validateMigrationPreConditions();
+        
+        // Migration-Lock erwerben
+        await migrationLock.acquire();
+        
+        // Sicherheits-Backup erstellen
+        console.log('💾 Erstelle Sicherheits-Backup...');
+        await createAutoBackup();
+        
+        // Migrationen ausführen
+        console.log('🚀 Starte Migrationen...');
+        const newVersion = await runMigrations(dbWrapper.connection, currentVersion);
+        
+        // Schema-Version aktualisieren
+        await setSchemaVersion(newVersion);
+        
+        // Neue Schema-Checksum speichern
+        const newChecksum = await calculateSchemaChecksum();
+        await saveSchemaChecksum(newChecksum);
+        
+        // Lock freigeben
+        await migrationLock.release();
+        
+        console.log(`✅ Migrationen erfolgreich abgeschlossen: Version ${currentVersion} → ${newVersion}`);
+        
+      } catch (error) {
+        // Bei Fehler: Lock freigeben
+        await migrationLock.release();
+        throw error;
+      }
+    } else {
+      console.log('✅ Datenbank ist aktuell (keine Migrationen nötig)');
+    }
 
     console.log('✅ Datenbank-Initialisierung abgeschlossen');
   } catch (error) {
@@ -336,5 +702,12 @@ module.exports = {
   reconnectDatabase,
   dbPath,
   dataDir,
-  DB_SCHEMA_VERSION
+  DB_SCHEMA_VERSION,
+  // Neue Funktionen
+  migrationLock,
+  validateMigrationPreConditions,
+  calculateSchemaChecksum,
+  verifySchemaIntegrity,
+  getSchemaVersion,
+  setSchemaVersion
 };
