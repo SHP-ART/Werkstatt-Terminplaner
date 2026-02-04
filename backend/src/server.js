@@ -266,6 +266,30 @@ async function startServer(clientCountCallback, requestLogCallback) {
         throw dbError;
     }
 
+    // Automatisches Backup beim Start erstellen
+    logStartup('Erstelle automatisches Backup beim Start...');
+    try {
+        const BackupController = require('./controllers/backupController');
+        const autoBackupResult = await BackupController.createAutoBackupOnStartup();
+        
+        if (autoBackupResult.created) {
+            logStartup(`Auto-Backup erstellt: ${autoBackupResult.backup.name}`);
+            
+            if (autoBackupResult.warnung) {
+                logStartup('⚠️  DATENBANK-WARNUNG:', 'WARN');
+                logStartup(autoBackupResult.warnung, 'WARN');
+                console.warn('\n' + '='.repeat(80));
+                console.warn(autoBackupResult.warnung);
+                console.warn('='.repeat(80) + '\n');
+            }
+        } else if (autoBackupResult.skipped) {
+            logStartup(`Auto-Backup übersprungen: ${autoBackupResult.reason}`);
+        }
+    } catch (backupError) {
+        logStartup(`WARNUNG: Auto-Backup fehlgeschlagen: ${backupError.message}`, 'WARN');
+        // Kein throw - Server soll trotzdem starten
+    }
+
     // Automatische Endzeiten-Migration (einmalig nach Update)
     logStartup('Prüfe Endzeiten-Migration...');
     try {

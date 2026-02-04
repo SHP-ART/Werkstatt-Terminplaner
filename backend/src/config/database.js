@@ -7,6 +7,9 @@ const os = require('os');
 // Migration-Runner importieren
 const { runMigrations, getLatestVersion, hasPendingMigrations } = require('../../migrations');
 
+// Schema-Kompatibilitäts-Modul importieren
+const { ensureSchemaCompatibility } = require('./schemaCompatibility');
+
 // Bestimme das Datenverzeichnis:
 // Priorität:
 // 1. Umgebungsvariable DATA_DIR (wird von electron-main.js gesetzt)
@@ -616,6 +619,12 @@ async function initializeDatabaseWithBackup() {
     // 0. Warte auf Datenbank-Connection (wichtig für async sqlite3.Database)
     await dbWrapper.readyPromise;
     console.log('✅ Datenbank-Connection bereit');
+
+    // 0.5 WICHTIG: Schema-Kompatibilität prüfen (alte _schema_meta → neue schema_migrations)
+    const compatResult = await ensureSchemaCompatibility(dbWrapper.connection);
+    if (compatResult.converted) {
+      console.log(`✅ ${compatResult.message}`);
+    }
 
     // 1. Schema-Version prüfen
     const currentVersion = await getSchemaVersion();
