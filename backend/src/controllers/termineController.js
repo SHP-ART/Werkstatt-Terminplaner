@@ -822,6 +822,7 @@ class TermineController {
       if (updateData.arbeitszeiten_details !== undefined) {
         const terminMitUpdate = { ...termin, ...updateData };
         const { startzeit, endzeit } = await berechneEndzeitFuerTermin(terminMitUpdate, updateData.arbeitszeiten_details);
+        // Nur überschreiben wenn tatsächlich berechnet wurde
         if (startzeit) updateData.startzeit = startzeit;
         if (endzeit) updateData.endzeit_berechnet = endzeit;
       }
@@ -2201,6 +2202,15 @@ class TermineController {
           laufendeZeit = neueEndzeit;
         }
       }
+
+      // Cache invalidieren für aktualisierte Termine
+      invalidateTermineCache();
+      invalidateAuslastungCache(datum);
+      
+      // Falls Termine verschoben wurden, auch für neue Daten Cache invalidieren
+      verschobeneTermine.forEach(vt => {
+        invalidateAuslastungCache(vt.neuesDatum);
+      });
 
       // WebSocket-Broadcast für Aktualisierungen
       broadcastEvent('termine_updated', { datum });

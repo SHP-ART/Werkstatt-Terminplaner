@@ -388,6 +388,19 @@ class AuslastungService {
   static async getByDatum(datum) {
     return ApiService.get(`/auslastung/${datum}`);
   }
+
+  static async getByDateRange(startDatum, endDatum) {
+    // Wenn Start- und Enddatum identisch sind, nutze getByDatum
+    if (startDatum === endDatum) {
+      return this.getByDatum(startDatum);
+    }
+    // Ansonsten hole beide Daten und kombiniere sie
+    const [start, end] = await Promise.all([
+      this.getByDatum(startDatum),
+      this.getByDatum(endDatum)
+    ]);
+    return { start, end };
+  }
 }
 
 class EinstellungenService {

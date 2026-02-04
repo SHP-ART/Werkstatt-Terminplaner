@@ -932,7 +932,16 @@
 
     function berechneEndzeit(termin, person, isLehrling, globaleNebenzeit) {
       if (termin.status === 'abgeschlossen' && termin.fertigstellung_zeit) {
-        return termin.fertigstellung_zeit;
+        // Formatiere ISO-Timestamp zu HH:MM
+        try {
+          const datum = new Date(termin.fertigstellung_zeit);
+          const stunden = String(datum.getHours()).padStart(2, '0');
+          const minuten = String(datum.getMinutes()).padStart(2, '0');
+          return `${stunden}:${minuten}`;
+        } catch (e) {
+          // Falls kein ISO-Timestamp, gib direkt zurück (z.B. schon "10:00" Format)
+          return termin.fertigstellung_zeit;
+        }
       }
 
       const startzeit = termin.startzeit || termin.bring_zeit;
@@ -1134,15 +1143,20 @@
 
     async function handlePauseStarten(personId, personTyp, datum, imZeitfenster) {
       try {
-        // Wenn außerhalb Zeitfenster: Bestätigung einholen
+        // Wenn außerhalb des idealen Zeitfensters (nach der eingestellten Pausenzeit): Bestätigung einholen
         if (!imZeitfenster) {
           const bestaetigung = confirm(
-            '⚠️ Die Pausenzeit liegt außerhalb des empfohlenen Zeitfensters (±1h um Mittagszeit).\n\n' +
+            '⚠️ Die Pausenzeit liegt nach der eingestellten Mittagspause.\n\n' +
             'Möchten Sie trotzdem die Pause starten?'
           );
-          if (!bestaetigung) return;
+          if (!bestaetigung) {
+            console.log('Pause abgebrochen durch Benutzer');
+            return; // Abbruch - keine weiteren Aktionen
+          }
         }
 
+        console.log('Starte Pause für:', { personId, personTyp, datum });
+        
         await ApiService.post('/pause/starten', {
           personId,
           personTyp,
@@ -1402,20 +1416,25 @@
           </button>
         `;
       } else if (terminMitButtons && !inPause && !inBerufsschule) {
-        // Pause-Button nur wenn Auftrag existiert und im Zeitfenster
+        // Pause-Button nur wenn Auftrag existiert und 1h vor Pausenzeit
         const jetztMinuten = jetzt.getHours() * 60 + jetzt.getMinutes();
         const [pauseH, pauseM] = (person.mittagspause_start || '12:00').split(':').map(Number);
         const pausenStartMinuten = pauseH * 60 + pauseM;
-        const zeitfensterMin = pausenStartMinuten - 60;
-        const zeitfensterMax = pausenStartMinuten + 60;
-        const imZeitfenster = jetztMinuten >= zeitfensterMin && jetztMinuten <= zeitfensterMax;
+        const zeitfensterMin = pausenStartMinuten - 60; // 1h vor Pausenzeit
+        
+        // Button nur anzeigen wenn 1h vor Pausenzeit oder später, aber vor 1h nach Pausenzeit
+        const imAnzeigeZeitraum = jetztMinuten >= zeitfensterMin;
+        const zeitfensterMax = pausenStartMinuten + 60; // Warnung wenn zu spät
+        const imIdealemZeitfenster = jetztMinuten >= zeitfensterMin && jetztMinuten <= pausenStartMinuten;
 
-        buttonsHtml += `
-          <button class="tablet-btn tablet-btn-pause ${imZeitfenster ? '' : 'außerhalb'}" 
-                  onclick="handlePauseStarten(${personId}, '${typ}', '${formatDateLocal(new Date())}', ${imZeitfenster})">
-            🍽️ Pause starten
-          </button>
-        `;
+        if (imAnzeigeZeitraum) {
+          buttonsHtml += `
+            <button class="tablet-btn tablet-btn-pause ${imIdealemZeitfenster ? '' : 'außerhalb'}" 
+                    onclick="handlePauseStarten(${personId}, '${typ}', '${formatDateLocal(new Date())}', ${imIdealemZeitfenster})">
+              🍽️ Pause starten
+            </button>
+          `;
+        }
       }
 
       return `

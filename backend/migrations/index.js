@@ -13,7 +13,7 @@
 const path = require('path');
 const fs = require('fs');
 const { createMigrationOperation } = require('../src/utils/asyncOperations');
-const { broadcastEvent } = require('../src/utils/broadcast');
+const { broadcastEvent } = require('../src/utils/websocket');
 
 const migrations = [
   require('./001_initial'),

@@ -8,7 +8,7 @@
  * - Automatischem Rollback bei Timeout
  */
 
-const { broadcastEvent } = require('./broadcast');
+const { broadcastEvent } = require('./websocket');
 
 /**
  * Async Operation mit Timeout und Progress-Tracking
