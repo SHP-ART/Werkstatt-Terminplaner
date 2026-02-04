@@ -55,10 +55,27 @@ function mapBackupFiles() {
   return files.map(file => {
     const full = path.join(backupDir, file);
     const stats = fs.statSync(full);
+    
+    // Versuche Datum aus Dateinamen zu extrahieren (werkstatt_backup_20260204T10-22-34.db)
+    let createdAt = stats.birthtime; // Fallback: birthtime
+    const match = file.match(/(\d{4})(\d{2})(\d{2})T(\d{2})-(\d{2})-(\d{2})/);
+    if (match) {
+      // Datum aus Dateinamen parsen (ist in lokaler Zeit)
+      const [, year, month, day, hour, minute, second] = match;
+      createdAt = new Date(
+        parseInt(year),
+        parseInt(month) - 1, // Monat ist 0-basiert
+        parseInt(day),
+        parseInt(hour),
+        parseInt(minute),
+        parseInt(second)
+      );
+    }
+    
     return {
       name: file,
       sizeBytes: stats.size,
-      createdAt: stats.mtime
+      createdAt: createdAt
     };
   }).sort((a, b) => b.createdAt - a.createdAt);
 }
@@ -136,13 +153,16 @@ const BackupController = {
         try {
           fs.copyFileSync(dbPath, dest);
           const stats = fs.statSync(dest);
+          
+          // Verwende jetzt() statt stats.mtime für korrektes Erstellungsdatum
+          const jetzt = new Date();
 
           const response = {
             message: 'Backup erstellt',
             backup: { 
               name: backupName, 
               sizeBytes: stats.size, 
-              createdAt: stats.mtime 
+              createdAt: jetzt
             }
           };
 
