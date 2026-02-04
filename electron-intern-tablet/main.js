@@ -1,4 +1,4 @@
-const { app, BrowserWindow, screen, ipcMain, Menu, Tray } = require('electron');
+const { app, BrowserWindow, screen, ipcMain, Menu, Tray, powerSaveBlocker } = require('electron');
 const path = require('path');
 const fs = require('fs');
 
@@ -81,6 +81,7 @@ let CONFIG = loadConfig();
 let mainWindow;
 let tray = null;
 let displayTimer = null;
+let powerSaveBlockerId = null;  // Für Display-Steuerung
 
 function createWindow() {
   // Bildschirmgröße ermitteln
@@ -172,7 +173,46 @@ function checkDisplaySchedule() {
     shouldBeOff = currentTime >= offTime && currentTime < onTime;
   }
 
-  // Display-Status an Renderer senden
+  // Display physisch ausschalten (Windows 10/11)
+  if (shouldBeOff) {
+    // Display ausschalten: Blockiere NICHT den Bildschirm-Energiesparmodus
+    if (powerSaveBlockerId !== null) {
+      try {
+        powerSaveBlocker.stop(powerSaveBlockerId);
+        powerSaveBlockerId = null;
+        console.log('🌙 Display-Energiesparmodus AKTIVIERT (Display kann ausschalten)');
+      } catch (e) {
+        console.error('Fehler beim Stoppen des PowerSaveBlockers:', e);
+      }
+    }
+    
+    // Windows Display ausschalten via PowerShell (nur auf Windows)
+    if (process.platform === 'win32') {
+      try {
+        const { execSync } = require('child_process');
+        // Schalte Monitor aus (sendet Signal an Monitor)
+        execSync('powershell -Command "(Add-Type \'[DllImport(\\"user32.dll\\")]public static extern int SendMessage(int hWnd,int hMsg,int wParam,int lParam);\' -Name a -Pas)::SendMessage(-1,0x0112,0xF170,2)"', {
+          windowsHide: true,
+          timeout: 1000
+        });
+        console.log('🌙 Windows-Monitor ausgeschaltet');
+      } catch (e) {
+        console.error('Fehler beim Ausschalten des Monitors:', e.message);
+      }
+    }
+  } else {
+    // Display einschalten: Blockiere den Bildschirm-Energiesparmodus
+    if (powerSaveBlockerId === null) {
+      try {
+        powerSaveBlockerId = powerSaveBlocker.start('prevent-display-sleep');
+        console.log('☀️ Display-Energiesparmodus BLOCKIERT (Display bleibt an)');
+      } catch (e) {
+        console.error('Fehler beim Starten des PowerSaveBlockers:', e);
+      }
+    }
+  }
+
+  // Display-Status an Renderer senden (für UI-Overlay)
   if (mainWindow && mainWindow.webContents) {
     mainWindow.webContents.send('display-status', shouldBeOff);
   }
@@ -248,6 +288,58 @@ ipcMain.handle('update-display-times', (event, times) => {
   saveConfig(CONFIG);
   
   // Display-Timer neu starten mit neuen Zeiten
+  startDisplayTimer();
+  
+  return { success: true };
+});
+
+// Manuelles Display-Steuern (sofort ein/aus schalten)
+ipcMain.handle('set-display-manual', (event, shouldBeOff) => {
+  console.log(`🔧 Manuelles Display-Schalten: ${shouldBeOff ? 'AUS' : 'AN'}`);
+  
+  if (shouldBeOff) {
+    // Display ausschalten
+    if (powerSaveBlockerId !== null) {
+      try {
+        powerSaveBlocker.stop(powerSaveBlockerId);
+        powerSaveBlockerId = null;
+      } catch (e) {
+        console.error('Fehler beim Stoppen des PowerSaveBlockers:', e);
+      }
+    }
+    
+    // Windows Monitor ausschalten
+    if (process.platform === 'win32') {
+      try {
+        const { execSync } = require('child_process');
+        execSync('powershell -Command "(Add-Type \'[DllImport(\\"user32.dll\\")]public static extern int SendMessage(int hWnd,int hMsg,int wParam,int lParam);\' -Name a -Pas)::SendMessage(-1,0x0112,0xF170,2)"', {
+          windowsHide: true,
+          timeout: 1000
+        });
+        console.log('🌙 Windows-Monitor manuell ausgeschaltet');
+      } catch (e) {
+        console.error('Fehler:', e.message);
+      }
+    }
+  } else {
+    // Display einschalten
+    if (powerSaveBlockerId === null) {
+      try {
+        powerSaveBlockerId = powerSaveBlocker.start('prevent-display-sleep');
+        console.log('☀️ Display-Energiesparmodus blockiert (manuell)');
+      } catch (e) {
+        console.error('Fehler beim Starten des PowerSaveBlockers:', e);
+      }
+    }
+  }
+  
+  // Status an Renderer senden
+  if (mainWindow && mainWindow.webContents) {
+    mainWindow.webContents.send('display-status', shouldBeOff);
+  }
+  
+  return { success: true };
+});
   startDisplayTimer();
   
   return { success: true, config: CONFIG };

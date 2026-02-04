@@ -9035,6 +9035,15 @@ class App {
       const container = document.getElementById('mitarbeiterAuslastungContainer');
       const section = document.getElementById('mitarbeiterAuslastungSection');
       
+      // Lade aktive Pausen
+      let aktivePausen = [];
+      try {
+        aktivePausen = await fetch(`${CONFIG.API_URL}/pause/aktive`)
+          .then(res => res.ok ? res.json() : []);
+      } catch (error) {
+        console.error('Fehler beim Laden der aktiven Pausen:', error);
+      }
+      
       if (container && section) {
         let html = '';
         
@@ -9045,6 +9054,12 @@ class App {
             const istAbwesend = ma.ist_abwesend === true;
             const abwesendStyle = istAbwesend ? 'background: linear-gradient(135deg, #ffebee 0%, #ffcdd2 100%); border-left: 4px solid #c62828;' : '';
             const abwesendBadge = istAbwesend ? '<span style="background: #c62828; color: white; padding: 2px 8px; border-radius: 12px; font-size: 0.8em; margin-left: 10px;">🏥 Abwesend</span>' : '';
+            
+            // Prüfe ob Mitarbeiter in Pause ist
+            const pauseInfo = aktivePausen.find(p => p.mitarbeiter_id === ma.mitarbeiter_id);
+            const pauseBadge = pauseInfo 
+              ? `<span style="background: linear-gradient(135deg, #fdcb6e 0%, #e17055 100%); color: white; padding: 2px 8px; border-radius: 12px; font-size: 0.8em; margin-left: 10px; border: 1px solid #d63031;">🍽️ Pause (${pauseInfo.verbleibende_minuten || 0} Min.)</span>` 
+              : '';
             
             const prozentColor = istAbwesend ? '#c62828' :
                                 ma.auslastung_prozent > 100 ? '#c62828' :
@@ -9072,7 +9087,7 @@ class App {
             
             return `
               <div style="${cardStyle}">
-                <h4 style="margin: 0 0 10px 0;">${ma.mitarbeiter_name}${abwesendBadge}${nurServiceBadge}</h4>
+                <h4 style="margin: 0 0 10px 0;">${ma.mitarbeiter_name}${abwesendBadge}${pauseBadge}${nurServiceBadge}</h4>
                 <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin-bottom: 10px;">
                   <div><strong>Verfügbar:</strong> ${verfuegbarText}</div>
                   <div><strong>Belegt:</strong> ${this.formatMinutesToHours(ma.belegt_minuten)}</div>
@@ -9096,6 +9111,12 @@ class App {
             const istAbwesend = la.ist_abwesend === true;
             const abwesendBadge = istAbwesend ? '<span style="background: #c62828; color: white; padding: 2px 8px; border-radius: 12px; font-size: 0.8em; margin-left: 10px;">🏥 Abwesend</span>' : '';
             
+            // Prüfe ob Lehrling in Pause ist
+            const pauseInfo = aktivePausen.find(p => p.lehrling_id === la.lehrling_id);
+            const pauseBadge = pauseInfo 
+              ? `<span style="background: linear-gradient(135deg, #fdcb6e 0%, #e17055 100%); color: white; padding: 2px 8px; border-radius: 12px; font-size: 0.8em; margin-left: 10px; border: 1px solid #d63031;">🍽️ Pause (${pauseInfo.verbleibende_minuten || 0} Min.)</span>` 
+              : '';
+            
             const prozentColor = istAbwesend ? '#c62828' :
                                 la.auslastung_prozent > 100 ? '#c62828' :
                                 la.auslastung_prozent > 80 ? '#f57c00' : '#2e7d32';
@@ -9106,7 +9127,7 @@ class App {
               : `margin-bottom: 20px; padding: 15px; background: #f8f9fa; border-radius: 8px; border-left: 4px solid ${prozentColor};`;
             return `
               <div style="${cardStyle}">
-                <h4 style="margin: 0 0 10px 0;">${la.lehrling_name || la.name || 'Unbekannt'}${abwesendBadge}${lehrlingBadge}</h4>
+                <h4 style="margin: 0 0 10px 0;">${la.lehrling_name || la.name || 'Unbekannt'}${abwesendBadge}${pauseBadge}${lehrlingBadge}</h4>
                 <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin-bottom: 10px;">
                   <div><strong>Verfügbar:</strong> ${verfuegbarText}</div>
                   <div><strong>Belegt:</strong> ${this.formatMinutesToHours(la.belegt_minuten || 0)}</div>
@@ -18638,6 +18659,16 @@ class App {
         console.error('Fehler beim Laden der Abwesenheiten:', error);
       }
       
+      // 3a2. Aktive Pausen laden
+      let aktivePausen = [];
+      try {
+        aktivePausen = await fetch(`${CONFIG.API_URL}/pause/aktive`)
+          .then(res => res.ok ? res.json() : []);
+        console.log('Aktive Pausen geladen:', aktivePausen);
+      } catch (error) {
+        console.error('Fehler beim Laden der aktiven Pausen:', error);
+      }
+      
       // 3b. Werkstatt-Einstellungen laden (für Nebenzeit)
       const einstellungen = await EinstellungenService.getWerkstatt();
       const nebenzeitProzent = einstellungen?.nebenzeit_prozent || 0;
@@ -18821,6 +18852,13 @@ class App {
             this.addGesperrteZeitbereicheToTrack(track, arbeitszeit.arbeitsbeginn, arbeitszeit.arbeitsende, startHour, endHour);
           }
           this.addMittagspauseToTrack(track, ma.mittagspause_start, startHour);
+          
+          // Prüfe ob Mitarbeiter in Pause ist
+          const pauseInfo = aktivePausen.find(p => p.mitarbeiter_id === ma.id);
+          if (pauseInfo) {
+            this.addAktivePauseToTrack(track, pauseInfo, startHour);
+          }
+          
           // Drop-Events nur für nicht-abwesende registrieren
           this.setupTimelineDropZone(track, startHour);
         }
@@ -18893,6 +18931,13 @@ class App {
             this.addGesperrteZeitbereicheToTrack(track, arbeitszeit.arbeitsbeginn, arbeitszeit.arbeitsende, startHour, endHour);
           }
           this.addMittagspauseToTrack(track, lehrling.mittagspause_start, startHour);
+          
+          // Prüfe ob Lehrling in Pause ist
+          const pauseInfo = aktivePausen.find(p => p.lehrling_id === lehrling.id);
+          if (pauseInfo) {
+            this.addAktivePauseToTrack(track, pauseInfo, startHour);
+          }
+          
           this.setupTimelineDropZone(track, startHour, 'lehrling');
         }
       });
@@ -19125,6 +19170,50 @@ class App {
     pauseBlock.style.width = `${widthPx}px`;
     pauseBlock.title = `Mittagspause ${pauseStart} - ${pauseDauer} min`;
     pauseBlock.innerHTML = '🍽️';
+    
+    track.appendChild(pauseBlock);
+  }
+
+  /**
+   * Fügt eine aktive Pause zur Timeline hinzu (30 min Block)
+   * @param {HTMLElement} track - Timeline Track Element
+   * @param {object} pauseInfo - Pause-Info Objekt mit pause_start_zeit und verbleibende_minuten
+   * @param {number} startHour - Start der Timeline (z.B. 8)
+   */
+  addAktivePauseToTrack(track, pauseInfo, startHour) {
+    if (!pauseInfo || !pauseInfo.pause_start_zeit) return;
+    
+    const pauseStart = new Date(pauseInfo.pause_start_zeit);
+    const pauseH = pauseStart.getHours();
+    const pauseM = pauseStart.getMinutes();
+    const pauseDauer = 30; // 30 Minuten Pause (fest)
+    
+    const pixelPerHour = 100;
+    const pixelPerMinute = pixelPerHour / 60;
+    
+    const pauseStartMinutes = (pauseH - startHour) * 60 + pauseM;
+    const leftPx = pauseStartMinutes * pixelPerMinute;
+    const widthPx = pauseDauer * pixelPerMinute;
+    
+    const pauseBlock = document.createElement('div');
+    pauseBlock.className = 'timeline-aktive-pause';
+    pauseBlock.style.left = `${leftPx}px`;
+    pauseBlock.style.width = `${widthPx}px`;
+    pauseBlock.style.background = 'linear-gradient(135deg, #fdcb6e 0%, #e17055 100%)';
+    pauseBlock.style.border = '2px solid #d63031';
+    pauseBlock.style.borderRadius = '4px';
+    pauseBlock.style.display = 'flex';
+    pauseBlock.style.alignItems = 'center';
+    pauseBlock.style.justifyContent = 'center';
+    pauseBlock.style.fontSize = '1.2em';
+    pauseBlock.style.zIndex = '100';
+    pauseBlock.style.cursor = 'default';
+    pauseBlock.style.boxShadow = '0 2px 6px rgba(230, 126, 34, 0.4)';
+    
+    const verbleibendeMin = pauseInfo.verbleibende_minuten || 0;
+    pauseBlock.title = `🍽️ AKTIVE PAUSE\nGestartet: ${pauseH.toString().padStart(2,'0')}:${pauseM.toString().padStart(2,'0')}\nVerbleibend: ${verbleibendeMin} Min.`;
+    pauseBlock.innerHTML = `🍽️ <small style="margin-left:3px;">${verbleibendeMin}min</small>`;
+    pauseBlock.setAttribute('data-pause', 'true');
     
     track.appendChild(pauseBlock);
   }

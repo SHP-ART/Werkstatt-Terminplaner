@@ -781,10 +781,18 @@
               // Display sofort einschalten
               const overlay = document.getElementById('displayOffOverlay');
               if (overlay) overlay.classList.remove('active');
+              // Informiere Electron-Main-Process: Display EINSCHALTEN
+              if (window.electronAPI && window.electronAPI.setDisplayManual) {
+                window.electronAPI.setDisplayManual(false);
+              }
             } else if (einstellungen.manueller_display_status === 'aus') {
               // Display sofort ausschalten
               const overlay = document.getElementById('displayOffOverlay');
               if (overlay) overlay.classList.add('active');
+              // Informiere Electron-Main-Process: Display AUSSCHALTEN
+              if (window.electronAPI && window.electronAPI.setDisplayManual) {
+                window.electronAPI.setDisplayManual(true);
+              }
             }
             // Bei 'auto' wird die normale Zeitsteuerung verwendet
           }
@@ -1141,7 +1149,17 @@
       }
     }
 
+    // Map zum Tracken von laufenden Pause-Requests (verhindert Doppelklicks)
+    const pauseStartInProgress = new Set();
+
     async function handlePauseStarten(personId, personTyp, datum, imZeitfenster) {
+      // Prüfe ob bereits ein Request für diese Person läuft
+      const key = `${personTyp}_${personId}`;
+      if (pauseStartInProgress.has(key)) {
+        console.log('Pause-Start bereits in Bearbeitung, Request wird ignoriert');
+        return;
+      }
+
       try {
         // Wenn außerhalb des idealen Zeitfensters (nach der eingestellten Pausenzeit): Bestätigung einholen
         if (!imZeitfenster) {
@@ -1157,6 +1175,9 @@
 
         console.log('Starte Pause für:', { personId, personTyp, datum });
         
+        // Markiere als "in Bearbeitung"
+        pauseStartInProgress.add(key);
+        
         await ApiService.post('/pause/starten', {
           personId,
           personTyp,
@@ -1168,6 +1189,9 @@
       } catch (error) {
         console.error('Fehler beim Pause starten:', error);
         showToast(`Fehler: ${error.message}`, 'error');
+      } finally {
+        // Entferne "in Bearbeitung" Markierung
+        pauseStartInProgress.delete(key);
       }
     }
 
@@ -1415,8 +1439,8 @@
             🍽️ Pause (${verbleibendeMin} Min.)
           </button>
         `;
-      } else if (terminMitButtons && !inPause && !inBerufsschule) {
-        // Pause-Button nur wenn Auftrag existiert und 1h vor Pausenzeit
+      } else if (!inPause && !inBerufsschule) {
+        // Pause-Button immer anzeigen (auch ohne Termine) wenn 1h vor Pausenzeit
         const jetztMinuten = jetzt.getHours() * 60 + jetzt.getMinutes();
         const [pauseH, pauseM] = (person.mittagspause_start || '12:00').split(':').map(Number);
         const pausenStartMinuten = pauseH * 60 + pauseM;

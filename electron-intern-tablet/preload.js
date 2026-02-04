@@ -7,5 +7,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getConfigPath: () => ipcRenderer.invoke('get-config-path'),
   restartApp: () => ipcRenderer.invoke('restart-app'),
   onDisplayStatus: (callback) => ipcRenderer.on('display-status', (event, shouldBeOff) => callback(shouldBeOff)),
-  updateDisplayTimes: (times) => ipcRenderer.invoke('update-display-times', times)
+  updateDisplayTimes: (times) => ipcRenderer.invoke('update-display-times', times),
+  setDisplayManual: (shouldBeOff) => ipcRenderer.invoke('set-display-manual', shouldBeOff)
 });
