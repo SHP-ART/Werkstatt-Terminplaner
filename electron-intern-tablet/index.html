@@ -1539,6 +1539,11 @@
           ` : ''}
         `;
       } else if (naechsterAuftrag) {
+        // Interne Auftragsnummer priorisieren, wenn verfügbar
+        const anzeigeNr = (naechsterAuftrag.interne_auftragsnummer && naechsterAuftrag.interne_auftragsnummer.trim())
+          ? `📋 ${escapeHtml(naechsterAuftrag.interne_auftragsnummer)}`
+          : escapeHtml(naechsterAuftrag.termin_nr) || '-';
+        
         bodyContent = `
           <div class="leer-zustand">
             <div class="leer-icon">☕</div>
@@ -1548,9 +1553,10 @@
           <div class="naechster-auftrag">
             <div class="naechster-label">⏰ Nächster Auftrag:</div>
             <div class="auftrag-info" style="border-left-color: var(--success);">
-              <div class="auftrag-nr">${escapeHtml(naechsterAuftrag.termin_nr) || '-'}</div>
+              <div class="auftrag-nr">${anzeigeNr}</div>
               <div class="auftrag-kunde">${escapeHtml(naechsterAuftrag.kunde_name) || '-'}</div>
               <div class="auftrag-kennzeichen">${escapeHtml(naechsterAuftrag.kennzeichen) || '-'}</div>
+              <div class="auftrag-arbeit">${escapeHtml(naechsterAuftrag.arbeit) || '-'}</div>
             </div>
             <div class="zeit-info" style="margin-top: 10px;">
               <div class="zeit-item">
