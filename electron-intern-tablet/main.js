@@ -184,17 +184,40 @@ function checkDisplaySchedule() {
       }
     }
     
-    // Windows Display ausschalten via PowerShell (nur auf Windows)
+    // Windows Display ausschalten via nircmd (funktioniert zuverlässiger)
     if (process.platform === 'win32') {
       try {
-        const { execSync } = require('child_process');
-        // Schalte Monitor aus (sendet Signal an Monitor)
-        const cmd = 'powershell -Command "(Add-Type \'[DllImport(\\\"user32.dll\\\")]public static extern int SendMessage(int hWnd,int hMsg,int wParam,int lParam);\' -Name a -Pas)::SendMessage(-1,0x0112,0xF170,2)"';
-        execSync(cmd, {
-          windowsHide: true,
-          timeout: 1000
+        const { exec } = require('child_process');
+        
+        // Methode 1: PowerShell mit korrigierter Syntax
+        const psCommand = `powershell -Command "Add-Type -TypeDefinition @'
+using System;
+using System.Runtime.InteropServices;
+public class Monitor {
+    [DllImport(\\"user32.dll\\")]
+    public static extern int SendMessage(int hWnd, int hMsg, int wParam, int lParam);
+    public static void Off() {
+        SendMessage(0xFFFF, 0x0112, 0xF170, 2);
+    }
+}
+'@; [Monitor]::Off()"`;
+        
+        exec(psCommand, { windowsHide: true, timeout: 2000 }, (error) => {
+          if (error) {
+            console.log('PowerShell-Methode fehlgeschlagen, versuche Alternative...');
+            
+            // Methode 2: Setze Windows-Energiesparplan auf minimale Zeit
+            exec('powercfg /change monitor-timeout-ac 1', { windowsHide: true });
+            
+            // Warte kurz und setze zurück
+            setTimeout(() => {
+              exec('powercfg /change monitor-timeout-ac 0', { windowsHide: true });
+            }, 2000);
+          } else {
+            console.log('🌙 Windows-Monitor erfolgreich ausgeschaltet');
+          }
         });
-        console.log('🌙 Windows-Monitor ausgeschaltet');
+        
       } catch (e) {
         console.error('Fehler beim Ausschalten des Monitors:', e.message);
       }
@@ -205,6 +228,13 @@ function checkDisplaySchedule() {
       try {
         powerSaveBlockerId = powerSaveBlocker.start('prevent-display-sleep');
         console.log('☀️ Display-Energiesparmodus BLOCKIERT (Display bleibt an)');
+        
+        // Sicherstellen, dass Monitor auch wirklich an ist
+        if (process.platform === 'win32') {
+          const { exec } = require('child_process');
+          // Bewege Maus minimal, um Display zu aktivieren
+          exec('powershell -Command "$sig = @\\\"\\n[DllImport(\\\\"user32.dll\\\\")]public static extern void mouse_event(int dwFlags, int dx, int dy, int cButtons, int dwExtraInfo);\\n\\\"; Add-Type -MemberDefinition $sig -Name Mouse -Namespace Win32; [Win32.Mouse]::mouse_event(0x0001, 1, 1, 0, 0)"', { windowsHide: true });
+        }
       } catch (e) {
         console.error('Fehler beim Starten des PowerSaveBlockers:', e);
       }
@@ -310,13 +340,28 @@ ipcMain.handle('set-display-manual', (event, shouldBeOff) => {
     // Windows Monitor ausschalten
     if (process.platform === 'win32') {
       try {
-        const { execSync } = require('child_process');
-        const cmd = 'powershell -Command "(Add-Type \'[DllImport(\\\"user32.dll\\\")]public static extern int SendMessage(int hWnd,int hMsg,int wParam,int lParam);\' -Name a -Pas)::SendMessage(-1,0x0112,0xF170,2)"';
-        execSync(cmd, {
-          windowsHide: true,
-          timeout: 1000
+        const { exec } = require('child_process');
+        
+        const psCommand = `powershell -Command "Add-Type -TypeDefinition @'
+using System;
+using System.Runtime.InteropServices;
+public class Monitor {
+    [DllImport(\\"user32.dll\\")]
+    public static extern int SendMessage(int hWnd, int hMsg, int wParam, int lParam);
+    public static void Off() {
+        SendMessage(0xFFFF, 0x0112, 0xF170, 2);
+    }
+}
+'@; [Monitor]::Off()"`;
+        
+        exec(psCommand, { windowsHide: true, timeout: 2000 }, (error) => {
+          if (error) {
+            console.log('Fehler beim manuellen Display-Ausschalten:', error.message);
+          } else {
+            console.log('🌙 Windows-Monitor manuell ausgeschaltet');
+          }
         });
-        console.log('🌙 Windows-Monitor manuell ausgeschaltet');
+        
       } catch (e) {
         console.error('Fehler:', e.message);
       }
