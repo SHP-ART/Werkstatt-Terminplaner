@@ -55,9 +55,13 @@ function getDataDirectory() {
   if (process.execPath && process.execPath.endsWith('.exe')) {
     const exeDir = path.dirname(process.execPath);
     const resourcesDir = path.join(exeDir, 'resources');
-    if (fs.existsSync(resourcesDir)) {
-      console.log('Electron gepackte App erkannt (exe+resources), EXE-Verzeichnis:', exeDir);
-      return exeDir;
+    
+    // Überspringe node_modules/electron/dist (Development-Modus)
+    if (!exeDir.includes('node_modules')) {
+      if (fs.existsSync(resourcesDir)) {
+        console.log('Electron gepackte App erkannt (exe+resources), EXE-Verzeichnis:', exeDir);
+        return exeDir;
+      }
     }
   }
 
