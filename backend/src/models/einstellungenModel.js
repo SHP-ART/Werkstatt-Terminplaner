@@ -23,7 +23,26 @@ const maskApiKey = (key) => {
 
 class EinstellungenModel {
   static async getWerkstatt() {
-    return await getAsync('SELECT * FROM werkstatt_einstellungen WHERE id = 1', []);
+    try {
+      const result = await getAsync('SELECT * FROM werkstatt_einstellungen WHERE id = 1', []);
+      
+      // Falls keine Einstellungen existieren, Standardwerte einfügen
+      if (!result) {
+        await runAsync(
+          `INSERT OR IGNORE INTO werkstatt_einstellungen (
+            id, pufferzeit_minuten, servicezeit_minuten, ersatzauto_anzahl,
+            nebenzeit_prozent, mittagspause_minuten
+          ) VALUES (1, 15, 10, 2, 0, 30)`
+        );
+        return await getAsync('SELECT * FROM werkstatt_einstellungen WHERE id = 1', []);
+      }
+      
+      return result;
+    } catch (err) {
+      console.error('Fehler beim Abrufen von werkstatt_einstellungen:', err);
+      console.error('HINWEIS: Bitte stellen Sie sicher, dass alle Migrationen ausgeführt wurden.');
+      throw new Error('Datenbankfehler beim Abrufen der Einstellungen');
+    }
   }
 
   // Holt die Einstellungen mit maskiertem API-Key (für Frontend-Anzeige)

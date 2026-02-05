@@ -15159,16 +15159,28 @@ class App {
     const gesamtMitarbeiterSelect = document.getElementById('modalGesamtMitarbeiter');
     gesamtMitarbeiterSelect.innerHTML = '<option value="">-- Keine Zuordnung --</option>';
     
+    // Prüfe aktuelle Zeit für Pause (nur wenn Termin vormittags ist)
+    const terminStartzeit = termin.startzeit || '08:00';
+    const sollPausePruefen = terminStartzeit < '13:00'; // Nur vormittags prüfen
+    
     // Optgroup für Mitarbeiter
     if (mitarbeiter.length > 0) {
       mitarbeiter.forEach(ma => {
         const option = document.createElement('option');
         option.value = `ma_${ma.id}`;
         const istAbwesend = abwesendeIds.has(`ma_${ma.id}`);
-        option.textContent = istAbwesend ? `🚫 ${ma.name} (ABWESEND)` : `👤 ${ma.name}`;
-        option.style.color = istAbwesend ? '#c62828' : '';
+        const inPause = sollPausePruefen && this.istPersonAktuellInPause(ma);
+        
         if (istAbwesend) {
+          option.textContent = `🚫 ${ma.name} (ABWESEND)`;
+          option.style.color = '#c62828';
           option.disabled = true;
+        } else if (inPause) {
+          option.textContent = `🍽️ ${ma.name} (in Pause)`;
+          option.style.color = '#f57c00';
+          // NICHT disabled - Zuordnung erlauben
+        } else {
+          option.textContent = `👤 ${ma.name}`;
         }
         gesamtMitarbeiterSelect.appendChild(option);
       });
@@ -15180,8 +15192,9 @@ class App {
         const option = document.createElement('option');
         option.value = `l_${l.id}`;
         const istAbwesend = abwesendeIds.has(`l_${l.id}`);
-        // Prüfe auch Berufsschule
         const schule = this.isLehrlingInBerufsschule(l, termin.datum);
+        const inPause = sollPausePruefen && this.istPersonAktuellInPause(l);
+        
         if (istAbwesend) {
           option.textContent = `🚫 ${l.name} (ABWESEND)`;
           option.style.color = '#c62828';
@@ -15190,6 +15203,10 @@ class App {
           option.textContent = `📚 ${l.name} (KW ${schule.kw} - Berufsschule)`;
           option.style.color = '#1565c0';
           option.disabled = true;
+        } else if (inPause) {
+          option.textContent = `🍽️ ${l.name} (in Pause)`;
+          option.style.color = '#f57c00';
+          // NICHT disabled - Zuordnung erlauben
         } else {
           option.textContent = `🎓 ${l.name} (Lehrling)`;
         }
@@ -15309,6 +15326,8 @@ class App {
       // Erstelle Dropdown für diese Aufgabe (mit Mitarbeitern und Lehrlingen)
       // Verwende gespeicherte Abwesenheiten
       const abwesendeIds = this.modalAbwesendeIds || new Set();
+      const terminStartzeit = termin.startzeit || '08:00';
+      const sollPausePruefen = terminStartzeit < '13:00';
       let mitarbeiterOptions = '<option value="">-- Keine Zuordnung --</option>';
       
       // Mitarbeiter
@@ -15317,9 +15336,20 @@ class App {
           const value = `ma_${ma.id}`;
           const selected = value === mitarbeiterId ? 'selected' : '';
           const istAbwesend = abwesendeIds.has(value);
-          const disabled = istAbwesend ? 'disabled' : '';
-          const label = istAbwesend ? `🚫 ${ma.name} (ABWESEND)` : `👤 ${ma.name}`;
-          const style = istAbwesend ? 'style="color: #c62828;"' : '';
+          const inPause = sollPausePruefen && this.istPersonAktuellInPause(ma);
+          let disabled = '';
+          let label = `👤 ${ma.name}`;
+          let style = '';
+          
+          if (istAbwesend) {
+            disabled = 'disabled';
+            label = `🚫 ${ma.name} (ABWESEND)`;
+            style = 'style="color: #c62828;"';
+          } else if (inPause) {
+            // NICHT disabled - nur kennzeichnen
+            label = `🍽️ ${ma.name} (in Pause)`;
+            style = 'style="color: #f57c00;"';
+          }
           mitarbeiterOptions += `<option value="${value}" ${selected} ${disabled} ${style}>${label}</option>`;
         });
       }
@@ -15330,8 +15360,8 @@ class App {
           const value = `l_${l.id}`;
           const selected = value === mitarbeiterId ? 'selected' : '';
           const istAbwesend = abwesendeIds.has(value);
-          // Prüfe auch Berufsschule - benötigt Zugriff auf termin.datum
           const schule = this.isLehrlingInBerufsschule(l, termin.datum);
+          const inPause = sollPausePruefen && this.istPersonAktuellInPause(l);
           let disabled = '';
           let label = `🎓 ${l.name} (Lehrling)`;
           let style = '';
@@ -15344,6 +15374,10 @@ class App {
             disabled = 'disabled';
             label = `📚 ${l.name} (KW ${schule.kw} - Berufsschule)`;
             style = 'style="color: #1565c0;"';
+          } else if (inPause) {
+            // NICHT disabled - nur kennzeichnen
+            label = `🍽️ ${l.name} (in Pause)`;
+            style = 'style="color: #f57c00;"';
           }
           mitarbeiterOptions += `<option value="${value}" ${selected} ${disabled} ${style}>${label}</option>`;
         });

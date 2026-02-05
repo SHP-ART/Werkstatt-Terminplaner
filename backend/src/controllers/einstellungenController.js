@@ -44,7 +44,22 @@ class EinstellungenController {
         anomaly_detection_enabled: true
       });
     } catch (err) {
-      res.status(500).json({ error: err.message });
+      console.error('Fehler beim Abrufen der Werkstatt-Einstellungen:', err);
+      // Bei Fehler: Sende Default-Werte statt Fehler
+      res.json({ 
+        pufferzeit_minuten: 15, 
+        servicezeit_minuten: 10, 
+        ersatzauto_anzahl: 2,
+        chatgpt_api_key_configured: false,
+        chatgpt_api_key_masked: null,
+        ki_enabled: true,
+        realtime_enabled: true,
+        ki_mode: 'local',
+        ki_external_url: null,
+        smart_scheduling_enabled: true,
+        anomaly_detection_enabled: true,
+        _error: 'Datenbank-Fehler, Default-Werte verwendet'
+      });
     }
   }
 
