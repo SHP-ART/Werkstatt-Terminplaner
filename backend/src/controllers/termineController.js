@@ -285,7 +285,9 @@ function berechneAuslastungErgebnis(params) {
     auslastungProMitarbeiter, // DB-Ergebnis pro Mitarbeiter
     auslastungProLehrling,    // DB-Ergebnis pro Lehrling
     abwesendeMitarbeiter,     // Set mit abwesenden Mitarbeiter-IDs
+    abwesendeMitarbeiterTyp,  // Map mit Mitarbeiter-ID -> Abwesenheitstyp
     abwesendeLehrlinge,       // Set mit abwesenden Lehrling-IDs
+    abwesendeLehrlingeTyp,    // Map mit Lehrling-ID -> Abwesenheitstyp
     alleTermine,              // Alle Termine des Tages
     globaleNebenzeit,         // Nebenzeit in Prozent
     servicezeitWert,          // Servicezeit pro Termin in Minuten
@@ -406,6 +408,7 @@ function berechneAuslastungErgebnis(params) {
     let verfuegbar = arbeitszeitMinuten;
     
     const istAbwesend = abwesendeMitarbeiter.has(mitarbeiterId);
+    const abwesenheitsTyp = istAbwesend ? (abwesendeMitarbeiterTyp.get(mitarbeiterId) || null) : null;
     if (istAbwesend) {
       verfuegbar = 0;
     }
@@ -451,6 +454,7 @@ function berechneAuslastungErgebnis(params) {
       nebenzeit_minuten: nebenzeitMinuten,
       nur_service: nurService,
       ist_abwesend: istAbwesend,
+      abwesenheits_typ: abwesenheitsTyp,
       verfuegbar_minuten: verfuegbarNachService,
       belegt_minuten: belegtMitService,
       belegt_minuten_roh: belegtRoh,
@@ -468,6 +472,7 @@ function berechneAuslastungErgebnis(params) {
     ? auslastungProLehrling.map(la => {
         const lehrlingId = typeof la.lehrling_id === 'number' ? la.lehrling_id : parseInt(la.lehrling_id, 10);
         const istAbwesend = abwesendeLehrlinge.has(lehrlingId);
+        const abwesenheitsTyp = istAbwesend ? (abwesendeLehrlingeTyp.get(lehrlingId) || null) : null;
         const arbeitszeitMinuten = (la.arbeitsstunden_pro_tag || 8) * 60;
         const verfuegbar = istAbwesend ? 0 : arbeitszeitMinuten;
         const belegtRoh = la.belegt_minuten_roh || la.belegt_minuten || 0;
@@ -483,6 +488,7 @@ function berechneAuslastungErgebnis(params) {
           nebenzeit_prozent: globaleNebenzeit,
           aufgabenbewaeltigung_prozent: la.aufgabenbewaeltigung_prozent,
           ist_abwesend: istAbwesend,
+          abwesenheits_typ: abwesenheitsTyp,
           verfuegbar_minuten: verfuegbar,
           belegt_minuten: belegtMitNebenzeit,
           belegt_minuten_roh: belegtRoh,
@@ -1002,21 +1008,26 @@ class TermineController {
       // DEBUG: Speichere Abwesenheiten für Response
       const debugAbwesenheiten = [];
 
-      // Erstelle Maps für schnelle Abwesenheits-Abfrage
+      // Erstelle Maps für schnelle Abwesenheits-Abfrage (ID -> Typ)
       const abwesendeMitarbeiter = new Set();
+      const abwesendeMitarbeiterTyp = new Map(); // ID -> Typ
       const abwesendeLehrlinge = new Set();
+      const abwesendeLehrlingeTyp = new Map(); // ID -> Typ
+      
       (individuelleAbwesenheiten || []).forEach(abw => {
-        console.log(`   Verarbeite: mitarbeiter_id=${abw.mitarbeiter_id}, lehrling_id=${abw.lehrling_id}`);
+        console.log(`   Verarbeite: mitarbeiter_id=${abw.mitarbeiter_id}, lehrling_id=${abw.lehrling_id}, typ=${abw.typ}`);
         if (abw.mitarbeiter_id !== null && abw.mitarbeiter_id !== undefined) {
           // Stelle sicher, dass die ID als Zahl gespeichert wird
           const mitarbeiterId = parseInt(abw.mitarbeiter_id, 10);
           if (!isNaN(mitarbeiterId)) {
             abwesendeMitarbeiter.add(mitarbeiterId);
-            console.log(`   ✓ Mitarbeiter ${mitarbeiterId} (${abw.mitarbeiter_name}) zu Set hinzugefügt`);
+            abwesendeMitarbeiterTyp.set(mitarbeiterId, abw.typ); // Speichere den Typ
+            console.log(`   ✓ Mitarbeiter ${mitarbeiterId} (${abw.mitarbeiter_name}) zu Set hinzugefügt, Typ: ${abw.typ}`);
             debugAbwesenheiten.push({
               typ: 'mitarbeiter',
               id: mitarbeiterId,
               name: abw.mitarbeiter_name,
+              abwesenheits_typ: abw.typ,
               von: abw.von_datum,
               bis: abw.bis_datum
             });
@@ -1029,11 +1040,13 @@ class TermineController {
           const lehrlingId = parseInt(abw.lehrling_id, 10);
           if (!isNaN(lehrlingId)) {
             abwesendeLehrlinge.add(lehrlingId);
-            console.log(`   ✓ Lehrling ${lehrlingId} (${abw.lehrling_name}) zu Set hinzugefügt`);
+            abwesendeLehrlingeTyp.set(lehrlingId, abw.typ); // Speichere den Typ
+            console.log(`   ✓ Lehrling ${lehrlingId} (${abw.lehrling_name}) zu Set hinzugefügt, Typ: ${abw.typ}`);
             debugAbwesenheiten.push({
               typ: 'lehrling',
               id: lehrlingId,
               name: abw.lehrling_name,
+              abwesenheits_typ: abw.typ,
               von: abw.von_datum,
               bis: abw.bis_datum
             });
@@ -1052,11 +1065,13 @@ class TermineController {
           // Nur hinzufügen wenn nicht schon abwesend (Urlaub/Krank)
           if (!abwesendeLehrlinge.has(lehrling.id)) {
             abwesendeLehrlinge.add(lehrling.id);
+            abwesendeLehrlingeTyp.set(lehrling.id, 'berufsschule'); // Typ für Berufsschule
             console.log(`   ✓ Lehrling ${lehrling.id} (${lehrling.name}) in Berufsschule (KW ${aktuelleKW})`);
             debugAbwesenheiten.push({
               typ: 'lehrling',
               id: lehrling.id,
               name: lehrling.name,
+              abwesenheits_typ: 'berufsschule',
               grund: `Berufsschule (KW ${aktuelleKW})`,
               berufsschul_wochen: lehrling.berufsschul_wochen
             });
@@ -1155,7 +1170,9 @@ class TermineController {
         auslastungProMitarbeiter,
         auslastungProLehrling,
         abwesendeMitarbeiter,
+        abwesendeMitarbeiterTyp,
         abwesendeLehrlinge,
+        abwesendeLehrlingeTyp,
         alleTermine,
         globaleNebenzeit,
         servicezeitWert,

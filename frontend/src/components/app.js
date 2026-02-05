@@ -9055,8 +9055,21 @@ class App {
           html += data.mitarbeiter_auslastung.map(ma => {
             // Abwesende Mitarbeiter rot markieren
             const istAbwesend = ma.ist_abwesend === true;
+            const abwesenheitsTyp = ma.abwesenheits_typ || '';
             const abwesendStyle = istAbwesend ? 'background: linear-gradient(135deg, #ffebee 0%, #ffcdd2 100%); border-left: 4px solid #c62828;' : '';
-            const abwesendBadge = istAbwesend ? '<span style="background: #c62828; color: white; padding: 2px 8px; border-radius: 12px; font-size: 0.8em; margin-left: 10px;">🏥 Abwesend</span>' : '';
+            
+            // Spezifischer Badge je nach Abwesenheitstyp
+            let abwesendBadge = '';
+            if (istAbwesend) {
+              const abwesenheitsLabels = {
+                'urlaub': '🏖️ URLAUB',
+                'krank': '🤒 KRANK',
+                'lehrgang': '📖 LEHRGANG',
+                'berufsschule': '📚 BERUFSSCHULE'
+              };
+              const label = abwesenheitsLabels[abwesenheitsTyp] || '🏥 ABWESEND';
+              abwesendBadge = `<span style="background: #c62828; color: white; padding: 2px 8px; border-radius: 12px; font-size: 0.8em; margin-left: 10px;">${label}</span>`;
+            }
             
             // Prüfe ob Mitarbeiter in Pause ist
             const pauseInfo = aktivePausen.find(p => p.mitarbeiter_id === ma.mitarbeiter_id);
@@ -9112,7 +9125,20 @@ class App {
           html += lehrlingeAuslastung.map(la => {
             // Abwesende Lehrlinge rot markieren
             const istAbwesend = la.ist_abwesend === true;
-            const abwesendBadge = istAbwesend ? '<span style="background: #c62828; color: white; padding: 2px 8px; border-radius: 12px; font-size: 0.8em; margin-left: 10px;">🏥 Abwesend</span>' : '';
+            const abwesenheitsTyp = la.abwesenheits_typ || '';
+            
+            // Spezifischer Badge je nach Abwesenheitstyp
+            let abwesendBadge = '';
+            if (istAbwesend) {
+              const abwesenheitsLabels = {
+                'urlaub': '🏖️ URLAUB',
+                'krank': '🤒 KRANK',
+                'lehrgang': '📖 LEHRGANG',
+                'berufsschule': '📚 BERUFSSCHULE'
+              };
+              const label = abwesenheitsLabels[abwesenheitsTyp] || '🏥 ABWESEND';
+              abwesendBadge = `<span style="background: #c62828; color: white; padding: 2px 8px; border-radius: 12px; font-size: 0.8em; margin-left: 10px;">${label}</span>`;
+            }
             
             // Prüfe ob Lehrling in Pause ist
             const pauseInfo = aktivePausen.find(p => p.lehrling_id === la.lehrling_id);
@@ -24964,11 +24990,12 @@ class App {
     try {
       // Hole alle Daten parallel (inkl. Einstellungen für Nebenzeit)
       const heute = this.formatDateLocal(this.getToday());
-      const [mitarbeiter, lehrlinge, termineHeute, einstellungen] = await Promise.all([
+      const [mitarbeiter, lehrlinge, termineHeute, einstellungen, abwesenheiten] = await Promise.all([
         ApiService.get('/mitarbeiter'),
         ApiService.get('/lehrlinge'),
         ApiService.get(`/termine?datum=${heute}`),
-        EinstellungenService.getWerkstatt()
+        EinstellungenService.getWerkstatt(),
+        ApiService.get(`/abwesenheiten/datum/${heute}`).catch(() => [])
       ]);
 
       // Globale Nebenzeit aus Einstellungen
@@ -25009,12 +25036,26 @@ class App {
         arbeitszeitenMap[key] = result.data;
       });
 
+      // Erstelle Map für Abwesenheiten (für schnellen Zugriff)
+      const abwesenheitenMap = {};
+      if (Array.isArray(abwesenheiten)) {
+        abwesenheiten.forEach(abw => {
+          if (abw.mitarbeiter_id) {
+            abwesenheitenMap[`mitarbeiter_${abw.mitarbeiter_id}`] = abw;
+          }
+          if (abw.lehrling_id) {
+            abwesenheitenMap[`lehrling_${abw.lehrling_id}`] = abw;
+          }
+        });
+      }
+
       // Kontext für Berechnungen mit Nebenzeit/Aufgabenbewältigung + Arbeitszeiten
       const berechnungsKontext = {
         globaleNebenzeitProzent,
         mitarbeiter,
         lehrlinge,
-        arbeitszeitenMap
+        arbeitszeitenMap,
+        abwesenheitenMap
       };
 
       // Render Mitarbeiter-Kacheln
@@ -25170,12 +25211,29 @@ class App {
     // Prüfe ob Person gerade in Mittagspause ist (6h-Regel)
     const inPause = this.istPersonAktuellInPause(person, jetztZeit);
 
+    // Prüfe ob Person heute abwesend ist (Urlaub/Krank/Lehrgang)
+    const abwesenheitenMap = kontext.abwesenheitenMap || {};
+    const abwesenheitKey = isLehrling ? `lehrling_${personId}` : `mitarbeiter_${personId}`;
+    const abwesenheit = abwesenheitenMap[abwesenheitKey];
+    const istAbwesend = !!abwesenheit;
+    const abwesenheitsTyp = abwesenheit?.typ || '';
+
     // Status Badge bestimmen
     let badgeClass = 'frei';
     let badgeText = 'Frei';
     if (inPause) {
       badgeClass = 'pause';
       badgeText = '🍽️ Pause';
+    } else if (istAbwesend) {
+      // Spezifischer Badge für Abwesenheitstyp
+      badgeClass = 'abwesend';
+      const abwesenheitsLabels = {
+        'urlaub': '🏖️ Urlaub',
+        'krank': '🤒 Krank',
+        'lehrgang': '📖 Lehrgang',
+        'berufsschule': '📚 Berufsschule'
+      };
+      badgeText = abwesenheitsLabels[abwesenheitsTyp] || '🏥 Abwesend';
     } else if (inBerufsschule) {
       badgeClass = 'pause';
       badgeText = 'Berufsschule';
@@ -25192,6 +25250,33 @@ class App {
         <div class="intern-person-schule">
           <div class="schule-icon">🍽️</div>
           <div class="schule-text">Mittagspause</div>
+        </div>
+      `;
+    } else if (istAbwesend) {
+      // Spezifische Anzeige für Abwesenheitstyp
+      const abwesenheitsIcons = {
+        'urlaub': '🏖️',
+        'krank': '🤒',
+        'lehrgang': '📖',
+        'berufsschule': '📚'
+      };
+      const abwesenheitsTexte = {
+        'urlaub': 'Im Urlaub',
+        'krank': 'Krankgemeldet',
+        'lehrgang': 'Im Lehrgang',
+        'berufsschule': 'In der Berufsschule'
+      };
+      const icon = abwesenheitsIcons[abwesenheitsTyp] || '🏥';
+      const text = abwesenheitsTexte[abwesenheitsTyp] || 'Abwesend';
+      // Beschreibung nur bei Urlaub/Lehrgang/Berufsschule anzeigen, nicht bei Krankheit (Datenschutz)
+      const beschreibung = (abwesenheit?.beschreibung && abwesenheitsTyp !== 'krank') 
+        ? `<div style="margin-top: 5px; font-size: 0.9em; color: #666;">${this.escapeHtml(abwesenheit.beschreibung)}</div>` 
+        : '';
+      
+      bodyContent = `
+        <div class="intern-person-schule">
+          <div class="schule-icon">${icon}</div>
+          <div class="schule-text">${text}${beschreibung}</div>
         </div>
       `;
     } else if (inBerufsschule) {
@@ -25311,8 +25396,8 @@ class App {
     const arbeitszeitKey = isLehrling ? `lehrling_${personId}` : `mitarbeiter_${personId}`;
     const arbeitszeit = arbeitszeitenMap[arbeitszeitKey];
     
-    // Arbeitszeit nur anzeigen, wenn Person nicht abwesend ist (nicht in Pause, nicht in Berufsschule)
-    const zeigeArbeitszeit = !inPause && !inBerufsschule;
+    // Arbeitszeit nur anzeigen, wenn Person nicht abwesend ist (nicht in Pause, nicht in Berufsschule, nicht abwesend)
+    const zeigeArbeitszeit = !inPause && !inBerufsschule && !istAbwesend;
 
     return `
       <div class="intern-person-kachel ${isLehrling ? 'lehrling' : ''}">

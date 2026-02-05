@@ -224,6 +224,11 @@
       color: white;
     }
 
+    .person-badge.abwesend {
+      background: #c62828;
+      color: white;
+    }
+
     .person-arbeitszeit {
       padding: 8px 15px;
       background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%);
@@ -1401,21 +1406,34 @@
 
       console.log(`[DEBUG] ${personName}: aktuellerAuftrag=`, aktuellerAuftrag, 'naechsterAuftrag=', naechsterAuftrag);
 
+      // Prüfe Abwesenheit (Urlaub/Krank/Lehrgang)
+      const istAbwesend = person.ist_abwesend === true;
+      const abwesenheitsTyp = person.abwesenheits_typ || '';
+
       // Prüfe Berufsschule
       let inBerufsschule = false;
-      if (isLehrling && person.berufsschul_wochen) {
+      if (isLehrling && person.berufsschul_wochen && !istAbwesend) {
         inBerufsschule = isLehrlingInBerufsschule(person, formatDateLocal(new Date()));
       }
 
       // Prüfe Mittagspause (6h-Regel)
       const inPause = istPersonAktuellInPause(person, jetztZeit);
       
-      console.log(`[DEBUG] ${personName}: inPause=${inPause}, inBerufsschule=${inBerufsschule}`);
+      console.log(`[DEBUG] ${personName}: inPause=${inPause}, inBerufsschule=${inBerufsschule}, istAbwesend=${istAbwesend}`);
 
       // Badge
       let badgeClass = 'frei';
       let badgeText = 'Frei';
-      if (inPause) {
+      if (istAbwesend) {
+        badgeClass = 'abwesend';
+        const abwesenheitsLabels = {
+          'urlaub': '🏖️ Urlaub',
+          'krank': '🤒 Krank',
+          'lehrgang': '📖 Lehrgang',
+          'berufsschule': '📚 Berufsschule'
+        };
+        badgeText = abwesenheitsLabels[abwesenheitsTyp] || '🏥 Abwesend';
+      } else if (inPause) {
         badgeClass = 'pause';
         badgeText = '🍽️ Pause';
       } else if (inBerufsschule) {
@@ -1429,7 +1447,26 @@
       // Body Content
       let bodyContent = '';
 
-      if (inPause) {
+      if (istAbwesend) {
+        const abwesenheitsIcons = {
+          'urlaub': '🏖️',
+          'krank': '🤒',
+          'lehrgang': '📖',
+          'berufsschule': '📚'
+        };
+        const abwesenheitsTexte = {
+          'urlaub': 'Im Urlaub',
+          'krank': 'Krankgemeldet',
+          'lehrgang': 'Im Lehrgang',
+          'berufsschule': 'In der Berufsschule'
+        };
+        bodyContent = `
+          <div class="schule-info">
+            <div class="schule-icon">${abwesenheitsIcons[abwesenheitsTyp] || '🏥'}</div>
+            <div class="schule-text">${abwesenheitsTexte[abwesenheitsTyp] || 'Abwesend'}</div>
+          </div>
+        `;
+      } else if (inPause) {
         bodyContent = `
           <div class="schule-info">
             <div class="schule-icon">🍽️</div>
@@ -1536,8 +1573,8 @@
         `;
       }
 
-      // Arbeitszeit nur anzeigen, wenn Person nicht abwesend ist (nicht in Pause, nicht in Berufsschule)
-      const zeigeArbeitszeit = !inPause && !inBerufsschule;
+      // Arbeitszeit nur anzeigen, wenn Person nicht abwesend ist (nicht in Pause, nicht in Berufsschule, nicht anderweitig abwesend)
+      const zeigeArbeitszeit = !inPause && !inBerufsschule && !istAbwesend;
 
       // Button-Container (Toggle & Pause) - IMMER ALLE BUTTONS ANZEIGEN
       let buttonsHtml = '';
@@ -1546,9 +1583,9 @@
       const terminMitButtons = aktuellerAuftrag || naechsterAuftrag;
       
       // 1. Toggle-Button: Starten/Fertig - IMMER ANZEIGEN
-      const kannStarten = terminMitButtons && !inPause && !inBerufsschule && 
+      const kannStarten = terminMitButtons && !inPause && !inBerufsschule && !istAbwesend && 
                          (terminMitButtons.status === 'geplant' || terminMitButtons.status === 'offen');
-      const kannBeenden = terminMitButtons && !inPause && !inBerufsschule && 
+      const kannBeenden = terminMitButtons && !inPause && !inBerufsschule && !istAbwesend && 
                          terminMitButtons.status === 'in_arbeit';
       
       if (kannStarten) {
@@ -1593,7 +1630,7 @@
             <span class="btn-icon">⏸️</span> Pause (${verbleibendeMin} Min)
           </button>
         `;
-      } else if (imAnzeigeZeitraum && !inPause && !inBerufsschule) {
+      } else if (imAnzeigeZeitraum && !inPause && !inBerufsschule && !istAbwesend) {
         // Pause-Button aktiv
         const pauseIcon = imIdealemZeitfenster ? '🍽️' : '⚠️';
         const pauseText = imIdealemZeitfenster ? 'Pause' : 'Pause (spät)';
@@ -1643,12 +1680,13 @@
 
       try {
         const heute = formatDateLocal(new Date());
-        const [mitarbeiter, lehrlinge, termine, einstellungen, aktivePausen] = await Promise.all([
+        const [mitarbeiter, lehrlinge, termine, einstellungen, aktivePausen, abwesenheiten] = await Promise.all([
           ApiService.get('/mitarbeiter'),
           ApiService.get('/lehrlinge'),
           ApiService.get(`/termine?datum=${heute}`),
           ApiService.get('/einstellungen/werkstatt'),
-          ApiService.get('/pause/aktive')
+          ApiService.get('/pause/aktive'),
+          ApiService.get(`/abwesenheiten/datum/${heute}`)
         ]);
 
         const globaleNebenzeit = einstellungen?.nebenzeit_prozent || 0;
@@ -1680,6 +1718,34 @@
           if (pauseInfo) {
             l.pause_tracking_aktiv = pauseInfo.pause_tracking_aktiv;
             l.pause_verbleibende_minuten = pauseInfo.pause_verbleibende_minuten;
+          }
+        });
+
+        // Merge Abwesenheits-Daten in Person-Objekte
+        const abwesenheitsMap = {};
+        (abwesenheiten || []).forEach(abw => {
+          const key = abw.mitarbeiter_id 
+            ? `mitarbeiter_${abw.mitarbeiter_id}` 
+            : `lehrling_${abw.lehrling_id}`;
+          abwesenheitsMap[key] = {
+            ist_abwesend: true,
+            abwesenheits_typ: abw.typ
+          };
+        });
+
+        aktiveMitarbeiter.forEach(m => {
+          const abwInfo = abwesenheitsMap[`mitarbeiter_${m.id}`];
+          if (abwInfo) {
+            m.ist_abwesend = abwInfo.ist_abwesend;
+            m.abwesenheits_typ = abwInfo.abwesenheits_typ;
+          }
+        });
+
+        aktiveLehrlinge.forEach(l => {
+          const abwInfo = abwesenheitsMap[`lehrling_${l.id}`];
+          if (abwInfo) {
+            l.ist_abwesend = abwInfo.ist_abwesend;
+            l.abwesenheits_typ = abwInfo.abwesenheits_typ;
           }
         });
 
