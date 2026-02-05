@@ -6528,7 +6528,12 @@ class App {
           </div>` : ''}
           <div class="detail-item">
             <span class="detail-label">Interne Auftragsnr.</span>
-            <span class="detail-value detail-value-highlight">${termin.interne_auftragsnummer || '-'}</span>
+            <input type="text" 
+                   id="terminInterneAuftragsnummer"
+                   value="${termin.interne_auftragsnummer || ''}"
+                   placeholder="z.B. A-2026-123"
+                   style="padding: 6px 10px; border: 1px solid #ddd; border-radius: 4px; font-family: 'Courier New', monospace; width: 100%;"
+                   title="Interne Auftragsnummer">
           </div>
           ${termin.dringlichkeit ? `
           <div class="detail-item">
@@ -6725,6 +6730,15 @@ class App {
         const endMin = endMinuten % 60;
         updateData.endzeit_berechnet = `${String(endStunden).padStart(2, '0')}:${String(endMin).padStart(2, '0')}`;
         console.log('Startzeit und Endzeit in Datenbank gespeichert:', updateData.startzeit, '-', updateData.endzeit_berechnet);
+      }
+      
+      // Interne Auftragsnummer speichern (falls geändert)
+      const interneAuftragsnummerInput = document.getElementById('terminInterneAuftragsnummer');
+      if (interneAuftragsnummerInput) {
+        const neueAuftragsnummer = interneAuftragsnummerInput.value.trim();
+        if (neueAuftragsnummer !== (termin.interne_auftragsnummer || '')) {
+          updateData.interne_auftragsnummer = neueAuftragsnummer;
+        }
       }
       
       await TermineService.update(terminId, updateData);
@@ -13202,6 +13216,13 @@ class App {
               <input type="text" id="schnellNotizen" value="${termin.notizen || ''}" placeholder="Kurze Notiz...">
             </div>
           </div>
+          
+          <div class="form-row">
+            <div class="form-group">
+              <label>🏷️ Interne Auftragsnummer</label>
+              <input type="text" id="schnellInterneAuftragsnummer" value="${termin.interne_auftragsnummer || ''}" placeholder="Optionale interne Nummer...">
+            </div>
+          </div>
         </div>
         
         <div class="schnell-bearbeitung-footer">
@@ -13264,6 +13285,7 @@ class App {
       const fertigstellung = document.getElementById('schnellFertigstellung')?.value;
       let dauer = parseInt(document.getElementById('schnellDauer')?.value) || null;
       const notizen = document.getElementById('schnellNotizen')?.value?.trim();
+      const interneAuftragsnummer = document.getElementById('schnellInterneAuftragsnummer')?.value?.trim();
       
       // Wenn Fertigstellungszeit geändert wurde, berechne neue Dauer
       if (fertigstellung && startzeit) {
@@ -13295,6 +13317,7 @@ class App {
         }
       }
       if (notizen !== undefined) updateData.notizen = notizen;
+      if (interneAuftragsnummer !== undefined) updateData.interne_auftragsnummer = interneAuftragsnummer;
       
       // Speichern
       await TermineService.update(terminId, updateData);
@@ -15049,19 +15072,21 @@ class App {
   }
 
   async openArbeitszeitenModal(terminId) {
-    let termin = this.termineById[terminId];
-    
-    // Bug 2 Fix: Fallback - Lade Termin direkt wenn nicht im Cache
-    if (!termin) {
-      try {
-        console.log('[DEBUG] Termin nicht im Cache, lade nach:', terminId);
-        termin = await TermineService.getById(terminId);
-        if (termin) {
-          this.termineById[terminId] = termin;
-        }
-      } catch (e) {
-        console.error('Fehler beim Nachladen des Termins:', e);
+    // IMMER frisch aus der DB laden, damit aktuelle Werte angezeigt werden
+    let termin = null;
+    try {
+      termin = await TermineService.getById(terminId);
+      if (termin) {
+        // Cache aktualisieren
+        this.termineById[terminId] = termin;
       }
+    } catch (e) {
+      console.error('Fehler beim Laden des Termins:', e);
+    }
+    
+    // Fallback auf Cache falls DB-Laden fehlschlägt
+    if (!termin) {
+      termin = this.termineById[terminId];
     }
     
     if (!termin) {
@@ -15211,6 +15236,7 @@ class App {
 
     // Verwende die tatsächlich gespeicherte Zeit (falls vorhanden), sonst die geschätzte Zeit
     const gesamtzeit = termin.tatsaechliche_zeit || termin.geschaetzte_zeit || 0;
+    console.log('[DEBUG openModal] Termin:', terminId, 'tatsaechliche_zeit:', termin.tatsaechliche_zeit, 'geschaetzte_zeit:', termin.geschaetzte_zeit, 'gesamtzeit:', gesamtzeit);
     const zeitProArbeit = arbeitenListe.length > 0 ? Math.round(gesamtzeit / arbeitenListe.length) : 30;
 
     // Füge Gesamtzeit-Eingabefeld VOR den einzelnen Arbeiten ein
@@ -15235,6 +15261,7 @@ class App {
       </div>
     `;
     liste.appendChild(gesamtzeitHeader);
+    console.log('[DEBUG openModal] Gesamtzeit-Input value gesetzt auf:', (gesamtzeit / 60).toFixed(2));
 
     arbeitenListe.forEach((arbeit, index) => {
       let zeitMinuten;
@@ -15246,7 +15273,10 @@ class App {
       if (arbeitszeitenDetails[arbeit]) {
         // Neue Struktur: {zeit: 30, mitarbeiter_id: 1, type: 'mitarbeiter', teile_status: 'vorrätig', startzeit: '09:00'} oder alte Struktur: 30
         if (typeof arbeitszeitenDetails[arbeit] === 'object') {
-          zeitMinuten = arbeitszeitenDetails[arbeit].zeit || arbeitszeitenDetails[arbeit];
+          // Wenn zeit-Feld existiert und > 0, verwende es, sonst 0 (= nutze Gesamtzeit)
+          zeitMinuten = (arbeitszeitenDetails[arbeit].zeit && arbeitszeitenDetails[arbeit].zeit > 0) 
+            ? arbeitszeitenDetails[arbeit].zeit 
+            : 0;
           teileStatus = arbeitszeitenDetails[arbeit].teile_status || '';
           startzeit = arbeitszeitenDetails[arbeit].startzeit || '';
           if (arbeitszeitenDetails[arbeit].type === 'lehrling') {
@@ -15257,6 +15287,7 @@ class App {
             mitarbeiterId = '';
           }
         } else {
+          // Alte Struktur: nur Zahl
           zeitMinuten = arbeitszeitenDetails[arbeit];
           mitarbeiterId = '';
         }
@@ -15719,9 +15750,10 @@ class App {
 
     document.getElementById('modalGesamtzeit').textContent = gesamtStunden.toFixed(2) + ' h';
     
-    // Update auch das Gesamtzeit-Input (falls vorhanden)
+    // Update das Gesamtzeit-Input NUR wenn Einzelzeiten vorhanden sind (> 0)
+    // Wenn alle Einzelzeiten 0 sind, behalte den aktuellen Wert (nutzt Gesamtzeit)
     const gesamtzeitInput = document.getElementById('modalGesamtzeitInput');
-    if (gesamtzeitInput) {
+    if (gesamtzeitInput && gesamtStunden > 0) {
       gesamtzeitInput.value = gesamtStunden.toFixed(2);
     }
   }
@@ -15900,6 +15932,10 @@ class App {
         arbeitszeitenDetails = {};
       }
     }
+    
+    // Prüfe ob Gesamtzeit-Input einen Wert hat (für Fall: Gesamtzeit eingegeben, Einzelzeiten alle 0)
+    const gesamtzeitInput = document.getElementById('modalGesamtzeitInput');
+    const gesamtzeitInputWert = gesamtzeitInput ? (parseFloat(gesamtzeitInput.value) || 0) : 0;
 
     // Sammle Gesamt-Mitarbeiter-Zuordnung
     const gesamtMitarbeiterValue = document.getElementById('modalGesamtMitarbeiter').value;
@@ -15940,6 +15976,19 @@ class App {
       const startzeitInput = document.getElementById(`modal_startzeit_${index}`);
       const startzeit = startzeitInput ? startzeitInput.value.trim() : '';
 
+      // Prüfe welche Daten vorhanden sind
+      const hatTeileStatus = !!teileStatus;
+      const hatStartzeit = !!startzeit;
+      const hatMitarbeiter = !!(mitarbeiterValue && mitarbeiterValue !== '');
+      const hatZeit = zeitMinuten > 0;
+      
+      // Wenn KEINE Daten vorhanden sind: Diese Arbeit komplett überspringen
+      if (!hatTeileStatus && !hatStartzeit && !hatMitarbeiter && !hatZeit) {
+        // Entferne die Arbeit aus arbeitszeiten_details wenn vorhanden
+        delete arbeitszeitenDetails[arbeitName];
+        return; // Überspringe diese Arbeit
+      }
+      
       // Bestehende Arbeit-Details holen oder neues Objekt erstellen
       let existingDetails = arbeitszeitenDetails[arbeitName];
       
@@ -15951,7 +16000,13 @@ class App {
       }
       
       // Aktualisiere die Werte
-      existingDetails.zeit = zeitMinuten;
+      // WICHTIG: zeit NUR speichern wenn > 0, sonst fällt getTerminGesamtdauer auf tatsaechliche_zeit zurück
+      if (zeitMinuten > 0) {
+        existingDetails.zeit = zeitMinuten;
+      } else {
+        // Zeit ist 0 -> NICHT speichern (damit Termin als GANZES bleibt)
+        delete existingDetails.zeit;
+      }
       
       if (teileStatus) {
         existingDetails.teile_status = teileStatus;
@@ -15980,11 +16035,15 @@ class App {
       }
       // Wenn mitarbeiterValue undefined ist, bestehende Zuordnung beibehalten
       
-      // Speichere das aktualisierte Objekt (oder nur die Zeit wenn keine anderen Daten)
-      if (Object.keys(existingDetails).length === 1 && existingDetails.zeit) {
+      // Speichere das aktualisierte Objekt nur wenn Daten vorhanden sind
+      if (Object.keys(existingDetails).length === 0) {
+        // Keine Daten mehr -> Arbeit nicht speichern
+        delete arbeitszeitenDetails[arbeitName];
+      } else if (Object.keys(existingDetails).length === 1 && existingDetails.zeit) {
         // Nur Zeit vorhanden -> als einfache Zahl speichern (Rückwärtskompatibilität)
         arbeitszeitenDetails[arbeitName] = existingDetails.zeit;
       } else {
+        // Objekt mit mehreren Feldern oder nur andere Daten (ohne Zeit)
         arbeitszeitenDetails[arbeitName] = existingDetails;
       }
     });
@@ -16004,7 +16063,15 @@ class App {
     }
 
     // Umrechnung von Stunden in Minuten für die Datenbank
-    const gesamtzeitMinuten = Math.round(gesamtStunden * 60);
+    // WICHTIG: Wenn alle Einzelzeiten 0 sind, aber Gesamtzeit-Input ausgefüllt ist, nutze diesen Wert
+    let gesamtzeitMinuten;
+    if (gesamtStunden === 0 && gesamtzeitInputWert > 0) {
+      // Nutze eingegebene Gesamtzeit (alle Einzelzeiten sind 0)
+      gesamtzeitMinuten = Math.round(gesamtzeitInputWert * 60);
+    } else {
+      // Nutze Summe der Einzelzeiten
+      gesamtzeitMinuten = Math.round(gesamtStunden * 60);
+    }
 
     let status = document.getElementById('modalTerminStatus').value;
 
@@ -16013,6 +16080,44 @@ class App {
     let terminMitarbeiterId = termin.mitarbeiter_id || null;
     if (gesamtMitarbeiterValue && gesamtMitarbeiterValue.startsWith('ma_')) {
       terminMitarbeiterId = parseInt(gesamtMitarbeiterValue.replace('ma_', ''), 10);
+    }
+    
+    // WICHTIG: Wenn Gesamtzeit-Modus (keine individuellen Zeiten),
+    // müssen wir die Zuordnung anpassen
+    const hatIndividuelleZeiten = Object.keys(arbeitszeitenDetails).some(key => {
+      if (key.startsWith('_')) return false;
+      const val = arbeitszeitenDetails[key];
+      if (typeof val === 'number' && val > 0) return true;
+      if (typeof val === 'object' && val.zeit && val.zeit > 0) return true;
+      return false;
+    });
+    
+    if (!hatIndividuelleZeiten) {
+      // Gesamtzeit-Modus: Entferne alle individuellen Zuordnungen aus Arbeiten
+      Object.keys(arbeitszeitenDetails).forEach(key => {
+        if (key.startsWith('_')) return; // Meta-Felder behalten
+        const val = arbeitszeitenDetails[key];
+        if (typeof val === 'object') {
+          // Entferne Zuordnungen, behalte nur Startzeit und Teile-Status
+          delete val.mitarbeiter_id;
+          delete val.lehrling_id;
+          delete val.type;
+          
+          // Wenn nur noch startzeit oder teile_status übrig ist (aber kein zeit), 
+          // ist das auch OK - wird dann beim Laden als Gesamttermin behandelt
+          // Aber wenn GAR NICHTS mehr übrig ist, entferne die Arbeit komplett
+          const nurMetaDaten = !val.zeit && !val.startzeit && !val.teile_status;
+          if (nurMetaDaten || Object.keys(val).length === 0) {
+            delete arbeitszeitenDetails[key];
+          }
+        }
+      });
+      
+      // Wenn Gesamt-Zuordnung ein LEHRLING ist, setze mitarbeiter_id auf NULL
+      // (Lehrlinge können nicht auf Top-Level zugeordnet werden)
+      if (gesamtMitarbeiterValue && gesamtMitarbeiterValue.startsWith('l_')) {
+        terminMitarbeiterId = null;
+      }
     }
     
     // Automatisch auf "geplant" setzen wenn Startzeit und Mitarbeiter vorhanden und Status "wartend"
@@ -16029,6 +16134,17 @@ class App {
     // Interne Auftragsnummer auslesen
     const interneAuftragsnummerInput = document.getElementById('modalInterneAuftragsnummer');
     const interneAuftragsnummer = interneAuftragsnummerInput ? interneAuftragsnummerInput.value.trim() : '';
+
+    // DEBUG: Zeige was gespeichert wird
+    console.log(`[DEBUG SAVE] Termin ${termin.termin_nr}:`, {
+      terminId: this.currentTerminId,
+      tatsaechliche_zeit: gesamtzeitMinuten,
+      mitarbeiter_id: terminMitarbeiterId,
+      hatIndividuelleZeiten,
+      gesamtMitarbeiterValue,
+      arbeitszeitenDetails: JSON.parse(JSON.stringify(arbeitszeitenDetails)), // Deep copy für Log
+      status
+    });
 
     try {
       await TermineService.update(this.currentTerminId, {
@@ -16079,10 +16195,19 @@ class App {
         await PhasenService.syncPhasen(this.currentTerminId, []);
       }
 
+      // Lösche den Termin aus dem Cache, damit er beim nächsten Mal frisch geladen wird
+      delete this.termineById[this.currentTerminId];
+
       this.closeArbeitszeitenModal();
       this.loadTermine();
       this.loadDashboard();
       this.loadAuslastung();
+      
+      // Aktualisiere Planung & Zuweisung wenn sichtbar
+      const planungTab = document.getElementById('auslastung-dragdrop');
+      if (planungTab && planungTab.classList.contains('active')) {
+        this.loadAuslastungDragDrop();
+      }
       
       // Aktualisiere Teile-Status-Übersicht wenn sichtbar
       const teileStatusTab = document.getElementById('teileStatus');
@@ -19104,8 +19229,11 @@ class App {
             // Arbeit mit Details (Objekt) oder einfacher Wert (Zahl)
             if (typeof arbeitData === 'object' && arbeitData !== null) {
               const zeit = parseInt(arbeitData.zeit) || 0;
-              if (zeit > 0) hatIndividuelleZeiten = true;
-              arbeiten.push({ name: key, ...arbeitData, zeit });
+              // NUR Zeit > 0 zählt für Splitting! Startzeit/Mitarbeiter ohne Zeit = keine individuellen Zeiten
+              if (zeit > 0) {
+                hatIndividuelleZeiten = true;
+                arbeiten.push({ name: key, ...arbeitData, zeit });
+              }
             } else if (typeof arbeitData === 'number' && arbeitData > 0) {
               hatIndividuelleZeiten = true;
               arbeiten.push({ name: key, zeit: arbeitData });
@@ -19146,6 +19274,7 @@ class App {
             terminId: termin.id, 
             arbeitenCount: arbeiten.length, 
             arbeiten, 
+            hatIndividuelleZeiten,
             details,
             raw: termin.arbeitszeiten_details,
             altesFormat: termin.arbeiten
@@ -19154,22 +19283,47 @@ class App {
         
         // Wenn Termin mehrere Arbeiten hat, jede als separaten Block darstellen
         if (arbeiten.length > 1) {
+          console.log(`[DEBUG] ${termin.termin_nr} - Mehrere Arbeiten (${arbeiten.length}) erkannt, erstelle separate Blöcke`);
+          
+          // Berechne Gesamtdauer und prüfe ob alle Arbeiten eine Zeit haben
+          let gesamtArbeitZeit = 0;
+          let arbeitenOhneZeit = 0;
+          arbeiten.forEach(a => {
+            const zeit = parseInt(a.zeit) || 0;
+            if (zeit > 0) {
+              gesamtArbeitZeit += zeit;
+            } else {
+              arbeitenOhneZeit++;
+            }
+          });
+          
+          // Wenn manche Arbeiten keine Zeit haben, verteile die Restzeit
+          const terminGesamtzeit = termin.tatsaechliche_zeit || termin.geschaetzte_zeit || 60;
+          const restzeit = terminGesamtzeit - gesamtArbeitZeit;
+          const zeitProArbeitOhneZeit = arbeitenOhneZeit > 0 ? Math.round(restzeit / arbeitenOhneZeit) : 30;
+          
           // Mehrere Arbeiten - jede als separater Block
           arbeiten.forEach((arbeit, index) => {
             const arbeitZuordnung = this.getArbeitZuordnung(arbeit, details, termin);
             
             // DEBUG
-            if (termin.terminNr === 'T-2026-065' || termin.id === 483) {
-              console.log(`[DEBUG] Arbeit "${arbeit.name}":`, { arbeit, arbeitZuordnung });
+            if (termin.termin_nr && termin.termin_nr.includes('2026-06')) {
+              console.log(`[DEBUG] ${termin.termin_nr} - Arbeit "${arbeit.name}":`, { 
+                arbeit, 
+                arbeitZuordnung,
+                lehrlingMapHasKey: arbeitZuordnung.type === 'lehrling' && !!lehrlingeMap[arbeitZuordnung.id],
+                mitarbeiterMapHasKey: arbeitZuordnung.type === 'mitarbeiter' && !!mitarbeiterMap[arbeitZuordnung.id]
+              });
             }
             
             // Erstelle virtuellen Termin für diese Arbeit
+            const arbeitDauer = (parseInt(arbeit.zeit) > 0) ? arbeit.zeit : zeitProArbeitOhneZeit;
             const arbeitTermin = {
               ...termin,
               _arbeitName: arbeit.name,
               _arbeitIndex: index,
               _istArbeitBlock: true,
-              _arbeitDauer: arbeit.zeit || 30,
+              _arbeitDauer: arbeitDauer,
               startzeit: arbeit.startzeit || (details && details._startzeit) || termin.startzeit || termin.bring_zeit || '08:00'
             };
             
@@ -19182,6 +19336,8 @@ class App {
                 // Erstelle Fortsetzung falls nötig
                 const fortsetzung = this.createArbeitBlockFortsetzung(arbeitTermin, arbeit, arbeitTermin.startzeit, startHour, endHour, pauseStart);
                 if (fortsetzung) lehrlingeMap[arbeitZuordnung.id].appendChild(fortsetzung);
+              } else {
+                console.warn(`[DEBUG] ${termin.termin_nr} - Arbeit "${arbeit.name}" - createArbeitBlockElement gab NULL zurück`);
               }
             } else if (arbeitZuordnung.type === 'mitarbeiter' && arbeitZuordnung.id && mitarbeiterMap[arbeitZuordnung.id]) {
               const pauseStart = mitarbeiterPauseMap[arbeitZuordnung.id];
@@ -19191,8 +19347,11 @@ class App {
                 // Erstelle Fortsetzung falls nötig
                 const fortsetzung = this.createArbeitBlockFortsetzung(arbeitTermin, arbeit, arbeitTermin.startzeit, startHour, endHour, pauseStart);
                 if (fortsetzung) mitarbeiterMap[arbeitZuordnung.id].appendChild(fortsetzung);
+              } else {
+                console.warn(`[DEBUG] ${termin.termin_nr} - Arbeit "${arbeit.name}" - createArbeitBlockElement gab NULL zurück`);
               }
             } else {
+              console.warn(`[DEBUG] ${termin.termin_nr} - Arbeit "${arbeit.name}" NICHT zugeordnet, Zuordnung:`, arbeitZuordnung);
               // Nicht zugeordnet - als Mini-Card anzeigen
               const card = this.createArbeitMiniCard(termin, arbeit, index);
               card.dataset.dauer = arbeit.zeit; // Setze Dauer für Drag & Drop
@@ -19211,13 +19370,21 @@ class App {
           
           if (details) {
             // Priorität 1: _gesamt_mitarbeiter_id
-            if (details._gesamt_mitarbeiter_id) {
+            // ABER: Nur verwenden wenn KEINE individuellen Zuordnungen in Arbeiten existieren
+            // (Gesamtzeit-Modus mit Lehrling sollte nicht automatisch zugeordnet werden)
+            const hatIndividuelleArbeitsZuordnungen = Object.keys(details).some(key => {
+              if (key.startsWith('_')) return false;
+              const val = details[key];
+              return typeof val === 'object' && (val.mitarbeiter_id || val.lehrling_id);
+            });
+            
+            if (details._gesamt_mitarbeiter_id && !hatIndividuelleArbeitsZuordnungen) {
               zuordnungsTyp = details._gesamt_mitarbeiter_id.type;
-              if (zuordnungsTyp === 'lehrling') {
-                lehrlingId = details._gesamt_mitarbeiter_id.id;
-              } else if (zuordnungsTyp === 'mitarbeiter') {
+              // Nur Mitarbeiter können auf Timeline platziert werden, Lehrlinge bleiben in "Nicht zugeordnet"
+              if (zuordnungsTyp === 'mitarbeiter') {
                 mitarbeiterId = details._gesamt_mitarbeiter_id.id;
               }
+              // Lehrlinge NICHT automatisch zuordnen im Gesamtzeit-Modus
             }
             
             if (details._startzeit) {
@@ -20339,8 +20506,25 @@ class App {
     
     const startMinutesFromDayStart = (startH - startHour) * 60 + startM;
     
+    // DEBUG für problematische Termine
+    if (termin.termin_nr && termin.termin_nr.includes('2026-070')) {
+      console.log(`[DEBUG createArbeitBlockElement] ${termin.termin_nr} - ${arbeit.name}:`, {
+        startzeit,
+        startH,
+        startM,
+        startHour,
+        endHour,
+        dauer,
+        pauseStart,
+        checkAusserhalb: startH < startHour || startH > endHour
+      });
+    }
+    
     // Außerhalb des sichtbaren Bereichs?
     if (startH < startHour || startH > endHour) {
+      if (termin.termin_nr && termin.termin_nr.includes('2026-070')) {
+        console.warn(`[DEBUG] ${termin.termin_nr} - ${arbeit.name} - AUSSERHALB des Bereichs (${startHour}-${endHour})`);
+      }
       return null;
     }
     
@@ -20370,7 +20554,12 @@ class App {
     if (ueberschneidetPause) {
       // Teil 1: Bis zur Pause
       const teil1Dauer = pauseStartMinutes - startMinutes;
-      if (teil1Dauer <= 0) return null; // Startet in oder nach der Pause
+      if (teil1Dauer <= 0) {
+        if (termin.termin_nr && termin.termin_nr.includes('2026-070')) {
+          console.warn(`[DEBUG] ${termin.termin_nr} - ${arbeit.name} - Startet IN/NACH Pause (teil1Dauer: ${teil1Dauer})`);
+        }
+        return null; // Startet in oder nach der Pause
+      }
       
       const leftPx = startMinutesFromDayStart * pixelPerMinute;
       const widthPx = Math.max(teil1Dauer * pixelPerMinute, 40);
@@ -20434,6 +20623,17 @@ class App {
     const colors = ['#3498db', '#9b59b6', '#1abc9c', '#f39c12', '#e74c3c'];
     const colorIndex = termin._arbeitIndex % colors.length;
     div.style.borderLeft = `4px solid ${colors[colorIndex]}`;
+    
+    div.innerHTML = `
+      <div class="termin-title">${termin.termin_nr || 'Neu'}</div>
+      <div class="termin-info arbeit-name">${arbeit.name}</div>
+      <div class="termin-info">${dauerText}</div>
+    `;
+    div.title = `${termin.termin_nr}\n${termin.kunde_name}\n\n📋 Arbeit: ${arbeit.name}\n⏱️ Dauer: ${dauerText}\n🕐 Start: ${startzeit}`;
+    
+    this.addDragEventsToArbeitBlock(div, termin, arbeit, startzeit, dauerMitNebenzeit);
+    
+    return div;
   }
 
   createArbeitBlockFortsetzung(termin, arbeit, startzeitStr, startHour, endHour, pauseStart, type) {
