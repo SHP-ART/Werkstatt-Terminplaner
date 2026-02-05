@@ -15213,6 +15213,29 @@ class App {
     const gesamtzeit = termin.tatsaechliche_zeit || termin.geschaetzte_zeit || 0;
     const zeitProArbeit = arbeitenListe.length > 0 ? Math.round(gesamtzeit / arbeitenListe.length) : 30;
 
+    // Füge Gesamtzeit-Eingabefeld VOR den einzelnen Arbeiten ein
+    const gesamtzeitHeader = document.createElement('div');
+    gesamtzeitHeader.style.cssText = 'margin-bottom: 20px; padding: 15px; background: #e3f2fd; border-radius: 8px; border-left: 4px solid #1976d2;';
+    gesamtzeitHeader.innerHTML = `
+      <div style="display: flex; align-items: center; gap: 15px;">
+        <label style="font-weight: 600; font-size: 1.05em;">⏱️ Gesamtzeit:</label>
+        <input type="number"
+               id="modalGesamtzeitInput"
+               value="${(gesamtzeit / 60).toFixed(2)}"
+               min="0.25"
+               step="0.25"
+               placeholder="Std."
+               title="Gesamtzeit in Stunden - wird gleichmäßig auf Arbeiten verteilt"
+               style="padding: 8px 12px; border: 2px solid #1976d2; border-radius: 4px; width: 100px; font-size: 1.1em; font-weight: 600;"
+               oninput="app.updateEinzelzeitenFromGesamtzeit()">
+        <span style="color: #1565c0; font-size: 0.9em;">Std. (wird auf Arbeiten verteilt)</span>
+      </div>
+      <div style="margin-top: 8px; font-size: 0.85em; color: #666;">
+        💡 Einzelzeiten unten auf 0 lassen = Gesamtzeit nutzen | Einzelzeiten > 0 = Termin wird geteilt
+      </div>
+    `;
+    liste.appendChild(gesamtzeitHeader);
+
     arbeitenListe.forEach((arbeit, index) => {
       let zeitMinuten;
       let mitarbeiterId = '';
@@ -15687,13 +15710,39 @@ class App {
 
   updateModalGesamtzeit() {
     const liste = document.getElementById('modalArbeitszeitenListe');
-    const inputs = liste.querySelectorAll('input[type="number"]');
+    const inputs = liste.querySelectorAll('input[id^="modal_zeit_"]');
     let gesamtStunden = 0;
 
     inputs.forEach(input => {
       gesamtStunden += parseFloat(input.value) || 0;
     });
 
+    document.getElementById('modalGesamtzeit').textContent = gesamtStunden.toFixed(2) + ' h';
+    
+    // Update auch das Gesamtzeit-Input (falls vorhanden)
+    const gesamtzeitInput = document.getElementById('modalGesamtzeitInput');
+    if (gesamtzeitInput) {
+      gesamtzeitInput.value = gesamtStunden.toFixed(2);
+    }
+  }
+
+  // Setzt alle Einzelzeiten auf 0 wenn Gesamtzeit geändert wird
+  updateEinzelzeitenFromGesamtzeit() {
+    const gesamtzeitInput = document.getElementById('modalGesamtzeitInput');
+    if (!gesamtzeitInput) return;
+    
+    const liste = document.getElementById('modalArbeitszeitenListe');
+    const zeitInputs = liste.querySelectorAll('input[id^="modal_zeit_"]');
+    
+    if (zeitInputs.length === 0) return;
+    
+    // Setze ALLE Einzelzeiten auf 0 = Termin bleibt EINS
+    zeitInputs.forEach(input => {
+      input.value = '0.00';
+    });
+    
+    // Update Anzeige
+    const gesamtStunden = parseFloat(gesamtzeitInput.value) || 0;
     document.getElementById('modalGesamtzeit').textContent = gesamtStunden.toFixed(2) + ' h';
   }
 
@@ -19046,17 +19095,61 @@ class App {
         
         // Zähle einzelne Arbeiten (nicht Meta-Felder)
         const arbeiten = [];
+        let hatIndividuelleZeiten = false; // Flag ob Arbeiten eigene Zeiten haben
+        
         if (details) {
           for (const key in details) {
             if (key.startsWith('_')) continue; // Meta-Felder überspringen
             const arbeitData = details[key];
             // Arbeit mit Details (Objekt) oder einfacher Wert (Zahl)
             if (typeof arbeitData === 'object' && arbeitData !== null) {
-              arbeiten.push({ name: key, ...arbeitData });
-            } else if (typeof arbeitData === 'number') {
+              const zeit = parseInt(arbeitData.zeit) || 0;
+              if (zeit > 0) hatIndividuelleZeiten = true;
+              arbeiten.push({ name: key, ...arbeitData, zeit });
+            } else if (typeof arbeitData === 'number' && arbeitData > 0) {
+              hatIndividuelleZeiten = true;
               arbeiten.push({ name: key, zeit: arbeitData });
             }
           }
+        } else if (termin.arbeiten && Array.isArray(termin.arbeiten) && termin.arbeiten.length > 0) {
+          // Fallback: Altes Format mit termin.arbeiten Array
+          termin.arbeiten.forEach((arbeitName, index) => {
+            arbeiten.push({ 
+              name: arbeitName, 
+              zeit: Math.ceil((parseInt(termin.geschaetzte_zeit) || 60) / termin.arbeiten.length)
+            });
+          });
+          hatIndividuelleZeiten = true; // Array-Format = individuelle Arbeiten
+        } else if (termin.arbeit && typeof termin.arbeit === 'string' && termin.arbeit.includes('||')) {
+          // Fallback 2: Feld "arbeit" mit || Trennung
+          const arbeitNamen = termin.arbeit.split('||').map(a => a.trim()).filter(a => a.length > 0);
+          const gesamtzeit = parseInt(termin.geschaetzte_zeit) || 60;
+          const zeitProArbeit = Math.ceil(gesamtzeit / arbeitNamen.length);
+          arbeitNamen.forEach((arbeitName, index) => {
+            arbeiten.push({ 
+              name: arbeitName, 
+              zeit: zeitProArbeit
+            });
+          });
+          hatIndividuelleZeiten = true; // || Trennung = individuelle Arbeiten
+        }
+        
+        // Wenn KEINE individuellen Zeiten, behandle als EINEN Termin
+        if (!hatIndividuelleZeiten && arbeiten.length > 0) {
+          arbeiten.length = 0; // Array leeren = wird als normaler Termin behandelt
+        }
+        
+        // DEBUG: Zeige Details für problematische Termine
+        if (termin.termin_nr && (termin.termin_nr.includes('2026-065') || termin.termin_nr.includes('2026-067') || 
+            termin.termin_nr.includes('2026-068') || termin.termin_nr.includes('2026-069') || termin.termin_nr.includes('2026-070'))) {
+          console.log(`[DEBUG] ${termin.termin_nr} geladen:`, { 
+            terminId: termin.id, 
+            arbeitenCount: arbeiten.length, 
+            arbeiten, 
+            details,
+            raw: termin.arbeitszeiten_details,
+            altesFormat: termin.arbeiten
+          });
         }
         
         // Wenn Termin mehrere Arbeiten hat, jede als separaten Block darstellen
@@ -19065,6 +19158,11 @@ class App {
           arbeiten.forEach((arbeit, index) => {
             const arbeitZuordnung = this.getArbeitZuordnung(arbeit, details, termin);
             
+            // DEBUG
+            if (termin.terminNr === 'T-2026-065' || termin.id === 483) {
+              console.log(`[DEBUG] Arbeit "${arbeit.name}":`, { arbeit, arbeitZuordnung });
+            }
+            
             // Erstelle virtuellen Termin für diese Arbeit
             const arbeitTermin = {
               ...termin,
@@ -19072,30 +19170,44 @@ class App {
               _arbeitIndex: index,
               _istArbeitBlock: true,
               _arbeitDauer: arbeit.zeit || 30,
-              startzeit: arbeit.startzeit || details._startzeit || termin.startzeit || termin.bring_zeit || '08:00'
+              startzeit: arbeit.startzeit || (details && details._startzeit) || termin.startzeit || termin.bring_zeit || '08:00'
             };
             
-            // Platziere auf der richtigen Timeline
+            // Prüfe ob diese Arbeit zugeordnet ist
             if (arbeitZuordnung.type === 'lehrling' && arbeitZuordnung.id && lehrlingeMap[arbeitZuordnung.id]) {
               const pauseStart = lehrlingePauseMap[arbeitZuordnung.id];
               const timelineElement = this.createArbeitBlockElement(arbeitTermin, arbeit, startHour, endHour, pauseStart, 'lehrling');
-              if (timelineElement) lehrlingeMap[arbeitZuordnung.id].appendChild(timelineElement);
+              if (timelineElement) {
+                lehrlingeMap[arbeitZuordnung.id].appendChild(timelineElement);
+                // Erstelle Fortsetzung falls nötig
+                const fortsetzung = this.createArbeitBlockFortsetzung(arbeitTermin, arbeit, arbeitTermin.startzeit, startHour, endHour, pauseStart);
+                if (fortsetzung) lehrlingeMap[arbeitZuordnung.id].appendChild(fortsetzung);
+              }
             } else if (arbeitZuordnung.type === 'mitarbeiter' && arbeitZuordnung.id && mitarbeiterMap[arbeitZuordnung.id]) {
               const pauseStart = mitarbeiterPauseMap[arbeitZuordnung.id];
               const timelineElement = this.createArbeitBlockElement(arbeitTermin, arbeit, startHour, endHour, pauseStart, 'mitarbeiter');
-              if (timelineElement) mitarbeiterMap[arbeitZuordnung.id].appendChild(timelineElement);
+              if (timelineElement) {
+                mitarbeiterMap[arbeitZuordnung.id].appendChild(timelineElement);
+                // Erstelle Fortsetzung falls nötig
+                const fortsetzung = this.createArbeitBlockFortsetzung(arbeitTermin, arbeit, arbeitTermin.startzeit, startHour, endHour, pauseStart);
+                if (fortsetzung) mitarbeiterMap[arbeitZuordnung.id].appendChild(fortsetzung);
+              }
             } else {
               // Nicht zugeordnet - als Mini-Card anzeigen
               const card = this.createArbeitMiniCard(termin, arbeit, index);
+              card.dataset.dauer = arbeit.zeit; // Setze Dauer für Drag & Drop
               sourceContainer.appendChild(card);
             }
           });
-        } else {
-          // Einzelne Arbeit oder keine Details - normale Darstellung
-          let zuordnungsTyp = null;
-          let mitarbeiterId = null;
-          let lehrlingId = null;
-          let effektiveStartzeit = null;
+          return; // Termin ist abgearbeitet, nächster Termin
+        }
+        
+        // === Ab hier: Termine mit 0 oder 1 Arbeit ===
+        // Einzelne Arbeit oder keine Details - normale Darstellung
+        let zuordnungsTyp = null;
+        let mitarbeiterId = null;
+        let lehrlingId = null;
+        let effektiveStartzeit = null;
           
           if (details) {
             // Priorität 1: _gesamt_mitarbeiter_id
@@ -19153,11 +19265,10 @@ class App {
               if (el) mitarbeiterMap[mitarbeiterId].appendChild(el);
             });
           } else {
-            // Nicht zugeordnet
+            // Nicht zugeordnet - als normaler Termin anzeigen
             const card = this.createTerminMiniCard(termin);
             sourceContainer.appendChild(card);
           }
-        }
       });
       
       // Drop-Zone für "Nicht zugeordnet"
@@ -20227,15 +20338,81 @@ class App {
     const pixelPerMinute = pixelPerHour / 60;
     
     const startMinutesFromDayStart = (startH - startHour) * 60 + startM;
-    const leftPx = startMinutesFromDayStart * pixelPerMinute;
-    const widthPx = Math.max(dauerMitNebenzeit * pixelPerMinute, 40);
     
     // Außerhalb des sichtbaren Bereichs?
     if (startH < startHour || startH > endHour) {
       return null;
     }
     
-    // Dauer formatiert
+    // === PAUSE-SPLIT-LOGIK ===
+    const startMinutes = startH * 60 + startM;
+    const endMinutes = startMinutes + dauerMitNebenzeit;
+    
+    // Prüfe ob Arbeitsblock über Pause geht
+    let pauseStartMinutes = null;
+    let pauseEndMinutes = null;
+    const pauseDauer = 30; // Standard Pausendauer
+    
+    if (pauseStart) {
+      if (typeof pauseStart === 'string') {
+        const [pH, pM] = pauseStart.split(':').map(Number);
+        pauseStartMinutes = pH * 60 + pM;
+        pauseEndMinutes = pauseStartMinutes + pauseDauer;
+      } else if (typeof pauseStart === 'number') {
+        pauseStartMinutes = pauseStart;
+        pauseEndMinutes = pauseStartMinutes + pauseDauer;
+      }
+    }
+    
+    const ueberschneidetPause = pauseStartMinutes !== null && 
+      startMinutes < pauseEndMinutes && endMinutes > pauseStartMinutes;
+    
+    if (ueberschneidetPause) {
+      // Teil 1: Bis zur Pause
+      const teil1Dauer = pauseStartMinutes - startMinutes;
+      if (teil1Dauer <= 0) return null; // Startet in oder nach der Pause
+      
+      const leftPx = startMinutesFromDayStart * pixelPerMinute;
+      const widthPx = Math.max(teil1Dauer * pixelPerMinute, 40);
+      
+      const teil1DauerText = teil1Dauer >= 60 
+        ? `${Math.floor(teil1Dauer/60)}h ${teil1Dauer%60 > 0 ? (teil1Dauer%60) + 'min' : ''}`.trim()
+        : `${teil1Dauer} min`;
+      
+      // Erstelle Teil 1
+      const div = document.createElement('div');
+      const statusClass = termin.status ? ` status-${termin.status.toLowerCase().replace(' ', '-')}` : '';
+      div.className = 'timeline-termin arbeit-block' + statusClass + (isSchwebend ? ' schwebend' : '');
+      div.id = `timeline-arbeit-${termin.id}-${termin._arbeitIndex}`;
+      div.dataset.terminId = termin.id;
+      div.dataset.arbeitName = arbeit.name;
+      div.dataset.arbeitIndex = termin._arbeitIndex;
+      div.dataset.dauer = dauerMitNebenzeit;
+      div.dataset.originalDauer = dauer;
+      div.draggable = true;
+      div.style.left = `${leftPx}px`;
+      div.style.width = `${widthPx}px`;
+      
+      const colors = ['#3498db', '#9b59b6', '#1abc9c', '#f39c12', '#e74c3c'];
+      const colorIndex = termin._arbeitIndex % colors.length;
+      div.style.borderLeft = `4px solid ${colors[colorIndex]}`;
+      
+      div.innerHTML = `
+        <div class="termin-title">${termin.termin_nr || 'Neu'}</div>
+        <div class="termin-info arbeit-name">${arbeit.name}</div>
+        <div class="termin-info">${teil1DauerText}</div>
+      `;
+      div.title = `${termin.termin_nr}\n${termin.kunde_name}\n\n📋 Arbeit: ${arbeit.name}\n⏱️ Dauer: ${teil1DauerText}\n🕐 Start: ${startzeit}`;
+      
+      this.addDragEventsToArbeitBlock(div, termin, arbeit, startzeit, dauerMitNebenzeit);
+      
+      return div; // Teil 2 wird separat erstellt
+    }
+    
+    // === NORMALER BLOCK (keine Pause-Überschneidung) ===
+    const leftPx = startMinutesFromDayStart * pixelPerMinute;
+    const widthPx = Math.max(dauerMitNebenzeit * pixelPerMinute, 40);
+    
     const dauerText = dauerMitNebenzeit >= 60 
       ? `${Math.floor(dauerMitNebenzeit/60)}h ${dauerMitNebenzeit%60 > 0 ? (dauerMitNebenzeit%60) + 'min' : ''}`.trim()
       : `${dauerMitNebenzeit} min`;
@@ -20257,17 +20434,89 @@ class App {
     const colors = ['#3498db', '#9b59b6', '#1abc9c', '#f39c12', '#e74c3c'];
     const colorIndex = termin._arbeitIndex % colors.length;
     div.style.borderLeft = `4px solid ${colors[colorIndex]}`;
+  }
+
+  createArbeitBlockFortsetzung(termin, arbeit, startzeitStr, startHour, endHour, pauseStart, type) {
+    // Prüfe ob Pause-Überschneidung vorliegt
+    const dauer = arbeit.zeit || 0;
+    const nebenzeitProzent = this._planungNebenzeitProzent || 0;
+    const dauerMitNebenzeit = nebenzeitProzent > 0 
+      ? Math.round(dauer * (1 + nebenzeitProzent / 100)) 
+      : dauer;
+      
+    const [startHourPart, startMinutePart] = (startzeitStr || '08:00').split(':').map(Number);
+    const startMinutes = startHourPart * 60 + startMinutePart;
+    const endMinutes = startMinutes + dauerMitNebenzeit;
     
-    // Abholzeit-Info
-    const abholzeitInfo = termin.abholung_zeit ? `\n🚗 Abholung: ${termin.abholung_zeit}` : '';
+    // Pause parsen (gleiche Logik wie in createArbeitBlockElement)
+    let pauseStartMinutes = null;
+    let pauseEndMinutes = null;
+    const pauseDauer = 30; // Standard Pausendauer
+    
+    if (pauseStart) {
+      if (typeof pauseStart === 'string') {
+        const [pH, pM] = pauseStart.split(':').map(Number);
+        pauseStartMinutes = pH * 60 + pM;
+        pauseEndMinutes = pauseStartMinutes + pauseDauer;
+      } else if (typeof pauseStart === 'number') {
+        pauseStartMinutes = pauseStart;
+        pauseEndMinutes = pauseStartMinutes + pauseDauer;
+      }
+    }
+    
+    if (pauseStartMinutes === null) return null;
+
+    const ueberschneidetPause = startMinutes < pauseEndMinutes && endMinutes > pauseStartMinutes;
+    
+    if (!ueberschneidetPause) {
+      return null; // Keine Fortsetzung nötig
+    }
+
+    // === TEIL 2 (Fortsetzung) nach der Pause ===
+    const teil2Dauer = endMinutes - pauseEndMinutes;
+    if (teil2Dauer <= 0) return null; // Endet in der Pause
+    
+    const teil2StartHour = Math.floor(pauseEndMinutes / 60);
+    const teil2StartMinute = pauseEndMinutes % 60;
+    const teil2StartMinutesFromDayStart = (teil2StartHour - startHour) * 60 + teil2StartMinute;
+    
+    const pixelPerMinute = 100 / 60; // 100px pro Stunde
+    const leftPx = teil2StartMinutesFromDayStart * pixelPerMinute;
+    const widthPx = Math.max(teil2Dauer * pixelPerMinute, 40);
+    
+    const dauerText = teil2Dauer >= 60 
+      ? `${Math.floor(teil2Dauer/60)}h ${teil2Dauer%60 > 0 ? (teil2Dauer%60) + 'min' : ''}`.trim()
+      : `${teil2Dauer} min`;
+
+    const div = document.createElement('div');
+    const statusClass = termin.status ? ` status-${termin.status.toLowerCase().replace(' ', '-')}` : '';
+    div.className = 'timeline-termin arbeit-block fortsetzung' + statusClass;
+    div.id = `timeline-arbeit-${termin.id}-${termin._arbeitIndex}-teil2`;
+    div.dataset.terminId = termin.id;
+    div.dataset.arbeitName = arbeit.name;
+    div.dataset.arbeitIndex = termin._arbeitIndex;
+    div.dataset.teil = '2';
+    div.draggable = false; // Fortsetzungen nicht verschiebbar
+    div.style.left = `${leftPx}px`;
+    div.style.width = `${widthPx}px`;
+    
+    // Farbe basierend auf Arbeit-Index
+    const colors = ['#3498db', '#9b59b6', '#1abc9c', '#f39c12', '#e74c3c'];
+    const colorIndex = termin._arbeitIndex % colors.length;
+    div.style.borderLeft = `4px solid ${colors[colorIndex]}`;
     
     div.innerHTML = `
-      <div class="termin-title">${termin.termin_nr || 'Neu'}</div>
+      <div class="termin-title">↪ ${termin.termin_nr || 'Neu'}</div>
       <div class="termin-info arbeit-name">${arbeit.name}</div>
       <div class="termin-info">${dauerText}</div>
     `;
-    div.title = `${termin.termin_nr}\n${termin.kunde_name}\n\n📋 Arbeit: ${arbeit.name}\n⏱️ Dauer: ${dauerText}\n🕐 Start: ${startzeit}${abholzeitInfo}`;
-
+    div.title = `${termin.termin_nr}\n${termin.kunde_name}\n\n📋 Arbeit: ${arbeit.name}\n⏱️ Fortsetzung: ${dauerText}`;
+    
+    return div;
+  }
+  
+  // Hilfsfunktion: Drag Events für Arbeitsblöcke
+  addDragEventsToArbeitBlock(div, termin, arbeit, startzeit, dauer) {
     // Drag Events
     div.addEventListener('dragstart', (e) => {
       div.classList.add('dragging');
@@ -20275,7 +20524,7 @@ class App {
       e.dataTransfer.setData('application/x-arbeit-name', arbeit.name);
       e.dataTransfer.setData('application/x-arbeit-index', termin._arbeitIndex);
       e.dataTransfer.setData('application/x-startzeit', startzeit);
-      e.dataTransfer.setData('application/x-dauer', dauerMitNebenzeit);
+      e.dataTransfer.setData('application/x-dauer', dauer);
       e.dataTransfer.setData('application/x-ist-arbeit-block', 'true');
       e.dataTransfer.effectAllowed = 'move';
       
@@ -20295,11 +20544,9 @@ class App {
         e.stopPropagation();
         // Aktuellen Termin aus Cache holen (für aktuellen Status)
         const aktuellerTermin = this.termineById[termin.id] || termin;
-        this.showSchnellStatusDialog(aktuellerTermin, div, startzeit, dauer);
+        this.showSchnellStatusDialog(aktuellerTermin, div, startzeit, arbeit.zeit || 30);
       }
     });
-
-    return div;
   }
 
   // Erstellt eine Mini-Card für einen nicht zugeordneten Arbeitsblock
@@ -20307,6 +20554,7 @@ class App {
     const card = document.createElement('div');
     card.className = 'termin-mini-card arbeit-block';
     card.draggable = true;
+    card.id = `termin-arbeit-card-${termin.id}-${index}`;
     card.dataset.terminId = termin.id;
     card.dataset.arbeitName = arbeit.name;
     card.dataset.arbeitIndex = index;
@@ -21016,6 +21264,13 @@ class App {
       
       // Hole alle Termine der gleichen Person am gleichen Tag
       const auslastungData = await AuslastungService.getByDateRange(datum, datum);
+      
+      // Defensive Prüfung: stelle sicher dass die erwarteten Properties existieren
+      if (!auslastungData || (type === 'mitarbeiter' && !auslastungData.mitarbeiter) || (type === 'lehrling' && !auslastungData.lehrlinge)) {
+        console.warn('Auslastungsdaten nicht verfügbar für Überlappungsprüfung', { type, datum });
+        return;
+      }
+      
       const personTermine = type === 'mitarbeiter' 
         ? auslastungData.mitarbeiter.find(m => m.id === parseInt(personId))?.termine || []
         : auslastungData.lehrlinge.find(l => l.id === parseInt(personId))?.termine || [];
@@ -21365,7 +21620,7 @@ class App {
   // UI-Aktualisierung für verschobenen Arbeitsblock
   async updateArbeitBlockUI(terminId, arbeitName, arbeitIndex, startzeit, mitarbeiterId, lehrlingId, type) {
     const blockEl = document.getElementById(`timeline-arbeit-${terminId}-${arbeitIndex}`);
-    const miniCard = document.querySelector(`.termin-mini-card[data-termin-id="${terminId}"][data-arbeit-index="${arbeitIndex}"]`);
+    const miniCard = document.getElementById(`termin-arbeit-card-${terminId}-${arbeitIndex}`);
     
     const startHour = 8;
     const pixelPerHour = 100;
@@ -21384,12 +21639,86 @@ class App {
     if (blockEl) {
       // Bestehendes Block-Element verschieben
       const dauer = parseInt(blockEl.dataset.dauer) || 30;
-      const leftPx = (startH - startHour) * pixelPerHour + startM * pixelPerMinute;
-      const widthPx = Math.max(dauer * pixelPerMinute, 40);
       
-      blockEl.style.left = `${leftPx}px`;
-      blockEl.style.width = `${widthPx}px`;
-      blockEl.classList.add('geaendert');
+      // Prüfe ob Arbeitsblock über Mittagspause geht
+      const startMinutes = startH * 60 + startM;
+      const endMinutes = startMinutes + dauer;
+      
+      // Hole Mittagspause des Ziel-Tracks
+      const pauseBlock = targetTrack?.querySelector('.timeline-mittagspause');
+      let pauseStartMinutes = null;
+      let pauseEndMinutes = null;
+      
+      if (pauseBlock) {
+        const pauseLeft = parseFloat(pauseBlock.style.left) || 0;
+        const pauseWidth = parseFloat(pauseBlock.style.width) || 0;
+        pauseStartMinutes = 8 * 60 + (pauseLeft / pixelPerMinute);
+        pauseEndMinutes = pauseStartMinutes + (pauseWidth / pixelPerMinute);
+      }
+      
+      // Prüfe ob Arbeitsblock Pause überschneidet
+      const ueberschneidetPause = pauseStartMinutes !== null && 
+        startMinutes < pauseEndMinutes && endMinutes > pauseStartMinutes;
+      
+      if (ueberschneidetPause) {
+        // Teile Arbeitsblock: Teil 1 bis Pause, Teil 2 nach Pause
+        const teil1Dauer = pauseStartMinutes - startMinutes;
+        if (teil1Dauer > 0) {
+          const leftPx = (startH - startHour) * pixelPerHour + startM * pixelPerMinute;
+          const widthPx = Math.max(teil1Dauer * pixelPerMinute, 40);
+          blockEl.style.left = `${leftPx}px`;
+          blockEl.style.width = `${widthPx}px`;
+          blockEl.classList.add('geaendert');
+        }
+        
+        // Teil 2 (Fortsetzung)
+        const teil2Dauer = endMinutes - pauseEndMinutes;
+        if (teil2Dauer > 0) {
+          // Entferne alte Fortsetzung falls vorhanden
+          const alteForts = document.getElementById(`timeline-arbeit-${terminId}-${arbeitIndex}-teil2`);
+          if (alteForts) alteForts.remove();
+          
+          const teil2StartH = Math.floor(pauseEndMinutes / 60);
+          const teil2StartM = pauseEndMinutes % 60;
+          const teil2LeftPx = (teil2StartH - startHour) * pixelPerHour + teil2StartM * pixelPerMinute;
+          const teil2WidthPx = Math.max(teil2Dauer * pixelPerMinute, 40);
+          
+          const teil2Div = document.createElement('div');
+          teil2Div.className = 'timeline-termin arbeit-block fortsetzung geaendert';
+          teil2Div.id = `timeline-arbeit-${terminId}-${arbeitIndex}-teil2`;
+          teil2Div.dataset.terminId = terminId;
+          teil2Div.dataset.arbeitName = arbeitName;
+          teil2Div.dataset.arbeitIndex = arbeitIndex;
+          teil2Div.dataset.istFortsetzung = '1';
+          teil2Div.draggable = false;
+          teil2Div.style.left = `${teil2LeftPx}px`;
+          teil2Div.style.width = `${teil2WidthPx}px`;
+          
+          // Farbe wie Hauptblock
+          const colors = ['#3498db', '#9b59b6', '#1abc9c', '#f39c12', '#e74c3c'];
+          const colorIndex = arbeitIndex % colors.length;
+          teil2Div.style.borderLeft = `4px solid ${colors[colorIndex]}`;
+          
+          const dauerText = teil2Dauer >= 60 
+            ? `${Math.floor(teil2Dauer/60)}h ${teil2Dauer%60 > 0 ? (teil2Dauer%60) + 'min' : ''}`.trim()
+            : `${teil2Dauer} min`;
+          
+          teil2Div.innerHTML = `
+            <div class="termin-title">↪ ${arbeitName}</div>
+            <div class="termin-info">${dauerText} (Forts.)</div>
+          `;
+          teil2Div.title = `${arbeitName} (Fortsetzung nach Pause)`;
+          
+          targetTrack.appendChild(teil2Div);
+        }
+      } else {
+        // Keine Pause-Überschneidung
+        const leftPx = (startH - startHour) * pixelPerHour + startM * pixelPerMinute;
+        const widthPx = Math.max(dauer * pixelPerMinute, 40);
+        blockEl.style.left = `${leftPx}px`;
+        blockEl.style.width = `${widthPx}px`;
+        blockEl.classList.add('geaendert');
+      }
       
       // Track wechseln wenn nötig
       const currentTrack = blockEl.closest('.timeline-track');
@@ -21401,6 +21730,26 @@ class App {
       const termin = await TermineService.getById(terminId);
       const dauer = parseInt(miniCard.dataset.dauer) || 30;
       
+      // Prüfe ob Arbeitsblock über Mittagspause geht
+      const startMinutes = startH * 60 + startM;
+      const endMinutes = startMinutes + dauer;
+      
+      // Hole Mittagspause des Ziel-Tracks
+      const pauseBlock = targetTrack.querySelector('.timeline-mittagspause');
+      let pauseStartMinutes = null;
+      let pauseEndMinutes = null;
+      
+      if (pauseBlock) {
+        const pauseLeft = parseFloat(pauseBlock.style.left) || 0;
+        const pauseWidth = parseFloat(pauseBlock.style.width) || 0;
+        pauseStartMinutes = 8 * 60 + (pauseLeft / pixelPerMinute);
+        pauseEndMinutes = pauseStartMinutes + (pauseWidth / pixelPerMinute);
+      }
+      
+      // Prüfe ob Arbeitsblock Pause überschneidet
+      const ueberschneidetPause = pauseStartMinutes !== null && 
+        startMinutes < pauseEndMinutes && endMinutes > pauseStartMinutes;
+      
       // Neues Timeline-Element erstellen
       const newBlock = document.createElement('div');
       newBlock.className = 'timeline-termin arbeit-block geaendert';
@@ -21411,25 +21760,78 @@ class App {
       newBlock.dataset.dauer = dauer;
       newBlock.draggable = true;
       
-      const leftPx = (startH - startHour) * pixelPerHour + startM * pixelPerMinute;
-      const widthPx = Math.max(dauer * pixelPerMinute, 40);
-      newBlock.style.left = `${leftPx}px`;
-      newBlock.style.width = `${widthPx}px`;
-      
       // Farbe
       const colors = ['#3498db', '#9b59b6', '#1abc9c', '#f39c12', '#e74c3c'];
       const colorIndex = arbeitIndex % colors.length;
       newBlock.style.borderLeft = `4px solid ${colors[colorIndex]}`;
       
-      const dauerText = dauer >= 60 
-        ? `${Math.floor(dauer/60)}h ${dauer%60 > 0 ? (dauer%60) + 'min' : ''}`.trim()
-        : `${dauer} min`;
-      
-      newBlock.innerHTML = `
-        <div class="termin-title">${termin.termin_nr || 'Neu'}</div>
-        <div class="termin-info arbeit-name">${arbeitName}</div>
-        <div class="termin-info">${dauerText}</div>
-      `;
+      if (ueberschneidetPause) {
+        // Teil 1: Bis zur Pause
+        const teil1Dauer = pauseStartMinutes - startMinutes;
+        const leftPx = (startH - startHour) * pixelPerHour + startM * pixelPerMinute;
+        const widthPx = Math.max(teil1Dauer * pixelPerMinute, 40);
+        newBlock.style.left = `${leftPx}px`;
+        newBlock.style.width = `${widthPx}px`;
+        
+        const teil1DauerText = teil1Dauer >= 60 
+          ? `${Math.floor(teil1Dauer/60)}h ${teil1Dauer%60 > 0 ? (teil1Dauer%60) + 'min' : ''}`.trim()
+          : `${teil1Dauer} min`;
+        
+        newBlock.innerHTML = `
+          <div class="termin-title">${termin.termin_nr || 'Neu'}</div>
+          <div class="termin-info arbeit-name">${arbeitName}</div>
+          <div class="termin-info">${teil1DauerText}</div>
+        `;
+        
+        // Teil 2: Nach der Pause (Fortsetzung)
+        const teil2Dauer = endMinutes - pauseEndMinutes;
+        if (teil2Dauer > 0) {
+          const teil2StartH = Math.floor(pauseEndMinutes / 60);
+          const teil2StartM = pauseEndMinutes % 60;
+          const teil2LeftPx = (teil2StartH - startHour) * pixelPerHour + teil2StartM * pixelPerMinute;
+          const teil2WidthPx = Math.max(teil2Dauer * pixelPerMinute, 40);
+          
+          const teil2Div = document.createElement('div');
+          teil2Div.className = 'timeline-termin arbeit-block fortsetzung geaendert';
+          teil2Div.id = `timeline-arbeit-${terminId}-${arbeitIndex}-teil2`;
+          teil2Div.dataset.terminId = terminId;
+          teil2Div.dataset.arbeitName = arbeitName;
+          teil2Div.dataset.arbeitIndex = arbeitIndex;
+          teil2Div.dataset.istFortsetzung = '1';
+          teil2Div.draggable = false;
+          teil2Div.style.left = `${teil2LeftPx}px`;
+          teil2Div.style.width = `${teil2WidthPx}px`;
+          teil2Div.style.borderLeft = `4px solid ${colors[colorIndex]}`;
+          
+          const teil2DauerText = teil2Dauer >= 60 
+            ? `${Math.floor(teil2Dauer/60)}h ${teil2Dauer%60 > 0 ? (teil2Dauer%60) + 'min' : ''}`.trim()
+            : `${teil2Dauer} min`;
+          
+          teil2Div.innerHTML = `
+            <div class="termin-title">↪ ${arbeitName}</div>
+            <div class="termin-info">${teil2DauerText} (Forts.)</div>
+          `;
+          teil2Div.title = `${arbeitName} (Fortsetzung nach Pause)`;
+          
+          targetTrack.appendChild(teil2Div);
+        }
+      } else {
+        // Keine Pause-Überschneidung
+        const leftPx = (startH - startHour) * pixelPerHour + startM * pixelPerMinute;
+        const widthPx = Math.max(dauer * pixelPerMinute, 40);
+        newBlock.style.left = `${leftPx}px`;
+        newBlock.style.width = `${widthPx}px`;
+        
+        const dauerText = dauer >= 60 
+          ? `${Math.floor(dauer/60)}h ${dauer%60 > 0 ? (dauer%60) + 'min' : ''}`.trim()
+          : `${dauer} min`;
+        
+        newBlock.innerHTML = `
+          <div class="termin-title">${termin.termin_nr || 'Neu'}</div>
+          <div class="termin-info arbeit-name">${arbeitName}</div>
+          <div class="termin-info">${dauerText}</div>
+        `;
+      }
       
       // Drag Events
       newBlock.addEventListener('dragstart', (e) => {
