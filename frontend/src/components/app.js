@@ -8086,24 +8086,36 @@ class App {
    * Öffnet das Erweiterungs-Modal für einen bestimmten Termin (aus Schnell-Status-Dialog)
    */
   async openErweiterungModalForTermin(terminId) {
+    console.log('=== openErweiterungModalForTermin aufgerufen ===');
+    console.log('Termin-ID:', terminId);
+    
     // Setze currentDetailTerminId und rufe dann openErweiterungModal auf
     this.currentDetailTerminId = terminId;
     
     // Stelle sicher, dass der Termin im Cache ist
     if (!this.termineById[terminId]) {
+      console.log('Termin nicht im Cache, lade von API...');
       try {
         const termin = await TermineService.getById(terminId);
+        console.log('Termin geladen:', termin);
         if (termin) {
           this.termineById[terminId] = termin;
+        } else {
+          console.error('Termin nicht gefunden (API returned null/undefined)');
+          this.showToast('❌ Termin nicht gefunden', 'error');
+          return;
         }
       } catch (error) {
         console.error('Fehler beim Laden des Termins:', error);
         this.showToast('❌ Termin konnte nicht geladen werden', 'error');
         return;
       }
+    } else {
+      console.log('Termin bereits im Cache:', this.termineById[terminId]);
     }
     
     // Öffne das normale Erweiterungs-Modal
+    console.log('Öffne Erweiterungs-Modal...');
     await this.openErweiterungModal();
   }
 
@@ -8111,21 +8123,25 @@ class App {
    * Öffnet das Erweiterungs-Modal für den aktuellen Termin
    */
   async openErweiterungModal() {
-    console.log('openErweiterungModal aufgerufen');
+    console.log('=== openErweiterungModal aufgerufen ===');
     console.log('currentDetailTerminId:', this.currentDetailTerminId);
     
     if (!this.currentDetailTerminId) {
+      console.error('Fehler: Kein Termin ausgewählt (currentDetailTerminId ist null/undefined)');
       alert('Kein Termin ausgewählt.');
       return;
     }
 
     const termin = this.termineById[this.currentDetailTerminId];
-    console.log('Termin gefunden:', termin);
+    console.log('Termin aus Cache:', termin);
     
     if (!termin) {
+      console.error('Fehler: Termin nicht im Cache gefunden für ID:', this.currentDetailTerminId);
       alert('Termin nicht gefunden.');
       return;
     }
+
+    console.log('Termin gefunden, initialisiere Modal...');
 
     // Speichere Termin-Daten für spätere Verwendung
     this.erweiterungTermin = termin;
@@ -8133,17 +8149,18 @@ class App {
 
     // Fülle Original-Termin-Info
     const detailsEl = document.getElementById('erweiterungTerminDetails');
-    const endzeitBerechnet = this.berechneEndzeit(termin.bring_zeit, termin.geschaetzte_zeit);
+    const endzeitBerechnet = this.berechneEndzeit(termin);
     
     detailsEl.innerHTML = `
       <span><strong>Nr:</strong> ${termin.termin_nr || '-'}</span>
       <span><strong>Kunde:</strong> ${termin.kunde_name || '-'}</span>
       <span><strong>Kennzeichen:</strong> ${termin.kennzeichen || '-'}</span>
       <span><strong>Datum:</strong> ${this.formatDateGerman(termin.datum)}</span>
-      <span><strong>Zeit:</strong> ${termin.bring_zeit || '08:00'} - ${endzeitBerechnet}</span>
+      <span><strong>Zeit:</strong> ${termin.bring_zeit || termin.startzeit || '08:00'} - ${endzeitBerechnet}</span>
       <span><strong>Dauer:</strong> ${termin.geschaetzte_zeit || 0} Min</span>
     `;
     
+    console.log('Lade bestehende Erweiterungen...');
     // Lade und zeige bestehende Erweiterungen
     await this.ladeBestehendeErweiterungen(termin.id);
 
@@ -8167,11 +8184,16 @@ class App {
     // Initiale Vorschau aktualisieren
     this.updateErweiterungVorschau();
 
+    console.log('Zeige Modal an...');
     // Modal anzeigen
-    document.getElementById('erweiterungModal').style.display = 'block';
+    const modal = document.getElementById('erweiterungModal');
+    modal.style.display = 'block';
+    console.log('Modal display style gesetzt auf: block');
 
     // Prüfe Konflikte für "Im Anschluss"
     this.pruefeErweiterungsKonflikte();
+    
+    console.log('=== openErweiterungModal abgeschlossen ===');
   }
 
   /**
