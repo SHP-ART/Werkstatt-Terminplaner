@@ -5,6 +5,24 @@ const fs = require('fs');
 const net = require('net');
 const { autoUpdater } = require('electron-updater');
 
+// ===== PERSISTENTE DATEN-VERZEICHNISSE =====
+// Bei gepackter App: Verwende userData-Verzeichnis (bleibt bei Updates erhalten)
+// Bei Development: Verwende Projektverzeichnis
+if (app.isPackaged) {
+  const userDataDir = app.getPath('userData');
+  process.env.DATA_DIR = userDataDir;
+  console.log('📁 Persistentes Datenverzeichnis:', userDataDir);
+  
+  // Stelle sicher, dass das Verzeichnis existiert
+  if (!fs.existsSync(userDataDir)) {
+    fs.mkdirSync(userDataDir, { recursive: true });
+  }
+} else {
+  // Development: Verwende Projektverzeichnis
+  process.env.DATA_DIR = __dirname;
+  console.log('🔧 Development-Modus: Daten im Projektverzeichnis');
+}
+
 // Globaler Handler für unbehandelte Promise-Rejections (unterdrückt EINTR-Fehler)
 process.on('unhandledRejection', (reason, promise) => {
   // EINTR-Fehler sind harmlos und können ignoriert werden
