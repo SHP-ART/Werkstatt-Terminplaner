@@ -28,20 +28,26 @@ class EinstellungenModel {
       
       // Falls keine Einstellungen existieren, Standardwerte einfügen
       if (!result) {
-        await runAsync(
-          `INSERT OR IGNORE INTO werkstatt_einstellungen (
-            id, pufferzeit_minuten, servicezeit_minuten, ersatzauto_anzahl,
-            nebenzeit_prozent, mittagspause_minuten
-          ) VALUES (1, 15, 10, 2, 0, 30)`
-        );
-        return await getAsync('SELECT * FROM werkstatt_einstellungen WHERE id = 1', []);
+        try {
+          await runAsync(
+            `INSERT OR IGNORE INTO werkstatt_einstellungen (
+              id, pufferzeit_minuten, servicezeit_minuten, ersatzauto_anzahl,
+              nebenzeit_prozent, mittagspause_minuten
+            ) VALUES (1, 15, 10, 2, 0, 30)`
+          );
+          return await getAsync('SELECT * FROM werkstatt_einstellungen WHERE id = 1', []);
+        } catch (insertErr) {
+          console.warn('Konnte Standard-Einstellungen nicht einfügen:', insertErr.message);
+          return null; // Gib null zurück, Controller liefert dann Defaults
+        }
       }
       
       return result;
     } catch (err) {
-      console.error('Fehler beim Abrufen von werkstatt_einstellungen:', err);
-      console.error('HINWEIS: Bitte stellen Sie sicher, dass alle Migrationen ausgeführt wurden.');
-      throw new Error('Datenbankfehler beim Abrufen der Einstellungen');
+      console.warn('Tabelle werkstatt_einstellungen nicht gefunden oder Lesefehler:', err.message);
+      console.log('→ Wird durch Migrationen erstellt, verwende Default-Werte');
+      // Gib null zurück statt Error zu werfen - Controller liefert dann Default-Werte
+      return null;
     }
   }
 
