@@ -266,6 +266,16 @@ async function startServer(clientCountCallback, requestLogCallback) {
         throw dbError;
     }
 
+    // Tablet-Update-System initialisieren
+    logStartup('Initialisiere Tablet-Update-System...');
+    try {
+        const TabletUpdateModel = require('./models/tabletUpdateModel');
+        await TabletUpdateModel.initialize();
+        logStartup('Tablet-Update-System initialisiert ✓');
+    } catch (err) {
+        logStartup(`WARNUNG: Tablet-Update-System Fehler: ${err.message}`, 'WARN');
+    }
+
     // Automatisches Backup beim Start erstellen
     logStartup('Erstelle automatisches Backup beim Start...');
     try {

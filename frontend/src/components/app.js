@@ -6713,6 +6713,15 @@ class App {
         ist_schwebend: istSchwebend
       };
       
+      // 🔍 DEBUG: Ausführliches Logging für Produktivsystem
+      console.log('[DEBUG] updateTerminMitarbeiter - Start');
+      console.log('[DEBUG] Termin-ID:', terminId);
+      console.log('[DEBUG] Selected Value:', selectedValue);
+      console.log('[DEBUG] Mitarbeiter ID (wird gespeichert):', mitarbeiterIdValue);
+      console.log('[DEBUG] Schwebend-Status:', istSchwebend);
+      console.log('[DEBUG] Existing Details:', existingDetails);
+      console.log('[DEBUG] Update Data:', updateData);
+      
       if (neuerStatus) {
         updateData.status = neuerStatus;
       }
@@ -6741,7 +6750,13 @@ class App {
         }
       }
       
-      await TermineService.update(terminId, updateData);
+      console.log('[DEBUG] Sende API-Request: PUT /termine/' + terminId);
+      console.log('[DEBUG] Request Body:', JSON.stringify(updateData, null, 2));
+      
+      const response = await TermineService.update(terminId, updateData);
+      
+      console.log('[DEBUG] API Response:', response);
+      
       let hinweis = neuerStatus ? ' Status auf "Geplant" gesetzt.' : '';
       if (bringzeitAlsStartzeit) {
         hinweis += ' Bringzeit wurde als Startzeit übernommen.';
@@ -6754,8 +6769,9 @@ class App {
         this.loadHeuteTermine();
       }
     } catch (error) {
-      console.error('Fehler beim Speichern der Zuordnung:', error);
-      alert('Fehler beim Speichern der Zuordnung.');
+      console.error('[ERROR] Fehler beim Speichern der Zuordnung:', error);
+      console.error('[ERROR] Stack:', error.stack);
+      alert('Fehler beim Speichern der Zuordnung: ' + error.message);
     }
   }
 
@@ -18882,10 +18898,15 @@ class App {
   // =================================================================================
 
   async loadAuslastungDragDrop() {
+    console.log('[DEBUG] loadAuslastungDragDrop - Start');
     const datumInput = document.getElementById('auslastungDragDropDatum');
-    if (!datumInput) return;
+    if (!datumInput) {
+      console.log('[DEBUG] loadAuslastungDragDrop - datumInput nicht gefunden');
+      return;
+    }
     
     const datum = datumInput.value;
+    console.log('[DEBUG] loadAuslastungDragDrop - Datum:', datum);
     if (!datum) return;
 
     // Prüfe auf ungespeicherte Änderungen beim Datumswechsel
@@ -18920,10 +18941,15 @@ class App {
       const alleTermineResponse = await TermineService.getAll(null);
       let alleTermine = Array.isArray(alleTermineResponse) ? alleTermineResponse : (alleTermineResponse.termine || []);
       
+      console.log('[DEBUG] Gesamte Termine geladen:', alleTermine.length);
+      
       // Robuste Filterung: ist_schwebend kann 1, "1", true sein
       const schwebendeTermine = alleTermine.filter(t => 
         t.ist_schwebend === 1 || t.ist_schwebend === '1' || t.ist_schwebend === true
       );
+      
+      console.log('[DEBUG] Termine für Datum:', termine.length);
+      console.log('[DEBUG] Schwebende Termine:', schwebendeTermine.length);
       
       // Schwebende Termine markieren und zu den Terminen hinzufügen (ohne Duplikate)
       schwebendeTermine.forEach(st => {
@@ -19242,6 +19268,8 @@ class App {
         lehrlingePauseMap[l.id] = l.mittagspause_start || null;
       });
 
+      console.log('[DEBUG] Starte Termin-Verarbeitung für', termine.length, 'Termine');
+      
       termine.forEach(termin => {
         // Termin im Cache speichern für späteren Zugriff (z.B. Shift+Click)
         this.termineById[termin.id] = termin;
@@ -19249,8 +19277,11 @@ class App {
         // Schwebende Termine separat in eigenem Panel anzeigen (nicht hier)
         const istSchwebend = termin.ist_schwebend === 1 || termin.ist_schwebend === true;
         if (istSchwebend) {
+          console.log('[DEBUG] Termin', termin.termin_nr, 'ist schwebend - wird übersprungen');
           return; // Schwebende Termine später separat verarbeiten
         }
+        
+        console.log('[DEBUG] Verarbeite Termin:', termin.termin_nr, 'ID:', termin.id);
         
         // Parse arbeitszeiten_details
         let details = null;
@@ -19413,6 +19444,11 @@ class App {
         let mitarbeiterId = null;
         let lehrlingId = null;
         let effektiveStartzeit = null;
+        
+        console.log('[DEBUG] Termin', termin.termin_nr, '- Prüfe Zuordnung');
+        console.log('[DEBUG] - arbeitszeiten_details:', termin.arbeitszeiten_details);
+        console.log('[DEBUG] - mitarbeiter_id (Feld):', termin.mitarbeiter_id);
+        console.log('[DEBUG] - Parsed details:', details);
           
           if (details) {
             // Priorität 1: _gesamt_mitarbeiter_id
@@ -19456,7 +19492,17 @@ class App {
           if (!zuordnungsTyp && termin.mitarbeiter_id) {
             mitarbeiterId = termin.mitarbeiter_id;
             zuordnungsTyp = 'mitarbeiter';
+            console.log('[DEBUG] Termin', termin.termin_nr, '- Fallback auf termin.mitarbeiter_id:', mitarbeiterId);
           }
+          
+          console.log('[DEBUG] Termin', termin.termin_nr, '- Finale Zuordnung:', {
+            zuordnungsTyp,
+            mitarbeiterId,
+            lehrlingId,
+            effektiveStartzeit,
+            mitarbeiterMapHasKey: mitarbeiterId && !!mitarbeiterMap[mitarbeiterId],
+            lehrlingMapHasKey: lehrlingId && !!lehrlingeMap[lehrlingId]
+          });
           
           // Erstelle Kopie des Termins mit effektiver Startzeit
           const terminFuerTimeline = { ...termin };
@@ -19466,18 +19512,26 @@ class App {
           
           // Termin auf Timeline platzieren
           if (zuordnungsTyp === 'lehrling' && lehrlingId && lehrlingeMap[lehrlingId]) {
+            console.log('[DEBUG] Termin', termin.termin_nr, '- Platziere auf Lehrling-Timeline:', lehrlingId);
             const pauseStart = lehrlingePauseMap[lehrlingId];
             const timelineElements = this.createTimelineTerminWithPause(terminFuerTimeline, startHour, endHour, pauseStart, 'lehrling');
             timelineElements.forEach(el => {
               if (el) lehrlingeMap[lehrlingId].appendChild(el);
             });
+            console.log('[DEBUG] Termin', termin.termin_nr, '- Timeline-Elemente erstellt:', timelineElements.length);
           } else if (mitarbeiterId && mitarbeiterMap[mitarbeiterId]) {
+            console.log('[DEBUG] Termin', termin.termin_nr, '- Platziere auf Mitarbeiter-Timeline:', mitarbeiterId);
             const pauseStart = mitarbeiterPauseMap[mitarbeiterId];
             const timelineElements = this.createTimelineTerminWithPause(terminFuerTimeline, startHour, endHour, pauseStart);
             timelineElements.forEach(el => {
               if (el) mitarbeiterMap[mitarbeiterId].appendChild(el);
             });
+            console.log('[DEBUG] Termin', termin.termin_nr, '- Timeline-Elemente erstellt:', timelineElements.length);
           } else {
+            console.log('[DEBUG] Termin', termin.termin_nr, '- NICHT ZUGEORDNET - platziere in "Nicht zugeordnet" Container');
+            console.log('[DEBUG] - Grund: zuordnungsTyp=', zuordnungsTyp, 'mitarbeiterId=', mitarbeiterId, 'lehrlingId=', lehrlingId);
+            console.log('[DEBUG] - mitarbeiterMap hat Key?', mitarbeiterId && mitarbeiterMap[mitarbeiterId] !== undefined);
+            console.log('[DEBUG] - lehrlingeMap hat Key?', lehrlingId && lehrlingeMap[lehrlingId] !== undefined);
             // Nicht zugeordnet - als normaler Termin anzeigen
             const card = this.createTerminMiniCard(termin);
             sourceContainer.appendChild(card);

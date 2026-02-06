@@ -14,12 +14,13 @@ const DEFAULT_CONFIG = {
   displayOnTime: '07:30'
 };
 
-// Config-Datei Pfad (neben der .exe)
+// Config-Datei Pfad - PERSISTENT über Updates!
 function getConfigPath() {
+  // Im Production: Verwende userData (persistent über Updates)
   // Im Development: im Projektordner
-  // Im Production: neben der .exe
   if (app.isPackaged) {
-    return path.join(path.dirname(process.execPath), 'config.json');
+    const userDataPath = app.getPath('userData');
+    return path.join(userDataPath, 'config.json');
   }
   return path.join(__dirname, 'config.json');
 }
@@ -34,14 +35,18 @@ function loadConfig() {
       const fileContent = fs.readFileSync(configPath, 'utf8');
       const loadedConfig = JSON.parse(fileContent);
       config = { ...DEFAULT_CONFIG, ...loadedConfig };
-      console.log('Konfiguration geladen von:', configPath);
+      console.log('✅ Konfiguration geladen von:', configPath);
     } else {
       // Config-Datei erstellen mit Standardwerten
+      const configDir = path.dirname(configPath);
+      if (!fs.existsSync(configDir)) {
+        fs.mkdirSync(configDir, { recursive: true });
+      }
       saveConfig(config);
-      console.log('Standard-Konfiguration erstellt:', configPath);
+      console.log('✨ Standard-Konfiguration erstellt:', configPath);
     }
   } catch (error) {
-    console.error('Fehler beim Laden der Konfiguration:', error);
+    console.error('❌ Fehler beim Laden der Konfiguration:', error);
   }
 
   return config;
@@ -51,11 +56,15 @@ function loadConfig() {
 function saveConfig(config) {
   const configPath = getConfigPath();
   try {
+    const configDir = path.dirname(configPath);
+    if (!fs.existsSync(configDir)) {
+      fs.mkdirSync(configDir, { recursive: true });
+    }
     const content = JSON.stringify(config, null, 2);
     fs.writeFileSync(configPath, content, 'utf8');
-    console.log('Konfiguration gespeichert:', configPath);
+    console.log('💾 Konfiguration gespeichert:', configPath);
   } catch (error) {
-    console.error('Fehler beim Speichern der Konfiguration:', error);
+    console.error('❌ Fehler beim Speichern der Konfiguration:', error);
   }
 }
 
@@ -77,6 +86,204 @@ function setAutostart(enable) {
 
 // Konfiguration laden
 let CONFIG = loadConfig();
+
+let mainWindow;
+let tray = null;
+let displayTimer = null;
+let powerSaveBlockerId = null;  // Für Display-Steuerung
+let updateCheckInterval = null; // Für Auto-Update-Check
+
+// ========== AUTO-UPDATE FUNKTIONEN ==========
+const http = require('http');
+const https = require('https');
+const os = require('os');
+
+// Versions-Information aus package.json
+const packageJson = require('./package.json');
+const CURRENT_VERSION = packageJson.version;
+
+/**
+ * Hilfsfunktion für HTTP-Requests (Node.js-kompatibel)
+ */
+function httpRequest(url, options = {}) {
+  return new Promise((resolve, reject) => {
+    const urlObj = new URL(url);
+    const protocol = urlObj.protocol === 'https:' ? https : http;
+    
+    const req = protocol.request(url, options, (res) => {
+      const chunks = [];
+      
+      res.on('data', (chunk) => chunks.push(chunk));
+      res.on('end', () => {
+        const body = Buffer.concat(chunks);
+        
+        if (res.statusCode >= 200 && res.statusCode < 300) {
+          resolve({
+            ok: true,
+            status: res.statusCode,
+            data: body,
+            json: () => JSON.parse(body.toString()),
+            buffer: () => body
+          });
+        } else {
+          reject(new Error(`HTTP ${res.statusCode}`));
+        }
+      });
+    });
+    
+    req.on('error', reject);
+    
+    if (options.body) {
+      req.write(options.body);
+    }
+    
+    req.end();
+  });
+}
+
+/**
+ * Prüft auf Updates vom Server
+ */
+async function checkForUpdates() {
+  try {
+    const backendUrl = CONFIG.backendUrl || 'http://localhost:3000';
+    const updateCheckUrl = `${backendUrl}/api/tablet-update/check?version=${CURRENT_VERSION}`;
+    
+    console.log(`🔍 Prüfe auf Updates... (Aktuelle Version: ${CURRENT_VERSION})`);
+    
+    const response = await httpRequest(updateCheckUrl);
+    const updateInfo = response.json();
+    
+    if (updateInfo.updateAvailable) {
+      console.log(`✨ Update verfügbar: ${updateInfo.latestVersion}`);
+      return updateInfo;
+    } else {
+      console.log('✅ Tablet-App ist aktuell');
+      return null;
+    }
+  } catch (error) {
+    console.log('⚠️ Update-Check Fehler:', error.message);
+    return null;
+  }
+}
+
+/**
+ * Lädt Update herunter und installiert es
+ */
+async function downloadAndInstallUpdate() {
+  try {
+    const backendUrl = CONFIG.backendUrl || 'http://localhost:3000';
+    const downloadUrl = `${backendUrl}/api/tablet-update/download`;
+    
+    console.log('⬇️ Lade Update herunter...');
+    
+    const tempDir = app.getPath('temp');
+    const updateFileName = `Werkstatt-Intern-Update-${Date.now()}.exe`;
+    const updatePath = path.join(tempDir, updateFileName);
+    
+    // Download
+    const response = await httpRequest(downloadUrl);
+    const buffer = response.buffer();
+    
+    fs.writeFileSync(updatePath, buffer);
+    
+    console.log('✅ Update heruntergeladen:', updatePath);
+    console.log('🚀 Starte Installation...');
+    
+    // Installer starten
+    const { exec } = require('child_process');
+    exec(`"${updatePath}" /S`, (error) => {
+      if (error) {
+        console.error('❌ Installation fehlgeschlagen:', error);
+      } else {
+        console.log('✅ Installation gestartet - App wird beendet');
+        app.quit();
+      }
+    });
+    
+    return true;
+  } catch (error) {
+    console.error('❌ Update-Fehler:', error);
+    return false;
+  }
+}
+
+/**
+ * Meldet Status an Server
+ */
+async function reportStatusToServer() {
+  try {
+    const backendUrl = CONFIG.backendUrl || 'http://localhost:3000';
+    const statusUrl = `${backendUrl}/api/tablet-update/report-status`;
+    
+    const hostname = os.hostname();
+    const networkInterfaces = os.networkInterfaces();
+    let ip = 'unknown';
+    
+    // Finde primäre IP-Adresse
+    for (const [name, interfaces] of Object.entries(networkInterfaces)) {
+      for (const iface of interfaces) {
+        if (iface.family === 'IPv4' && !iface.internal) {
+          ip = iface.address;
+          break;
+        }
+      }
+      if (ip !== 'unknown') break;
+    }
+    
+    await fetch(statusUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+    const body = JSON.stringify({
+      version: CURRENT_VERSION,
+      hostname,
+      ip
+    });
+    
+    await httpRequest(statusUrl, {
+      method: 'POST',
+      headers: { 
+        'Content-Type': 'application/json',
+        'Content-Length': Buffer.byteLength(body)
+      },
+      bodyole.log(`📡 Status gemeldet: ${hostname} (${ip}) - v${CURRENT_VERSION}`);
+  } catch (error) {
+    // Fehler beim Status-Melden ist nicht kritisch
+    console.log('⚠️ Status-Meldung fehlgeschlagen:', error.message);
+  }
+}
+
+/**
+ * Startet regelmäßigen Update-Check
+ */
+function startUpdateCheck() {
+  // Sofort beim Start prüfen
+  checkForUpdates().then(updateInfo => {
+    if (updateInfo && updateInfo.updateAvailable) {
+      // Zeige Update-Benachrichtigung
+      if (mainWindow) {
+        mainWindow.webContents.send('update-available', updateInfo);
+      }
+    }
+  });
+  
+  // Status an Server melden
+  reportStatusToServer();
+  
+  // Alle 30 Minuten prüfen
+  updateCheckInterval = setInterval(() => {
+    checkForUpdates().then(updateInfo => {
+      if (updateInfo && updateInfo.updateAvailable) {
+        if (mainWindow) {
+          mainWindow.webContents.send('update-available', updateInfo);
+        }
+      }
+    });
+    
+    // Status an Server melden
+    reportStatusToServer();
+  }, 30 * 60 * 1000); // 30 Minuten
+}
 
 let mainWindow;
 let tray = null;
@@ -255,6 +462,9 @@ app.whenReady().then(() => {
   }
 
   createWindow();
+  
+  // Starte Auto-Update-Check
+  startUpdateCheck();
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {
@@ -385,3 +595,13 @@ public class Monitor {
   
   return { success: true };
 });
+
+// Update-Verwaltung
+ipcMain.handle('check-for-updates', async () => {
+  return await checkForUpdates();
+});
+
+ipcMain.handle('install-update', async () => {
+  return await downloadAndInstallUpdate();
+});
+

@@ -20,6 +20,7 @@ const teileRoutes = require('./teileRoutes');
 const fahrzeugeRoutes = require('./fahrzeuge');
 const kiPlanungRoutes = require('./kiPlanungRoutes');
 const tabletRoutes = require('./tabletRoutes');
+const tabletUpdateRoutes = require('./tabletUpdateRoutes');
 const pauseRoutes = require('./pause');
 const systemRoutes = require('./systemRoutes');
 
@@ -41,6 +42,7 @@ router.use('/teile-bestellungen', teileRoutes);
 router.use('/fahrzeuge', fahrzeugeRoutes);
 router.use('/ki-planung', kiPlanungRoutes);
 router.use('/tablet', tabletRoutes);
+router.use('/tablet-update', tabletUpdateRoutes);
 router.use('/pause', pauseRoutes);
 router.use('/system', systemRoutes);
 

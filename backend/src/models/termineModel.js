@@ -303,6 +303,8 @@ class TermineModel {
       values.push(arbeit);
     }
     if (arbeitszeiten_details !== undefined) {
+      console.log('[DEBUG] TermineModel.update - arbeitszeiten_details wird aktualisiert');
+      console.log('[DEBUG] arbeitszeiten_details Inhalt:', arbeitszeiten_details);
       updates.push('arbeitszeiten_details = ?');
       values.push(arbeitszeiten_details);
     }
@@ -315,6 +317,7 @@ class TermineModel {
       values.push(endzeit_berechnet);
     }
     if (mitarbeiter_id !== undefined) {
+      console.log('[DEBUG] TermineModel.update - mitarbeiter_id wird aktualisiert:', mitarbeiter_id);
       updates.push('mitarbeiter_id = ?');
       values.push(mitarbeiter_id || null);
     }
@@ -414,15 +417,21 @@ class TermineModel {
     }
 
     if (updates.length === 0) {
+      console.log('[DEBUG] TermineModel.update - Keine Felder zum Aktualisieren');
       throw new Error('Keine Felder zum Aktualisieren');
     }
 
     values.push(id);
 
-    const result = await runAsync(
-      `UPDATE termine SET ${updates.join(', ')} WHERE id = ?`,
-      values
-    );
+    const sqlQuery = `UPDATE termine SET ${updates.join(', ')} WHERE id = ?`;
+    console.log('[DEBUG] TermineModel.update - SQL:', sqlQuery);
+    console.log('[DEBUG] TermineModel.update - Values:', values);
+
+    const result = await runAsync(sqlQuery, values);
+    
+    console.log('[DEBUG] TermineModel.update - Result:', result);
+    console.log('[DEBUG] TermineModel.update - Changes:', result.changes);
+    
     return { changes: result.changes };
   }
 

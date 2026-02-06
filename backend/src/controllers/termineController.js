@@ -865,15 +865,24 @@ class TermineController {
       }
 
       const newDatum = updateData.datum || termin.datum;
+      
+      console.log('[DEBUG] Führe Datenbank-Update aus...');
       const result = await TermineModel.update(req.params.id, updateData);
+      console.log('[DEBUG] Datenbank-Update Ergebnis:', result);
+      
       const changes = (result && result.changes) || 0;
+      console.log('[DEBUG] Anzahl geänderter Zeilen:', changes);
+      
       if (changes > 0) {
+        console.log('[DEBUG] Cache wird invalidiert');
         invalidateTermineCache();
         broadcastEvent('termin.updated', {
           id: req.params.id,
           datum: newDatum || null,
           oldDatum: termin.datum || null
         });
+      } else {
+        console.log('[DEBUG] Keine Änderungen - Cache wird NICHT invalidiert');
       }
       
       // 🚗 AUTO-SPEICHERUNG: Fahrzeugdaten in fahrzeuge-Tabelle speichern (bei VIN-Update)
