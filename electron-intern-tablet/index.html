@@ -1336,15 +1336,73 @@
 
     async function handleBeenden(terminId, kundeName) {
       try {
+        console.log('[DEBUG] handleBeenden - terminId:', terminId, 'Kunde:', kundeName);
+        
+        // Lade Termin-Details um zu prüfen ob mehrere Arbeiten vorhanden sind
+        const termin = await ApiService.get(`/termine/${terminId}`);
+        console.log('[DEBUG] Termin-Details geladen:', termin);
+        console.log('[DEBUG] arbeitszeiten_details:', termin.arbeitszeiten_details);
+        
+        // Parse Arbeiten
+        let arbeiten = [];
+        if (termin.arbeitszeiten_details) {
+          try {
+            const details = typeof termin.arbeitszeiten_details === 'string'
+              ? JSON.parse(termin.arbeitszeiten_details)
+              : termin.arbeitszeiten_details;
+            
+            // Zähle nur echte Arbeiten (nicht Meta-Felder wie _gesamt_mitarbeiter_id)
+            arbeiten = Object.keys(details).filter(key => 
+              !key.startsWith('_') && 
+              (typeof details[key] === 'object' || typeof details[key] === 'number')
+            );
+            
+            console.log('[DEBUG] Anzahl Arbeiten gefunden:', arbeiten.length);
+            console.log('[DEBUG] Arbeiten:', arbeiten);
+          } catch (e) {
+            console.error('[ERROR] Fehler beim Parsen von arbeitszeiten_details:', e);
+          }
+        }
+        
+        // WARNUNG wenn mehrere Arbeiten - Bestätigungs-Dialog
+        if (arbeiten.length > 1) {
+          console.warn('[WARNUNG] Termin hat mehrere Arbeiten - alle würden abgeschlossen!');
+          
+          const arbeitenListe = arbeiten.map((arbeit, index) => `  ${index + 1}. ${arbeit}`).join('\n');
+          const bestaetigung = confirm(
+            `⚠️ ACHTUNG: Mehrere Arbeiten!\n\n` +
+            `Dieser Termin hat ${arbeiten.length} Arbeiten:\n\n${arbeitenListe}\n\n` +
+            `Wenn Sie fortfahren, werden ALLE Arbeiten als abgeschlossen markiert.\n\n` +
+            `Sind wirklich ALLE Arbeiten fertig?`
+          );
+          
+          if (!bestaetigung) {
+            console.log('[DEBUG] Abschließen abgebrochen durch Benutzer (nicht alle Arbeiten fertig)');
+            showToast('Abgeschlossen abgebrochen', 'info');
+            return;
+          }
+          
+          console.log('[DEBUG] Benutzer hat bestätigt - alle Arbeiten werden abgeschlossen');
+        }
+        
+        // Termin als abgeschlossen markieren
         await ApiService.put(`/termine/${terminId}`, { 
           status: 'abgeschlossen',
           fertigstellung_zeit: new Date().toISOString()
         });
         
+        console.log('[DEBUG] Termin erfolgreich abgeschlossen');
+        
         await loadTeamUebersicht();
-        showToast(`Auftrag abgeschlossen: ${kundeName}`, 'success');
+        
+        if (arbeiten.length > 1) {
+          showToast(`Auftrag abgeschlossen: ${kundeName} (${arbeiten.length} Arbeiten)`, 'success');
+        } else {
+          showToast(`Auftrag abgeschlossen: ${kundeName}`, 'success');
+        }
       } catch (error) {
-        console.error('Fehler beim Beenden:', error);
+        console.error('[ERROR] Fehler beim Beenden:', error);
+        console.error('[ERROR] Stack:', error.stack);
         showToast(`Fehler: ${error.message}`, 'error');
       }
     }
