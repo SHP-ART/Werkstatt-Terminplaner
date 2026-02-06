@@ -7,6 +7,8 @@
     "start": "electron .",
     "server": "node src/server.js",
     "dev": "nodemon src/server.js",
+    "test": "jest --verbose --forceExit --detectOpenHandles",
+    "test:bugs": "jest tests/bugs/ --verbose --forceExit --detectOpenHandles",
     "build:exe": "electron-builder",
     "build:allinone": "electron-builder --config electron-builder-allinone.json",
     "release": "electron-builder --config electron-builder-allinone.json --publish always",
@@ -29,8 +31,10 @@
   "devDependencies": {
     "electron": "^39.3.0",
     "electron-builder": "^26.0.12",
+    "jest": "^30.2.0",
     "nodemon": "^3.0.1",
-    "pkg": "^5.8.1"
+    "pkg": "^5.8.1",
+    "supertest": "^7.2.2"
   },
   "build": {
     "appId": "com.example.werkstatt-terminplaner-server",

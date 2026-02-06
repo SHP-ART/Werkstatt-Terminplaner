@@ -8753,12 +8753,12 @@ class App {
     return dauerMinuten;
   }
 
-  // Hilfsfunktion: Nächster Arbeitstag (überspringt Sonntage)
+  // Hilfsfunktion: Nächster Arbeitstag (überspringt Samstag und Sonntag)
   naechsterArbeitstag(datum) {
     const d = new Date(datum + 'T12:00:00');
     d.setDate(d.getDate() + 1);
-    // Sonntag überspringen
-    if (d.getDay() === 0) {
+    // Wochenende (Samstag und Sonntag) überspringen
+    while (d.getDay() === 0 || d.getDay() === 6) {
       d.setDate(d.getDate() + 1);
     }
     return d.toISOString().split('T')[0];

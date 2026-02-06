@@ -3,7 +3,7 @@
  * 
  * Verwaltet Mittagspausen für Mitarbeiter und Lehrlinge:
  * - Pausenstart mit Terminverschiebung
- * - Automatisches Pause-Ende nach 30 Minuten
+ * - Automatisches Pause-Ende nach individueller Pausenzeit (pausenzeit_minuten aus DB)
  * - Pause-Status-Abfrage
  */
 
@@ -67,8 +67,18 @@ class PauseController {
       let beendet = 0;
 
       for (const pause of aktivePausen) {
+        // Individuelle Pausenzeit aus DB laden
+        let pausenDauer = 30; // Fallback
+        if (pause.mitarbeiter_id) {
+          const ma = await PauseController.dbGet('SELECT pausenzeit_minuten FROM mitarbeiter WHERE id = ?', [pause.mitarbeiter_id]);
+          if (ma && ma.pausenzeit_minuten) pausenDauer = ma.pausenzeit_minuten;
+        } else if (pause.lehrling_id) {
+          const le = await PauseController.dbGet('SELECT pausenzeit_minuten FROM lehrlinge WHERE id = ?', [pause.lehrling_id]);
+          if (le && le.pausenzeit_minuten) pausenDauer = le.pausenzeit_minuten;
+        }
+
         const startZeit = new Date(pause.pause_start_zeit);
-        const pausenEnde = new Date(startZeit.getTime() + 30 * 60 * 1000); // +30 Minuten
+        const pausenEnde = new Date(startZeit.getTime() + pausenDauer * 60 * 1000); // +individuelle Pausenzeit
 
         if (now >= pausenEnde) {
           // Pause ist abgelaufen
@@ -118,10 +128,10 @@ class PauseController {
         });
       }
 
-      // 1. Lade Person-Daten für mittagspause_start
+      // 1. Lade Person-Daten für mittagspause_start und pausenzeit_minuten
       const personTable = personTyp === 'mitarbeiter' ? 'mitarbeiter' : 'lehrlinge';
       const person = await PauseController.dbGet(`
-        SELECT id, name, mittagspause_start
+        SELECT id, name, mittagspause_start, pausenzeit_minuten
         FROM ${personTable}
         WHERE id = ?
       `, [personId]);
@@ -205,8 +215,9 @@ class PauseController {
             details._pause_unterbrochen_bei = jetztZeit;
             details._pause_start_zeit = jetzt.toISOString();
             
-            // Verschiebe Endzeit um 30 Minuten
-            const neueEndzeit = termin.endzeit_berechnet ? addMinutesToTime(termin.endzeit_berechnet, 30) : null;
+            // Verschiebe Endzeit um individuelle Pausendauer
+            const pausenDauer = person.pausenzeit_minuten || 30;
+            const neueEndzeit = termin.endzeit_berechnet ? addMinutesToTime(termin.endzeit_berechnet, pausenDauer) : null;
 
             await PauseController.dbRun(`
               UPDATE termine
@@ -219,9 +230,10 @@ class PauseController {
             console.error('Fehler beim Unterbrechen des laufenden Termins:', e);
           }
         } else if (termin.startzeit && termin.startzeit >= jetztZeit) {
-          // Verschiebe nur zukünftige Termine
-          const neueStartzeit = addMinutesToTime(termin.startzeit, 30);
-          const neueEndzeit = termin.endzeit_berechnet ? addMinutesToTime(termin.endzeit_berechnet, 30) : null;
+          // Verschiebe nur zukünftige Termine um individuelle Pausendauer
+          const pausenDauer = person.pausenzeit_minuten || 30;
+          const neueStartzeit = addMinutesToTime(termin.startzeit, pausenDauer);
+          const neueEndzeit = termin.endzeit_berechnet ? addMinutesToTime(termin.endzeit_berechnet, pausenDauer) : null;
 
           await PauseController.dbRun(`
             UPDATE termine
@@ -283,20 +295,31 @@ class PauseController {
 
       // Berechne verbleibende Zeit
       const now = new Date();
-      const result = aktivePausen.map(pause => {
+      const resultPausen = [];
+      for (const pause of aktivePausen) {
+        // Individuelle Pausenzeit aus DB laden
+        let pausenDauer = 30; // Fallback
+        if (pause.mitarbeiter_id) {
+          const ma = await PauseController.dbGet('SELECT pausenzeit_minuten FROM mitarbeiter WHERE id = ?', [pause.mitarbeiter_id]);
+          if (ma && ma.pausenzeit_minuten) pausenDauer = ma.pausenzeit_minuten;
+        } else if (pause.lehrling_id) {
+          const le = await PauseController.dbGet('SELECT pausenzeit_minuten FROM lehrlinge WHERE id = ?', [pause.lehrling_id]);
+          if (le && le.pausenzeit_minuten) pausenDauer = le.pausenzeit_minuten;
+        }
+
         const startZeit = new Date(pause.pause_start_zeit);
-        const pausenEnde = new Date(startZeit.getTime() + 30 * 60 * 1000);
+        const pausenEnde = new Date(startZeit.getTime() + pausenDauer * 60 * 1000);
         const verbleibendeMs = pausenEnde.getTime() - now.getTime();
         const verbleibendeMinuten = Math.max(0, Math.ceil(verbleibendeMs / (60 * 1000)));
 
-        return {
+        resultPausen.push({
           ...pause,
           verbleibende_minuten: verbleibendeMinuten,
           pause_ende_zeit: pausenEnde.toISOString()
-        };
-      });
+        });
+      }
 
-      res.json(result);
+      res.json(resultPausen);
     } catch (error) {
       console.error('[Pause-Aktive] Fehler:', error);
       res.status(500).json({ error: 'Fehler beim Laden der Pausen', details: error.message });

@@ -1099,10 +1099,8 @@ class TermineModel {
       throw new Error('Original-Termin nicht gefunden');
     }
 
-    // Neue Termin-Nummer generieren
-    const terminNrResult = await getAsync(`SELECT MAX(CAST(SUBSTR(termin_nr, 3) AS INTEGER)) as max_nr FROM termine WHERE termin_nr LIKE 'T-%'`);
-    const neueNr = (terminNrResult && terminNrResult.max_nr) ? terminNrResult.max_nr + 1 : 1;
-    const terminNr = `T-${String(neueNr).padStart(5, '0')}`;
+    // Neue Termin-Nummer generieren (gleiches Format wie reguläre Termine: T-YYYY-NNN)
+    const terminNr = await this.generateTerminNr();
 
     let result;
     let verschobeneTermine = [];

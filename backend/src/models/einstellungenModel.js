@@ -293,7 +293,7 @@ class EinstellungenModel {
     // Zähle wie viele Termine an diesem Tag ein Ersatzauto haben
     const row = await getAsync(
       `SELECT COUNT(*) as vergeben FROM termine 
-       WHERE datum = ? AND ersatzauto = 1 AND status != 'storniert' AND geloescht = 0`,
+       WHERE datum = ? AND ersatzauto = 1 AND status != 'storniert' AND geloescht_am IS NULL`,
       [datum]
     );
     
