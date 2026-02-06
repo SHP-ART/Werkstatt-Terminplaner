@@ -18902,11 +18902,24 @@ class App {
     this.updatePlanungAenderungenUI();
 
     try {
-      // 1. Termine für das Datum laden
-      const termine = await TermineService.getAll(datum);
+      // 1. Termine für das Datum laden (API gibt jetzt {termine: [], aktivePausen: []} zurück)
+      const terminResponse = await TermineService.getAll(datum);
+      let termine = [];
+      let aktivePausen = [];
+      
+      // Prüfe ob neues Format mit aktivePausen
+      if (terminResponse && terminResponse.termine && Array.isArray(terminResponse.termine)) {
+        termine = terminResponse.termine;
+        aktivePausen = terminResponse.aktivePausen || [];
+      } else if (Array.isArray(terminResponse)) {
+        // Fallback für altes Format (nur Array)
+        termine = terminResponse;
+      }
 
       // 1b. Schwebende Termine laden (alle Termine, dann filtern)
-      const alleTermine = await TermineService.getAll(null);
+      const alleTermineResponse = await TermineService.getAll(null);
+      let alleTermine = Array.isArray(alleTermineResponse) ? alleTermineResponse : (alleTermineResponse.termine || []);
+      
       // Robuste Filterung: ist_schwebend kann 1, "1", true sein
       const schwebendeTermine = alleTermine.filter(t => 
         t.ist_schwebend === 1 || t.ist_schwebend === '1' || t.ist_schwebend === true
@@ -18936,15 +18949,8 @@ class App {
         console.error('Fehler beim Laden der Abwesenheiten:', error);
       }
       
-      // 3a2. Aktive Pausen laden
-      let aktivePausen = [];
-      try {
-        aktivePausen = await fetch(`${CONFIG.API_URL}/pause/aktive`)
-          .then(res => res.ok ? res.json() : []);
-        console.log('Aktive Pausen geladen:', aktivePausen);
-      } catch (error) {
-        console.error('Fehler beim Laden der aktiven Pausen:', error);
-      }
+      // aktivePausen wurden bereits mit Terminen geladen (siehe oben)
+      console.log('Aktive Pausen geladen:', aktivePausen);
       
       // 3b. Werkstatt-Einstellungen laden (für Nebenzeit)
       const einstellungen = await EinstellungenService.getWerkstatt();
@@ -19128,12 +19134,15 @@ class App {
           if (arbeitszeit) {
             this.addGesperrteZeitbereicheToTrack(track, arbeitszeit.arbeitsbeginn, arbeitszeit.arbeitsende, startHour, endHour);
           }
-          this.addMittagspauseToTrack(track, ma.mittagspause_start, startHour);
           
           // Prüfe ob Mitarbeiter in Pause ist
           const pauseInfo = aktivePausen.find(p => p.mitarbeiter_id === ma.id);
           if (pauseInfo) {
+            // Aktive Pause anzeigen
             this.addAktivePauseToTrack(track, pauseInfo, startHour);
+          } else {
+            // Nur geplante Pause anzeigen wenn keine aktive Pause läuft
+            this.addMittagspauseToTrack(track, ma.mittagspause_start, startHour, false); // false = geplant
           }
           
           // Drop-Events nur für nicht-abwesende registrieren
@@ -19207,12 +19216,15 @@ class App {
           if (arbeitszeit) {
             this.addGesperrteZeitbereicheToTrack(track, arbeitszeit.arbeitsbeginn, arbeitszeit.arbeitsende, startHour, endHour);
           }
-          this.addMittagspauseToTrack(track, lehrling.mittagspause_start, startHour);
           
           // Prüfe ob Lehrling in Pause ist
           const pauseInfo = aktivePausen.find(p => p.lehrling_id === lehrling.id);
           if (pauseInfo) {
+            // Aktive Pause anzeigen
             this.addAktivePauseToTrack(track, pauseInfo, startHour);
+          } else {
+            // Nur geplante Pause anzeigen wenn keine aktive Pause läuft
+            this.addMittagspauseToTrack(track, lehrling.mittagspause_start, startHour, false); // false = geplant
           }
           
           this.setupTimelineDropZone(track, startHour, 'lehrling');
@@ -19532,7 +19544,7 @@ class App {
     }
   }
 
-  addMittagspauseToTrack(track, pauseStart, startHour) {
+  addMittagspauseToTrack(track, pauseStart, startHour, istAktiv = false) {
     if (!pauseStart) return;
     
     const [pauseH, pauseM] = pauseStart.split(':').map(Number);
@@ -19546,17 +19558,37 @@ class App {
     const widthPx = pauseDauer * pixelPerMinute;
     
     const pauseBlock = document.createElement('div');
-    pauseBlock.className = 'timeline-mittagspause';
+    pauseBlock.className = istAktiv ? 'timeline-mittagspause timeline-pause-aktiv' : 'timeline-mittagspause timeline-pause-geplant';
+    pauseBlock.draggable = false; // Pausen sind nie verschiebbar
     pauseBlock.style.left = `${leftPx}px`;
     pauseBlock.style.width = `${widthPx}px`;
-    pauseBlock.title = `Mittagspause ${pauseStart} - ${pauseDauer} min`;
-    pauseBlock.innerHTML = '🍽️';
+    
+    if (!istAktiv) {
+      // Geplante Pause - gestrichelt und transparent
+      pauseBlock.style.opacity = '0.5';
+      pauseBlock.style.border = '2px dashed #ccc';
+      pauseBlock.style.background = 'repeating-linear-gradient(45deg, #f0f0f0, #f0f0f0 10px, #e0e0e0 10px, #e0e0e0 20px)';
+      pauseBlock.style.cursor = 'not-allowed';
+      pauseBlock.style.pointerEvents = 'none'; // Termine können über Pause hinweg platziert werden
+      pauseBlock.title = `Geplante Mittagspause ${pauseStart} - ${pauseDauer} min\n⚠️ Pause kann nicht verschoben werden\n✓ Termine können hier platziert werden`;
+      pauseBlock.innerHTML = '<span style="opacity:0.6">🍽️</span>';
+    } else {
+      pauseBlock.style.cursor = 'not-allowed';
+      pauseBlock.style.pointerEvents = 'none'; // Termine können über Pause hinweg platziert werden
+      pauseBlock.title = `Mittagspause ${pauseStart} - ${pauseDauer} min\n⚠️ Pause kann nicht verschoben werden\n✓ Termine können hier platziert werden`;
+      pauseBlock.innerHTML = '🍽️';
+    }
+    
+    pauseBlock.setAttribute('data-pause', 'true');
+    pauseBlock.setAttribute('data-locked', 'true');
     
     track.appendChild(pauseBlock);
   }
 
   /**
    * Fügt eine aktive Pause zur Timeline hinzu (30 min Block)
+   * HINWEIS: Pausenblöcke sind nicht verschiebbar (locked), aber Termine können
+   * darüber hinweg gezogen und in der Pausenzeit platziert werden (pointerEvents: none)
    * @param {HTMLElement} track - Timeline Track Element
    * @param {object} pauseInfo - Pause-Info Objekt mit pause_start_zeit und verbleibende_minuten
    * @param {number} startHour - Start der Timeline (z.B. 8)
@@ -19578,6 +19610,7 @@ class App {
     
     const pauseBlock = document.createElement('div');
     pauseBlock.className = 'timeline-aktive-pause';
+    pauseBlock.draggable = false; // Pause selbst nicht verschiebbar
     pauseBlock.style.left = `${leftPx}px`;
     pauseBlock.style.width = `${widthPx}px`;
     pauseBlock.style.background = 'linear-gradient(135deg, #fdcb6e 0%, #e17055 100%)';
@@ -19588,13 +19621,15 @@ class App {
     pauseBlock.style.justifyContent = 'center';
     pauseBlock.style.fontSize = '1.2em';
     pauseBlock.style.zIndex = '100';
-    pauseBlock.style.cursor = 'default';
+    pauseBlock.style.cursor = 'not-allowed'; 
     pauseBlock.style.boxShadow = '0 2px 6px rgba(230, 126, 34, 0.4)';
+    pauseBlock.style.pointerEvents = 'none'; // Termine können über Pause hinweg platziert werden
     
     const verbleibendeMin = pauseInfo.verbleibende_minuten || 0;
-    pauseBlock.title = `🍽️ AKTIVE PAUSE\nGestartet: ${pauseH.toString().padStart(2,'0')}:${pauseM.toString().padStart(2,'0')}\nVerbleibend: ${verbleibendeMin} Min.`;
+    pauseBlock.title = `🍽️ AKTIVE PAUSE\nGestartet: ${pauseH.toString().padStart(2,'0')}:${pauseM.toString().padStart(2,'0')}\nVerbleibend: ${verbleibendeMin} Min.\n⚠️ Pause kann nicht verschoben werden\n✓ Termine können hier platziert werden`;
     pauseBlock.innerHTML = `🍽️ <small style="margin-left:3px;">${verbleibendeMin}min</small>`;
     pauseBlock.setAttribute('data-pause', 'true');
+    pauseBlock.setAttribute('data-locked', 'true'); // Markierung für gesperrte Elemente
     
     track.appendChild(pauseBlock);
   }
@@ -20707,7 +20742,9 @@ class App {
     }
 
     // === TEIL 2 (Fortsetzung) nach der Pause ===
-    const teil2Dauer = endMinutes - pauseEndMinutes;
+    // Berechne verbleibende Arbeitszeit (nicht absolute Endzeit!)
+    const teil1Dauer = pauseStartMinutes - startMinutes;
+    const teil2Dauer = dauerMitNebenzeit - teil1Dauer; // Verbleibende Arbeitszeit
     if (teil2Dauer <= 0) return null; // Endet in der Pause
     
     const teil2StartHour = Math.floor(pauseEndMinutes / 60);
@@ -20931,6 +20968,24 @@ class App {
   createTimelineTerminWithPause(termin, startHour, endHour, mittagspauseStart, type = 'mitarbeiter') {
     const isSchwebend = termin.ist_schwebend === 1 || termin._istSchwebend;
     
+    // Prüfe ob Termin durch aktive Pause unterbrochen wurde
+    let pauseUnterbrochenBei = null;
+    let pauseStartZeit = null;
+    if (termin.arbeitszeiten_details) {
+      try {
+        const details = typeof termin.arbeitszeiten_details === 'string' 
+          ? JSON.parse(termin.arbeitszeiten_details) 
+          : termin.arbeitszeiten_details;
+        
+        if (details._pause_unterbrochen_bei) {
+          pauseUnterbrochenBei = details._pause_unterbrochen_bei;
+          pauseStartZeit = details._pause_start_zeit;
+        }
+      } catch (e) {
+        console.warn('Fehler beim Parsen von arbeitszeiten_details:', e);
+      }
+    }
+    
     // Startzeit parsen
     let startzeit = termin.startzeit || termin.bring_zeit || '08:00';
     const [startH, startM] = startzeit.split(':').map(Number);
@@ -20942,6 +20997,47 @@ class App {
     const startMinutes = startH * 60 + startM;
     const endMinutes = startMinutes + dauer;
     
+    // Fall 1: Termin wurde durch aktive Pause unterbrochen
+    if (pauseUnterbrochenBei) {
+      const elements = [];
+      const [pauseH, pauseM] = pauseUnterbrochenBei.split(':').map(Number);
+      const pauseStartMinuten = pauseH * 60 + pauseM;
+      const pauseEndMinuten = pauseStartMinuten + 30; // 30 Min Pause
+      
+      // Teil 1: Bis zur Pausenunterbrechung
+      const teil1Dauer = pauseStartMinuten - startMinutes;
+      const teil1 = this.createTimelineTerminElement(
+        termin, startHour, endHour, type, isSchwebend,
+        startzeit, teil1Dauer, dauer, false, true // letzter Parameter = unterbrochen
+      );
+      if (teil1) {
+        teil1.classList.add('termin-unterbrochen');
+        teil1.title = `⏸️ UNTERBROCHEN\n${termin.termin_nr || termin.id}\n${termin.arbeit}\nPause gestartet um ${pauseUnterbrochenBei}`;
+        elements.push(teil1);
+      }
+      
+      // Teil 2: Fortsetzung nach Pause
+      const teil2Dauer = dauer - teil1Dauer;
+      if (teil2Dauer > 0) {
+        const teil2StartH = Math.floor(pauseEndMinuten / 60);
+        const teil2StartM = pauseEndMinuten % 60;
+        const teil2Startzeit = `${String(teil2StartH).padStart(2, '0')}:${String(teil2StartM).padStart(2, '0')}`;
+        
+        const teil2 = this.createTimelineTerminElement(
+          termin, startHour, endHour, type, isSchwebend,
+          teil2Startzeit, teil2Dauer, dauer, true
+        );
+        if (teil2) {
+          teil2.classList.add('termin-fortsetzung-nach-pause');
+          teil2.title = `▶️ FORTSETZUNG NACH PAUSE\n${termin.termin_nr || termin.id}\n${termin.arbeit}\nFortsetzung um ${teil2Startzeit}`;
+          elements.push(teil2);
+        }
+      }
+      
+      return elements;
+    }
+    
+    // Fall 2: Termin geht über geplante Mittagspause (Standard-Verhalten)
     // Mittagspause parsen (Standard: 30 Minuten Dauer)
     let pauseStartMinuten = null;
     let pauseEndMinuten = null;
@@ -21905,8 +22001,9 @@ class App {
           blockEl.classList.add('geaendert');
         }
         
-        // Teil 2 (Fortsetzung)
-        const teil2Dauer = endMinutes - pauseEndMinutes;
+        // Teil 2 (Fortsetzung) - verbleibende Arbeitszeit
+        const gesamtDauer = endMinutes - startMinutes;
+        const teil2Dauer = gesamtDauer - teil1Dauer; // Verbleibende Arbeitszeit
         if (teil2Dauer > 0) {
           // Entferne alte Fortsetzung falls vorhanden
           const alteForts = document.getElementById(`timeline-arbeit-${terminId}-${arbeitIndex}-teil2`);
@@ -22017,8 +22114,9 @@ class App {
           <div class="termin-info">${teil1DauerText}</div>
         `;
         
-        // Teil 2: Nach der Pause (Fortsetzung)
-        const teil2Dauer = endMinutes - pauseEndMinutes;
+        // Teil 2: Nach der Pause (Fortsetzung) - verbleibende Arbeitszeit
+        const gesamtDauer = endMinutes - startMinutes;
+        const teil2Dauer = gesamtDauer - teil1Dauer; // Verbleibende Arbeitszeit
         if (teil2Dauer > 0) {
           const teil2StartH = Math.floor(pauseEndMinutes / 60);
           const teil2StartM = pauseEndMinutes % 60;
@@ -22359,8 +22457,9 @@ class App {
       terminEl.style.width = `${teil1WidthPx}px`;
       terminEl.classList.add('geaendert');
       
-      // Teil 2: Nach der Pause (Fortsetzung erstellen)
-      const teil2Dauer = endMinutes - pauseEndMinutes;
+      // Teil 2: Nach der Pause (Fortsetzung erstellen) - verbleibende Arbeitszeit
+      const gesamtDauer = endMinutes - startMinutes;
+      const teil2Dauer = gesamtDauer - teil1Dauer; // Verbleibende Arbeitszeit
       if (teil2Dauer > 0) {
         const teil2StartH = Math.floor(pauseEndMinutes / 60);
         const teil2StartM = pauseEndMinutes % 60;

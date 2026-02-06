@@ -187,12 +187,38 @@ class PauseController {
         // Keine Termine zum Verschieben, aber Pause kann trotzdem gestartet werden
       }
 
-      // 5. Verschiebe eigene Termine um 30 Minuten (falls vorhanden)
+      // 5. Verschiebe eigene Termine und unterbreche laufende Termine
       const jetzt = new Date();
       const jetztZeit = `${String(jetzt.getHours()).padStart(2, '0')}:${String(jetzt.getMinutes()).padStart(2, '0')}`;
 
       for (const termin of eigeneTermine) {
-        if (termin.startzeit && termin.startzeit >= jetztZeit) {
+        // Prüfe ob Termin läuft (status = 'in_arbeit')
+        if (termin.status === 'in_arbeit') {
+          try {
+            // Laufenden Termin unterbrechen
+            let details = {};
+            if (termin.arbeitszeiten_details) {
+              details = JSON.parse(termin.arbeitszeiten_details);
+            }
+            
+            // Speichere Pausenunterbrechung
+            details._pause_unterbrochen_bei = jetztZeit;
+            details._pause_start_zeit = jetzt.toISOString();
+            
+            // Verschiebe Endzeit um 30 Minuten
+            const neueEndzeit = termin.endzeit_berechnet ? addMinutesToTime(termin.endzeit_berechnet, 30) : null;
+
+            await PauseController.dbRun(`
+              UPDATE termine
+              SET endzeit_berechnet = ?, arbeitszeiten_details = ?
+              WHERE id = ?
+            `, [neueEndzeit, JSON.stringify(details), termin.id]);
+
+            console.log(`[Pause-Start] Laufender Termin ${termin.id} unterbrochen um ${jetztZeit}`);
+          } catch (e) {
+            console.error('Fehler beim Unterbrechen des laufenden Termins:', e);
+          }
+        } else if (termin.startzeit && termin.startzeit >= jetztZeit) {
           // Verschiebe nur zukünftige Termine
           const neueStartzeit = addMinutesToTime(termin.startzeit, 30);
           const neueEndzeit = termin.endzeit_berechnet ? addMinutesToTime(termin.endzeit_berechnet, 30) : null;

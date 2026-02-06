@@ -9,6 +9,7 @@ const openaiService = require('../services/openaiService');
 const { parsePagination } = require('../utils/pagination');
 const { SimpleCache } = require('../utils/cache');
 const { broadcastEvent } = require('../utils/websocket');
+const { db } = require('../config/database');
 
 // Cache für Mitarbeiter und Lehrlinge (Performance-Optimierung)
 let mitarbeiterCache = { data: null, timestamp: 0 };
@@ -25,6 +26,30 @@ function getTermineCacheKey(datum, pagination) {
 
 function invalidateTermineCache() {
   termineListCache.clear();
+}
+
+// Hilfsfunktion: Lade aktive Pausen für ein Datum
+async function getAktivePausenFuerDatum(datum) {
+  return new Promise((resolve, reject) => {
+    db.all(`
+      SELECT 
+        pt.id,
+        pt.mitarbeiter_id,
+        pt.lehrling_id,
+        pt.pause_start_zeit,
+        pt.pause_ende_zeit,
+        pt.datum
+      FROM pause_tracking pt
+      WHERE pt.datum = ? AND pt.abgeschlossen = 0
+    `, [datum], (err, rows) => {
+      if (err) {
+        console.error('[getAktivePausenFuerDatum] Fehler:', err);
+        resolve([]); // Bei Fehler leeres Array zurückgeben
+      } else {
+        resolve(rows || []);
+      }
+    });
+  });
 }
 
 async function getCachedMitarbeiter() {
@@ -606,12 +631,18 @@ class TermineController {
         const cacheKey = getTermineCacheKey(datum, null);
         const cached = termineListCache.get(cacheKey);
         if (cached) {
+          // Auch für gecachte Daten aktive Pausen hinzufügen
+          if (datum) {
+            const aktivePausen = await getAktivePausenFuerDatum(datum);
+            return res.json({ termine: cached, aktivePausen });
+          }
           return res.json(cached);
         }
         if (datum) {
           const rows = await TermineModel.getByDatum(datum);
+          const aktivePausen = await getAktivePausenFuerDatum(datum);
           termineListCache.set(cacheKey, rows);
-          return res.json(rows);
+          return res.json({ termine: rows, aktivePausen });
         }
         const rows = await TermineModel.getAll();
         termineListCache.set(cacheKey, rows);

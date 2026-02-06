@@ -22,6 +22,7 @@
 | `ersatzautos` | Ersatzfahrzeuge für Kunden |
 | `termin_phasen` | Mehrtägige Termin-Phasen |
 | `abwesenheiten` | ⚠️ **Aktuell**: Individuelle Mitarbeiter-/Lehrling-Abwesenheiten (aktiv genutzt) |
+| `pause_tracking` | 🍽️ Tatsächlich gestartete Mittagspausen mit Historie (30 Min. fest) |
 | `_schema_meta` | Interne Schema-Versionierung |
 
 **Hinweis:** Die Tabellen `mitarbeiter_abwesenheiten` und `abwesenheiten_legacy` wurden mit Migration 018 entfernt. Alte Daten wurden automatisch migriert.
@@ -379,6 +380,46 @@ Ersatzfahrzeuge für Kunden.
 
 ---
 
+### 🍽️ `pause_tracking`
+
+Tracking-Tabelle für **tatsächlich gestartete** Mittagspausen. Speichert wann ein Mitarbeiter oder Lehrling die Pause startet und beendet. Die Pausendauer ist fest auf **30 Minuten** festgelegt.
+
+**Unterschied zu geplanten Pausen:**
+- `mitarbeiter.mittagspause_start` und `lehrlinge.mittagspause_start` sind die **geplanten** Standard-Pausenzeiten
+- `pause_tracking` enthält die **tatsächlichen** Pausen, die aktiv gestartet wurden
+
+| Feld | Typ | Beschreibung |
+|------|-----|--------------|
+| `id` | INTEGER | Primärschlüssel (auto) |
+| `mitarbeiter_id` | INTEGER | FK → mitarbeiter.id (NULL wenn Lehrling) |
+| `lehrling_id` | INTEGER | FK → lehrlinge.id (NULL wenn Mitarbeiter) |
+| `pause_start_zeit` | TEXT | ISO 8601 Zeitstempel des Pausenstarts (**Pflicht**) |
+| `pause_ende_zeit` | TEXT | ISO 8601 Zeitstempel des Pausenendes (NULL solange Pause aktiv) |
+| `pause_naechster_termin_id` | INTEGER | FK → termine.id (Optional: Nächster Termin der automatisch nach Pause startet) |
+| `datum` | DATE | Pausendatum im Format YYYY-MM-DD (**Pflicht**) |
+| `abgeschlossen` | INTEGER | 0 = Pause läuft noch, 1 = Pause beendet (Standard: 0) |
+| `erstellt_am` | DATETIME | Erstellungszeitpunkt (Standard: CURRENT_TIMESTAMP) |
+
+**Verwendung:**
+- **Pausenstart:** Über `/api/pause/starten` wird ein neuer Eintrag mit `abgeschlossen=0` erstellt
+- **Pausenende:** Nach 30 Minuten setzt ein automatischer Cleanup-Job `abgeschlossen=1` und `pause_ende_zeit`
+- **Timeline-Anzeige:** Frontend zeigt aktive Pausen (`abgeschlossen=0`) als orangefarbenen Block, geplante Pausen als gestrichelt
+- **Terminverschiebung:** Beim Pausenstart werden alle zukünftigen Termine des Mitarbeiters/Lehrlings um 30 Min verschoben
+- **Laufende Termine:** Termine mit `status='in_arbeit'` werden unterbrochen und in `arbeitszeiten_details._pause_unterbrochen_bei` markiert
+
+**API-Endpunkte:**
+- `POST /api/pause/starten` - Startet eine Pause
+- `GET /api/pause/aktive` - Gibt alle aktiven Pausen zurück
+
+**Foreign Keys:**
+```sql
+FOREIGN KEY (mitarbeiter_id) REFERENCES mitarbeiter(id) ON DELETE CASCADE
+FOREIGN KEY (lehrling_id) REFERENCES lehrlinge(id) ON DELETE CASCADE
+FOREIGN KEY (pause_naechster_termin_id) REFERENCES termine(id) ON DELETE SET NULL
+```
+
+---
+
 ### 📅 `termin_phasen`
 
 Für mehrtägige Termine mit mehreren Phasen.
@@ -430,6 +471,10 @@ Für Performance optimiert:
 | `idx_abwesenheiten_mitarbeiter` | abwesenheiten | mitarbeiter_id |
 | `idx_abwesenheiten_lehrling` | abwesenheiten | lehrling_id |
 | `idx_abwesenheiten_datum` | abwesenheiten | datum_von, datum_bis |
+| `idx_pause_tracking_mitarbeiter` | pause_tracking | mitarbeiter_id |
+| `idx_pause_tracking_lehrling` | pause_tracking | lehrling_id |
+| `idx_pause_tracking_datum` | pause_tracking | datum |
+| `idx_pause_tracking_abgeschlossen` | pause_tracking | abgeschlossen |
 
 ---
 

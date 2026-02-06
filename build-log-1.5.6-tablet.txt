@@ -1,0 +1,11 @@
+﻿  ÔÇó electron-builder  version=24.13.3 os=10.0.26200
+  ÔÇó loaded configuration  file=package.json ("build" field)
+  ÔÇó packaging       platform=win32 arch=x64 electron=28.3.3 appOutDir=dist\win-unpacked
+  ÔÇó default Electron icon is used  reason=application icon is not set
+  ÔÇó packaging       platform=win32 arch=ia32 electron=28.3.3 appOutDir=dist\win-ia32-unpacked
+  ÔÇó building        target=nsis file=dist\Werkstatt-Intern-Setup-1.5.6.exe archs=x64, ia32 oneClick=true perMachine=false
+  ÔÇó building block map  blockMapFile=dist\Werkstatt-Intern-Setup-1.5.6.exe.blockmap
+  ÔÇó building        target=nsis file=dist\Werkstatt-Intern-Setup-1.5.6-x64.exe archs=x64 oneClick=true perMachine=false
+  ÔÇó building block map  blockMapFile=dist\Werkstatt-Intern-Setup-1.5.6-x64.exe.blockmap
+  ÔÇó building        target=nsis file=dist\Werkstatt-Intern-Setup-1.5.6-ia32.exe archs=ia32 oneClick=true perMachine=false
+  ÔÇó building block map  blockMapFile=dist\Werkstatt-Intern-Setup-1.5.6-ia32.exe.blockmap
