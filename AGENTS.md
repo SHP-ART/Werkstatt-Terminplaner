@@ -10,7 +10,6 @@ Kurzleitfaden für neue Beiträge zum Werkstatt-Terminplaner. Fokus: Klarheit, k
 
 ## Build, Test, and Development Commands
 - Komplettstart: `./start.sh` (macOS/Linux) oder `start.bat` (Windows) – installiert fehlende Dependencies, startet Backend (3001) mit Electron-UI und schreibt Logs.
-- Backend isoliert: `./start_server_only.sh` (nur Backend ohne Electron)
 - Backend: `cd backend && npm install` (erstmalig), danach `npm start` für Produktion oder `npm run dev` mit nodemon-Reload.
 - Stop: `./stop.sh` (stoppt Backend + Electron)
 

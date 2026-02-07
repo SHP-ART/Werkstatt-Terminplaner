@@ -22,7 +22,7 @@ Schema updates are applied automatically at startup by:
 Start the backend normally:
 
 ```bash
-./start_server_only.sh
+./start.sh
 ```
 
 Check `logs/backend.log` for messages like:
