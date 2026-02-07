@@ -31,7 +31,7 @@ if %ERRORLEVEL% NEQ 0 (
 
 echo.
 echo [2/3] Erstelle Windows Build...
-call npm run build:portable
+call npm run build:win
 if %ERRORLEVEL% NEQ 0 (
     echo FEHLER beim Build!
     pause
@@ -41,8 +41,8 @@ if %ERRORLEVEL% NEQ 0 (
 echo.
 echo [3/3] Build abgeschlossen!
 echo.
-echo Die fertige .exe Datei befindet sich in:
-echo   %CD%\dist\WerkstattIntern-Portable.exe
+echo Die fertigen Installer befinden sich in:
+echo   %CD%\dist\
 echo.
 echo Kopiere diese Datei auf das Tablet.
 echo.
