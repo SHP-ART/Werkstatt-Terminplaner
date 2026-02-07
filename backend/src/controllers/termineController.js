@@ -2283,13 +2283,13 @@ class TermineController {
       console.error('Fehler bei berechneZeitenNeu:', err);
       res.status(500).json({ error: err.message });
     }
-  },
+  }
 
   /**
    * Schließt eine einzelne Arbeit innerhalb eines Termins ab
    * PUT /termine/:id/arbeit/:arbeitName/abschliessen
    */
-  async completeEinzelarbeit(req, res) {
+  static async completeEinzelarbeit(req, res) {
     try {
       const { id, arbeitName } = req.params;
       const { tatsaechliche_zeit } = req.body;
