@@ -272,6 +272,99 @@ class TermineModel {
     throw lastError || new Error('Konnte keine eindeutige Termin-Nummer generieren');
   }
 
+  /**
+   * Schließt eine einzelne Arbeit innerhalb von arbeitszeiten_details ab
+   * @param {number} terminId - ID des Termins
+   * @param {string} arbeitName - Name der abzuschließenden Arbeit
+   * @param {number} tatsaechlicheZeit - Tatsächliche Dauer in Minuten
+   * @returns {Promise<object>} - Aktualisierter Termin
+   */
+  static async completeEinzelarbeit(terminId, arbeitName, tatsaechlicheZeit) {
+    return new Promise((resolve, reject) => {
+      // 1. Termin laden
+      db.get('SELECT * FROM termine WHERE id = ?', [terminId], (err, termin) => {
+        if (err) return reject(err);
+        if (!termin) return reject(new Error('Termin nicht gefunden'));
+
+        let details = {};
+        try {
+          details = termin.arbeitszeiten_details ? JSON.parse(termin.arbeitszeiten_details) : {};
+        } catch (e) {
+          return reject(new Error('Fehler beim Parsen von arbeitszeiten_details'));
+        }
+
+        // 2. Prüfen ob Arbeit existiert
+        if (!details[arbeitName]) {
+          return reject(new Error(`Arbeit "${arbeitName}" nicht gefunden`));
+        }
+
+        // 3. Arbeit als abgeschlossen markieren
+        if (typeof details[arbeitName] === 'object') {
+          details[arbeitName].abgeschlossen = true;
+          details[arbeitName].tatsaechliche_zeit = tatsaechlicheZeit;
+          details[arbeitName].fertigstellung_zeit = new Date().toISOString();
+        } else {
+          // Wenn nur Zahl gespeichert war, in Objekt umwandeln
+          details[arbeitName] = {
+            zeit: details[arbeitName],
+            abgeschlossen: true,
+            tatsaechliche_zeit: tatsaechlicheZeit,
+            fertigstellung_zeit: new Date().toISOString()
+          };
+        }
+
+        // 4. Prüfen ob ALLE Arbeiten abgeschlossen sind
+        let alleAbgeschlossen = true;
+        let gesamtTatsaechlicheZeit = 0;
+        
+        for (const [key, value] of Object.entries(details)) {
+          if (key.startsWith('_')) continue; // Metadaten überspringen
+          
+          if (typeof value === 'object') {
+            if (!value.abgeschlossen) {
+              alleAbgeschlossen = false;
+            } else {
+              gesamtTatsaechlicheZeit += value.tatsaechliche_zeit || value.zeit || 0;
+            }
+          } else {
+            // Nicht-Objekt = noch nicht abgeschlossen
+            alleAbgeschlossen = false;
+          }
+        }
+
+        // 5. Update durchführen
+        const neuerStatus = alleAbgeschlossen ? 'abgeschlossen' : 'in_bearbeitung';
+        const neueTatsaechlicheZeit = alleAbgeschlossen ? gesamtTatsaechlicheZeit : null;
+        const neueFertigstellung = alleAbgeschlossen ? new Date().toISOString() : null;
+
+        const sql = `
+          UPDATE termine 
+          SET arbeitszeiten_details = ?,
+              status = ?,
+              tatsaechliche_zeit = ?,
+              fertigstellung_zeit = ?
+          WHERE id = ?
+        `;
+
+        db.run(sql, [
+          JSON.stringify(details),
+          neuerStatus,
+          neueTatsaechlicheZeit,
+          neueFertigstellung,
+          terminId
+        ], function(err) {
+          if (err) return reject(err);
+          
+          // Aktualiserten Termin zurückgeben
+          db.get('SELECT * FROM termine WHERE id = ?', [terminId], (err, updated) => {
+            if (err) return reject(err);
+            resolve(updated);
+          });
+        });
+      });
+    });
+  }
+
   static async update(id, data) {
     const { 
       tatsaechliche_zeit, status, geschaetzte_zeit, arbeit, arbeitszeiten_details, 

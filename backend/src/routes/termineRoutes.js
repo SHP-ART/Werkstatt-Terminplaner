@@ -35,6 +35,9 @@ router.get('/teile-status', TermineController.getTeileStatus);
 router.get('/dropdown', TermineController.getDropdownData);
 router.post('/berechne-zeiten-neu', TermineController.berechneZeitenNeu);
 
+// Einzelarbeit abschließen (muss vor :id stehen!)
+router.put('/:id/arbeit/:arbeitName/abschliessen', TermineController.completeEinzelarbeit);
+
 // Standard CRUD-Routes (müssen NACH spezifischen Routes stehen)
 router.get('/', TermineController.getAll);
 router.get('/:id', TermineController.getById);

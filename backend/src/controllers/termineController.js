@@ -2283,6 +2283,50 @@ class TermineController {
       console.error('Fehler bei berechneZeitenNeu:', err);
       res.status(500).json({ error: err.message });
     }
+  },
+
+  /**
+   * Schließt eine einzelne Arbeit innerhalb eines Termins ab
+   * PUT /termine/:id/arbeit/:arbeitName/abschliessen
+   */
+  async completeEinzelarbeit(req, res) {
+    try {
+      const { id, arbeitName } = req.params;
+      const { tatsaechliche_zeit } = req.body;
+
+      console.log(`[completeEinzelarbeit] Termin ${id}, Arbeit "${arbeitName}", Zeit: ${tatsaechliche_zeit}min`);
+
+      if (!tatsaechliche_zeit || isNaN(tatsaechliche_zeit)) {
+        return res.status(400).json({ error: 'tatsaechliche_zeit (in Minuten) erforderlich' });
+      }
+
+      const aktualisierterTermin = await TermineModel.completeEinzelarbeit(
+        id,
+        decodeURIComponent(arbeitName),
+        parseInt(tatsaechliche_zeit)
+      );
+
+      // Cache invalidieren
+      invalidateTermineCache();
+      invalidateAuslastungCache(aktualisierterTermin.datum);
+
+      // WebSocket-Broadcast
+      broadcastEvent('termin_updated', { 
+        terminId: id,
+        datum: aktualisierterTermin.datum
+      });
+
+      res.json({
+        success: true,
+        termin: aktualisierterTermin,
+        message: aktualisierterTermin.status === 'abgeschlossen' 
+          ? 'Alle Arbeiten abgeschlossen - Termin ist fertig'
+          : `Arbeit "${arbeitName}" abgeschlossen`
+      });
+    } catch (err) {
+      console.error('Fehler bei completeEinzelarbeit:', err);
+      res.status(500).json({ error: err.message });
+    }
   }
 }
 

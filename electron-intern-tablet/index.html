@@ -539,6 +539,96 @@
       animation: pulse-warning 2s ease-in-out infinite;
     }
 
+    /* ========== ARBEITEN-LISTE ========== */
+    .arbeiten-liste {
+      margin-top: 12px;
+      border-radius: 8px;
+      overflow: hidden;
+      background: #f8f9fa;
+      border: 1px solid #dee2e6;
+    }
+
+    .arbeit-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 10px 12px;
+      border-bottom: 1px solid #dee2e6;
+      transition: background 0.2s;
+    }
+
+    .arbeit-item:last-child {
+      border-bottom: none;
+    }
+
+    .arbeit-item:hover {
+      background: #e9ecef;
+    }
+
+    .arbeit-item.abgeschlossen {
+      background: #d4edda;
+      opacity: 0.8;
+    }
+
+    .arbeit-item.abgeschlossen:hover {
+      background: #c3e6cb;
+    }
+
+    .arbeit-info {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex: 1;
+    }
+
+    .arbeit-icon {
+      font-size: 1.2em;
+      flex-shrink: 0;
+    }
+
+    .arbeit-name {
+      font-weight: 500;
+      color: #212529;
+      flex: 1;
+    }
+
+    .arbeit-item.abgeschlossen .arbeit-name {
+      text-decoration: line-through;
+      color: #6c757d;
+    }
+
+    .arbeit-zeit {
+      font-size: 0.85em;
+      color: #6c757d;
+      font-family: monospace;
+      margin-right: 8px;
+    }
+
+    .arbeit-btn {
+      padding: 6px 12px;
+      border: none;
+      border-radius: 6px;
+      background: linear-gradient(135deg, #1976d2 0%, #42a5f5 100%);
+      color: white;
+      font-size: 0.75em;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+      white-space: nowrap;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    }
+
+    .arbeit-btn:hover {
+      background: linear-gradient(135deg, #1565c0 0%, #1e88e5 100%);
+      transform: translateY(-2px);
+      box-shadow: 0 4px 8px rgba(25, 118, 210, 0.3);
+    }
+
+    .arbeit-btn:active {
+      transform: translateY(0);
+      box-shadow: 0 2px 4px rgba(25, 118, 210, 0.2);
+    }
+
     @keyframes pulse-warning {
       0%, 100% {
         border-color: var(--warning);
@@ -594,6 +684,97 @@
       .tablet-btn:active {
         transform: scale(0.95);
       }
+    }
+
+    /* ========== ARBEITEN-LISTE ========== */
+    .arbeiten-liste {
+      margin: 15px 0;
+      background: rgba(0, 0, 0, 0.03);
+      border-radius: 8px;
+      padding: 10px;
+    }
+
+    .arbeit-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px;
+      margin-bottom: 8px;
+      background: white;
+      border-radius: 6px;
+      border-left: 4px solid var(--accent);
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+      transition: all 0.2s;
+    }
+
+    .arbeit-item:last-child {
+      margin-bottom: 0;
+    }
+
+    .arbeit-item.abgeschlossen {
+      opacity: 0.6;
+      border-left-color: var(--success);
+      background: #f1f8f4;
+    }
+
+    .arbeit-item.offen {
+      border-left-color: var(--accent);
+    }
+
+    .arbeit-info {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex: 1;
+      min-width: 0;
+    }
+
+    .arbeit-icon {
+      font-size: 1.2em;
+      flex-shrink: 0;
+    }
+
+    .arbeit-name {
+      font-weight: 600;
+      font-size: 0.9em;
+      flex: 1;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .arbeit-zeit {
+      font-size: 0.85em;
+      color: var(--text-muted);
+      font-weight: 500;
+      flex-shrink: 0;
+    }
+
+    .arbeit-btn {
+      flex-shrink: 0;
+      padding: 6px 12px;
+      background: linear-gradient(135deg, #1976d2 0%, #42a5f5 100%);
+      color: white;
+      border: none;
+      border-radius: 6px;
+      font-weight: 700;
+      font-size: 0.75em;
+      cursor: pointer;
+      transition: all 0.2s;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      box-shadow: 0 2px 4px rgba(25, 118, 210, 0.3);
+    }
+
+    .arbeit-btn:hover {
+      background: linear-gradient(135deg, #1565c0 0%, #1e88e5 100%);
+      transform: translateY(-2px);
+      box-shadow: 0 4px 8px rgba(25, 118, 210, 0.4);
+    }
+
+    .arbeit-btn:active {
+      transform: translateY(0);
+      box-shadow: 0 2px 4px rgba(25, 118, 210, 0.3);
     }
 
     /* Verschobene Termine */
@@ -1307,6 +1488,87 @@
       return false;
     }
 
+    /**
+     * Extrahiert Arbeiten aus arbeitszeiten_details und gibt Array zurück
+     */
+    function getArbeitenFromTermin(termin) {
+      if (!termin.arbeitszeiten_details) return [];
+      
+      try {
+        const details = typeof termin.arbeitszeiten_details === 'string'
+          ? JSON.parse(termin.arbeitszeiten_details)
+          : termin.arbeitszeiten_details;
+        
+        const arbeiten = [];
+        for (const [key, value] of Object.entries(details)) {
+          if (key.startsWith('_')) continue; // Meta-Felder überspringen
+          
+          let arbeit = {
+            name: key,
+            zeit: 0,
+            abgeschlossen: false,
+            tatsaechliche_zeit: null,
+            fertigstellung_zeit: null
+          };
+          
+          if (typeof value === 'number') {
+            arbeit.zeit = value;
+          } else if (typeof value === 'object') {
+            arbeit.zeit = value.zeit || 0;
+            arbeit.abgeschlossen = value.abgeschlossen === true;
+            arbeit.tatsaechliche_zeit = value.tatsaechliche_zeit || null;
+            arbeit.fertigstellung_zeit = value.fertigstellung_zeit || null;
+          }
+          
+          arbeiten.push(arbeit);
+        }
+        
+        return arbeiten;
+      } catch (e) {
+        console.error('[getArbeitenFromTermin] Parse-Fehler:', e);
+        return [];
+      }
+    }
+
+    /**
+     * Rendert einzelne Arbeiten mit Buttons
+     */
+    function renderArbeitenListe(termin, personId, personTyp) {
+      const arbeiten = getArbeitenFromTermin(termin);
+      
+      if (arbeiten.length === 0) {
+        return ''; // Keine Arbeiten vorhanden
+      }
+      
+      let html = '<div class=\"arbeiten-liste\">';
+      
+      arbeiten.forEach((arbeit, index) => {
+        const icon = arbeit.abgeschlossen ? '✅' : '⚙️';
+        const statusClass = arbeit.abgeschlossen ? 'abgeschlossen' : 'offen';
+        const zeitText = arbeit.abgeschlossen 
+          ? `${formatMinutesToHours(arbeit.tatsaechliche_zeit || arbeit.zeit)}`
+          : `~${formatMinutesToHours(arbeit.zeit)}`;
+        
+        html += `
+          <div class=\"arbeit-item ${statusClass}\">
+            <div class=\"arbeit-info\">
+              <span class=\"arbeit-icon\">${icon}</span>
+              <span class=\"arbeit-name\">${escapeHtml(arbeit.name)}</span>
+              <span class=\"arbeit-zeit\">${zeitText}</span>
+            </div>
+            ${!arbeit.abgeschlossen && termin.status === 'in_arbeit' ? `
+            <button class=\"arbeit-btn\" onclick=\"handleBeendenEinzelarbeit(${termin.id}, '${arbeit.name.replace(/'/g, \"\\\\'\").replace(/\"/g, '&quot;')}', '${escapeHtml(termin.kunde_name || '')}')\">
+              ✓ Fertig
+            </button>
+            ` : ''}
+          </div>
+        `;
+      });
+      
+      html += '</div>';
+      return html;
+    }
+
     // ========== BUTTON HANDLER ==========
     async function handleBestaetigen(personId, personTyp, terminId, kundeName) {
       try {
@@ -1334,56 +1596,51 @@
       }
     }
 
+    /**
+     * Schließt eine einzelne Arbeit innerhalb eines Termins ab
+     */
+    async function handleBeendenEinzelarbeit(terminId, arbeitName, kundeName) {
+      try {
+        console.log(`[handleBeendenEinzelarbeit] Termin ${terminId}, Arbeit "${arbeitName}"`);
+        
+        // Frage nach tatsächlicher Dauer
+        const dauer = prompt(
+          `Arbeit "${arbeitName}" abschließen\n\nBitte geben Sie die tatsächliche Dauer in Minuten ein:`,
+          '60'
+        );
+        
+        if (dauer === null) {
+          console.log('[DEBUG] Abschließen abgebrochen');
+          return;
+        }
+        
+        const dauerMin = parseInt(dauer);
+        if (isNaN(dauerMin) || dauerMin <= 0) {
+          showToast('Ungültige Dauer', 'error');
+          return;
+        }
+        
+        // API-Call zum Abschließen der einzelnen Arbeit
+        const response = await ApiService.put(
+          `/termine/${terminId}/arbeit/${encodeURIComponent(arbeitName)}/abschliessen`,
+          { tatsaechliche_zeit: dauerMin }
+        );
+        
+        console.log('[DEBUG] Arbeit abgeschlossen:', response);
+        await loadTeamUebersicht();
+        showToast(response.message || `Arbeit "${arbeitName}" abgeschlossen`, 'success');
+      } catch (error) {
+        console.error('[ERROR] Fehler beim Abschließen der Arbeit:', error);
+        showToast(`Fehler: ${error.message}`, 'error');
+      }
+    }
+
+    /**
+     * Schließt einen gesamten Termin ab (für Termine ohne arbeitszeiten_details)
+     */
     async function handleBeenden(terminId, kundeName) {
       try {
         console.log('[DEBUG] handleBeenden - terminId:', terminId, 'Kunde:', kundeName);
-        
-        // Lade Termin-Details um zu prüfen ob mehrere Arbeiten vorhanden sind
-        const termin = await ApiService.get(`/termine/${terminId}`);
-        console.log('[DEBUG] Termin-Details geladen:', termin);
-        console.log('[DEBUG] arbeitszeiten_details:', termin.arbeitszeiten_details);
-        
-        // Parse Arbeiten
-        let arbeiten = [];
-        if (termin.arbeitszeiten_details) {
-          try {
-            const details = typeof termin.arbeitszeiten_details === 'string'
-              ? JSON.parse(termin.arbeitszeiten_details)
-              : termin.arbeitszeiten_details;
-            
-            // Zähle nur echte Arbeiten (nicht Meta-Felder wie _gesamt_mitarbeiter_id)
-            arbeiten = Object.keys(details).filter(key => 
-              !key.startsWith('_') && 
-              (typeof details[key] === 'object' || typeof details[key] === 'number')
-            );
-            
-            console.log('[DEBUG] Anzahl Arbeiten gefunden:', arbeiten.length);
-            console.log('[DEBUG] Arbeiten:', arbeiten);
-          } catch (e) {
-            console.error('[ERROR] Fehler beim Parsen von arbeitszeiten_details:', e);
-          }
-        }
-        
-        // WARNUNG wenn mehrere Arbeiten - Bestätigungs-Dialog
-        if (arbeiten.length > 1) {
-          console.warn('[WARNUNG] Termin hat mehrere Arbeiten - alle würden abgeschlossen!');
-          
-          const arbeitenListe = arbeiten.map((arbeit, index) => `  ${index + 1}. ${arbeit}`).join('\n');
-          const bestaetigung = confirm(
-            `⚠️ ACHTUNG: Mehrere Arbeiten!\n\n` +
-            `Dieser Termin hat ${arbeiten.length} Arbeiten:\n\n${arbeitenListe}\n\n` +
-            `Wenn Sie fortfahren, werden ALLE Arbeiten als abgeschlossen markiert.\n\n` +
-            `Sind wirklich ALLE Arbeiten fertig?`
-          );
-          
-          if (!bestaetigung) {
-            console.log('[DEBUG] Abschließen abgebrochen durch Benutzer (nicht alle Arbeiten fertig)');
-            showToast('Abgeschlossen abgebrochen', 'info');
-            return;
-          }
-          
-          console.log('[DEBUG] Benutzer hat bestätigt - alle Arbeiten werden abgeschlossen');
-        }
         
         // Termin als abgeschlossen markieren
         await ApiService.put(`/termine/${terminId}`, { 
@@ -1392,17 +1649,10 @@
         });
         
         console.log('[DEBUG] Termin erfolgreich abgeschlossen');
-        
         await loadTeamUebersicht();
-        
-        if (arbeiten.length > 1) {
-          showToast(`Auftrag abgeschlossen: ${kundeName} (${arbeiten.length} Arbeiten)`, 'success');
-        } else {
-          showToast(`Auftrag abgeschlossen: ${kundeName}`, 'success');
-        }
+        showToast(`Auftrag abgeschlossen: ${kundeName}`, 'success');
       } catch (error) {
         console.error('[ERROR] Fehler beim Beenden:', error);
-        console.error('[ERROR] Stack:', error.stack);
         showToast(`Fehler: ${error.message}`, 'error');
       }
     }
@@ -1623,14 +1873,20 @@
         if (istVerschoben) badges += '<span class="badge-verschoben">📅 Verschoben</span>';
         if (istVerspaetet) badges += '<span class="badge-verspaetet">⚠️ Verzögerung</span>';
 
+        // Prüfe ob Termin mehrere Arbeiten hat
+        const arbeiten = getArbeitenFromTermin(aktuellerAuftrag);
+        const hatMehrereArbeiten = arbeiten.length > 1;
+
         bodyContent = `
           <div class="auftrag-info ${istVerschoben ? 'termin-verschoben' : ''} ${istVerspaetet ? 'termin-verspaetet' : ''}">
             <div class="auftrag-label">🔧 Aktueller Auftrag ${badges}</div>
             <div class="auftrag-nr">${escapeHtml(aktuellerAuftrag.termin_nr) || '-'}</div>
             <div class="auftrag-kunde">${escapeHtml(aktuellerAuftrag.kunde_name) || '-'}</div>
             <div class="auftrag-kennzeichen">${escapeHtml(aktuellerAuftrag.kennzeichen) || '-'}</div>
-            <div class="auftrag-arbeit">${escapeHtml(aktuellerAuftrag.arbeit) || '-'}</div>
+            ${!hatMehrereArbeiten ? `<div class="auftrag-arbeit">${escapeHtml(aktuellerAuftrag.arbeit) || '-'}</div>` : ''}
           </div>
+
+          ${hatMehrereArbeiten ? renderArbeitenListe(aktuellerAuftrag, personId, typ) : ''}
 
           <div class="zeit-info">
             <div class="zeit-item">
@@ -1717,11 +1973,17 @@
       // Bestimme den Termin, für den Buttons angezeigt werden sollen
       const terminMitButtons = aktuellerAuftrag || naechsterAuftrag;
       
+      // Prüfe ob Termin mehrere Arbeiten hat
+      const terminArbeiten = terminMitButtons ? getArbeitenFromTermin(terminMitButtons) : [];
+      const hatMehrereArbeiten = terminArbeiten.length > 1;
+      
       // 1. Toggle-Button: Starten/Fertig - IMMER ANZEIGEN
       const kannStarten = terminMitButtons && !inPause && !inBerufsschule && !istAbwesend && 
                          (terminMitButtons.status === 'geplant' || terminMitButtons.status === 'offen');
+      // Fertig-Button nur zeigen wenn KEINE mehreren Arbeiten oder ALLE Arbeiten abgeschlossen
+      const alleArbeitenAbgeschlossen = terminArbeiten.length > 0 && terminArbeiten.every(a => a.abgeschlossen);
       const kannBeenden = terminMitButtons && !inPause && !inBerufsschule && !istAbwesend && 
-                         terminMitButtons.status === 'in_arbeit';
+                         terminMitButtons.status === 'in_arbeit' && !hatMehrereArbeiten;
       
       if (kannStarten) {
         // Starten-Button aktiv
@@ -1731,12 +1993,20 @@
             <span class="btn-icon">▶️</span> Starten
           </button>
         `;
-      } else if (kannBeenden) {
-        // Fertig-Button aktiv
+      } else if (kannBeenden || (hatMehrereArbeiten && alleArbeitenAbgeschlossen)) {
+        // Fertig-Button aktiv (nur bei einzelner Arbeit oder wenn alle Arbeiten fertig)
+        const buttonText = hatMehrereArbeiten ? 'Alle Fertig ✓' : 'Fertig';
         buttonsHtml += `
           <button class="tablet-btn tablet-btn-complete" 
                   onclick="handleBeenden(${terminMitButtons.id}, '${escapeHtml(terminMitButtons.kunde_name)}')">
-            <span class="btn-icon">✓</span> Fertig
+            <span class="btn-icon">✓</span> ${buttonText}
+          </button>
+        `;
+      } else if (hatMehrereArbeiten && terminMitButtons.status === 'in_arbeit') {
+        // Bei mehreren Arbeiten in Arbeit: Kein globaler Fertig-Button (nur einzelne Arbeiten-Buttons)
+        buttonsHtml += `
+          <button class="tablet-btn tablet-btn-confirm" disabled style="opacity: 0.5;">
+            <span class="btn-icon">⚙️</span> In Arbeit
           </button>
         `;
       } else {
