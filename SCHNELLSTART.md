@@ -8,15 +8,15 @@
 3. **Firewall öffnen**: Port 3001 freigeben (siehe NETZWERK-INSTALLATION.md)
 
 ### Täglich:
-1. Doppelklick auf **`start-server.bat`** → Fenster offen lassen!
+1. Doppelklick auf **`start.bat`** → Fenster offen lassen!
 2. Doppelklick auf **`werkstattplaner-oeffnen.bat`**
 3. Im Browser → **Einstellungen** → Server-IP: `localhost` → Port: `3001` → Speichern
 
 ### Windows-Setup (Details):
 1. **Node.js LTS** installieren (empfohlen) und danach den Rechner neu starten
 2. Start-Skripte:
-   - `start-server.bat` (Backend + WebSocket)
-   - `werkstattplaner-oeffnen.bat` (Frontend im Browser)
+   - `start.bat` (Backend + Electron UI)
+   - `werkstattplaner-oeffnen.bat` (Alternative: Frontend im Browser)
 3. **Ports freigeben**:
    - `3001` (Backend + WebSocket)
    - optional `3000` (Frontend, falls getrennt gestartet)
@@ -42,7 +42,7 @@
 ## 🔴 Probleme?
 
 **"Verbindung fehlgeschlagen":**
-- Ist der Server-PC an und läuft `start-server.bat`?
+- Ist der Server-PC an und läuft `start.bat`?
 - Ist die IP-Adresse in den Einstellungen richtig?
 - Firewall prüfen!
 

@@ -117,7 +117,7 @@ Siehe [NETZWERK-INSTALLATION.md](NETZWERK-INSTALLATION.md) für Details.
 - **Detaillierte Anleitung**: Siehe [NETZWERK-INSTALLATION.md](NETZWERK-INSTALLATION.md)
 
 **Windows:**
-- **Server-PC**: Doppelklick auf `start-server.bat` (startet den zentralen Server)
+- **Server-PC**: Doppelklick auf `start.bat` (startet den zentralen Server)
 - **Alle PCs**: Doppelklick auf `werkstattplaner-oeffnen.bat` (öffnet die Anwendung)
 - **Konfiguration**: Im Browser → Einstellungen → Server-Verbindung einstellen
 

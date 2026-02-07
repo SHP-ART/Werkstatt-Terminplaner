@@ -25,7 +25,7 @@ echo   Einstellungen ^> Server-Verbindung
 echo und geben Sie die IP-Adresse des Server-PCs ein.
 echo.
 echo Wenn dies der Server-PC ist, verwenden Sie:
-echo   start-server.bat
+echo   start.bat
 echo um den Server zu starten.
 echo.
 

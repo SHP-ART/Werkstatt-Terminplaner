@@ -55,7 +55,7 @@ Der Server muss auf Port 3001 erreichbar sein:
 
 ### Schritt 5: Server starten (auf Server-PC)
 1. Navigieren Sie zum Ordner `Werkstatt-Terminplaner`
-2. Doppelklicken Sie auf **`start-server.bat`**
+2. Doppelklicken Sie auf **`start.bat`**
 3. Ein Fenster öffnet sich und zeigt:
    ```
    Server läuft jetzt!
@@ -96,7 +96,7 @@ Der Server muss auf Port 3001 erreichbar sein:
 2. Sie sollten sehen: "✓ Verbindung erfolgreich!"
 3. Falls nicht, prüfen Sie:
    - Ist der Server-PC eingeschaltet?
-   - Läuft `start-server.bat` auf dem Server-PC?
+   - Läuft `start.bat` auf dem Server-PC?
    - Ist die IP-Adresse korrekt?
    - Ist die Firewall richtig konfiguriert?
 
@@ -104,7 +104,7 @@ Der Server muss auf Port 3001 erreichbar sein:
 
 ### Auf dem Server-PC:
 1. PC einschalten
-2. `start-server.bat` starten (Fenster offen lassen!)
+2. `start.bat` starten (Fenster offen lassen!)
 3. `werkstattplaner-oeffnen.bat` starten
 
 ### Auf Client-PCs:
@@ -132,7 +132,7 @@ Der Server muss auf Port 3001 erreichbar sein:
    - Tipp: Richten Sie eine statische IP-Adresse ein
 
 4. **Server läuft nicht**
-   - Ist `start-server.bat` auf dem Server-PC geöffnet?
+   - Ist `start.bat` auf dem Server-PC geöffnet?
    - Prüfen Sie, ob dort Fehlermeldungen angezeigt werden
 
 ### Server-Fenster schließt sich sofort
@@ -188,7 +188,7 @@ Um zu verhindern, dass sich die IP-Adresse des Server-PCs ändert:
 
 Bei Problemen überprüfen Sie:
 1. Ist Node.js auf dem Server-PC installiert?
-2. Läuft `start-server.bat` auf dem Server-PC?
+2. Läuft `start.bat` auf dem Server-PC?
 3. Ist die Firewall richtig konfiguriert?
 4. Sind alle PCs im selben Netzwerk?
 5. Ist die IP-Adresse in den Einstellungen korrekt?
