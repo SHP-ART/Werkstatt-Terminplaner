@@ -301,6 +301,14 @@ ipcMain.handle('backup-create', async () => {
     const backupName = `werkstatt_backup_${timestamp}.db`;
     const dest = path.join(backupDir, backupName);
     
+    // WAL-Checkpoint vor Backup durchführen
+    try {
+      const { db } = require('./src/config/database');
+      await new Promise((resolve) => {
+        db.run('PRAGMA wal_checkpoint(TRUNCATE);', () => resolve());
+      });
+    } catch (e) { /* nicht kritisch */ }
+    
     fs.copyFileSync(dbPath, dest);
     const stats = fs.statSync(dest);
     
@@ -324,7 +332,22 @@ ipcMain.handle('backup-restore', async (event, filename) => {
       return { success: false, error: 'Backup nicht gefunden' };
     }
     
+    // DB-Verbindung schließen, WAL/SHM löschen, Datei ersetzen, reconnect
+    const { closeDatabase, reconnectDatabase, initializeDatabaseWithBackup } = require('./src/config/database');
+    await closeDatabase();
+    
+    // WAL/SHM-Dateien löschen
+    try {
+      if (fs.existsSync(dbPath + '-wal')) fs.unlinkSync(dbPath + '-wal');
+      if (fs.existsSync(dbPath + '-shm')) fs.unlinkSync(dbPath + '-shm');
+    } catch (e) { /* nicht kritisch */ }
+    
     fs.copyFileSync(source, dbPath);
+    
+    // Verbindung neu herstellen und Migrationen ausführen
+    await reconnectDatabase();
+    await initializeDatabaseWithBackup();
+    
     return { success: true, restored: path.basename(filename) };
   } catch (error) {
     return { success: false, error: error.message };

@@ -279,7 +279,17 @@ function broadcastMigrationProgress(version, progress, step) {
  */
 function logMigration(status, version, description, error = null, duration = null) {
   try {
-    const logDir = path.join(__dirname, '..', 'logs');
+    // Log-Verzeichnis bestimmen:
+    // 1. Linux-Service: /var/log/werkstatt-terminplaner/ (über DATA_DIR ableitbar)
+    // 2. Fallback: backend/logs/
+    let logDir;
+    if (process.env.DATA_DIR && process.platform === 'linux') {
+      // Linux-Service: Verwende das beschreibbare Log-Verzeichnis
+      logDir = '/var/log/werkstatt-terminplaner';
+    } else {
+      logDir = path.join(__dirname, '..', 'logs');
+    }
+    
     if (!fs.existsSync(logDir)) {
       fs.mkdirSync(logDir, { recursive: true });
     }

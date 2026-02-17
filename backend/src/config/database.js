@@ -137,9 +137,63 @@ dbWrapper.readyPromise = new Promise((resolve, reject) => {
       reject(err);
     } else {
       console.log('Datenbank verbunden:', dbPath);
-      // Performance-Optimierungen
-      dbInstance.run('PRAGMA journal_mode = WAL;');
-      dbInstance.run('PRAGMA synchronous = NORMAL;');
+      
+      // =========================================================================
+      // Performance-Optimierungen für Linux Multi-Client-Zugriff
+      // =========================================================================
+      console.log('🔧 Aktiviere SQLite-Optimierungen...');
+      
+      // WAL-Modus für bessere Concurrency (Leser blockieren nicht Schreiber)
+      dbInstance.run('PRAGMA journal_mode = WAL;', (err) => {
+        if (err) console.warn('⚠️ WAL-Modus konnte nicht aktiviert werden:', err.message);
+        else console.log('  ✓ WAL-Modus aktiviert (Write-Ahead Logging)');
+      });
+      
+      // Synchronisierung reduzieren (NORMAL ist guter Kompromiss zwischen Speed und Sicherheit)
+      dbInstance.run('PRAGMA synchronous = NORMAL;', (err) => {
+        if (err) console.warn('⚠️ synchronous konnte nicht gesetzt werden:', err.message);
+        else console.log('  ✓ Synchronous = NORMAL (optimiert für Performance)');
+      });
+      
+      // Busy-Timeout erhöhen (wichtig für Multi-Client: warte bis zu 5 Sekunden wenn DB gesperrt)
+      dbInstance.run('PRAGMA busy_timeout = 5000;', (err) => {
+        if (err) console.warn('⚠️ busy_timeout konnte nicht gesetzt werden:', err.message);
+        else console.log('  ✓ Busy-Timeout = 5000ms (bessere Concurrency)');
+      });
+      
+      // Cache-Größe erhöhen (Standard: 2MB, neu: 32MB = bessere Read-Performance)
+      dbInstance.run('PRAGMA cache_size = -32000;', (err) => {
+        if (err) console.warn('⚠️ cache_size konnte nicht gesetzt werden:', err.message);
+        else console.log('  ✓ Cache-Size = 32MB (schnellere Queries)');
+      });
+      
+      // Temporäre Daten im RAM (schneller als Disk-I/O)
+      dbInstance.run('PRAGMA temp_store = MEMORY;', (err) => {
+        if (err) console.warn('⚠️ temp_store konnte nicht gesetzt werden:', err.message);
+        else console.log('  ✓ Temp-Store = MEMORY (schnellere Sorts/Joins)');
+      });
+      
+      // Memory-Mapped I/O für schnellere Lesezugriffe (128MB)
+      // Gut für Linux-Server mit genügend RAM
+      dbInstance.run('PRAGMA mmap_size = 134217728;', (err) => {
+        if (err) console.warn('⚠️ mmap_size konnte nicht gesetzt werden:', err.message);
+        else console.log('  ✓ Memory-Mapped I/O = 128MB (schnellere Reads)');
+      });
+      
+      // WAL Auto-Checkpoint optimieren (1000 Seiten statt 1000)
+      dbInstance.run('PRAGMA wal_autocheckpoint = 1000;', (err) => {
+        if (err) console.warn('⚠️ wal_autocheckpoint konnte nicht gesetzt werden:', err.message);
+        else console.log('  ✓ WAL Auto-Checkpoint = 1000 Seiten');
+      });
+      
+      // Foreign Keys aktivieren (Datenintegrität)
+      dbInstance.run('PRAGMA foreign_keys = ON;', (err) => {
+        if (err) console.warn('⚠️ foreign_keys konnte nicht aktiviert werden:', err.message);
+        else console.log('  ✓ Foreign Keys aktiviert');
+      });
+      
+      console.log('✅ SQLite-Optimierungen abgeschlossen');
+      
       // JETZT erst Connection setzen - nachdem der Callback ausgeführt wurde
       dbWrapper.connection = dbInstance;
       dbWrapper.ready = true;
@@ -151,26 +205,73 @@ dbWrapper.readyPromise = new Promise((resolve, reject) => {
 // Funktion zum Neuladen der Datenbank-Verbindung (nach Backup-Restore)
 function reconnectDatabase() {
   return new Promise((resolve, reject) => {
+    const openNewConnection = () => {
+      console.log('🔄 Öffne neue Datenbankverbindung...');
+      const newDb = new sqlite3.Database(dbPath, (err) => {
+        if (err) {
+          console.error('Fehler beim Öffnen der Datenbank:', err);
+          reject(err);
+        } else {
+          dbWrapper.connection = newDb;
+          dbWrapper.ready = true;
+          console.log('✅ Datenbank neu verbunden:', dbPath);
+          
+          // Performance-Optimierungen (gleiche wie bei initialer Connection)
+          console.log('🔧 Reaktiviere SQLite-Optimierungen...');
+          newDb.run('PRAGMA journal_mode = WAL;');
+          newDb.run('PRAGMA synchronous = NORMAL;');
+          newDb.run('PRAGMA busy_timeout = 5000;');
+          newDb.run('PRAGMA cache_size = -32000;');
+          newDb.run('PRAGMA temp_store = MEMORY;');
+          newDb.run('PRAGMA mmap_size = 134217728;');
+          newDb.run('PRAGMA wal_autocheckpoint = 1000;');
+          newDb.run('PRAGMA foreign_keys = ON;');
+          console.log('✅ SQLite-Optimierungen reaktiviert');
+          
+          resolve(newDb);
+        }
+      });
+    };
+
+    // Falls Connection null ist, direkt neue öffnen
+    if (!dbWrapper.connection) {
+      console.log('🔄 Keine bestehende Verbindung - öffne neue...');
+      openNewConnection();
+      return;
+    }
+
     console.log('🔄 Schließe alte Datenbankverbindung...');
     dbWrapper.connection.close((closeErr) => {
       if (closeErr) {
         console.error('Fehler beim Schließen der alten Verbindung:', closeErr);
         // Trotzdem fortfahren
       }
+      dbWrapper.connection = null;
+      dbWrapper.ready = false;
+      openNewConnection();
+    });
+  });
+}
 
-      console.log('🔄 Öffne neue Datenbankverbindung...');
-      dbWrapper.connection = new sqlite3.Database(dbPath, (err) => {
-        if (err) {
-          console.error('Fehler beim Öffnen der Datenbank:', err);
-          reject(err);
-        } else {
-          console.log('✅ Datenbank neu verbunden:', dbPath);
-          // Performance-Optimierungen
-          dbWrapper.connection.run('PRAGMA journal_mode = WAL;');
-          dbWrapper.connection.run('PRAGMA synchronous = NORMAL;');
-          resolve(dbWrapper.connection);
-        }
-      });
+// Funktion zum Schließen der Datenbank-Verbindung (ohne neue zu öffnen)
+// Wird vor Datei-Restore verwendet damit kein File-Handle offen ist
+function closeDatabase() {
+  return new Promise((resolve) => {
+    if (!dbWrapper.connection) {
+      console.log('🔄 Keine Verbindung zum Schließen vorhanden');
+      return resolve();
+    }
+    
+    console.log('🔄 Schließe Datenbankverbindung...');
+    dbWrapper.connection.close((err) => {
+      if (err) {
+        console.error('Fehler beim Schließen der Verbindung:', err);
+      } else {
+        console.log('✅ Datenbankverbindung geschlossen');
+      }
+      dbWrapper.connection = null;
+      dbWrapper.ready = false;
+      resolve();
     });
   });
 }
@@ -213,29 +314,48 @@ function createAutoBackup() {
       const backupFileName = `werkstatt_backup_${timestamp}.db`;
       const backupPath = path.join(backupDir, backupFileName);
 
-      // Backup erstellen
-      fs.copyFileSync(dbPath, backupPath);
-      console.log(`✅ Automatisches Backup erstellt: ${backupPath}`);
+      // WAL-Checkpoint durchführen damit alle Daten in der Hauptdatei sind
+      // Dann Backup erstellen
+      const performBackup = () => {
+        try {
+          fs.copyFileSync(dbPath, backupPath);
+          console.log(`✅ Automatisches Backup erstellt: ${backupPath}`);
 
-      // Alte Backups aufräumen (behalte nur die letzten 10)
-      const backupFiles = fs.readdirSync(backupDir)
-        .filter(f => f.startsWith('werkstatt_backup_') && f.endsWith('.db'))
-        .sort()
-        .reverse();
+          // Alte Backups aufräumen (behalte nur die letzten 10)
+          const backupFiles = fs.readdirSync(backupDir)
+            .filter(f => f.startsWith('werkstatt_backup_') && f.endsWith('.db'))
+            .sort()
+            .reverse();
 
-      if (backupFiles.length > 10) {
-        const zuLoeschen = backupFiles.slice(10);
-        zuLoeschen.forEach(file => {
-          try {
-            fs.unlinkSync(path.join(backupDir, file));
-            console.log(`🗑️ Altes Backup gelöscht: ${file}`);
-          } catch (e) {
-            console.error(`Fehler beim Löschen von ${file}:`, e);
+          if (backupFiles.length > 10) {
+            const zuLoeschen = backupFiles.slice(10);
+            zuLoeschen.forEach(file => {
+              try {
+                fs.unlinkSync(path.join(backupDir, file));
+                console.log(`🗑️ Altes Backup gelöscht: ${file}`);
+              } catch (e) {
+                console.error(`Fehler beim Löschen von ${file}:`, e);
+              }
+            });
           }
-        });
-      }
 
-      resolve(true);
+          resolve(true);
+        } catch (copyErr) {
+          console.error('⚠️ Fehler beim Kopieren des Backups:', copyErr);
+          resolve(false);
+        }
+      };
+
+      // Checkpoint versuchen, dann Backup erstellen
+      if (dbWrapper.connection) {
+        dbWrapper.connection.run('PRAGMA wal_checkpoint(TRUNCATE);', (err) => {
+          if (err) console.warn('⚠️ WAL-Checkpoint fehlgeschlagen:', err.message);
+          else console.log('✅ WAL-Checkpoint vor Backup durchgeführt');
+          performBackup();
+        });
+      } else {
+        performBackup();
+      }
     } catch (error) {
       console.error('⚠️ Fehler beim Erstellen des Backups:', error);
       resolve(false);
@@ -713,6 +833,7 @@ module.exports = {
   initializeDatabaseWithBackup,
   createAutoBackup,
   reconnectDatabase,
+  closeDatabase,
   dbPath,
   dataDir,
   DB_SCHEMA_VERSION,

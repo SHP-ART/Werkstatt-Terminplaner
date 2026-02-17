@@ -1,8 +1,49 @@
 const fs = require('fs');
 const path = require('path');
-const { db, dbPath, dataDir, initializeDatabase, reconnectDatabase } = require('../config/database');
+const { db, dbPath, dataDir, initializeDatabaseWithBackup, reconnectDatabase, closeDatabase } = require('../config/database');
 
 const backupDir = path.join(dataDir, 'backups');
+
+// WAL-Checkpoint durchführen bevor Backup-Kopie erstellt wird
+// Ohne Checkpoint können Daten in der WAL-Datei stecken und fehlen im Backup!
+function walCheckpoint() {
+  return new Promise((resolve) => {
+    if (!db || !db._connection) {
+      return resolve(false);
+    }
+    try {
+      db.run('PRAGMA wal_checkpoint(TRUNCATE);', (err) => {
+        if (err) {
+          console.warn('⚠️ WAL-Checkpoint fehlgeschlagen (Backup trotzdem möglich):', err.message);
+          resolve(false);
+        } else {
+          console.log('✅ WAL-Checkpoint durchgeführt (alle Daten in DB geschrieben)');
+          resolve(true);
+        }
+      });
+    } catch (e) {
+      resolve(false);
+    }
+  });
+}
+
+// WAL- und SHM-Dateien löschen (wichtig bei Restore)
+function cleanupWalFiles() {
+  const walFile = dbPath + '-wal';
+  const shmFile = dbPath + '-shm';
+  try {
+    if (fs.existsSync(walFile)) {
+      fs.unlinkSync(walFile);
+      console.log('🗑️ WAL-Datei gelöscht:', path.basename(walFile));
+    }
+    if (fs.existsSync(shmFile)) {
+      fs.unlinkSync(shmFile);
+      console.log('🗑️ SHM-Datei gelöscht:', path.basename(shmFile));
+    }
+  } catch (e) {
+    console.warn('⚠️ Fehler beim Löschen von WAL/SHM-Dateien:', e.message);
+  }
+}
 
 // Hilfsfunktion: Prüfe ob DB aktuelle Daten hat
 function checkDatabaseCurrency(callback) {
@@ -124,13 +165,16 @@ const BackupController = {
     }
   },
 
-  create: (req, res) => {
+  create: async (req, res) => {
     try {
       ensureBackupDir();
       
       if (!fs.existsSync(dbPath)) {
         return res.status(400).json({ error: 'Keine Datenbank gefunden' });
       }
+
+      // WAL-Checkpoint durchführen damit alle Daten in der Hauptdatei sind
+      await walCheckpoint();
 
       // Prüfe DB-Aktualität
       checkDatabaseCurrency((err, dbStats) => {
@@ -210,17 +254,22 @@ const BackupController = {
       
       // Wichtig: Erst Datenbankverbindung schließen, dann Datei ersetzen, dann neu verbinden
       console.log('🔄 Bereite Backup-Restore vor...');
-      await reconnectDatabase(); // Schließt alte Verbindung
       
-      // Jetzt Datei ersetzen (Verbindung ist geschlossen)
+      // 1. Verbindung komplett schließen
+      await closeDatabase();
+      
+      // 2. WAL/SHM-Dateien löschen (verhindert Korruption bei Restore)
+      cleanupWalFiles();
+      
+      // 3. Backup-Datei kopieren
       fs.copyFileSync(source, dbPath);
       console.log('📁 Backup-Datei kopiert:', path.basename(source));
       
-      // Verbindung neu herstellen
+      // 4. Verbindung neu herstellen
       await reconnectDatabase();
       
-      // Führe Migrationen auf der wiederhergestellten Datenbank aus
-      initializeDatabase();
+      // 5. Migrationen auf der wiederhergestellten Datenbank ausführen (AWAIT!)
+      await initializeDatabaseWithBackup();
       console.log('✅ Backup eingespielt und Migrationen ausgeführt:', path.basename(source));
       
       res.json({ 
@@ -251,16 +300,22 @@ const BackupController = {
       if (restoreNow) {
         // Wichtig: Erst Datenbankverbindung schließen, dann Datei ersetzen, dann neu verbinden
         console.log('🔄 Bereite Upload+Restore vor...');
-        await reconnectDatabase(); // Schließt alte Verbindung
         
+        // 1. Verbindung komplett schließen
+        await closeDatabase();
+        
+        // 2. WAL/SHM-Dateien löschen
+        cleanupWalFiles();
+        
+        // 3. Backup-Datei kopieren
         fs.copyFileSync(target, dbPath);
         console.log('📁 Backup-Datei kopiert:', safeName);
         
-        // Verbindung neu herstellen
+        // 4. Verbindung neu herstellen
         await reconnectDatabase();
         
-        // Führe Migrationen auf der wiederhergestellten Datenbank aus
-        initializeDatabase();
+        // 5. Migrationen ausführen (AWAIT!)
+        await initializeDatabaseWithBackup();
         console.log('✅ Backup hochgeladen, eingespielt und Migrationen ausgeführt:', safeName);
       }
 
@@ -319,77 +374,82 @@ const BackupController = {
   mapBackupFiles,
 
   // Automatisches Backup beim Server-Start
-  createAutoBackupOnStartup: () => {
-    return new Promise((resolve, reject) => {
-      try {
-        ensureBackupDir();
-        
-        if (!fs.existsSync(dbPath)) {
-          console.log('⏭️  Kein Auto-Backup: Keine Datenbank vorhanden');
-          return resolve({ skipped: true, reason: 'Keine DB vorhanden' });
-        }
-
-        // Prüfe ob heute schon ein Backup existiert
-        const heute = new Date().toISOString().split('T')[0].replace(/-/g, '');
-        const backups = mapBackupFiles();
-        const heutigesBackup = backups.find(b => b.name.includes(heute));
-        
-        if (heutigesBackup) {
-          console.log('✅ Auto-Backup: Backup von heute existiert bereits:', heutigesBackup.name);
-          return resolve({ skipped: true, reason: 'Backup von heute existiert', existing: heutigesBackup.name });
-        }
-
-        // Erstelle Auto-Backup
-        const now = new Date();
-        const timestamp = [
-          now.getFullYear(),
-          String(now.getMonth() + 1).padStart(2, '0'),
-          String(now.getDate()).padStart(2, '0'),
-          'T',
-          String(now.getHours()).padStart(2, '0'),
-          '-',
-          String(now.getMinutes()).padStart(2, '0'),
-          '-',
-          String(now.getSeconds()).padStart(2, '0')
-        ].join('');
-        const backupName = `werkstatt_backup_AUTO_${timestamp}.db`;
-        const dest = path.join(backupDir, backupName);
-
-        fs.copyFileSync(dbPath, dest);
-        const stats = fs.statSync(dest);
-        
-        console.log('💾 Auto-Backup erstellt beim Server-Start:', backupName);
-
-        // Prüfe DB-Aktualität
-        checkDatabaseCurrency((err, dbStats) => {
-          const result = {
-            created: true,
-            backup: { 
-              name: backupName, 
-              sizeBytes: stats.size, 
-              createdAt: stats.mtime 
-            }
-          };
-
-          if (!err && dbStats) {
-            result.datenStatus = dbStats;
-            
-            if (dbStats.istVeraltet) {
-              const warnung = `⚠️  WARNUNG: Die Datenbank enthält keine aktuellen Termine!\n   Neuester Termin: ${dbStats.neusterTermin} (vor ${dbStats.alterInTagen} Tagen)\n   Total Termine: ${dbStats.totalTermine}\n   → Möglicherweise verwenden Sie eine Test-/Entwicklungs-DB`;
-              console.warn('🔴', warnung);
-              result.warnung = warnung;
-            } else {
-              console.log('✅ DB-Status: Aktuelle Daten vorhanden');
-            }
-          }
-
-          resolve(result);
-        });
-      } catch (error) {
-        console.error('❌ Auto-Backup Fehler:', error);
-        reject(error);
+  createAutoBackupOnStartup: async () => {
+    try {
+      ensureBackupDir();
+      
+      if (!fs.existsSync(dbPath)) {
+        console.log('⏭️  Kein Auto-Backup: Keine Datenbank vorhanden');
+        return { skipped: true, reason: 'Keine DB vorhanden' };
       }
-    });
+
+      // Prüfe ob heute schon ein Backup existiert
+      const heute = new Date().toISOString().split('T')[0].replace(/-/g, '');
+      const backups = mapBackupFiles();
+      const heutigesBackup = backups.find(b => b.name.includes(heute));
+      
+      if (heutigesBackup) {
+        console.log('✅ Auto-Backup: Backup von heute existiert bereits:', heutigesBackup.name);
+        return { skipped: true, reason: 'Backup von heute existiert', existing: heutigesBackup.name };
+      }
+
+      // Erstelle Auto-Backup
+      const now = new Date();
+      const timestamp = [
+        now.getFullYear(),
+        String(now.getMonth() + 1).padStart(2, '0'),
+        String(now.getDate()).padStart(2, '0'),
+        'T',
+        String(now.getHours()).padStart(2, '0'),
+        '-',
+        String(now.getMinutes()).padStart(2, '0'),
+        '-',
+        String(now.getSeconds()).padStart(2, '0')
+      ].join('');
+      const backupName = `werkstatt_backup_AUTO_${timestamp}.db`;
+      const dest = path.join(backupDir, backupName);
+
+      // WAL-Checkpoint vor Backup durchführen
+      await walCheckpoint();
+
+      fs.copyFileSync(dbPath, dest);
+      const stats = fs.statSync(dest);
+      
+      console.log('💾 Auto-Backup erstellt beim Server-Start:', backupName);
+
+      // Prüfe DB-Aktualität
+      const dbStats = await new Promise((resolve) => {
+        checkDatabaseCurrency((err, stats) => {
+          resolve(err ? null : stats);
+        });
+      });
+
+      const result = {
+        created: true,
+        backup: { 
+          name: backupName, 
+          sizeBytes: stats.size, 
+          createdAt: stats.mtime 
+        }
+      };
+
+      if (dbStats) {
+        result.datenStatus = dbStats;
+        
+        if (dbStats.istVeraltet) {
+          const warnung = `⚠️  WARNUNG: Die Datenbank enthält keine aktuellen Termine!\n   Neuester Termin: ${dbStats.neusterTermin} (vor ${dbStats.alterInTagen} Tagen)\n   Total Termine: ${dbStats.totalTermine}\n   → Möglicherweise verwenden Sie eine Test-/Entwicklungs-DB`;
+          console.warn('🔴', warnung);
+          result.warnung = warnung;
+        } else {
+          console.log('✅ DB-Status: Aktuelle Daten vorhanden');
+        }
+      }
+
+      return result;
+    } catch (error) {
+      console.error('❌ Auto-Backup Fehler:', error);
+      throw error;
+    }
   }
 };
 
