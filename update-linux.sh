@@ -25,12 +25,20 @@ DATA_DIR="/var/lib/werkstatt-terminplaner"
 BACKUP_DIR="$DATA_DIR/backups"
 SERVICE_NAME="werkstatt-terminplaner"
 GITHUB_REPO="SHP-ART/Werkstatt-Terminplaner"
+GIT_BRANCH="master"
 AUTO_MODE=false
 
 # Parameter
-if [[ "$1" == "--auto" ]]; then
-    AUTO_MODE=true
-fi
+for arg in "$@"; do
+    case $arg in
+        --auto)
+            AUTO_MODE=true
+            ;;
+        --branch=*)
+            GIT_BRANCH="${arg#*=}"
+            ;;
+    esac
+done
 
 # Funktionen
 print_header() {
@@ -146,8 +154,8 @@ cd "$INSTALL_DIR"
 
 # Git pull wenn möglich
 if [ -d ".git" ]; then
-    git fetch origin main
-    git reset --hard origin/main
+    git fetch origin "$GIT_BRANCH"
+    git reset --hard "origin/$GIT_BRANCH"
     print_success "Code aktualisiert via git"
 else
     # Fallback: Frisches Clone
@@ -165,31 +173,48 @@ else
 fi
 
 # 8. Dependencies aktualisieren
-print_step "Aktualisiere Dependencies..."
+print_step "Aktualisiere Backend-Dependencies..."
 cd "$INSTALL_DIR/backend"
 npm install --production --silent 2>&1 | tail -5
-print_success "Dependencies aktualisiert"
+print_success "Backend-Dependencies aktualisiert"
 
-# 9. Datenbank-Migrationen (falls vorhanden)
+# 9. Frontend neu bauen
+print_step "Baue Frontend neu..."
+cd "$INSTALL_DIR/frontend"
+if [ -f "package.json" ]; then
+    npm install 2>&1 | tail -3 || print_warning "Frontend npm install fehlgeschlagen"
+    npm run build 2>&1 | tail -5 || {
+        print_warning "Frontend Build fehlgeschlagen - versuche alte Version"
+    }
+    if [ -f "dist/index.html" ]; then
+        DIST_SIZE=$(du -sh dist 2>/dev/null | cut -f1)
+        print_success "Frontend gebaut ($DIST_SIZE)"
+    else
+        print_warning "Frontend dist/ nicht erzeugt - Server liefert evtl. kein Frontend"
+    fi
+else
+    print_warning "Frontend package.json nicht gefunden"
+fi
+
+# 10. Datenbank-Migrationen
 print_step "Prüfe Datenbank-Migrationen..."
 if [ -f "$INSTALL_DIR/backend/src/server.js" ]; then
-    # Migrationen werden automatisch beim Server-Start ausgeführt
-    print_info "Migrationen werden beim Start ausgeführt"
+    print_info "Migrationen werden automatisch beim Server-Start ausgeführt"
 else
     print_warning "Server-Datei nicht gefunden"
 fi
 
-# 10. Permissions setzen
+# 11. Permissions setzen
 print_step "Setze Permissions..."
 chown -R werkstatt:werkstatt "$INSTALL_DIR"
 print_success "Permissions gesetzt"
 
-# 11. Service starten
+# 12. Service starten
 print_step "Starte Server..."
 systemctl start "$SERVICE_NAME.service"
 sleep 5
 
-# 12. Status prüfen
+# 13. Status prüfen
 if systemctl is-active --quiet "$SERVICE_NAME.service"; then
     print_success "Server läuft"
     

@@ -1,15 +1,28 @@
 #!/bin/bash
 # ============================================================================
-# Werkstatt Terminplaner - Automatisches Linux-Installations-Skript
+# Werkstatt Terminplaner - All-in-One KI-Server Installation (Linux)
 # ============================================================================
+# Installiert den kompletten Werkstatt-Terminplaner mit lokaler KI,
+# Frontend-Build, SQLite-Optimierungen und systemd-Service.
+#
 # Installation mit einem Befehl:
-#   curl -fsSL https://raw.githubusercontent.com/SHP-ART/Werkstatt-Terminplaner/main/install-linux.sh | sudo bash
-# 
+#   curl -fsSL https://raw.githubusercontent.com/SHP-ART/Werkstatt-Terminplaner/master/install-linux.sh | sudo bash
+#
 # Oder lokal:
 #   sudo ./install-linux.sh
+#
+# Optionen:
+#   --port=XXXX       Server-Port (Standard: 3001)
+#   --branch=NAME     Git-Branch (Standard: master)
+#   --no-frontend     Frontend-Build überspringen
+#   --with-openai     OpenAI API-Key interaktiv abfragen
 # ============================================================================
 
 set -e  # Bei Fehler abbrechen
+
+# ============================================================================
+# KONFIGURATION
+# ============================================================================
 
 # Farben für Output
 RED='\033[0;31m'
@@ -17,202 +30,461 @@ GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 CYAN='\033[0;36m'
+MAGENTA='\033[0;35m'
+BOLD='\033[1m'
 NC='\033[0m' # No Color
 
-# Variablen
+# Standard-Variablen
 INSTALL_DIR="/opt/werkstatt-terminplaner"
 DATA_DIR="/var/lib/werkstatt-terminplaner"
 LOG_DIR="/var/log/werkstatt-terminplaner"
 CONFIG_DIR="/etc/werkstatt-terminplaner"
 SERVICE_USER="werkstatt"
 SERVICE_NAME="werkstatt-terminplaner"
+REPO_URL="https://github.com/SHP-ART/Werkstatt-Terminplaner.git"
 PORT=3001
+GIT_BRANCH="master"
+BUILD_FRONTEND=true
+SETUP_OPENAI=false
+ERRORS=0
 
-# Funktionen für Output
+# Kommandozeilen-Argumente parsen
+for arg in "$@"; do
+    case $arg in
+        --port=*)
+            PORT="${arg#*=}"
+            ;;
+        --branch=*)
+            GIT_BRANCH="${arg#*=}"
+            ;;
+        --no-frontend)
+            BUILD_FRONTEND=false
+            ;;
+        --with-openai)
+            SETUP_OPENAI=true
+            ;;
+        --help|-h)
+            echo "Werkstatt Terminplaner - All-in-One KI-Server Installation"
+            echo ""
+            echo "Optionen:"
+            echo "  --port=XXXX       Server-Port (Standard: 3001)"
+            echo "  --branch=NAME     Git-Branch (Standard: master)"
+            echo "  --no-frontend     Frontend-Build überspringen"
+            echo "  --with-openai     OpenAI API-Key interaktiv abfragen"
+            echo "  --help            Hilfe anzeigen"
+            exit 0
+            ;;
+    esac
+done
+
+# ============================================================================
+# HILFSFUNKTIONEN
+# ============================================================================
+
 print_header() {
     echo ""
-    echo -e "${BLUE}╔════════════════════════════════════════════════════════════╗${NC}"
-    echo -e "${BLUE}║  Werkstatt Terminplaner - Linux Installation              ║${NC}"
-    echo -e "${BLUE}╚════════════════════════════════════════════════════════════╝${NC}"
+    echo -e "${BLUE}╔══════════════════════════════════════════════════════════════════╗${NC}"
+    echo -e "${BLUE}║  ${BOLD}Werkstatt Terminplaner - All-in-One KI-Server${NC}${BLUE}                ║${NC}"
+    echo -e "${BLUE}║  Linux Headless Installation                                   ║${NC}"
+    echo -e "${BLUE}╚══════════════════════════════════════════════════════════════════╝${NC}"
+    echo ""
+    echo -e "  ${CYAN}Backend${NC}  + ${MAGENTA}Lokale KI${NC} + ${GREEN}Frontend${NC} + ${YELLOW}SQLite-Optimiert${NC} + ${BLUE}systemd${NC}"
     echo ""
 }
 
 print_step() {
-    echo -e "${GREEN}▶${NC} $1"
+    echo ""
+    echo -e "${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo -e "${GREEN}▶ $1${NC}"
+    echo -e "${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+}
+
+print_substep() {
+    echo -e "  ${CYAN}▸${NC} $1"
 }
 
 print_success() {
-    echo -e "${GREEN}✓${NC} $1"
+    echo -e "  ${GREEN}✓${NC} $1"
 }
 
 print_error() {
-    echo -e "${RED}✗${NC} $1"
+    echo -e "  ${RED}✗${NC} $1"
+    ERRORS=$((ERRORS + 1))
 }
 
 print_warning() {
-    echo -e "${YELLOW}⚠${NC} $1"
+    echo -e "  ${YELLOW}⚠${NC} $1"
 }
 
 print_info() {
-    echo -e "${CYAN}ℹ${NC} $1"
+    echo -e "  ${CYAN}ℹ${NC} $1"
 }
 
+# Fehlerbehandlung
+cleanup_on_error() {
+    echo ""
+    print_error "Installation abgebrochen!"
+    echo -e "  Fehlerlog: ${YELLOW}sudo journalctl -u $SERVICE_NAME -n 50${NC}"
+    exit 1
+}
+trap cleanup_on_error ERR
+
+# ============================================================================
+# VORAUSSETZUNGEN
+# ============================================================================
+
 # Root-Check
-if [ "$EUID" -ne 0 ]; then 
-    print_error "Bitte als root ausführen oder mit sudo"
-    echo "Beispiel: sudo ./install-linux.sh"
+if [ "$EUID" -ne 0 ]; then
+    echo -e "${RED}✗ Bitte als root ausführen oder mit sudo${NC}"
+    echo "  Beispiel: sudo ./install-linux.sh"
+    echo "  Oder:     curl -fsSL https://...install-linux.sh | sudo bash"
     exit 1
 fi
 
 print_header
 
-# 1. System-Check
-print_step "Prüfe System..."
-OS_NAME=$(grep "^ID=" /etc/os-release | cut -d= -f2 | tr -d '"')
-OS_VERSION=$(grep "^VERSION_ID=" /etc/os-release | cut -d= -f2 | tr -d '"')
-print_info "Betriebssystem: $OS_NAME $OS_VERSION"
+# ============================================================================
+# SCHRITT 1: SYSTEM-CHECK
+# ============================================================================
+print_step "1/11 - System-Check"
 
-if [[ "$OS_NAME" != "debian" && "$OS_NAME" != "ubuntu" ]]; then
-    print_warning "Nicht getestet auf $OS_NAME - fahre trotzdem fort..."
+OS_NAME=$(grep "^ID=" /etc/os-release 2>/dev/null | cut -d= -f2 | tr -d '"' || echo "unknown")
+OS_VERSION=$(grep "^VERSION_ID=" /etc/os-release 2>/dev/null | cut -d= -f2 | tr -d '"' || echo "?")
+OS_PRETTY=$(grep "^PRETTY_NAME=" /etc/os-release 2>/dev/null | cut -d= -f2 | tr -d '"' || echo "$OS_NAME $OS_VERSION")
+ARCH=$(uname -m)
+RAM_MB=$(free -m 2>/dev/null | awk '/Mem:/ {print $2}' || echo "?")
+DISK_FREE=$(df -h / 2>/dev/null | awk 'NR==2 {print $4}' || echo "?")
+
+print_info "System:  $OS_PRETTY ($ARCH)"
+print_info "RAM:     ${RAM_MB} MB"
+print_info "Disk:    ${DISK_FREE} frei"
+print_info "Port:    $PORT"
+print_info "Branch:  $GIT_BRANCH"
+
+if [[ "$OS_NAME" != "debian" && "$OS_NAME" != "ubuntu" && "$OS_NAME" != "raspbian" ]]; then
+    print_warning "Nicht offiziell getestet auf $OS_NAME - fahre trotzdem fort..."
 fi
+
+# RAM-Warnung
+if [ "$RAM_MB" != "?" ] && [ "$RAM_MB" -lt 512 ]; then
+    print_warning "Wenig RAM (${RAM_MB} MB) - mindestens 512 MB empfohlen"
+fi
+
 print_success "System-Check abgeschlossen"
 
-# 2. Node.js installieren
-print_step "Prüfe Node.js..."
+# ============================================================================
+# SCHRITT 2: NODE.JS INSTALLIEREN
+# ============================================================================
+print_step "2/11 - Node.js 20 LTS"
+
+install_nodejs() {
+    print_substep "Installiere Node.js 20 LTS..."
+    if curl -fsSL https://deb.nodesource.com/setup_20.x | bash - &>/dev/null; then
+        apt-get install -y nodejs &>/dev/null
+        print_success "Node.js installiert: $(node -v)"
+    else
+        print_error "NodeSource-Repository fehlgeschlagen"
+        print_substep "Versuche Alternative (apt)..."
+        apt-get install -y nodejs npm &>/dev/null || {
+            print_error "Node.js konnte nicht installiert werden!"
+            exit 1
+        }
+        print_success "Node.js installiert (apt): $(node -v)"
+    fi
+}
+
 if command -v node &> /dev/null; then
     NODE_VERSION=$(node -v)
     NODE_MAJOR=$(echo "$NODE_VERSION" | sed 's/v//;s/\..*//')
     if [ "$NODE_MAJOR" -lt 18 ] 2>/dev/null; then
-        print_warning "Node.js $NODE_VERSION ist zu alt (mind. v18 erforderlich)"
-        print_step "Installiere Node.js 20 LTS..."
-        curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
-        apt-get install -y nodejs
-        print_success "Node.js aktualisiert: $(node -v)"
+        print_warning "Node.js $NODE_VERSION ist zu alt (mind. v18)"
+        install_nodejs
     else
-        print_success "Node.js bereits installiert: $NODE_VERSION"
+        print_success "Node.js vorhanden: $NODE_VERSION"
     fi
 else
-    print_step "Installiere Node.js 20 LTS..."
-    curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
-    apt-get install -y nodejs
-    print_success "Node.js installiert: $(node -v)"
+    install_nodejs
 fi
 
-# 3. Dependencies installieren
-print_step "Installiere System-Dependencies..."
-apt-get update -qq
-apt-get install -y git sqlite3 avahi-daemon curl wget 2>&1 | tail -3 || {
-    print_error "Fehler beim Installieren der Dependencies"
+# npm prüfen
+if ! command -v npm &> /dev/null; then
+    print_error "npm nicht gefunden!"
+    exit 1
+fi
+print_success "npm vorhanden: $(npm -v)"
+
+# ============================================================================
+# SCHRITT 3: SYSTEM-DEPENDENCIES
+# ============================================================================
+print_step "3/11 - System-Dependencies"
+
+print_substep "Aktualisiere Paketlisten..."
+apt-get update -qq 2>/dev/null
+
+# Basis-Pakete
+PACKAGES="git sqlite3 curl wget"
+print_substep "Installiere Basis: $PACKAGES"
+apt-get install -y $PACKAGES &>/dev/null || {
+    print_error "Basis-Pakete fehlgeschlagen"
     exit 1
 }
-print_success "System-Dependencies installiert"
+print_success "Basis-Pakete installiert"
 
-# 4. Repository klonen oder aktualisieren
-print_step "Lade Anwendung..."
-if [ -d "$INSTALL_DIR" ]; then
+# Build-Tools fuer native Node-Module (sqlite3, mdns-js)
+print_substep "Installiere Build-Tools (fuer native Node-Module)..."
+apt-get install -y build-essential python3 &>/dev/null || {
+    print_warning "Build-Tools teilweise fehlgeschlagen - native Module koennten Probleme machen"
+}
+print_success "Build-Tools installiert"
+
+# mDNS/Avahi fuer KI-Discovery im Netzwerk
+print_substep "Installiere Avahi/mDNS (KI-Discovery)..."
+apt-get install -y avahi-daemon libavahi-compat-libdnssd-dev &>/dev/null || {
+    print_warning "Avahi/mDNS nicht verfuegbar - KI-Discovery im LAN deaktiviert"
+    print_info "Externe KI kann manuell per URL konfiguriert werden"
+}
+print_success "Avahi/mDNS installiert (KI-Discovery aktiv)"
+
+# ============================================================================
+# SCHRITT 4: REPOSITORY LADEN
+# ============================================================================
+print_step "4/11 - Anwendung laden"
+
+if [ -d "$INSTALL_DIR/.git" ]; then
     print_info "Verzeichnis existiert - aktualisiere..."
     cd "$INSTALL_DIR"
-    git pull origin main &>/dev/null || print_warning "Git pull fehlgeschlagen - verwende vorhandene Version"
+    # Aktuelle Version merken
+    OLD_VERSION=$(node -p "require('./backend/package.json').version" 2>/dev/null || echo "?")
+    git fetch origin &>/dev/null || true
+    git checkout "$GIT_BRANCH" &>/dev/null || true
+    git pull origin "$GIT_BRANCH" &>/dev/null || print_warning "Git pull fehlgeschlagen - verwende vorhandene Version"
+    NEW_VERSION=$(node -p "require('./backend/package.json').version" 2>/dev/null || echo "?")
+    if [ "$OLD_VERSION" != "$NEW_VERSION" ]; then
+        print_info "Update: v$OLD_VERSION -> v$NEW_VERSION"
+    fi
+elif [ -d "$INSTALL_DIR" ]; then
+    print_info "Verzeichnis existiert (kein Git) - ueberspringe Clone"
+    cd "$INSTALL_DIR"
 else
-    print_info "Klone Repository..."
-    git clone https://github.com/SHP-ART/Werkstatt-Terminplaner.git "$INSTALL_DIR" &>/dev/null
+    print_substep "Klone Repository (Branch: $GIT_BRANCH)..."
+    git clone --branch "$GIT_BRANCH" --depth 1 "$REPO_URL" "$INSTALL_DIR" &>/dev/null || {
+        # Fallback ohne --depth (aeltere Git-Versionen)
+        git clone --branch "$GIT_BRANCH" "$REPO_URL" "$INSTALL_DIR" &>/dev/null
+    }
     cd "$INSTALL_DIR"
 fi
-print_success "Anwendung geladen"
 
-# 5. Backend-Dependencies installieren
-print_step "Installiere Backend-Dependencies..."
+APP_VERSION=$(node -p "require('./backend/package.json').version" 2>/dev/null || echo "unbekannt")
+print_success "Anwendung geladen (v$APP_VERSION)"
+
+# ============================================================================
+# SCHRITT 5: BACKEND INSTALLIEREN
+# ============================================================================
+print_step "5/11 - Backend installieren"
+
 cd "$INSTALL_DIR/backend"
-npm install --production --quiet &>/dev/null
+
+print_substep "Installiere Backend-Dependencies..."
+npm install --production 2>&1 | tail -5 || {
+    print_error "Backend npm install fehlgeschlagen"
+    exit 1
+}
 print_success "Backend-Dependencies installiert"
 
-# 6. System-User anlegen
-print_step "Erstelle System-User..."
+# Prüfe ob sqlite3 native Modul geladen werden kann
+if node -e "require('better-sqlite3')" 2>/dev/null; then
+    print_success "SQLite3 native Modul OK"
+elif node -e "require('sqlite3')" 2>/dev/null; then
+    print_success "SQLite3 Modul OK"
+else
+    print_warning "SQLite3-Modul Test uebersprungen (wird beim Start geladen)"
+fi
+
+# ============================================================================
+# SCHRITT 6: FRONTEND BAUEN
+# ============================================================================
+print_step "6/11 - Frontend bauen"
+
+if [ "$BUILD_FRONTEND" = true ]; then
+    cd "$INSTALL_DIR/frontend"
+
+    # Prüfe ob dist/ bereits existiert und aktuell ist
+    if [ -f "$INSTALL_DIR/frontend/dist/index.html" ]; then
+        print_info "Frontend dist/ existiert bereits"
+        # Prüfe ob Quelldateien neuer sind
+        SRC_TIME=$(find "$INSTALL_DIR/frontend/src" "$INSTALL_DIR/frontend/index.html" -newer "$INSTALL_DIR/frontend/dist/index.html" 2>/dev/null | head -1)
+        if [ -z "$SRC_TIME" ]; then
+            print_success "Frontend ist aktuell - ueberspringe Build"
+            BUILD_NEEDED=false
+        else
+            print_info "Quelldateien geaendert - baue neu..."
+            BUILD_NEEDED=true
+        fi
+    else
+        BUILD_NEEDED=true
+    fi
+
+    if [ "$BUILD_NEEDED" = true ]; then
+        print_substep "Installiere Frontend-Dependencies..."
+        npm install 2>&1 | tail -3 || {
+            print_error "Frontend npm install fehlgeschlagen"
+            exit 1
+        }
+        print_success "Frontend-Dependencies installiert"
+
+        print_substep "Baue Frontend (Vite Build)..."
+        npm run build 2>&1 | tail -5 || {
+            print_error "Frontend Build fehlgeschlagen!"
+            print_warning "Server startet ohne Frontend - nur API verfuegbar"
+            BUILD_FRONTEND=false
+        }
+
+        if [ -f "$INSTALL_DIR/frontend/dist/index.html" ]; then
+            DIST_SIZE=$(du -sh "$INSTALL_DIR/frontend/dist" 2>/dev/null | cut -f1)
+            print_success "Frontend gebaut ($DIST_SIZE)"
+        else
+            print_error "Frontend dist/index.html nicht gefunden nach Build"
+            BUILD_FRONTEND=false
+        fi
+    fi
+else
+    print_info "Frontend-Build uebersprungen (--no-frontend)"
+fi
+
+cd "$INSTALL_DIR"
+
+# ============================================================================
+# SCHRITT 7: SYSTEM-USER UND VERZEICHNISSE
+# ============================================================================
+print_step "7/11 - System-User und Verzeichnisse"
+
+# System-User
 if id "$SERVICE_USER" &>/dev/null; then
     print_info "User '$SERVICE_USER' existiert bereits"
 else
     useradd -r -s /bin/false -d "$DATA_DIR" "$SERVICE_USER"
-    print_success "User '$SERVICE_USER' erstellt"
+    print_success "System-User '$SERVICE_USER' erstellt"
 fi
 
-# 7. Verzeichnisse erstellen
-print_step "Erstelle Verzeichnisse..."
+# Verzeichnisse
 mkdir -p "$DATA_DIR"/{database,backups}
 mkdir -p "$LOG_DIR"
 mkdir -p "$CONFIG_DIR"
 
-# Anwendungsverzeichnis lesbar für Service-User setzen
+# Berechtigungen
 chown -R "$SERVICE_USER":"$SERVICE_USER" "$INSTALL_DIR"
 chown -R "$SERVICE_USER":"$SERVICE_USER" "$DATA_DIR"
 chown -R "$SERVICE_USER":"$SERVICE_USER" "$LOG_DIR"
 chmod 755 "$INSTALL_DIR" "$DATA_DIR" "$LOG_DIR"
-print_success "Verzeichnisse erstellt"
+print_success "Verzeichnisse erstellt und Berechtigungen gesetzt"
 
-# 8. Konfiguration erstellen
-print_step "Erstelle Konfiguration..."
-if [ ! -f "$CONFIG_DIR/.env" ]; then
-    cat > "$CONFIG_DIR/.env" << EOF
-# Werkstatt Terminplaner Konfiguration
-# Bearbeite diese Datei um Einstellungen anzupassen
+# ============================================================================
+# SCHRITT 8: KONFIGURATION
+# ============================================================================
+print_step "8/11 - Konfiguration (.env)"
 
-# Server Port
-PORT=$PORT
+OPENAI_KEY_LINE="# OPENAI_API_KEY=sk-..."
+OPENAI_MODEL_LINE="# OPENAI_MODEL=gpt-4o-mini"
+OPENAI_COST_LINE="# OPENAI_COST_LIMIT=50"
 
-# CORS-Einstellungen (Komma-getrennt oder * für alle)
-CORS_ORIGIN=*
-
-# Node Environment
-NODE_ENV=production
-
-# Datenbank-Pfad (optional)
-# DB_PATH=$DATA_DIR/database/werkstatt.db
-
-# Externe KI-URL (optional - für Hardware-KI)
-# KI_EXTERNAL_URL=http://192.168.1.100:5000
-
-# OpenAI API Key (optional - für Cloud-KI)
-# OPENAI_API_KEY=sk-...
-EOF
-    print_success "Konfiguration erstellt"
-else
-    print_info "Konfiguration existiert bereits"
+# OpenAI-Abfrage wenn --with-openai
+if [ "$SETUP_OPENAI" = true ] && [ -t 0 ]; then
+    echo ""
+    echo -e "  ${MAGENTA}OpenAI API-Key Konfiguration${NC}"
+    echo -e "  ${CYAN}(Optional - fuer Cloud-KI mit GPT-4o-mini)${NC}"
+    echo -e "  ${CYAN}Leer lassen = nur lokale KI verwenden${NC}"
+    echo ""
+    read -r -p "  OpenAI API-Key (sk-...): " OPENAI_KEY
+    if [ -n "$OPENAI_KEY" ]; then
+        OPENAI_KEY_LINE="OPENAI_API_KEY=$OPENAI_KEY"
+        OPENAI_MODEL_LINE="OPENAI_MODEL=gpt-4o-mini"
+        OPENAI_COST_LINE="OPENAI_COST_LIMIT=50"
+        print_success "OpenAI API-Key gesetzt"
+    else
+        print_info "Kein API-Key - nur lokale KI aktiv"
+    fi
 fi
 
-# Symlink für Backend
-ln -sf "$CONFIG_DIR/.env" "$INSTALL_DIR/backend/.env" 2>/dev/null || true
+if [ ! -f "$CONFIG_DIR/.env" ]; then
+    cat > "$CONFIG_DIR/.env" << EOF
+# ============================================================================
+# Werkstatt Terminplaner - Server-Konfiguration
+# ============================================================================
+# Nach Aenderungen: sudo systemctl restart $SERVICE_NAME
 
-# 9. systemd-Service installieren
-print_step "Installiere systemd-Service..."
-cat > /lib/systemd/system/"$SERVICE_NAME.service" << 'EOF'
+# --- Server ---
+PORT=$PORT
+NODE_ENV=production
+CORS_ORIGIN=*
+
+# --- Datenbank ---
+# DB_PATH=$DATA_DIR/database/werkstatt.db
+
+# --- KI-Konfiguration ---
+# Modus wird in der Web-Oberflaeche eingestellt (Einstellungen > KI)
+# Verfuegbare Modi: local (Standard), openai (Cloud), external (LAN-Server)
+
+# OpenAI Cloud-KI (optional)
+$OPENAI_KEY_LINE
+$OPENAI_MODEL_LINE
+# OPENAI_MAX_TOKENS=1000
+# OPENAI_TEMPERATURE=0.3
+$OPENAI_COST_LINE
+
+# Externe KI im LAN (optional - wird auch per mDNS auto-entdeckt)
+# KI_EXTERNAL_URL=http://192.168.1.100:5000
+# KI_EXTERNAL_TIMEOUT_MS=4000
+
+# mDNS Backend-Discovery
+BACKEND_DISCOVERY_ENABLED=1
+EOF
+    chown "$SERVICE_USER":"$SERVICE_USER" "$CONFIG_DIR/.env"
+    chmod 640 "$CONFIG_DIR/.env"
+    print_success "Konfiguration erstellt: $CONFIG_DIR/.env"
+else
+    print_info "Konfiguration existiert bereits - wird beibehalten"
+fi
+
+# Symlink fuer Backend
+ln -sf "$CONFIG_DIR/.env" "$INSTALL_DIR/backend/.env" 2>/dev/null || true
+print_success "Konfiguration verlinkt"
+
+# ============================================================================
+# SCHRITT 9: SYSTEMD-SERVICE
+# ============================================================================
+print_step "9/11 - systemd-Service"
+
+cat > /lib/systemd/system/"$SERVICE_NAME.service" << EOF
 [Unit]
-Description=Werkstatt Terminplaner Server
+Description=Werkstatt Terminplaner - All-in-One KI-Server
 Documentation=https://github.com/SHP-ART/Werkstatt-Terminplaner
-After=network.target
+After=network.target avahi-daemon.service
+Wants=avahi-daemon.service
 
 [Service]
 Type=simple
-User=werkstatt
-Group=werkstatt
-WorkingDirectory=/opt/werkstatt-terminplaner/backend
-Environment="NODE_ENV=production"
-Environment="DATA_DIR=/var/lib/werkstatt-terminplaner"
-Environment="PORT=3001"
-ExecStart=/usr/bin/node /opt/werkstatt-terminplaner/backend/src/server.js
+User=$SERVICE_USER
+Group=$SERVICE_USER
+WorkingDirectory=$INSTALL_DIR/backend
+EnvironmentFile=$CONFIG_DIR/.env
+Environment="DATA_DIR=$DATA_DIR"
+ExecStart=/usr/bin/node $INSTALL_DIR/backend/src/server.js
 Restart=always
 RestartSec=10
 
 # Logging
 StandardOutput=journal
 StandardError=journal
-SyslogIdentifier=werkstatt-terminplaner
+SyslogIdentifier=$SERVICE_NAME
 
 # Security hardening
 NoNewPrivileges=true
 PrivateTmp=true
 ProtectSystem=strict
 ProtectHome=true
-ReadWritePaths=/var/lib/werkstatt-terminplaner
-ReadWritePaths=/var/log/werkstatt-terminplaner
+ReadWritePaths=$DATA_DIR
+ReadWritePaths=$LOG_DIR
+ReadWritePaths=$INSTALL_DIR
 
 # Resource limits
 LimitNOFILE=65536
@@ -225,86 +497,154 @@ EOF
 systemctl daemon-reload
 print_success "systemd-Service installiert"
 
-# 10. Service aktivieren und starten
-print_step "Starte Server..."
+# ============================================================================
+# SCHRITT 10: SERVICE STARTEN
+# ============================================================================
+print_step "10/11 - Server starten"
+
+# Avahi starten (fuer mDNS KI-Discovery)
+if systemctl is-enabled avahi-daemon &>/dev/null 2>&1; then
+    systemctl start avahi-daemon &>/dev/null || true
+    print_success "Avahi-Daemon laeuft (mDNS KI-Discovery)"
+fi
+
+# Service aktivieren und starten
 systemctl enable "$SERVICE_NAME.service" &>/dev/null
 systemctl restart "$SERVICE_NAME.service"
-sleep 3
 
-# 11. Status prüfen
+print_substep "Warte auf Server-Start..."
+WAIT_SECONDS=10
+for i in $(seq 1 $WAIT_SECONDS); do
+    if systemctl is-active --quiet "$SERVICE_NAME.service"; then
+        # Health-Check
+        if curl -sf "http://localhost:$PORT/api/health" &>/dev/null; then
+            print_success "Server antwortet auf Health-Check"
+            break
+        fi
+    fi
+    sleep 1
+    printf "  Warte... %d/%d\r" "$i" "$WAIT_SECONDS"
+done
+echo ""
+
+# ============================================================================
+# SCHRITT 11: ABSCHLUSS UND STATUS
+# ============================================================================
+print_step "11/11 - Installation abgeschlossen"
+
 if systemctl is-active --quiet "$SERVICE_NAME.service"; then
-    print_success "Server läuft"
-    
     # Server-Info sammeln
-    SERVER_IP=$(hostname -I | awk '{print $1}')
-    
+    SERVER_IP=$(hostname -I 2>/dev/null | awk '{print $1}' || echo "localhost")
+    HOSTNAME=$(hostname 2>/dev/null || echo "server")
+    KI_STATUS="Lokale KI aktiv (trainiert automatisch)"
+
+    # KI-Status pruefen
+    KI_INFO=$(curl -sf "http://localhost:$PORT/api/ai/status" 2>/dev/null || echo "")
+    if echo "$KI_INFO" | grep -q '"enabled":true' 2>/dev/null; then
+        KI_MODE=$(echo "$KI_INFO" | grep -o '"mode":"[^"]*"' | cut -d'"' -f4)
+        case "$KI_MODE" in
+            openai)  KI_STATUS="OpenAI Cloud-KI (GPT-4o-mini)" ;;
+            external) KI_STATUS="Externe KI + lokaler Fallback" ;;
+            *)       KI_STATUS="Lokale KI aktiv (trainiert automatisch)" ;;
+        esac
+    fi
+
     echo ""
-    echo -e "${GREEN}╔════════════════════════════════════════════════════════════╗${NC}"
-    echo -e "${GREEN}║  Installation erfolgreich abgeschlossen! 🎉                ║${NC}"
-    echo -e "${GREEN}╚════════════════════════════════════════════════════════════╝${NC}"
+    echo -e "${GREEN}╔══════════════════════════════════════════════════════════════════╗${NC}"
+    echo -e "${GREEN}║                                                                  ║${NC}"
+    echo -e "${GREEN}║   Installation erfolgreich abgeschlossen!                        ║${NC}"
+    echo -e "${GREEN}║                                                                  ║${NC}"
+    echo -e "${GREEN}╚══════════════════════════════════════════════════════════════════╝${NC}"
     echo ""
-    echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-    echo -e "${BLUE}🌐 Zugriff auf die Anwendung:${NC}"
-    echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo -e "  ${CYAN}Version:${NC}     v$APP_VERSION"
+    echo -e "  ${CYAN}KI-Status:${NC}   $KI_STATUS"
     echo ""
-    echo -e "  📱 Frontend:  ${GREEN}http://$SERVER_IP:$PORT${NC}"
-    echo -e "  📊 Status:    ${GREEN}http://$SERVER_IP:$PORT/status${NC}"
-    echo -e "  🔌 API:       ${GREEN}http://$SERVER_IP:$PORT/api/health${NC}"
+    echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo -e "${BOLD} Zugriff auf die Anwendung${NC}"
+    echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
     echo ""
-    echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-    echo -e "${BLUE}🛠️  Nützliche Befehle:${NC}"
-    echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo -e "  Frontend:     ${GREEN}http://$SERVER_IP:$PORT${NC}"
+    echo -e "  Status-UI:    ${GREEN}http://$SERVER_IP:$PORT/status${NC}"
+    echo -e "  API-Health:   ${GREEN}http://$SERVER_IP:$PORT/api/health${NC}"
+    echo -e "  KI-Status:    ${GREEN}http://$SERVER_IP:$PORT/api/ai/status${NC}"
     echo ""
-    echo -e "  ${YELLOW}Status anzeigen:${NC}"
-    echo -e "    systemctl status $SERVICE_NAME"
+    echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo -e "${BOLD} KI-System${NC}"
+    echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
     echo ""
-    echo -e "  ${YELLOW}Server neu starten:${NC}"
-    echo -e "    sudo systemctl restart $SERVICE_NAME"
+    echo -e "  ${MAGENTA}Lokale KI (Standard):${NC}"
+    echo -e "    Sofort aktiv - trainiert automatisch aus Werkstatt-Daten"
+    echo -e "    Zeitschaetzung, Arbeitsvorschlaege, Termin-Parsing, VIN-Decoder"
     echo ""
-    echo -e "  ${YELLOW}Logs live anzeigen:${NC}"
-    echo -e "    sudo journalctl -u $SERVICE_NAME -f"
+    echo -e "  ${MAGENTA}OpenAI Cloud-KI (optional):${NC}"
+    echo -e "    API-Key setzen: ${YELLOW}sudo nano $CONFIG_DIR/.env${NC}"
+    echo -e "    Oder im Frontend: Einstellungen > KI > OpenAI"
     echo ""
-    echo -e "  ${YELLOW}Konfiguration bearbeiten:${NC}"
-    echo -e "    sudo nano $CONFIG_DIR/.env"
-    echo -e "    ${CYAN}(Danach: sudo systemctl restart $SERVICE_NAME)${NC}"
+    echo -e "  ${MAGENTA}Externe KI im LAN (optional):${NC}"
+    echo -e "    Wird per mDNS automatisch erkannt (avahi)"
+    echo -e "    Oder manuell: ${YELLOW}KI_EXTERNAL_URL=http://IP:PORT${NC}"
     echo ""
-    echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-    echo -e "${BLUE}📁 Wichtige Verzeichnisse:${NC}"
-    echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo -e "${BOLD} Server-Verwaltung${NC}"
+    echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
     echo ""
-    echo -e "  Anwendung:     $INSTALL_DIR"
-    echo -e "  Datenbank:     $DATA_DIR/database/"
-    echo -e "  Backups:       $DATA_DIR/backups/"
-    echo -e "  Konfiguration: $CONFIG_DIR/.env"
-    echo -e "  Logs:          journalctl -u $SERVICE_NAME"
+    echo -e "  ${YELLOW}Status:${NC}           systemctl status $SERVICE_NAME"
+    echo -e "  ${YELLOW}Neustart:${NC}         sudo systemctl restart $SERVICE_NAME"
+    echo -e "  ${YELLOW}Logs:${NC}             sudo journalctl -u $SERVICE_NAME -f"
+    echo -e "  ${YELLOW}Konfiguration:${NC}    sudo nano $CONFIG_DIR/.env"
+    echo -e "  ${YELLOW}Update:${NC}           sudo $INSTALL_DIR/update-linux.sh"
     echo ""
-    
+    echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo -e "${BOLD} Wichtige Verzeichnisse${NC}"
+    echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo ""
+    echo -e "  Anwendung:      $INSTALL_DIR"
+    echo -e "  Datenbank:      $DATA_DIR/database/"
+    echo -e "  Backups:        $DATA_DIR/backups/"
+    echo -e "  Konfiguration:  $CONFIG_DIR/.env"
+    echo -e "  Logs:           journalctl -u $SERVICE_NAME"
+    echo ""
+
     # Firewall-Check
     if command -v ufw >/dev/null 2>&1; then
         if ufw status 2>/dev/null | grep -q "Status: active"; then
-            echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-            echo -e "${YELLOW}⚠  Firewall aktiv!${NC}"
-            echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+            echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+            echo -e "${YELLOW} Firewall aktiv! Port oeffnen:${NC}"
+            echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
             echo ""
-            echo -e "  Port öffnen mit:"
-            echo -e "    ${GREEN}sudo ufw allow $PORT/tcp${NC}"
+            echo -e "  ${GREEN}sudo ufw allow $PORT/tcp${NC}"
             echo ""
         fi
     fi
-    
-    echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-    echo -e "${BLUE}📚 Dokumentation:${NC}"
-    echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+
+    # iptables-Check (falls kein ufw)
+    if ! command -v ufw >/dev/null 2>&1 && command -v iptables >/dev/null 2>&1; then
+        BLOCKED=$(iptables -L INPUT -n 2>/dev/null | grep -c "DROP\|REJECT" || echo "0")
+        if [ "$BLOCKED" -gt 0 ]; then
+            echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+            echo -e "${YELLOW} iptables aktiv! Port oeffnen:${NC}"
+            echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+            echo ""
+            echo -e "  ${GREEN}sudo iptables -A INPUT -p tcp --dport $PORT -j ACCEPT${NC}"
+            echo ""
+        fi
+    fi
+
+    echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
     echo ""
-    echo -e "  https://github.com/SHP-ART/Werkstatt-Terminplaner"
-    echo ""
-    
+
 else
-    print_error "Server konnte nicht gestartet werden"
     echo ""
-    echo "Fehleranalyse:"
-    echo "  sudo systemctl status $SERVICE_NAME"
-    echo "  sudo journalctl -u $SERVICE_NAME -n 50"
+    print_error "Server konnte nicht gestartet werden!"
+    echo ""
+    echo -e "  ${YELLOW}Fehleranalyse:${NC}"
+    echo -e "    systemctl status $SERVICE_NAME"
+    echo -e "    sudo journalctl -u $SERVICE_NAME -n 50"
+    echo ""
+    echo -e "  ${YELLOW}Manuell starten (Debug):${NC}"
+    echo -e "    cd $INSTALL_DIR/backend"
+    echo -e "    sudo -u $SERVICE_USER PORT=$PORT node src/server.js"
+    echo ""
     exit 1
 fi
 
