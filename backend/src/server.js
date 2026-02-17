@@ -340,6 +340,14 @@ async function startServer(clientCountCallback, requestLogCallback) {
     const routes = require('./routes');
     logStartup('routes geladen ✓');
 
+    // Status-Route für headless Server
+    logStartup('Lade Status-Route...');
+    const { router: statusRouter, requestLogger } = require('./routes/status');
+    logStartup('Status-Route geladen ✓');
+
+    // Request-Logger aktivieren (vor allen Routes)
+    app.use(requestLogger);
+
     // Lokales KI-Training (täglich)
     localAiService.scheduleDailyTraining();
 
@@ -356,6 +364,11 @@ async function startServer(clientCountCallback, requestLogCallback) {
         });
     }, 5 * 60 * 1000); // Alle 5 Minuten
     logStartup('Pause-Cleanup-Job gestartet ✓');
+
+    // Status-Route registrieren (vor API-Routen für /status und /api/server-status etc.)
+    logStartup('Registriere Status-Route...');
+    app.use('/', statusRouter);
+    logStartup('Status-Route registriert ✓');
 
     logStartup('Registriere API-Routen...');
     app.use('/api', routes);

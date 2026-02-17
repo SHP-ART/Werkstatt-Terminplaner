@@ -22,5 +22,11 @@ testdaten/
 *.exe
 *.blockmap
 
+# Linux build artifacts
+/dist-linux/
+/packaging/linux/debian/opt/
+/packaging/linux/debian/lib/
+*.deb
+
 # Ignore exe files in node_modules
 node_modules/**/*.exe

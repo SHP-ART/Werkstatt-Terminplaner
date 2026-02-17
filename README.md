@@ -90,7 +90,29 @@ Diese Version wird automatisch verwendet in:
 - **Werkstatt-Frontend.exe** (~73 MB) - Für Client-PCs
 - Zentrale Datenbankfreigabe für mehrere Benutzer
 
-### macOS & Linux
+### Linux (Debian/Ubuntu) - NEU! 🐧
+- **werkstatt-terminplaner_1.6.2_amd64.deb** (~80 MB)
+- Headless Server mit systemd-Integration
+- Web-Interface auf Port 3001
+- Status-Dashboard unter `/status`
+- **Performance-optimiert** für Multi-Client-Zugriff (5-8x schneller)
+- **Lokale KI** trainiert automatisch täglich
+- Optimiert für Intel N100 Mini-PC
+- ➡️ [Installations-Anleitung](LINUX-HEADLESS-INSTALLATION.md)
+- ➡️ [Linux Performance & KI](LINUX-OPTIMIERUNGEN.md)
+
+#### Schnell-Installation mit einem Befehl:
+```bash
+curl -fsSL https://raw.githubusercontent.com/SHP-ART/Werkstatt-Terminplaner/main/install-linux.sh | sudo bash
+```
+
+#### Oder mit deb-Paket:
+```bash
+sudo dpkg -i werkstatt-terminplaner_1.6.2_amd64.deb
+sudo apt-get install -f
+```
+
+### macOS & Linux (Manuelle Installation)
 - Manuelle Installation mit Start-Skripten (siehe unten)
 - Node.js und Python erforderlich
 
@@ -126,6 +148,19 @@ Siehe [NETZWERK-INSTALLATION.md](NETZWERK-INSTALLATION.md) für Details.
 ./start.sh    # Server starten
 ./stop.sh     # Server stoppen
 ```
+
+**Linux Headless Server (Empfohlen für Produktivsysteme):**
+```bash
+# deb-Paket installieren
+sudo dpkg -i werkstatt-terminplaner_1.6.2_amd64.deb
+sudo apt-get install -f
+
+# Server läuft automatisch als systemd-Service
+systemctl status werkstatt-terminplaner
+
+# Zugriff im Browser: http://<SERVER-IP>:3001
+```
+➡️ Vollständige Anleitung: [LINUX-HEADLESS-INSTALLATION.md](LINUX-HEADLESS-INSTALLATION.md)
 
 **Windows (alte Methode ohne Installer):**
 ```cmd
