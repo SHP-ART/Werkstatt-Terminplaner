@@ -1,0 +1,20 @@
+#!/bin/bash
+set -e
+
+echo "=== Werkstatt Terminplaner Deinstallation ==="
+
+# Service stoppen
+if systemctl is-active --quiet werkstatt-terminplaner.service; then
+    echo "Stoppe Server..."
+    systemctl stop werkstatt-terminplaner.service
+    echo "✓ Server gestoppt"
+fi
+
+# Service deaktivieren
+if systemctl is-enabled --quiet werkstatt-terminplaner.service; then
+    echo "Deaktiviere Service..."
+    systemctl disable werkstatt-terminplaner.service
+    echo "✓ Service deaktiviert"
+fi
+
+exit 0

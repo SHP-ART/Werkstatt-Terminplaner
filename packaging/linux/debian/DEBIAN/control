@@ -1,0 +1,19 @@
+Package: werkstatt-terminplaner
+Version: 1.6.2
+Section: utils
+Priority: optional
+Architecture: amd64
+Depends: nodejs (>= 18.0.0), sqlite3, avahi-daemon
+Maintainer: SHP-ART <info@shp-art.de>
+Homepage: https://github.com/SHP-ART/Werkstatt-Terminplaner
+Description: Terminplaner für Kfz-Werkstätten
+ Werkstatt Terminplaner ist eine Anwendung zur Verwaltung von
+ Terminen, Kunden und Auslastung in Kfz-Werkstätten.
+ .
+ Features:
+  - Kundenverwaltung
+  - Terminplanung mit Drag & Drop
+  - Auslastungsberechnung
+  - Lokale KI für Zeitschätzung
+  - Automatische Backups
+  - Multi-Client fähig (Web-Interface auf Port 3001)

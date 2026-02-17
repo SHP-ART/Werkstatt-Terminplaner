@@ -1,0 +1,42 @@
+#!/bin/bash
+set -e
+
+case "$1" in
+    purge)
+        # Nur bei vollständiger Entfernung (purge)
+        echo "=== Vollständige Deinstallation ==="
+        
+        # Datenverzeichnis entfernen
+        if [ -d /var/lib/werkstatt-terminplaner ]; then
+            echo "⚠ Lösche Datenverzeichnis inkl. Datenbank..."
+            echo "  (Backups waren in: /var/lib/werkstatt-terminplaner/backups/)"
+            rm -rf /var/lib/werkstatt-terminplaner
+            echo "✓ Datenverzeichnis gelöscht"
+        fi
+        
+        # Log-Verzeichnis entfernen
+        if [ -d /var/log/werkstatt-terminplaner ]; then
+            rm -rf /var/log/werkstatt-terminplaner
+            echo "✓ Log-Verzeichnis gelöscht"
+        fi
+        
+        # Konfiguration entfernen
+        if [ -d /etc/werkstatt-terminplaner ]; then
+            rm -rf /etc/werkstatt-terminplaner
+            echo "✓ Konfiguration gelöscht"
+        fi
+        
+        # System-User entfernen
+        if id -u werkstatt >/dev/null 2>&1; then
+            userdel werkstatt 2>/dev/null || true
+            echo "✓ User entfernt"
+        fi
+        ;;
+        
+    remove|upgrade|failed-upgrade|abort-install|abort-upgrade|disappear)
+        # Bei normalem remove oder upgrade: Daten behalten
+        echo "ℹ Datenverzeichnis wird behalten: /var/lib/werkstatt-terminplaner"
+        ;;
+esac
+
+exit 0

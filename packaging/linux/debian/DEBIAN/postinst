@@ -1,0 +1,149 @@
+#!/bin/bash
+set -e
+
+# Farben für Output
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+NC='\033[0m' # No Color
+
+echo -e "${GREEN}=== Werkstatt Terminplaner Post-Installation ===${NC}"
+
+# 1. System-User anlegen (falls nicht vorhanden)
+if ! id -u werkstatt >/dev/null 2>&1; then
+    echo "Erstelle System-User 'werkstatt'..."
+    useradd -r -s /bin/false -d /var/lib/werkstatt-terminplaner werkstatt
+    echo -e "${GREEN}✓${NC} User erstellt"
+else
+    echo -e "${YELLOW}ℹ${NC} User 'werkstatt' existiert bereits"
+fi
+
+# 2. Datenverzeichnis erstellen
+echo "Erstelle Datenverzeichnis..."
+mkdir -p /var/lib/werkstatt-terminplaner
+mkdir -p /var/lib/werkstatt-terminplaner/database
+mkdir -p /var/lib/werkstatt-terminplaner/backups
+mkdir -p /var/log/werkstatt-terminplaner
+
+# Permissions setzen
+chown -R werkstatt:werkstatt /var/lib/werkstatt-terminplaner
+chown -R werkstatt:werkstatt /var/log/werkstatt-terminplaner
+chmod 755 /var/lib/werkstatt-terminplaner
+chmod 755 /var/log/werkstatt-terminplaner
+echo -e "${GREEN}✓${NC} Verzeichnisse erstellt"
+
+# 3. Konfigurationsdatei kopieren (falls nicht vorhanden)
+if [ ! -f /etc/werkstatt-terminplaner/.env ]; then
+    echo "Erstelle Standard-Konfiguration..."
+    mkdir -p /etc/werkstatt-terminplaner
+    cat > /etc/werkstatt-terminplaner/.env << 'EOF'
+# Werkstatt Terminplaner Konfiguration
+# Bearbeite diese Datei um Einstellungen anzupassen
+
+# Server Port
+PORT=3001
+
+# CORS-Einstellungen (Komma-getrennt oder * für alle)
+CORS_ORIGIN=*
+
+# Node Environment
+NODE_ENV=production
+
+# Datenbank-Pfad (optional - Standard: /var/lib/werkstatt-terminplaner/database/werkstatt.db)
+# DB_PATH=/var/lib/werkstatt-terminplaner/database/werkstatt.db
+
+# Externe KI-URL (optional - für Hardware-KI)
+# KI_EXTERNAL_URL=http://192.168.1.100:5000
+
+# OpenAI API Key (optional - für Cloud-KI)
+# OPENAI_API_KEY=sk-...
+EOF
+    chmod 644 /etc/werkstatt-terminplaner/.env
+    echo -e "${GREEN}✓${NC} Konfiguration erstellt"
+else
+    echo -e "${YELLOW}ℹ${NC} Konfiguration existiert bereits"
+fi
+
+# 4. Symlink für Konfiguration erstellen (Backend liest aus /etc)
+ln -sf /etc/werkstatt-terminplaner/.env /opt/werkstatt-terminplaner/.env 2>/dev/null || true
+
+# 5. Datenbank initialisieren
+# Der Server erstellt die Datenbank automatisch beim ersten Start.
+# Wir starten ihn kurz und warten auf die Initialisierung.
+echo "Initialisiere Datenbank..."
+cd /opt/werkstatt-terminplaner
+export DATA_DIR=/var/lib/werkstatt-terminplaner
+export NODE_ENV=production
+
+# Server kurz starten für DB-Init (max 15 Sekunden, dann beenden)
+timeout 15 su -s /bin/bash werkstatt -c "cd /opt/werkstatt-terminplaner && DATA_DIR=/var/lib/werkstatt-terminplaner NODE_ENV=production /usr/bin/node -e \"
+  const path = require('path');
+  process.chdir('/opt/werkstatt-terminplaner');
+  // Datenbank-Modul laden löst die Initialisierung und Migrationen aus
+  const db = require('./src/config/database');
+  // Warten bis die DB bereit ist, dann beenden
+  if (db.readyPromise) {
+    db.readyPromise.then(() => {
+      console.log('Datenbank erfolgreich initialisiert');
+      process.exit(0);
+    }).catch((err) => {
+      console.error('DB-Init Fehler:', err);
+      process.exit(1);
+    });
+  } else {
+    setTimeout(() => process.exit(0), 5000);
+  }
+\"" 2>&1 || true
+echo -e "${GREEN}✓${NC} Datenbank initialisiert"
+
+# 6. systemd-Service aktivieren
+echo "Aktiviere systemd-Service..."
+systemctl daemon-reload
+systemctl enable werkstatt-terminplaner.service
+echo -e "${GREEN}✓${NC} Service aktiviert"
+
+# 7. Service starten
+echo "Starte Server..."
+systemctl start werkstatt-terminplaner.service
+sleep 3
+
+# 8. Status prüfen
+if systemctl is-active --quiet werkstatt-terminplaner.service; then
+    echo -e "${GREEN}✓${NC} Server läuft"
+    
+    # IP-Adresse ermitteln
+    SERVER_IP=$(hostname -I | awk '{print $1}')
+    
+    echo ""
+    echo -e "${GREEN}╔════════════════════════════════════════════════════════════╗${NC}"
+    echo -e "${GREEN}║  Installation erfolgreich abgeschlossen!                   ║${NC}"
+    echo -e "${GREEN}╚════════════════════════════════════════════════════════════╝${NC}"
+    echo ""
+    echo -e "➜ Frontend:  ${GREEN}http://${SERVER_IP}:3001${NC}"
+    echo -e "➜ Status:    ${GREEN}http://${SERVER_IP}:3001/status${NC}"
+    echo ""
+    echo -e "Nützliche Befehle:"
+    echo -e "  systemctl status werkstatt-terminplaner  ${YELLOW}# Status anzeigen${NC}"
+    echo -e "  systemctl restart werkstatt-terminplaner ${YELLOW}# Neu starten${NC}"
+    echo -e "  journalctl -u werkstatt-terminplaner -f  ${YELLOW}# Logs verfolgen${NC}"
+    echo ""
+    echo -e "Konfiguration: ${YELLOW}/etc/werkstatt-terminplaner/.env${NC}"
+    echo -e "Datenbank:     ${YELLOW}/var/lib/werkstatt-terminplaner/database/${NC}"
+    echo -e "Backups:       ${YELLOW}/var/lib/werkstatt-terminplaner/backups/${NC}"
+    echo ""
+    
+    # Firewall-Hinweis
+    if command -v ufw >/dev/null 2>&1; then
+        if ufw status | grep -q "Status: active"; then
+            echo -e "${YELLOW}⚠ Firewall aktiv!${NC} Port öffnen mit:"
+            echo -e "  ${YELLOW}sudo ufw allow 3001/tcp${NC}"
+            echo ""
+        fi
+    fi
+else
+    echo -e "${RED}✗${NC} Server konnte nicht gestartet werden"
+    echo "Prüfe Logs mit: journalctl -u werkstatt-terminplaner -n 50"
+    exit 1
+fi
+
+exit 0
