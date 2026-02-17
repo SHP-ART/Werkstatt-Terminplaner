@@ -103,7 +103,7 @@ Diese Version wird automatisch verwendet in:
 
 #### Schnell-Installation mit einem Befehl:
 ```bash
-curl -fsSL https://raw.githubusercontent.com/SHP-ART/Werkstatt-Terminplaner/main/install-linux.sh | sudo bash
+curl -fsSL https://raw.githubusercontent.com/SHP-ART/Werkstatt-Terminplaner/master/install-linux.sh | sudo bash
 ```
 
 #### Oder mit deb-Paket:

@@ -24,11 +24,25 @@ Diese Anleitung beschreibt die Installation des Werkstatt Terminplaners als **he
 
 ### Methode 1: Ein-Befehl-Installation (Empfohlen) ⚡
 
-Die einfachste und schnellste Methode:
+Die einfachste und schnellste Methode – installiert **alles** inklusive Frontend-Build und lokaler KI:
 
 ```bash
-# Direkt aus dem Internet installieren
-curl -fsSL https://raw.githubusercontent.com/SHP-ART/Werkstatt-Terminplaner/main/install-linux.sh | sudo bash
+curl -fsSL https://raw.githubusercontent.com/SHP-ART/Werkstatt-Terminplaner/master/install-linux.sh | sudo bash
+```
+
+**Optionen:**
+```bash
+# Mit anderem Port:
+curl -fsSL https://...install-linux.sh | sudo bash -s -- --port=8080
+
+# Mit OpenAI API-Key Abfrage:
+sudo ./install-linux.sh --with-openai
+
+# Nur Backend (ohne Frontend-Build):
+sudo ./install-linux.sh --no-frontend
+
+# Hilfe anzeigen:
+sudo ./install-linux.sh --help
 ```
 
 **Oder lokal:**
@@ -42,12 +56,15 @@ sudo ./install-linux.sh
 ```
 
 Das Skript führt automatisch aus:
-- ✅ Installiert Node.js (falls nötig)
-- ✅ Installiert System-Dependencies (git, sqlite3, avahi-daemon)
+- ✅ Installiert Node.js 20 LTS (falls nötig)
+- ✅ Installiert System-Dependencies (git, sqlite3, avahi, build-essential)
 - ✅ Klont/aktualisiert Repository
-- ✅ Installiert npm-Pakete
+- ✅ Installiert Backend npm-Pakete
+- ✅ **Baut das Frontend** (Vite Build → `dist/`)
 - ✅ Erstellt System-User `werkstatt`
 - ✅ Richtet Verzeichnisse ein (`/var/lib/werkstatt-terminplaner`, `/var/log/werkstatt-terminplaner`)
+- ✅ Konfiguriert KI-System (lokal, OpenAI, extern)
+- ✅ Installiert mDNS/Avahi für KI-Discovery im LAN
 - ✅ Erstellt Konfiguration (`/etc/werkstatt-terminplaner/.env`)
 - ✅ Installiert systemd-Service
 - ✅ Startet Server automatisch
