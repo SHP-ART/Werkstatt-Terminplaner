@@ -230,6 +230,51 @@ router.post('/external/retrain', aiController.retrainExternalModel);
 router.post('/external/notify-backend', aiController.notifyBackendUrl);
 
 // =============================================================================
+// OLLAMA TEST-ENDPUNKTE (unabhängig vom aktiven ki_mode)
+// =============================================================================
+
+/**
+ * GET /api/ai/ollama/status
+ * Prüft ob Ollama erreichbar ist und welche Modelle verfügbar sind.
+ * Läuft IMMER gegen Ollama — egal welcher ki_mode aktiv ist.
+ */
+router.get('/ollama/status', aiController.getOllamaStatus);
+
+/**
+ * GET /api/ai/ollama/modelle
+ * Listet alle auf dem Ollama-Server installierten Modelle auf.
+ */
+router.get('/ollama/modelle', aiController.getOllamaModelle);
+
+/**
+ * POST /api/ai/ollama/test-prompt
+ * Sendet einen freien Testprompt direkt an Ollama (für Debugging / Qualitätstest).
+ *
+ * Body: { prompt: "Dein Testprompt", systemPrompt: "optional" }
+ *
+ * Beispiel:
+ * {
+ *   "prompt": "Welche Wartungsarbeiten braucht ein Citroën C3 bei 60.000 km?",
+ *   "systemPrompt": "Du bist ein Werkstatt-Experte."
+ * }
+ */
+router.post('/ollama/test-prompt', aiController.testOllamaPrompt);
+
+/**
+ * POST /api/ai/ollama/test-termin
+ * Testet parseTerminFromText via Ollama — ignoriert den aktiven ki_mode.
+ * Nützlich zum Ausprobieren bevor Ollama als aktiver Provider gesetzt wird.
+ *
+ * Body: { text: "Freitext-Beschreibung" }
+ *
+ * Beispiel:
+ * {
+ *   "text": "Kunde Müller, Citroën C3, Ölwechsel morgen 9 Uhr"
+ * }
+ */
+router.post('/ollama/test-termin', aiController.testOllamaTermin);
+
+// =============================================================================
 // EXPORT
 // =============================================================================
 

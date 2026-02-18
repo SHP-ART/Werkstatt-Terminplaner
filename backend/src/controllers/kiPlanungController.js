@@ -1,5 +1,6 @@
 const EinstellungenModel = require('../models/einstellungenModel');
 const localAiService = require('../services/localAiService');
+const ollamaService = require('../services/ollamaService');
 const { getAsync, allAsync } = require('../utils/dbHelper');
 
 const DEFAULT_ARBEITSBEGINN_MIN = 8 * 60;
@@ -54,12 +55,15 @@ class KIPlanungController {
         });
       }
       
-      // API-Key prüfen
-      const apiKey = await EinstellungenModel.getChatGPTApiKey();
-      if (!apiKey) {
-        return res.status(400).json({ 
-          error: 'Kein ChatGPT API-Key konfiguriert. Bitte unter Einstellungen → KI / API einen API-Key hinterlegen.' 
-        });
+      // API-Key prüfen (nicht für Ollama)
+      let apiKey = null;
+      if (mode !== 'ollama') {
+        apiKey = await EinstellungenModel.getChatGPTApiKey();
+        if (!apiKey) {
+          return res.status(400).json({ 
+            error: 'Kein ChatGPT API-Key konfiguriert. Bitte unter Einstellungen → KI / API einen API-Key hinterlegen.' 
+          });
+        }
       }
       
       // Alle relevanten Daten sammeln
@@ -72,7 +76,7 @@ class KIPlanungController {
         KIPlanungController.getAbwesenheitenFuerDatum(datum)
       ]);
       
-      // Prompt für ChatGPT erstellen
+      // Prompt für KI erstellen
       const prompt = KIPlanungController.erstellePlanungsPrompt({
         datum,
         mitarbeiter,
@@ -83,8 +87,10 @@ class KIPlanungController {
         abwesenheiten
       });
       
-      // ChatGPT API aufrufen
-      const kiAntwort = await KIPlanungController.chatGPTRequest(apiKey, prompt);
+      // KI API aufrufen (Ollama oder ChatGPT)
+      const kiAntwort = mode === 'ollama'
+        ? await ollamaService.planungRequest(prompt)
+        : await KIPlanungController.chatGPTRequest(apiKey, prompt);
       
       // Antwort parsen und strukturieren
       const vorschlag = KIPlanungController.parseKIAntwort(kiAntwort, {
@@ -161,12 +167,15 @@ class KIPlanungController {
         });
       }
       
-      // API-Key prüfen
-      const apiKey = await EinstellungenModel.getChatGPTApiKey();
-      if (!apiKey) {
-        return res.status(400).json({ 
-          error: 'Kein ChatGPT API-Key konfiguriert.' 
-        });
+      // API-Key prüfen (nicht für Ollama)
+      let apiKey = null;
+      if (mode !== 'ollama') {
+        apiKey = await EinstellungenModel.getChatGPTApiKey();
+        if (!apiKey) {
+          return res.status(400).json({ 
+            error: 'Kein ChatGPT API-Key konfiguriert.' 
+          });
+        }
       }
       
       // Wochentage berechnen (Mo-Fr)
@@ -198,7 +207,10 @@ class KIPlanungController {
         einstellungen
       });
       
-      const kiAntwort = await KIPlanungController.chatGPTRequest(apiKey, prompt);
+      // KI API aufrufen (Ollama oder ChatGPT)
+      const kiAntwort = mode === 'ollama'
+        ? await ollamaService.planungRequest(prompt)
+        : await KIPlanungController.chatGPTRequest(apiKey, prompt);
       
       const vorschlag = KIPlanungController.parseWochenAntwort(kiAntwort, {
         wochentage,

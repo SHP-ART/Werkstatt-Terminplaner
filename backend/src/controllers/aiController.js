@@ -9,6 +9,7 @@
 const openaiService = require('../services/openaiService');
 const localAiService = require('../services/localAiService');
 const externalAiService = require('../services/externalAiService');
+const ollamaService = require('../services/ollamaService');
 const kiDiscoveryService = require('../services/kiDiscoveryService');
 const EinstellungenModel = require('../models/einstellungenModel');
 
@@ -28,6 +29,7 @@ async function getKISettings() {
 function getKIService(mode) {
   if (mode === 'openai') return openaiService;
   if (mode === 'external') return externalAiService;
+  if (mode === 'ollama') return ollamaService;
   return localAiService;
 }
 
@@ -74,6 +76,20 @@ async function getStatus(req, res) {
         message,
         health,
         connection
+      });
+    }
+
+    if (mode === 'ollama') {
+      const status = await ollamaService.testConnection();
+      const message = status.success
+        ? `Ollama aktiv (${status.model}${status.modelVerfuegbar ? '' : ' — Modell nicht geladen'})`
+        : `Ollama nicht erreichbar: ${status.error}`;
+      return res.json({
+        enabled: true,
+        configured: status.configured,
+        mode: 'ollama',
+        message,
+        ollama: status
       });
     }
 
@@ -146,6 +162,27 @@ async function testConnection(req, res) {
         error: result.error || 'Externe KI nicht erreichbar',
         configured: result.configured,
         mode: 'external'
+      });
+    }
+
+    if (mode === 'ollama') {
+      const result = await ollamaService.testConnection();
+      if (result.success) {
+        return res.json({
+          success: true,
+          message: `Ollama erreichbar — Modell: ${result.model}`,
+          mode: 'ollama',
+          modelVerfuegbar: result.modelVerfuegbar,
+          verfuegbareModelle: result.verfuegbareModelle,
+          baseUrl: result.baseUrl
+        });
+      }
+      return res.status(503).json({
+        success: false,
+        error: result.error || 'Ollama nicht erreichbar',
+        configured: result.configured,
+        mode: 'ollama',
+        baseUrl: ollamaService.OLLAMA_BASE_URL
       });
     }
 
@@ -934,6 +971,145 @@ async function notifyBackendUrl(req, res) {
 // EXPORTS
 // =============================================================================
 
+// =============================================================================
+// OLLAMA TEST-ENDPUNKTE (unabhängig vom aktiven ki_mode)
+// =============================================================================
+
+/**
+ * GET /api/ai/ollama/status
+ * Prüft Ollama-Verbindung und verfügbare Modelle.
+ * Läuft IMMER gegen Ollama, egal was ki_mode eingestellt ist.
+ */
+async function getOllamaStatus(req, res) {
+  try {
+    const status = await ollamaService.testConnection();
+    const httpStatus = status.success ? 200 : 503;
+    res.status(httpStatus).json({
+      ...status,
+      konfiguriertes_modell: ollamaService.OLLAMA_MODEL,
+      base_url: ollamaService.OLLAMA_BASE_URL
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+}
+
+/**
+ * GET /api/ai/ollama/modelle
+ * Listet alle auf dem Ollama-Server verfügbaren Modelle auf.
+ */
+async function getOllamaModelle(req, res) {
+  try {
+    const status = await ollamaService.testConnection();
+    if (!status.success) {
+      return res.status(503).json({
+        error: 'Ollama nicht erreichbar',
+        details: status.error,
+        base_url: ollamaService.OLLAMA_BASE_URL
+      });
+    }
+    res.json({
+      konfiguriertes_modell: ollamaService.OLLAMA_MODEL,
+      model_verfuegbar: status.modelVerfuegbar,
+      alle_modelle: status.verfuegbareModelle,
+      base_url: ollamaService.OLLAMA_BASE_URL
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+}
+
+/**
+ * POST /api/ai/ollama/test-prompt
+ * Sendet einen freien Testprompt direkt an Ollama.
+ * Body: { prompt: "Dein Testprompt", systemPrompt: "optional" }
+ */
+async function testOllamaPrompt(req, res) {
+  try {
+    const { prompt, systemPrompt } = req.body;
+    if (!prompt || prompt.trim().length < 3) {
+      return res.status(400).json({ error: 'prompt muss mindestens 3 Zeichen lang sein' });
+    }
+
+    const start = Date.now();
+    // Direkter HTTP-Call analog zu ollamaService intern
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 30000);
+
+    let response;
+    try {
+      response = await fetch(`${ollamaService.OLLAMA_BASE_URL}/api/chat`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        signal: controller.signal,
+        body: JSON.stringify({
+          model: ollamaService.OLLAMA_MODEL,
+          messages: [
+            { role: 'system', content: systemPrompt || 'Du bist ein hilfreicher Assistent.' },
+            { role: 'user', content: prompt }
+          ],
+          stream: false,
+          options: { temperature: 0.3 }
+        })
+      });
+    } finally {
+      clearTimeout(timeout);
+    }
+
+    if (!response.ok) {
+      const body = await response.text().catch(() => '');
+      return res.status(503).json({ error: `Ollama HTTP ${response.status}`, details: body.slice(0, 200) });
+    }
+
+    const data = await response.json();
+    const antwort = data?.message?.content || data?.response || '';
+    const dauer_ms = Date.now() - start;
+
+    res.json({
+      success: true,
+      modell: ollamaService.OLLAMA_MODEL,
+      dauer_ms,
+      antwort,
+      tokens: data?.eval_count || null
+    });
+  } catch (error) {
+    res.status(503).json({ error: error.message });
+  }
+}
+
+/**
+ * POST /api/ai/ollama/test-termin
+ * Testet parseTerminFromText mit einem Beispieltext via Ollama.
+ * Body: { text: "Freitext" }
+ * Ignoriert den aktiven ki_mode — läuft immer gegen Ollama.
+ */
+async function testOllamaTermin(req, res) {
+  try {
+    const text = req.body?.text || 'Kunde Müller, Citroën C3, Ölwechsel morgen 9 Uhr';
+    if (text.trim().length < 5) {
+      return res.status(400).json({ error: 'text muss mindestens 5 Zeichen lang sein' });
+    }
+
+    const start = Date.now();
+    const ergebnis = await ollamaService.parseTerminFromText(text);
+    const dauer_ms = Date.now() - start;
+
+    res.json({
+      success: true,
+      input_text: text,
+      dauer_ms,
+      modell: ollamaService.OLLAMA_MODEL,
+      ergebnis
+    });
+  } catch (error) {
+    res.status(503).json({
+      success: false,
+      error: error.message,
+      hinweis: 'Stelle sicher dass Ollama läuft und das Modell geladen ist'
+    });
+  }
+}
+
 module.exports = {
   getStatus,
   testConnection,
@@ -953,5 +1129,10 @@ module.exports = {
   excludeAllOutliers,
   retrainModel,
   retrainExternalModel,
-  notifyBackendUrl
+  notifyBackendUrl,
+  // Ollama Test-Endpunkte
+  getOllamaStatus,
+  getOllamaModelle,
+  testOllamaPrompt,
+  testOllamaTermin
 };

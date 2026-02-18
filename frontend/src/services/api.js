@@ -879,6 +879,47 @@ class AIService {
   static async checkTeileKompatibilitaet(vin, arbeit) {
     return ApiService.post('/ai/vin-teile-check', { vin, arbeit });
   }
+
+  // ---------------------------------------------------------------------------
+  // OLLAMA TEST-METHODEN (unabhängig vom aktiven ki_mode)
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Prüft ob Ollama erreichbar ist und welche Modelle verfügbar sind.
+   * Läuft IMMER gegen Ollama — egal welcher ki_mode aktiv ist.
+   * @returns {Promise<Object>} Ollama-Status + verfügbare Modelle
+   */
+  static async getOllamaStatus() {
+    return ApiService.get('/ai/ollama/status');
+  }
+
+  /**
+   * Listet alle auf dem Ollama-Server installierten Modelle.
+   * @returns {Promise<Object>} Modell-Liste
+   */
+  static async getOllamaModelle() {
+    return ApiService.get('/ai/ollama/modelle');
+  }
+
+  /**
+   * Sendet einen freien Testprompt direkt an Ollama.
+   * @param {string} prompt - Testprompt
+   * @param {string} systemPrompt - Optional: System-Prompt
+   * @returns {Promise<Object>} Ollama-Antwort + Dauer
+   */
+  static async testOllamaPrompt(prompt, systemPrompt = null) {
+    return ApiService.post('/ai/ollama/test-prompt', { prompt, systemPrompt });
+  }
+
+  /**
+   * Testet parseTerminFromText über Ollama.
+   * Ignoriert den aktiven ki_mode — läuft immer gegen Ollama.
+   * @param {string} text - Freitext (z.B. "Müller C3 Ölwechsel morgen 9 Uhr")
+   * @returns {Promise<Object>} Strukturierter Termin + Dauer
+   */
+  static async testOllamaTermin(text) {
+    return ApiService.post('/ai/ollama/test-termin', { text });
+  }
 }
 
 /**

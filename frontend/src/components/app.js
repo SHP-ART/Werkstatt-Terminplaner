@@ -12207,6 +12207,13 @@ class App {
           statusText.textContent = 'OpenAI ausgewählt - API-Key fehlt!';
           statusHint.textContent = 'Bitte konfiguriere unten einen API-Key für OpenAI';
         }
+      } else if (this.kiMode === 'ollama') {
+        // Ollama Modus — lokales LLM auf dem Server
+        statusContainer.style.background = '#f3e5f5';
+        statusContainer.style.borderColor = '#ce93d8';
+        statusIcon.textContent = '🦙';
+        statusText.textContent = 'Aktiv: Ollama (lokales LLM)';
+        statusHint.textContent = `Modell: ${window._ollamaModel || 'llama3.2'} · Läuft direkt auf dem Server · kein Internet erforderlich`;
       } else if (this.kiMode === 'external') {
         // Externer KI-Service
         const status = externalStatus || this._externalKIStatus;
@@ -12246,12 +12253,14 @@ class App {
       }
     }
 
-    // Body-Klasse für OpenAI-only Elemente setzen
-    document.body.classList.remove('ki-mode-openai', 'ki-mode-local', 'ki-mode-external');
+    // Body-Klasse für KI-Modus setzen
+    document.body.classList.remove('ki-mode-openai', 'ki-mode-local', 'ki-mode-external', 'ki-mode-ollama');
     if (this.kiEnabled && this.kiMode === 'openai') {
       document.body.classList.add('ki-mode-openai');
     } else if (this.kiEnabled && this.kiMode === 'external') {
       document.body.classList.add('ki-mode-external');
+    } else if (this.kiEnabled && this.kiMode === 'ollama') {
+      document.body.classList.add('ki-mode-ollama');
     } else {
       document.body.classList.add('ki-mode-local');
     }
@@ -12567,7 +12576,8 @@ class App {
     const modeLabels = {
       local: 'Lokal',
       openai: 'OpenAI',
-      external: 'Extern'
+      external: 'Extern',
+      ollama: 'Ollama'
     };
 
     try {
