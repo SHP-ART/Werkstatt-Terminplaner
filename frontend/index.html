@@ -221,6 +221,49 @@
                 </div>
             </div>
 
+            <!-- Server-Auslastung (nur bei Linux All-in-One Server) -->
+            <div class="dashboard-section server-stats-section" id="serverStatsSection" style="display: none;">
+                <h3>🐧 Server-Auslastung <span class="server-stats-badge">Linux All-in-One</span></h3>
+                <div class="server-stats-grid">
+                    <div class="server-stat-card">
+                        <div class="server-stat-icon">🔲</div>
+                        <div class="server-stat-content">
+                            <div class="server-stat-label">CPU</div>
+                            <div class="server-stat-value" id="serverCpuValue">--%</div>
+                            <div class="server-stat-bar">
+                                <div class="server-stat-fill" id="serverCpuBar" style="width: 0%"></div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="server-stat-card">
+                        <div class="server-stat-icon">💾</div>
+                        <div class="server-stat-content">
+                            <div class="server-stat-label">RAM</div>
+                            <div class="server-stat-value" id="serverMemValue">--</div>
+                            <div class="server-stat-bar">
+                                <div class="server-stat-fill" id="serverMemBar" style="width: 0%"></div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="server-stat-card">
+                        <div class="server-stat-icon">⏱️</div>
+                        <div class="server-stat-content">
+                            <div class="server-stat-label">Uptime</div>
+                            <div class="server-stat-value" id="serverUptimeValue">--</div>
+                            <div class="server-stat-detail" id="serverHostname"></div>
+                        </div>
+                    </div>
+                    <div class="server-stat-card">
+                        <div class="server-stat-icon">🌐</div>
+                        <div class="server-stat-content">
+                            <div class="server-stat-label">Node.js</div>
+                            <div class="server-stat-value" id="serverNodeValue">--</div>
+                            <div class="server-stat-detail" id="serverPlatformInfo"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             <!-- Heute fällige Ersatzauto-Rückgaben -->
             <div class="dashboard-section" id="ersatzautoRueckgabenSection" style="display: none;">
                 <h3>🚗 Heute fällige Ersatzauto-Rückgaben</h3>

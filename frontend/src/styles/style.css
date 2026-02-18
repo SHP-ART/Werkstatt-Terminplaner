@@ -206,6 +206,109 @@ header.animated-header:active {
     border: 1px solid rgba(255, 255, 255, 0.2);
 }
 
+/* ===== Server-Auslastung Widget (Linux) ===== */
+.server-stats-section {
+    border: 1px solid #e0e0e0;
+    border-radius: 12px;
+    padding: 20px;
+    background: linear-gradient(135deg, #f8f9fa 0%, #fff 100%);
+}
+
+.server-stats-section h3 {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 15px;
+}
+
+.server-stats-badge {
+    font-size: 0.65rem;
+    font-weight: 600;
+    background: rgba(255, 170, 0, 0.15);
+    color: #b37700;
+    padding: 2px 8px;
+    border-radius: 10px;
+    border: 1px solid rgba(255, 170, 0, 0.3);
+}
+
+.server-stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 15px;
+}
+
+.server-stat-card {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    background: #fff;
+    border: 1px solid #eee;
+    border-radius: 10px;
+    padding: 14px;
+    transition: box-shadow 0.2s;
+}
+
+.server-stat-card:hover {
+    box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+}
+
+.server-stat-icon {
+    font-size: 1.4rem;
+    line-height: 1;
+    margin-top: 2px;
+}
+
+.server-stat-content {
+    flex: 1;
+    min-width: 0;
+}
+
+.server-stat-label {
+    font-size: 0.75rem;
+    color: #888;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 2px;
+}
+
+.server-stat-value {
+    font-size: 1.15rem;
+    font-weight: 700;
+    color: #333;
+    margin-bottom: 6px;
+}
+
+.server-stat-detail {
+    font-size: 0.75rem;
+    color: #999;
+}
+
+.server-stat-bar {
+    height: 6px;
+    background: #eee;
+    border-radius: 3px;
+    overflow: hidden;
+}
+
+.server-stat-fill {
+    height: 100%;
+    border-radius: 3px;
+    transition: width 0.6s ease, background-color 0.4s;
+}
+
+.server-stat-fill.stat-ok {
+    background: linear-gradient(90deg, #4caf50, #66bb6a);
+}
+
+.server-stat-fill.stat-warning {
+    background: linear-gradient(90deg, #ff9800, #ffa726);
+}
+
+.server-stat-fill.stat-critical {
+    background: linear-gradient(90deg, #f44336, #ef5350);
+}
+
 /* Floating decoration dots */
 .header-decoration {
     position: absolute;

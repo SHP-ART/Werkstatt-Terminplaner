@@ -438,10 +438,84 @@ class App {
           badgeEl.className = `header-server-badge ${badge.cls}`;
           badgeEl.title = `Server: ${response.platform} (${response.arch}) | Node ${response.nodeVersion}`;
         }
+        
+        // Server-Auslastung Widget bei Linux anzeigen
+        if (response.serverType === 'linux-allinone') {
+          this.showServerStats();
+        }
       }
     } catch (error) {
       console.warn('Server-Version konnte nicht geladen werden:', error);
     }
+  }
+
+  // Server-Auslastung Widget anzeigen und Polling starten (nur Linux)
+  showServerStats() {
+    const section = document.getElementById('serverStatsSection');
+    if (section) {
+      section.style.display = 'block';
+    }
+    // Sofort laden und dann alle 30 Sekunden aktualisieren
+    this.updateServerStats();
+    if (!this._serverStatsInterval) {
+      this._serverStatsInterval = setInterval(() => this.updateServerStats(), 30000);
+    }
+  }
+
+  async updateServerStats() {
+    try {
+      const stats = await ApiService.get('/system-stats');
+      if (!stats) return;
+
+      // CPU
+      const cpuValue = document.getElementById('serverCpuValue');
+      const cpuBar = document.getElementById('serverCpuBar');
+      if (cpuValue) cpuValue.textContent = `${stats.cpuUsage}%`;
+      if (cpuBar) {
+        cpuBar.style.width = `${stats.cpuUsage}%`;
+        cpuBar.className = `server-stat-fill ${this.getStatBarClass(stats.cpuUsage)}`;
+      }
+
+      // RAM
+      const memValue = document.getElementById('serverMemValue');
+      const memBar = document.getElementById('serverMemBar');
+      if (memValue) memValue.textContent = `${stats.memoryUsed} / ${stats.memoryTotal} GB`;
+      if (memBar) {
+        const memPct = parseFloat(stats.memoryUsage);
+        memBar.style.width = `${memPct}%`;
+        memBar.className = `server-stat-fill ${this.getStatBarClass(memPct)}`;
+      }
+
+      // Uptime
+      const uptimeValue = document.getElementById('serverUptimeValue');
+      if (uptimeValue) uptimeValue.textContent = this.formatUptime(stats.uptime);
+      const hostnameEl = document.getElementById('serverHostname');
+      if (hostnameEl) hostnameEl.textContent = stats.hostname || '';
+
+      // Node.js
+      const nodeValue = document.getElementById('serverNodeValue');
+      if (nodeValue) nodeValue.textContent = stats.nodeVersion || '--';
+      const platformInfo = document.getElementById('serverPlatformInfo');
+      if (platformInfo) platformInfo.textContent = `${stats.platform || ''} (${stats.hostname || ''})`;
+    } catch (error) {
+      console.warn('Server-Stats konnten nicht geladen werden:', error);
+    }
+  }
+
+  getStatBarClass(pct) {
+    if (pct >= 90) return 'stat-critical';
+    if (pct >= 70) return 'stat-warning';
+    return 'stat-ok';
+  }
+
+  formatUptime(seconds) {
+    if (!seconds || seconds < 0) return '--';
+    const days = Math.floor(seconds / 86400);
+    const hours = Math.floor((seconds % 86400) / 3600);
+    const mins = Math.floor((seconds % 3600) / 60);
+    if (days > 0) return `${days}d ${hours}h ${mins}m`;
+    if (hours > 0) return `${hours}h ${mins}m`;
+    return `${mins}m`;
   }
 
   // Initialisiert alle Sub-Tabs und setzt display:none für nicht-aktive
