@@ -17,6 +17,7 @@
 #   --no-frontend     Frontend-Build überspringen
 #   --with-openai     OpenAI API-Key interaktiv abfragen
 #   --with-ki         Externe KI (ML-Service) auf diesem Server installieren
+#   --with-ollama     Ollama + lokales LLM installieren (empfohlen fuer Linux-Server)
 # ============================================================================
 
 set -e  # Bei Fehler abbrechen
@@ -47,7 +48,9 @@ PORT=3001
 GIT_BRANCH="master"
 BUILD_FRONTEND=true
 SETUP_OPENAI=false
-SETUP_KI=false
+SETUP_KI=true
+SETUP_OLLAMA=true
+OLLAMA_MODEL_DEFAULT="llama3.2"
 ERRORS=0
 
 # Kommandozeilen-Argumente parsen
@@ -68,6 +71,12 @@ for arg in "$@"; do
         --with-ki)
             SETUP_KI=true
             ;;
+        --with-ollama)
+            SETUP_OLLAMA=true
+            ;;
+        --ollama-model=*)
+            OLLAMA_MODEL_DEFAULT="${arg#*=}"
+            ;;
         --help|-h)
             echo "Werkstatt Terminplaner - All-in-One KI-Server Installation"
             echo ""
@@ -77,6 +86,8 @@ for arg in "$@"; do
             echo "  --no-frontend     Frontend-Build überspringen"
             echo "  --with-openai     OpenAI API-Key interaktiv abfragen"
             echo "  --with-ki         Externe KI (ML-Service) mitinstallieren"
+            echo "  --with-ollama     Ollama + lokales LLM installieren (empfohlen fuer Linux-Server)"
+            echo "  --ollama-model=NAME  Ollama-Modell (Standard: llama3.2)"
             echo "  --help            Hilfe anzeigen"
             exit 0
             ;;
@@ -97,6 +108,9 @@ print_header() {
     echo -e "  ${CYAN}Backend${NC}  + ${MAGENTA}Lokale KI${NC} + ${GREEN}Frontend${NC} + ${YELLOW}SQLite-Optimiert${NC} + ${BLUE}systemd${NC}"
     if [ "$SETUP_KI" = true ]; then
         echo -e "  + ${MAGENTA}Externe KI (ML-Service mit scikit-learn)${NC}"
+    fi
+    if [ "$SETUP_OLLAMA" = true ]; then
+        echo -e "  + ${CYAN}Ollama (lokales LLM: $OLLAMA_MODEL_DEFAULT)${NC}"
     fi
     echo ""
 }
@@ -150,6 +164,103 @@ if [ "$EUID" -ne 0 ]; then
     exit 1
 fi
 
+# ============================================================================
+# INTERAKTIVER SETUP-ASSISTENT
+# ============================================================================
+# Wird nur angezeigt wenn: interaktives Terminal vorhanden UND
+# keine Flags explizit gesetzt wurden (alles noch auf Standardwerten)
+# Beim Pipen (curl | bash) wird der Assistent übersprungen.
+
+# Interaktiver Setup-Assistent:
+# Läuft wenn ein Terminal vorhanden ist (nicht bei curl | bash).
+# Fragt nur nach Port, Ollama-Modell und optionalem OpenAI-Key.
+# Ollama + Externe KI werden IMMER installiert.
+if [ -t 0 ]; then
+
+    echo ""
+    echo -e "${BLUE}╔══════════════════════════════════════════════════════════════════╗${NC}"
+    echo -e "${BLUE}║  ${BOLD}Werkstatt Terminplaner - Setup-Assistent${NC}${BLUE}                      ║${NC}"
+    echo -e "${BLUE}╚══════════════════════════════════════════════════════════════════╝${NC}"
+    echo ""
+    echo -e "  Folgendes wird ${BOLD}immer${NC} installiert:"
+    echo -e "  ${GREEN}✓${NC} Werkstatt-Terminplaner (Backend + Frontend)"
+    echo -e "  ${GREEN}✓${NC} Ollama (lokales LLM) — Aktivierung im Frontend: Einstellungen > KI > Ollama"
+    echo -e "  ${GREEN}✓${NC} Externe KI (ML-Service, scikit-learn)"
+    echo ""
+    echo -e "  Beantworte die folgenden Fragen (Enter = Standard-Wert)."
+    echo ""
+
+    # --- Port ---
+    echo -e "  ${CYAN}▸ Server-Port${NC} [Standard: 3001]"
+    read -r -p "    Port eingeben (Enter = 3001): " INPUT_PORT
+    if [ -n "$INPUT_PORT" ] && [[ "$INPUT_PORT" =~ ^[0-9]+$ ]]; then
+        PORT="$INPUT_PORT"
+        echo -e "    ${GREEN}✓ Port: $PORT${NC}"
+    else
+        echo -e "    ${GREEN}✓ Port: 3001 (Standard)${NC}"
+    fi
+    echo ""
+
+    # --- Ollama-Modell ---
+    echo -e "  ${CYAN}▸ Ollama-Modell${NC}"
+    echo -e "    ${BOLD}1)${NC} llama3.2  — 2 GB, schnell, gut für Werkstatt-Texte ${GREEN}(empfohlen)${NC}"
+    echo -e "    ${BOLD}2)${NC} mistral   — 4 GB, besser bei komplexen Anfragen"
+    echo -e "    ${BOLD}3)${NC} llama3.1  — 5 GB, sehr gute Qualität"
+    echo -e "    ${BOLD}4)${NC} Eigene Eingabe"
+    read -r -p "    Modell wählen [1-4, Enter = 1]: " MODELL_WAHL
+    case "$MODELL_WAHL" in
+        2) OLLAMA_MODEL_DEFAULT="mistral"  ; echo -e "    ${GREEN}✓ Modell: mistral${NC}"  ;;
+        3) OLLAMA_MODEL_DEFAULT="llama3.1" ; echo -e "    ${GREEN}✓ Modell: llama3.1${NC}" ;;
+        4)
+            read -r -p "    Modell-Name eingeben: " CUSTOM_MODEL
+            if [ -n "$CUSTOM_MODEL" ]; then
+                OLLAMA_MODEL_DEFAULT="$CUSTOM_MODEL"
+                echo -e "    ${GREEN}✓ Modell: $OLLAMA_MODEL_DEFAULT${NC}"
+            else
+                echo -e "    ${GREEN}✓ Modell: llama3.2 (Standard)${NC}"
+            fi
+            ;;
+        *) OLLAMA_MODEL_DEFAULT="llama3.2" ; echo -e "    ${GREEN}✓ Modell: llama3.2 (Standard)${NC}" ;;
+    esac
+    echo ""
+
+    # --- OpenAI (optional) ---
+    echo -e "  ${CYAN}▸ OpenAI API-Key${NC} ${YELLOW}(optional)${NC}"
+    echo -e "    Nur nötig wenn du zusätzlich OpenAI Cloud-KI nutzen möchtest."
+    echo -e "    Leer lassen = Ollama / lokale KI verwenden (kein Internet nötig)."
+    read -r -p "    OpenAI API-Key (sk-... oder Enter zum Überspringen): " OPENAI_KEY_INPUT
+    if [ -n "$OPENAI_KEY_INPUT" ]; then
+        SETUP_OPENAI=true
+        OPENAI_KEY_PREFILL="$OPENAI_KEY_INPUT"
+        echo -e "    ${GREEN}✓ OpenAI API-Key wird konfiguriert${NC}"
+    else
+        echo -e "    ${CYAN}ℹ${NC} OpenAI übersprungen"
+    fi
+    echo ""
+
+    # --- Zusammenfassung + Bestätigung ---
+    echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo -e "${BOLD} Installations-Zusammenfassung${NC}"
+    echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo ""
+    echo -e "  ${GREEN}✓${NC} Werkstatt-Terminplaner auf Port $PORT"
+    echo -e "  ${GREEN}✓${NC} Ollama  — Modell: $OLLAMA_MODEL_DEFAULT  (Aktivierung im Frontend)"
+    echo -e "  ${GREEN}✓${NC} Externe KI (ML-Service)"
+    if [ "$SETUP_OPENAI" = true ]; then
+        echo -e "  ${GREEN}✓${NC} OpenAI API-Key konfiguriert"
+    fi
+    echo ""
+    read -r -p "  Installation starten? [J/n]: " BESTÄTIGUNG
+    case "$BESTÄTIGUNG" in
+        [nN]*)
+            echo -e "  ${YELLOW}Abgebrochen.${NC}"
+            exit 0
+            ;;
+        *) echo -e "  ${GREEN}▶ Starte Installation...${NC}" ;;
+    esac
+    echo ""
+fi
+
 print_header
 
 # ============================================================================
@@ -171,6 +282,9 @@ print_info "Port:    $PORT"
 print_info "Branch:  $GIT_BRANCH"
 if [ "$SETUP_KI" = true ]; then
     print_info "KI:      Externe KI wird mitinstalliert (--with-ki)"
+fi
+if [ "$SETUP_OLLAMA" = true ]; then
+    print_info "Ollama:  Wird installiert (Modell: $OLLAMA_MODEL_DEFAULT)"
 fi
 
 if [[ "$OS_NAME" != "debian" && "$OS_NAME" != "ubuntu" && "$OS_NAME" != "raspbian" ]]; then
@@ -408,8 +522,14 @@ OPENAI_KEY_LINE="# OPENAI_API_KEY=sk-..."
 OPENAI_MODEL_LINE="# OPENAI_MODEL=gpt-4o-mini"
 OPENAI_COST_LINE="# OPENAI_COST_LIMIT=50"
 
-# OpenAI-Abfrage wenn --with-openai
-if [ "$SETUP_OPENAI" = true ] && [ -t 0 ]; then
+# OpenAI-Key: vom Wizard vorausgefüllt ODER via --with-openai neu abfragen
+if [ -n "${OPENAI_KEY_PREFILL:-}" ]; then
+    # Aus dem interaktiven Wizard übernehmen
+    OPENAI_KEY_LINE="OPENAI_API_KEY=$OPENAI_KEY_PREFILL"
+    OPENAI_MODEL_LINE="OPENAI_MODEL=gpt-4o-mini"
+    OPENAI_COST_LINE="OPENAI_COST_LIMIT=50"
+    print_success "OpenAI API-Key aus Setup-Assistent übernommen"
+elif [ "$SETUP_OPENAI" = true ] && [ -t 0 ]; then
     echo ""
     echo -e "  ${MAGENTA}OpenAI API-Key Konfiguration${NC}"
     echo -e "  ${CYAN}(Optional - fuer Cloud-KI mit GPT-4o-mini)${NC}"
@@ -461,6 +581,13 @@ $OPENAI_COST_LINE
 
 # mDNS Backend-Discovery
 BACKEND_DISCOVERY_ENABLED=1
+
+# Ollama lokales LLM (wird bei --with-ollama automatisch gesetzt)
+# Modus in der Web-Oberflaeche: Einstellungen > KI > Ollama
+OLLAMA_BASE_URL=http://localhost:11434
+OLLAMA_MODEL=$OLLAMA_MODEL_DEFAULT
+OLLAMA_TIMEOUT_MS=15000
+OLLAMA_TEMPERATURE=0.3
 EOF
     chown "$SERVICE_USER":"$SERVICE_USER" "$CONFIG_DIR/.env"
     chmod 640 "$CONFIG_DIR/.env"
@@ -686,6 +813,75 @@ KIEOF
 fi
 
 # ============================================================================
+# SCHRITT 10c: OLLAMA INSTALLIEREN (optional, --with-ollama)
+# ============================================================================
+if [ "$SETUP_OLLAMA" = true ]; then
+    print_step "10c/11 - Ollama installieren (lokales LLM)"
+
+    if command -v ollama >/dev/null 2>&1; then
+        print_success "Ollama bereits installiert: $(ollama --version 2>/dev/null || echo 'version unbekannt')"
+    else
+        print_substep "Installiere Ollama..."
+        if curl -fsSL https://ollama.com/install.sh | sh &>/dev/null; then
+            print_success "Ollama installiert"
+        else
+            print_error "Ollama-Installation fehlgeschlagen - pruefe Internetverbindung"
+            print_info "Manuell: curl -fsSL https://ollama.com/install.sh | sh"
+            SETUP_OLLAMA=false
+        fi
+    fi
+
+    if [ "$SETUP_OLLAMA" = true ]; then
+        # systemd-Service fuer Ollama (falls nicht automatisch erstellt)
+        if ! systemctl is-enabled ollama &>/dev/null 2>&1; then
+            print_substep "Erstelle Ollama systemd-Service..."
+            cat > /etc/systemd/system/ollama.service << 'OLLAMAEOF'
+[Unit]
+Description=Ollama LLM Service
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/ollama serve
+Restart=always
+RestartSec=5
+Environment="OLLAMA_HOST=0.0.0.0:11434"
+
+[Install]
+WantedBy=multi-user.target
+OLLAMAEOF
+            systemctl daemon-reload
+            systemctl enable ollama &>/dev/null
+            print_success "Ollama systemd-Service registriert"
+        fi
+
+        # Ollama-Daemon starten
+        print_substep "Starte Ollama-Daemon..."
+        systemctl start ollama &>/dev/null || true
+        sleep 3
+
+        # Modell laden
+        print_substep "Lade Modell '$OLLAMA_MODEL_DEFAULT' herunter (kann einige Minuten dauern)..."
+        if ollama pull "$OLLAMA_MODEL_DEFAULT" 2>&1 | tee /tmp/ollama-pull.log | tail -3; then
+            print_success "Modell '$OLLAMA_MODEL_DEFAULT' geladen"
+        else
+            print_error "Modell konnte nicht geladen werden - Log: /tmp/ollama-pull.log"
+            print_info "Manuell: ollama pull $OLLAMA_MODEL_DEFAULT"
+        fi
+
+        print_info "Ollama bereit — KI-Modus im Frontend aktivieren: Einstellungen > KI > Ollama"
+
+        # Ollama-Test
+        print_substep "Teste Ollama-Verbindung..."
+        if curl -sf "http://localhost:11434/api/tags" &>/dev/null; then
+            print_success "Ollama erreichbar auf Port 11434"
+        else
+            print_warning "Ollama antwortet noch nicht - pruefe: systemctl status ollama"
+        fi
+    fi
+fi
+
+# ============================================================================
 # SCHRITT 11: ABSCHLUSS UND STATUS
 # ============================================================================
 print_step "11/11 - Installation abgeschlossen"
@@ -701,9 +897,10 @@ if systemctl is-active --quiet "$SERVICE_NAME.service"; then
     if echo "$KI_INFO" | grep -q '"enabled":true' 2>/dev/null; then
         KI_MODE=$(echo "$KI_INFO" | grep -o '"mode":"[^"]*"' | cut -d'"' -f4)
         case "$KI_MODE" in
-            openai)  KI_STATUS="OpenAI Cloud-KI (GPT-4o-mini)" ;;
+            openai)   KI_STATUS="OpenAI Cloud-KI (GPT-4o-mini)" ;;
             external) KI_STATUS="Externe KI + lokaler Fallback" ;;
-            *)       KI_STATUS="Lokale KI aktiv (trainiert automatisch)" ;;
+            ollama)   KI_STATUS="Ollama lokales LLM ($OLLAMA_MODEL_DEFAULT)" ;;
+            *)        KI_STATUS="Lokale KI aktiv (trainiert automatisch)" ;;
         esac
     fi
 
@@ -718,6 +915,9 @@ if systemctl is-active --quiet "$SERVICE_NAME.service"; then
     echo -e "  ${CYAN}KI-Status:${NC}   $KI_STATUS"
     if [ "$SETUP_KI" = true ] && systemctl is-active --quiet werkstatt-ki.service 2>/dev/null; then
         echo -e "  ${CYAN}KI-Service:${NC}  ML-Engine laeuft auf Port 5000"
+    fi
+    if [ "$SETUP_OLLAMA" = true ] && systemctl is-active --quiet ollama.service 2>/dev/null; then
+        echo -e "  ${CYAN}Ollama:${NC}      Lokales LLM laeuft auf Port 11434 (Modell: $OLLAMA_MODEL_DEFAULT)"
     fi
     echo ""
     echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
@@ -744,6 +944,12 @@ if systemctl is-active --quiet "$SERVICE_NAME.service"; then
     echo -e "  ${MAGENTA}Externe KI im LAN (optional):${NC}"
     echo -e "    Wird per mDNS automatisch erkannt (avahi)"
     echo -e "    Oder manuell: ${YELLOW}KI_EXTERNAL_URL=http://IP:PORT${NC}"
+    echo ""
+    echo -e "  ${MAGENTA}Ollama lokales LLM (empfohlen fuer Linux-Server):${NC}"
+    echo -e "    Installieren: ${YELLOW}curl -fsSL https://ollama.com/install.sh | sh${NC}"
+    echo -e "    Modell laden: ${YELLOW}ollama pull llama3.2${NC}"
+    echo -e "    Im Frontend:  Einstellungen > KI > Ollama"
+    echo -e "    Test-URL:     ${YELLOW}http://$SERVER_IP:$PORT/api/ai/ollama/status${NC}"
     if [ "$SETUP_KI" = true ]; then
         echo ""
         echo -e "  ${GREEN}Externe KI (lokal installiert):${NC}"
@@ -766,6 +972,13 @@ if systemctl is-active --quiet "$SERVICE_NAME.service"; then
         echo -e "  ${YELLOW}KI-Status:${NC}        systemctl status werkstatt-ki"
         echo -e "  ${YELLOW}KI-Logs:${NC}          sudo journalctl -u werkstatt-ki -f"
         echo -e "  ${YELLOW}KI-Neustart:${NC}      sudo systemctl restart werkstatt-ki"
+    fi
+    if [ "$SETUP_OLLAMA" = true ]; then
+        echo -e "  ${YELLOW}Ollama-Status:${NC}    systemctl status ollama"
+        echo -e "  ${YELLOW}Ollama-Logs:${NC}      sudo journalctl -u ollama -f"
+        echo -e "  ${YELLOW}Ollama-Test:${NC}      curl http://localhost:11434/api/tags"
+        echo -e "  ${YELLOW}Modelle:${NC}          ollama list"
+        echo -e "  ${YELLOW}Neues Modell:${NC}     ollama pull mistral"
     fi
     echo ""
     echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
