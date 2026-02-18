@@ -231,22 +231,21 @@ async function reportStatusToServer() {
       if (ip !== 'unknown') break;
     }
     
-    await fetch(statusUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
     const body = JSON.stringify({
       version: CURRENT_VERSION,
       hostname,
       ip
     });
     
-    await httpRequest(statusUrl, {
+    await fetch(statusUrl, {
       method: 'POST',
       headers: { 
         'Content-Type': 'application/json',
-        'Content-Length': Buffer.byteLength(body)
+        'Content-Length': String(Buffer.byteLength(body))
       },
-      bodyole.log(`📡 Status gemeldet: ${hostname} (${ip}) - v${CURRENT_VERSION}`);
+      body
+    });
+    console.log(`📡 Status gemeldet: ${hostname} (${ip}) - v${CURRENT_VERSION}`);
   } catch (error) {
     // Fehler beim Status-Melden ist nicht kritisch
     console.log('⚠️ Status-Meldung fehlgeschlagen:', error.message);
@@ -284,11 +283,6 @@ function startUpdateCheck() {
     reportStatusToServer();
   }, 30 * 60 * 1000); // 30 Minuten
 }
-
-let mainWindow;
-let tray = null;
-let displayTimer = null;
-let powerSaveBlockerId = null;  // Für Display-Steuerung
 
 function createWindow() {
   // Bildschirmgröße ermitteln
@@ -370,11 +364,12 @@ function checkDisplaySchedule() {
   let shouldBeOff = false;
 
   // Prüfe ob wir im "Aus"-Zeitfenster sind
-  if (offTime < onTime) {
-    // Normaler Fall (z.B. 18:10 bis 07:30 nächster Tag)
+  if (offTime > onTime) {
+    // Normaler Fall (z.B. offTime=18:10, onTime=07:30 → Zeitfenster über Mitternacht)
+    // Ausgeschaltet wenn: ab 18:10 ODER vor 07:30
     shouldBeOff = currentTime >= offTime || currentTime < onTime;
   } else {
-    // Falls jemand z.B. 07:30 bis 18:10 als "Aus" definiert (ungewöhnlich)
+    // Sonderfall: offTime und onTime am selben Tag (z.B. offTime=07:30, onTime=18:10)
     shouldBeOff = currentTime >= offTime && currentTime < onTime;
   }
 
