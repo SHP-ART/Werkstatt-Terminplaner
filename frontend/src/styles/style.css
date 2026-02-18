@@ -14175,3 +14175,1002 @@ body.intern-tablet-mode-active #intern {
     color: #28a745;
     font-weight: 600;
 }
+
+/* ================================================
+   KALENDER TAB - Styles
+   ================================================ */
+
+/* Toolbar */
+.kalender-toolbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 16px;
+    background: white;
+    border-radius: 12px;
+    margin-bottom: 16px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
+.kalender-nav {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.kalender-nav-btn {
+    padding: 8px 14px;
+    border-radius: 8px;
+    font-size: 0.95em;
+    min-width: 40px;
+    text-align: center;
+}
+
+.kalender-datum-display {
+    font-size: 1.15em;
+    font-weight: 600;
+    color: var(--steel);
+    margin-left: 12px;
+    white-space: nowrap;
+}
+
+.kalender-actions {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.kalender-ansicht-toggle {
+    display: flex;
+    background: #f1f5f9;
+    border-radius: 10px;
+    padding: 4px;
+    gap: 2px;
+}
+
+.kalender-ansicht-btn {
+    padding: 6px 14px;
+    border: none;
+    background: transparent;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 0.85em;
+    color: #64748b;
+    transition: all 0.2s;
+    white-space: nowrap;
+}
+
+.kalender-ansicht-btn.active {
+    background: white;
+    color: var(--accent);
+    font-weight: 600;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.08);
+}
+
+.kalender-sub-tabs {
+    margin-bottom: 16px;
+}
+
+/* ---- TAGESANSICHT ---- */
+.kalender-tag-container {
+    background: white;
+    border-radius: 12px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+    overflow: hidden;
+}
+
+.kalender-tag-header {
+    padding: 16px 20px;
+    background: var(--steel);
+    color: white;
+    font-size: 1.1em;
+    font-weight: 600;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.kalender-tag-header .tag-datum {
+    font-size: 1em;
+}
+
+.kalender-tag-header .tag-info {
+    font-size: 0.85em;
+    opacity: 0.8;
+}
+
+.kalender-tag-abwesenheiten {
+    padding: 0;
+}
+
+.kalender-abwesenheit-bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 20px;
+    background: #fff3cd;
+    border-bottom: 1px solid #ffeaa7;
+    font-size: 0.85em;
+    color: #856404;
+}
+
+.kalender-abwesenheit-bar .abw-icon {
+    font-size: 1.1em;
+}
+
+/* Zeitleiste (Tag) */
+.kalender-tag-zeitleiste {
+    position: relative;
+    min-height: 600px;
+}
+
+.kalender-zeit-spalte {
+    display: flex;
+    border-bottom: 1px solid #f0f0f0;
+}
+
+.kalender-zeit-label {
+    width: 70px;
+    min-width: 70px;
+    padding: 8px 12px;
+    font-size: 0.8em;
+    color: #9ca3af;
+    text-align: right;
+    border-right: 1px solid #e5e7eb;
+    background: #fafbfc;
+    box-sizing: border-box;
+}
+
+.kalender-zeit-slot {
+    flex: 1;
+    min-height: 50px;
+    position: relative;
+    cursor: pointer;
+    transition: background 0.15s;
+}
+
+.kalender-zeit-slot:hover {
+    background: #f0f7ff;
+}
+
+.kalender-zeit-slot .slot-halbstunde {
+    position: absolute;
+    top: 50%;
+    left: 0;
+    right: 0;
+    border-top: 1px dashed #f0f0f0;
+}
+
+/* Termin-Block auf Zeitleiste */
+.kalender-termin-block {
+    position: absolute;
+    left: 74px;
+    right: 8px;
+    border-radius: 8px;
+    padding: 6px 10px;
+    font-size: 0.82em;
+    color: white;
+    cursor: pointer;
+    overflow: hidden;
+    z-index: 2;
+    transition: transform 0.15s, box-shadow 0.15s;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.15);
+}
+
+.kalender-termin-block:hover {
+    transform: scale(1.02);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+    z-index: 10;
+}
+
+.kalender-termin-block .termin-block-zeit {
+    font-weight: 600;
+    font-size: 0.9em;
+    opacity: 0.9;
+}
+
+.kalender-termin-block .termin-block-titel {
+    font-weight: 600;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.kalender-termin-block .termin-block-arbeit {
+    font-size: 0.85em;
+    opacity: 0.85;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* Status-Farben für Termin-Blöcke */
+.kalender-termin-block.status-geplant {
+    background: linear-gradient(135deg, #ffc107, #e6ac00);
+    color: #333;
+}
+.kalender-termin-block.status-in_bearbeitung,
+.kalender-termin-block.status-in-bearbeitung {
+    background: linear-gradient(135deg, #17a2b8, #138496);
+}
+.kalender-termin-block.status-abgeschlossen {
+    background: linear-gradient(135deg, #28a745, #1f8a3a);
+}
+.kalender-termin-block.status-offen {
+    background: linear-gradient(135deg, #ffc107, #e0a800);
+    color: #333;
+}
+.kalender-termin-block.status-storniert {
+    background: linear-gradient(135deg, #dc3545, #c82333);
+}
+.kalender-termin-block.schwebend {
+    border: 2px dashed #ff9800;
+    background: linear-gradient(135deg, #fff3e0, #ffe0b2);
+    color: #e65100;
+}
+
+/* Listen-Ansicht (Tag) */
+.kalender-tag-liste {
+    padding: 16px 20px;
+}
+
+.kalender-liste-termin {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 12px 16px;
+    border-radius: 10px;
+    margin-bottom: 8px;
+    background: #f8f9fa;
+    border-left: 4px solid #ccc;
+    cursor: pointer;
+    transition: background 0.15s, transform 0.1s;
+}
+
+.kalender-liste-termin:hover {
+    background: #eef2f7;
+    transform: translateX(2px);
+}
+
+.kalender-liste-termin.status-geplant { border-left-color: #ffc107; }
+.kalender-liste-termin.status-in_bearbeitung,
+.kalender-liste-termin.status-in-bearbeitung { border-left-color: #17a2b8; }
+.kalender-liste-termin.status-abgeschlossen { border-left-color: #28a745; }
+.kalender-liste-termin.status-offen { border-left-color: #ffc107; }
+.kalender-liste-termin.status-storniert { border-left-color: #dc3545; }
+
+.kalender-liste-termin .liste-zeit {
+    min-width: 55px;
+    font-weight: 600;
+    font-size: 0.9em;
+    color: var(--steel);
+}
+
+.kalender-liste-termin .liste-info {
+    flex: 1;
+}
+
+.kalender-liste-termin .liste-kunde {
+    font-weight: 600;
+    font-size: 0.95em;
+    color: var(--steel);
+}
+
+.kalender-liste-termin .liste-kennzeichen {
+    font-size: 0.85em;
+    color: var(--muted);
+    margin-top: 2px;
+}
+
+.kalender-liste-termin .liste-arbeit {
+    font-size: 0.85em;
+    color: #555;
+    margin-top: 4px;
+}
+
+.kalender-liste-termin .liste-status {
+    font-size: 0.75em;
+    padding: 3px 8px;
+    border-radius: 12px;
+    font-weight: 600;
+    white-space: nowrap;
+    align-self: center;
+}
+
+.kalender-tag-leer {
+    text-align: center;
+    padding: 60px 20px;
+    color: var(--muted);
+    font-size: 1.1em;
+}
+
+.kalender-tag-leer .leer-icon {
+    font-size: 3em;
+    margin-bottom: 12px;
+    opacity: 0.5;
+}
+
+.kalender-tag-neu-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 16px;
+    padding: 10px 20px;
+    background: var(--accent);
+    color: white;
+    border: none;
+    border-radius: 10px;
+    cursor: pointer;
+    font-size: 0.95em;
+    font-weight: 600;
+    transition: background 0.2s;
+}
+
+.kalender-tag-neu-btn:hover {
+    background: var(--accent-strong);
+}
+
+/* ---- WOCHENANSICHT ---- */
+.kalender-wochen-container {
+    background: white;
+    border-radius: 12px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+    overflow: hidden;
+}
+
+.kalender-wochen-grid {
+    display: grid;
+    grid-template-columns: repeat(6, 1fr);
+    min-height: 500px;
+}
+
+.kalender-wochen-tag {
+    border-right: 1px solid #e5e7eb;
+    min-height: 500px;
+    display: flex;
+    flex-direction: column;
+}
+
+.kalender-wochen-tag:last-child {
+    border-right: none;
+}
+
+.kalender-wochen-tag.ist-heute {
+    background: #f0f7ff;
+}
+
+.kalender-wochen-tag-header {
+    padding: 10px 8px;
+    text-align: center;
+    background: var(--steel);
+    color: white;
+    font-size: 0.85em;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.2s;
+    position: sticky;
+    top: 0;
+    z-index: 3;
+}
+
+.kalender-wochen-tag-header:hover {
+    background: var(--steel-soft);
+}
+
+.kalender-wochen-tag-header.ist-heute {
+    background: var(--accent);
+}
+
+.kalender-wochen-tag-header .wt-name {
+    display: block;
+    font-size: 0.9em;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    opacity: 0.85;
+}
+
+.kalender-wochen-tag-header .wt-datum {
+    display: block;
+    font-size: 1.2em;
+    font-weight: 700;
+    margin-top: 2px;
+}
+
+.kalender-wochen-tag-header .wt-count {
+    display: block;
+    font-size: 0.75em;
+    opacity: 0.7;
+    margin-top: 2px;
+}
+
+.kalender-wochen-tag-body {
+    flex: 1;
+    padding: 6px;
+    overflow-y: auto;
+    position: relative;
+}
+
+/* Woche: Zeitleisten-Modus */
+.kalender-wochen-tag-body.zeitleiste-modus {
+    padding: 0;
+    position: relative;
+}
+
+.kalender-woche-zeitachse {
+    position: relative;
+    min-height: 500px;
+}
+
+.kalender-woche-zeit-row {
+    height: 50px;
+    border-bottom: 1px solid #f0f0f0;
+    position: relative;
+}
+
+.kalender-woche-zeit-row .wz-label {
+    position: absolute;
+    top: -8px;
+    left: 2px;
+    font-size: 0.65em;
+    color: #bbb;
+}
+
+.kalender-woche-termin-block {
+    position: absolute;
+    left: 2px;
+    right: 2px;
+    border-radius: 6px;
+    padding: 3px 5px;
+    font-size: 0.72em;
+    color: white;
+    cursor: pointer;
+    overflow: hidden;
+    z-index: 2;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.15);
+    transition: transform 0.1s, box-shadow 0.1s;
+    line-height: 1.2;
+}
+
+.kalender-woche-termin-block:hover {
+    transform: scale(1.03);
+    box-shadow: 0 3px 10px rgba(0,0,0,0.22);
+    z-index: 10;
+}
+
+.kalender-woche-termin-block.status-geplant {
+    background: linear-gradient(135deg, #ffc107, #e6ac00);
+    color: #333;
+}
+.kalender-woche-termin-block.status-in_bearbeitung,
+.kalender-woche-termin-block.status-in-bearbeitung {
+    background: linear-gradient(135deg, #17a2b8, #138496);
+}
+.kalender-woche-termin-block.status-abgeschlossen {
+    background: linear-gradient(135deg, #28a745, #1f8a3a);
+}
+.kalender-woche-termin-block.status-offen {
+    background: linear-gradient(135deg, #ffc107, #e0a800);
+    color: #333;
+}
+.kalender-woche-termin-block.status-storniert {
+    background: linear-gradient(135deg, #dc3545, #c82333);
+}
+.kalender-woche-termin-block.schwebend {
+    border: 2px dashed #ff9800;
+    background: #fff3e0;
+    color: #e65100;
+}
+
+.kalender-woche-termin-block .wb-titel {
+    font-weight: 600;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.kalender-woche-termin-block .wb-arbeit {
+    opacity: 0.85;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* Woche: Listen-Modus */
+.kalender-wochen-tag-body.listen-modus {
+    padding: 6px;
+}
+
+.kalender-woche-liste-termin {
+    padding: 6px 8px;
+    border-radius: 6px;
+    margin-bottom: 4px;
+    background: #f8f9fa;
+    border-left: 3px solid #ccc;
+    cursor: pointer;
+    font-size: 0.8em;
+    transition: background 0.15s;
+}
+
+.kalender-woche-liste-termin:hover {
+    background: #eef2f7;
+}
+
+.kalender-woche-liste-termin.status-geplant { border-left-color: #ffc107; }
+.kalender-woche-liste-termin.status-in_bearbeitung,
+.kalender-woche-liste-termin.status-in-bearbeitung { border-left-color: #17a2b8; }
+.kalender-woche-liste-termin.status-abgeschlossen { border-left-color: #28a745; }
+.kalender-woche-liste-termin.status-offen { border-left-color: #ffc107; }
+.kalender-woche-liste-termin.status-storniert { border-left-color: #dc3545; }
+
+.kalender-woche-liste-termin .wl-zeit {
+    font-weight: 600;
+    font-size: 0.9em;
+    color: var(--steel);
+}
+
+.kalender-woche-liste-termin .wl-kunde {
+    font-weight: 600;
+    margin-top: 2px;
+}
+
+.kalender-woche-liste-termin .wl-arbeit {
+    color: #666;
+    font-size: 0.9em;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.kalender-wochen-tag-footer {
+    padding: 6px;
+    text-align: center;
+    border-top: 1px solid #f0f0f0;
+}
+
+.kalender-woche-neu-btn {
+    background: none;
+    border: 2px dashed #ccc;
+    border-radius: 8px;
+    padding: 6px 12px;
+    color: #999;
+    cursor: pointer;
+    font-size: 0.8em;
+    width: 100%;
+    transition: all 0.2s;
+}
+
+.kalender-woche-neu-btn:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+    background: #fff5f5;
+}
+
+/* ---- MONATSANSICHT ---- */
+.kalender-monat-container {
+    background: white;
+    border-radius: 12px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+    overflow: hidden;
+}
+
+.kalender-monat-header-row {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    background: var(--steel);
+    color: white;
+}
+
+.kalender-monat-header-row span {
+    padding: 10px;
+    text-align: center;
+    font-weight: 600;
+    font-size: 0.85em;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.kalender-monat-grid {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+}
+
+.kalender-monat-zelle {
+    min-height: 100px;
+    border-right: 1px solid #e5e7eb;
+    border-bottom: 1px solid #e5e7eb;
+    padding: 6px;
+    cursor: pointer;
+    transition: background 0.15s;
+    position: relative;
+}
+
+.kalender-monat-zelle:nth-child(7n) {
+    border-right: none;
+}
+
+.kalender-monat-zelle:hover {
+    background: #f0f7ff;
+}
+
+.kalender-monat-zelle.ist-heute {
+    background: #e8f5e9;
+}
+
+.kalender-monat-zelle.anderer-monat {
+    background: #f9fafb;
+    opacity: 0.5;
+}
+
+.kalender-monat-zelle .mz-datum {
+    font-weight: 600;
+    font-size: 0.85em;
+    color: var(--steel);
+    margin-bottom: 4px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.kalender-monat-zelle.ist-heute .mz-datum {
+    color: var(--accent);
+}
+
+.kalender-monat-zelle .mz-datum .mz-tag {
+    width: 24px;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+}
+
+.kalender-monat-zelle.ist-heute .mz-datum .mz-tag {
+    background: var(--accent);
+    color: white;
+}
+
+.kalender-monat-zelle .mz-neu-btn {
+    width: 20px;
+    height: 20px;
+    border: none;
+    background: transparent;
+    color: #ccc;
+    cursor: pointer;
+    border-radius: 50%;
+    font-size: 1em;
+    line-height: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+    opacity: 0;
+}
+
+.kalender-monat-zelle:hover .mz-neu-btn {
+    opacity: 1;
+}
+
+.kalender-monat-zelle .mz-neu-btn:hover {
+    background: var(--accent);
+    color: white;
+}
+
+.kalender-monat-zelle .mz-auslastung {
+    height: 4px;
+    border-radius: 2px;
+    margin-bottom: 4px;
+    background: #e5e7eb;
+    overflow: hidden;
+}
+
+.kalender-monat-zelle .mz-auslastung-bar {
+    height: 100%;
+    border-radius: 2px;
+    transition: width 0.3s;
+}
+
+.kalender-monat-zelle .mz-termine {
+    font-size: 0.72em;
+    line-height: 1.35;
+}
+
+.kalender-monat-zelle .mz-termin-mini {
+    padding: 2px 4px;
+    border-radius: 4px;
+    margin-bottom: 2px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    background: #f1f5f9;
+    border-left: 2px solid #ccc;
+}
+
+.kalender-monat-zelle .mz-termin-mini.status-geplant { border-left-color: #ffc107; }
+.kalender-monat-zelle .mz-termin-mini.status-in_bearbeitung,
+.kalender-monat-zelle .mz-termin-mini.status-in-bearbeitung { border-left-color: #17a2b8; }
+.kalender-monat-zelle .mz-termin-mini.status-abgeschlossen { border-left-color: #28a745; }
+
+.kalender-monat-zelle .mz-mehr {
+    font-size: 0.8em;
+    color: var(--accent);
+    cursor: pointer;
+    padding: 2px 4px;
+}
+
+/* ---- JAHRESANSICHT ---- */
+.kalender-jahr-container {
+    padding: 16px;
+}
+
+.kalender-jahr-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 16px;
+}
+
+.kalender-mini-monat {
+    background: white;
+    border-radius: 12px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+    overflow: hidden;
+}
+
+.kalender-mini-monat-header {
+    padding: 10px 12px;
+    background: var(--steel);
+    color: white;
+    text-align: center;
+    font-weight: 600;
+    font-size: 0.9em;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+.kalender-mini-monat-header:hover {
+    background: var(--accent);
+}
+
+.kalender-mini-monat-tage-header {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    padding: 4px 6px;
+    font-size: 0.65em;
+    color: #9ca3af;
+    text-align: center;
+    font-weight: 600;
+}
+
+.kalender-mini-monat-grid {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    padding: 4px 6px 8px;
+    gap: 2px;
+}
+
+.kalender-mini-tag {
+    width: 100%;
+    aspect-ratio: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.7em;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.15s;
+    color: var(--steel);
+}
+
+.kalender-mini-tag:hover {
+    transform: scale(1.2);
+    box-shadow: 0 2px 6px rgba(0,0,0,0.15);
+}
+
+.kalender-mini-tag.leer {
+    cursor: default;
+}
+
+.kalender-mini-tag.leer:hover {
+    transform: none;
+    box-shadow: none;
+}
+
+.kalender-mini-tag.ist-heute {
+    font-weight: 700;
+    border: 2px solid var(--accent);
+    color: var(--accent);
+}
+
+.kalender-mini-tag.anderer-monat {
+    color: #ddd;
+}
+
+/* Auslastungs-Farben für Jahr */
+.kalender-mini-tag.auslastung-0 { background: #f8f9fa; }
+.kalender-mini-tag.auslastung-1 { background: #c8e6c9; }
+.kalender-mini-tag.auslastung-2 { background: #fff9c4; }
+.kalender-mini-tag.auslastung-3 { background: #ffe0b2; }
+.kalender-mini-tag.auslastung-4 { background: #ffcdd2; }
+
+/* ---- KALENDER MODAL ---- */
+.kalender-termin-modal .modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 16px 20px;
+    background: var(--steel);
+    color: white;
+}
+
+.kalender-termin-modal .modal-header h3 {
+    margin: 0;
+    font-size: 1.1em;
+}
+
+.kalender-termin-modal .modal-header .close {
+    position: static;
+    color: white;
+    font-size: 1.5em;
+    cursor: pointer;
+    opacity: 0.8;
+    transition: opacity 0.2s;
+}
+
+.kalender-termin-modal .modal-header .close:hover {
+    opacity: 1;
+}
+
+.kalender-termin-modal .modal-body {
+    padding: 20px;
+    max-height: 60vh;
+    overflow-y: auto;
+}
+
+.kalender-termin-modal .modal-footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    padding: 16px 20px;
+    border-top: 1px solid #e5e7eb;
+    background: #f8f9fa;
+}
+
+.kalender-termin-modal .form-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+}
+
+.kalender-termin-modal .form-group {
+    margin-bottom: 14px;
+}
+
+.kalender-termin-modal .form-group label {
+    display: block;
+    font-weight: 600;
+    font-size: 0.85em;
+    margin-bottom: 5px;
+    color: var(--steel);
+}
+
+.kalender-termin-modal .form-group input,
+.kalender-termin-modal .form-group textarea,
+.kalender-termin-modal .form-group select {
+    width: 100%;
+    padding: 8px 12px;
+    border: 1px solid #d1d5db;
+    border-radius: 8px;
+    font-size: 0.9em;
+    box-sizing: border-box;
+    transition: border-color 0.2s;
+}
+
+.kalender-termin-modal .form-group input:focus,
+.kalender-termin-modal .form-group textarea:focus,
+.kalender-termin-modal .form-group select:focus {
+    border-color: var(--accent);
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(210, 20, 44, 0.1);
+}
+
+.radio-group-inline {
+    display: flex;
+    gap: 16px;
+    flex-wrap: wrap;
+    padding: 6px 0;
+}
+
+.radio-group-inline label {
+    display: flex !important;
+    align-items: center;
+    gap: 4px;
+    font-weight: 400 !important;
+    font-size: 0.88em !important;
+    cursor: pointer;
+}
+
+.kalender-optionale-felder {
+    border: 1px solid #e5e7eb;
+    border-radius: 10px;
+    padding: 12px 16px;
+    margin-top: 8px;
+}
+
+.kalender-optionale-felder summary {
+    cursor: pointer;
+    font-weight: 600;
+    font-size: 0.9em;
+    color: var(--steel);
+    padding: 4px 0;
+}
+
+.kalender-optionale-felder[open] summary {
+    margin-bottom: 8px;
+    border-bottom: 1px solid #e5e7eb;
+    padding-bottom: 8px;
+}
+
+/* Autocomplete-Results im Modal */
+.kalender-termin-modal .autocomplete-results {
+    position: absolute;
+    background: white;
+    border: 1px solid #d1d5db;
+    border-radius: 8px;
+    max-height: 200px;
+    overflow-y: auto;
+    z-index: 1100;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.12);
+    width: calc(100% - 40px);
+}
+
+.kalender-termin-modal .autocomplete-item {
+    padding: 8px 12px;
+    cursor: pointer;
+    font-size: 0.88em;
+    border-bottom: 1px solid #f0f0f0;
+    transition: background 0.1s;
+}
+
+.kalender-termin-modal .autocomplete-item:hover {
+    background: #f0f7ff;
+}
+
+.kalender-termin-modal .autocomplete-item:last-child {
+    border-bottom: none;
+}
+
+/* ---- RESPONSIVE ---- */
+@media (max-width: 1200px) {
+    .kalender-jahr-grid {
+        grid-template-columns: repeat(3, 1fr);
+    }
+}
+
+@media (max-width: 900px) {
+    .kalender-wochen-grid {
+        grid-template-columns: repeat(3, 1fr);
+    }
+    .kalender-jahr-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+    .kalender-toolbar {
+        flex-direction: column;
+        align-items: stretch;
+    }
+}
+
+@media (max-width: 600px) {
+    .kalender-wochen-grid {
+        grid-template-columns: 1fr;
+    }
+    .kalender-monat-zelle {
+        min-height: 60px;
+    }
+    .kalender-jahr-grid {
+        grid-template-columns: 1fr 1fr;
+    }
+    .kalender-termin-modal .form-row {
+        grid-template-columns: 1fr;
+    }
+}

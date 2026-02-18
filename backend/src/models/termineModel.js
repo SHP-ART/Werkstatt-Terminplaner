@@ -579,7 +579,7 @@ class TermineModel {
     const query = `
       SELECT
         SUM(COALESCE(tatsaechliche_zeit, geschaetzte_zeit)) as gesamt_minuten,
-        SUM(CASE WHEN COALESCE(status, 'geplant') = 'geplant' THEN COALESCE(tatsaechliche_zeit, geschaetzte_zeit) ELSE 0 END) as geplant_minuten,
+        SUM(CASE WHEN COALESCE(status, 'geplant') IN ('geplant', 'offen') THEN COALESCE(tatsaechliche_zeit, geschaetzte_zeit) ELSE 0 END) as geplant_minuten,
         SUM(CASE WHEN status = 'in_arbeit' THEN COALESCE(tatsaechliche_zeit, geschaetzte_zeit) ELSE 0 END) as in_arbeit_minuten,
         SUM(CASE WHEN status = 'abgeschlossen' THEN COALESCE(tatsaechliche_zeit, geschaetzte_zeit) ELSE 0 END) as abgeschlossen_minuten,
         COUNT(*) as termin_anzahl,
@@ -699,7 +699,8 @@ class TermineModel {
     // Analysiere Termine und sammle Auslastung pro Mitarbeiter
     // BUG 8 FIX: Neue Logik - erst einzelne Arbeiten auswerten, dann Fallback für nicht zugeordnete
     (termine || []).forEach(termin => {
-      const status = termin.status || 'geplant';
+      const rawStatus = termin.status || 'geplant';
+      const status = rawStatus === 'offen' ? 'geplant' : rawStatus;
       const gesamtZeit = termin.tatsaechliche_zeit || termin.geschaetzte_zeit || 0;
       
       // Track welche Mitarbeiter Zeit von diesem Termin bekommen haben (für termin_anzahl)
@@ -819,11 +820,11 @@ class TermineModel {
     const query = `
       SELECT
         SUM(COALESCE(tatsaechliche_zeit, geschaetzte_zeit)) as gesamt_minuten,
-        SUM(CASE WHEN COALESCE(status, 'geplant') = 'geplant' THEN COALESCE(tatsaechliche_zeit, geschaetzte_zeit) ELSE 0 END) as geplant_minuten,
+        SUM(CASE WHEN COALESCE(status, 'geplant') IN ('geplant', 'offen') THEN COALESCE(tatsaechliche_zeit, geschaetzte_zeit) ELSE 0 END) as geplant_minuten,
         SUM(CASE WHEN status = 'in_arbeit' THEN COALESCE(tatsaechliche_zeit, geschaetzte_zeit) ELSE 0 END) as in_arbeit_minuten,
         SUM(CASE WHEN status = 'abgeschlossen' THEN COALESCE(tatsaechliche_zeit, geschaetzte_zeit) ELSE 0 END) as abgeschlossen_minuten,
         COUNT(*) as termin_anzahl,
-        SUM(CASE WHEN COALESCE(status, 'geplant') != 'abgeschlossen' THEN 1 ELSE 0 END) as aktive_termine
+        SUM(CASE WHEN COALESCE(status, 'geplant') NOT IN ('abgeschlossen') THEN 1 ELSE 0 END) as aktive_termine
       FROM termine
       WHERE datum = ? AND geloescht_am IS NULL AND COALESCE(ist_schwebend, 0) = 0
     `;
@@ -973,7 +974,8 @@ class TermineModel {
 
       try {
         const details = JSON.parse(termin.arbeitszeiten_details);
-        const status = termin.status || 'geplant';
+        const rawStatus = termin.status || 'geplant';
+        const status = rawStatus === 'offen' ? 'geplant' : rawStatus;
         const zeit = termin.tatsaechliche_zeit || termin.geschaetzte_zeit || 0;
 
         // Prüfe Gesamt-Zuordnung

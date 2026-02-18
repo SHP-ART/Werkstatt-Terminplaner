@@ -39,6 +39,7 @@
             <button class="tab-button active" data-tab="dashboard"><span>📊 Dashboard</span></button>
             <button class="tab-button" data-tab="heute"><span>📅 Heute</span></button>
             <button class="tab-button" data-tab="termine"><span>🗓️ Termine</span></button>
+            <button class="tab-button" data-tab="kalender"><span>📆 Kalender</span></button>
             <button class="tab-button" data-tab="kunden"><span>👥 Kunden</span></button>
             <button class="tab-button" data-tab="teile-bestellen"><span>🛒 Teile-Bestellen</span></button>
             <button class="tab-button" data-tab="ersatzautos"><span>🚗 Ersatzautos</span></button>
@@ -1171,6 +1172,86 @@
                     <div id="wartendeAktionenListe" class="wartende-liste">
                         <div class="loading">Lade wartende Aktionen...</div>
                     </div>
+                </div>
+            </div>
+        </template>
+
+        <!-- Kalender Tab -->
+        <div id="kalender" class="tab-content" data-template-id="tab-template-kalender"></div>
+
+        <template id="tab-template-kalender">
+            <div class="page-header">
+                <h2>📆 Kalender</h2>
+                <p class="page-subtitle">Termine in Tag-, Wochen-, Monats- und Jahresansicht</p>
+            </div>
+
+            <!-- Kalender Toolbar -->
+            <div class="kalender-toolbar">
+                <div class="kalender-nav">
+                    <button class="btn btn-nav kalender-nav-btn" id="kalenderPrev" title="Zurück">◀</button>
+                    <button class="btn btn-nav kalender-nav-btn" id="kalenderHeute" title="Heute">Heute</button>
+                    <button class="btn btn-nav kalender-nav-btn" id="kalenderNext" title="Vor">▶</button>
+                    <span class="kalender-datum-display" id="kalenderDatumDisplay">—</span>
+                </div>
+                <div class="kalender-actions">
+                    <div class="kalender-ansicht-toggle">
+                        <button class="kalender-ansicht-btn active" data-ansicht="zeitleiste" title="Zeitleiste">🕐 Zeitleiste</button>
+                        <button class="kalender-ansicht-btn" data-ansicht="liste" title="Liste">📋 Liste</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Sub-Tabs: Tag / Woche / Monat / Jahr -->
+            <div class="sub-tabs modern-tabs kalender-sub-tabs">
+                <button class="sub-tab-button" data-subtab="kalenderTag">
+                    <span class="tab-icon">📅</span>
+                    <span class="tab-label">Tag</span>
+                </button>
+                <button class="sub-tab-button active" data-subtab="kalenderWoche">
+                    <span class="tab-icon">📆</span>
+                    <span class="tab-label">Woche</span>
+                </button>
+                <button class="sub-tab-button" data-subtab="kalenderMonat">
+                    <span class="tab-icon">🗓️</span>
+                    <span class="tab-label">Monat</span>
+                </button>
+                <button class="sub-tab-button" data-subtab="kalenderJahr">
+                    <span class="tab-icon">📊</span>
+                    <span class="tab-label">Jahr</span>
+                </button>
+            </div>
+
+            <!-- Sub-Tab Content: Tag -->
+            <div id="kalenderTag" class="sub-tab-content">
+                <div class="kalender-tag-container">
+                    <div class="kalender-tag-header" id="kalenderTagHeader"></div>
+                    <div class="kalender-tag-abwesenheiten" id="kalenderTagAbwesenheiten"></div>
+                    <div class="kalender-tag-zeitleiste" id="kalenderTagZeitleiste"></div>
+                    <div class="kalender-tag-liste" id="kalenderTagListe" style="display:none;"></div>
+                </div>
+            </div>
+
+            <!-- Sub-Tab Content: Woche (Standard) -->
+            <div id="kalenderWoche" class="sub-tab-content active">
+                <div class="kalender-wochen-container">
+                    <div class="kalender-wochen-grid" id="kalenderWochenGrid"></div>
+                </div>
+            </div>
+
+            <!-- Sub-Tab Content: Monat -->
+            <div id="kalenderMonat" class="sub-tab-content">
+                <div class="kalender-monat-container">
+                    <div class="kalender-monat-header-row">
+                        <span>Mo</span><span>Di</span><span>Mi</span><span>Do</span><span>Fr</span><span>Sa</span><span>So</span>
+                    </div>
+                    <div class="kalender-monat-grid" id="kalenderMonatGrid"></div>
+                </div>
+            </div>
+
+            <!-- Sub-Tab Content: Jahr -->
+            <div id="kalenderJahr" class="sub-tab-content">
+                <div class="kalender-jahr-container">
+                    <div class="kalender-jahr-grid" id="kalenderJahrGrid"></div>
                 </div>
             </div>
         </template>
@@ -4268,6 +4349,105 @@
                         ✅ Einplanen
                     </button>
                 </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Kalender: Neuer Termin Modal -->
+    <div id="kalenderNeuerTerminModal" class="modal-overlay" style="display: none;">
+        <div class="modal-content kalender-termin-modal" style="max-width: 650px;">
+            <div class="modal-header">
+                <h3>📆 Neuer Termin</h3>
+                <span class="close" id="closeKalenderTerminModal">&times;</span>
+            </div>
+            <div class="modal-body">
+                <form id="kalenderTerminForm">
+                    <!-- Datum & Uhrzeit -->
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="kalTerminDatum">📅 Datum</label>
+                            <input type="date" id="kalTerminDatum" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="kalTerminUhrzeit">🕐 Uhrzeit (Bring-Zeit)</label>
+                            <input type="time" id="kalTerminUhrzeit" value="08:00">
+                        </div>
+                    </div>
+
+                    <!-- Kundensuche -->
+                    <div class="form-group">
+                        <label for="kalTerminKundenSuche">👤 Kunde (Name oder Kennzeichen)</label>
+                        <input type="text" id="kalTerminKundenSuche" placeholder="Name oder Kennzeichen eingeben..." autocomplete="off">
+                        <div id="kalTerminKundenSucheErgebnisse" class="autocomplete-results" style="display:none;"></div>
+                        <input type="hidden" id="kalTerminKundeId">
+                    </div>
+
+                    <!-- Kennzeichen -->
+                    <div class="form-group">
+                        <label for="kalTerminKennzeichen">🚗 Kennzeichen</label>
+                        <input type="text" id="kalTerminKennzeichen" placeholder="z.B. OSL-AB 123" required>
+                    </div>
+
+                    <!-- Arbeiten -->
+                    <div class="form-group">
+                        <label for="kalTerminArbeiten">🔧 Arbeiten (eine pro Zeile)</label>
+                        <textarea id="kalTerminArbeiten" rows="3" placeholder="z.B.&#10;Ölwechsel&#10;Bremsen prüfen" required></textarea>
+                    </div>
+
+                    <!-- Abholtyp -->
+                    <div class="form-group">
+                        <label>📦 Abholtyp</label>
+                        <div class="radio-group-inline">
+                            <label><input type="radio" name="kalTerminAbholtyp" value="bringen" checked> Bringen</label>
+                            <label><input type="radio" name="kalTerminAbholtyp" value="abholung"> Abholung</label>
+                            <label><input type="radio" name="kalTerminAbholtyp" value="hol_bring"> Hol-/Bring</label>
+                            <label><input type="radio" name="kalTerminAbholtyp" value="warten"> Warten</label>
+                        </div>
+                    </div>
+
+                    <!-- Optionale Felder (einklappbar) -->
+                    <details class="kalender-optionale-felder">
+                        <summary>➕ Weitere Optionen</summary>
+                        <div class="form-row" style="margin-top: 10px;">
+                            <div class="form-group">
+                                <label for="kalTerminVin">VIN / Fahrgestellnr.</label>
+                                <input type="text" id="kalTerminVin" placeholder="Optional">
+                            </div>
+                            <div class="form-group">
+                                <label for="kalTerminFahrzeugtyp">Fahrzeugtyp</label>
+                                <input type="text" id="kalTerminFahrzeugtyp" placeholder="z.B. C3, Berlingo">
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="kalTerminKilometerstand">Kilometerstand</label>
+                                <input type="number" id="kalTerminKilometerstand" placeholder="Optional">
+                            </div>
+                            <div class="form-group">
+                                <label for="kalTerminDringlichkeit">Dringlichkeit</label>
+                                <select id="kalTerminDringlichkeit">
+                                    <option value="">Normal</option>
+                                    <option value="hoch">🔴 Hoch</option>
+                                    <option value="mittel">🟡 Mittel</option>
+                                    <option value="niedrig">🟢 Niedrig</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label>
+                                <input type="checkbox" id="kalTerminErsatzauto"> 🚗 Ersatzauto benötigt
+                            </label>
+                        </div>
+                        <div class="form-group">
+                            <label for="kalTerminNotizen">Notizen</label>
+                            <textarea id="kalTerminNotizen" rows="2" placeholder="Optionale Notizen..."></textarea>
+                        </div>
+                    </details>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" id="kalenderTerminAbbrechen">Abbrechen</button>
+                <button type="button" class="btn btn-primary" id="kalenderTerminSpeichern">✅ Termin speichern</button>
             </div>
         </div>
     </div>

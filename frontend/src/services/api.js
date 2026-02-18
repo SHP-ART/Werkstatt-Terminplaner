@@ -223,7 +223,27 @@ class KundenService {
 class TermineService {
   static async getAll(datum = null) {
     const query = datum ? `?datum=${datum}` : '';
-    return ApiService.get(`/termine${query}`);
+    const result = await ApiService.get(`/termine${query}`);
+    // Backend gibt bei Datum-Filter { termine: [...], aktivePausen: [...] } zurück
+    if (result && result.termine && Array.isArray(result.termine)) {
+      return result.termine;
+    }
+    // Ohne Datum oder bei Pagination kommt ein Array oder Objekt mit data
+    if (result && result.data && Array.isArray(result.data)) {
+      return result.data;
+    }
+    return Array.isArray(result) ? result : [];
+  }
+
+  /**
+   * Gibt Termine mit aktivePausen für ein Datum zurück (für Auslastung etc.)
+   */
+  static async getAllMitPausen(datum) {
+    const result = await ApiService.get(`/termine?datum=${datum}`);
+    if (result && result.termine) {
+      return { termine: result.termine, aktivePausen: result.aktivePausen || [] };
+    }
+    return { termine: Array.isArray(result) ? result : [], aktivePausen: [] };
   }
 
   /**

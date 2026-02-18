@@ -2904,6 +2904,8 @@ class App {
       this.loadTeileBestellungen();
     } else if (tabName === 'intern') {
       this.initInternTab();
+    } else if (tabName === 'kalender') {
+      this.loadKalender();
     }
 
     if (!isSameTab) {
@@ -2914,6 +2916,16 @@ class App {
   }
 
   handleSubTabActivation(subTabName) {
+    if (subTabName === 'kalenderTag') {
+      this.loadKalenderTag();
+    } else if (subTabName === 'kalenderWoche') {
+      this.loadKalenderWoche();
+    } else if (subTabName === 'kalenderMonat') {
+      this.loadKalenderMonat();
+    } else if (subTabName === 'kalenderJahr') {
+      this.loadKalenderJahr();
+    }
+
     if (subTabName === 'mitarbeiter') {
       this.loadWerkstattSettings();
       this.loadMitarbeiter();
@@ -9780,7 +9792,7 @@ class App {
       const termineWoche = allTermine.filter(t => t.datum >= weekStart && t.datum <= weekEnd);
 
       document.getElementById('termineHeute').textContent = termineHeute.length;
-      const geplant = termineHeute.filter(t => t.status === 'geplant').length;
+      const geplant = termineHeute.filter(t => t.status === 'geplant' || t.status === 'offen').length;
       const inArbeit = termineHeute.filter(t => t.status === 'in_arbeit').length;
       document.getElementById('termineHeuteStatus').textContent =
         `${geplant} geplant, ${inArbeit} in Arbeit`;
@@ -19162,22 +19174,12 @@ class App {
 
     try {
       // 1. Termine für das Datum laden (API gibt jetzt {termine: [], aktivePausen: []} zurück)
-      const terminResponse = await TermineService.getAll(datum);
-      let termine = [];
-      let aktivePausen = [];
-      
-      // Prüfe ob neues Format mit aktivePausen
-      if (terminResponse && terminResponse.termine && Array.isArray(terminResponse.termine)) {
-        termine = terminResponse.termine;
-        aktivePausen = terminResponse.aktivePausen || [];
-      } else if (Array.isArray(terminResponse)) {
-        // Fallback für altes Format (nur Array)
-        termine = terminResponse;
-      }
+      const terminResponse = await TermineService.getAllMitPausen(datum);
+      let termine = terminResponse.termine || [];
+      let aktivePausen = terminResponse.aktivePausen || [];
 
       // 1b. Schwebende Termine laden (alle Termine, dann filtern)
-      const alleTermineResponse = await TermineService.getAll(null);
-      let alleTermine = Array.isArray(alleTermineResponse) ? alleTermineResponse : (alleTermineResponse.termine || []);
+      const alleTermine = await TermineService.getAll(null);
       
       console.log('[DEBUG] Gesamte Termine geladen:', alleTermine.length);
       
@@ -28825,6 +28827,1088 @@ class App {
 
 
   // === ENDE WOCHENARBEITSZEITVERWALTUNG ===
+
+  // =====================================================
+  // ========== KALENDER TAB =============================
+  // =====================================================
+
+  // --- Kalender State ---
+  kalenderState = {
+    datum: null,        // aktuell gewähltes Datum (Date-Objekt)
+    ansicht: 'zeitleiste', // 'zeitleiste' oder 'liste'
+    activeSubTab: 'kalenderWoche',
+    termineCache: {},   // datum-string -> [termine]
+    abwesenheitenCache: null,
+    initialized: false
+  };
+
+  /**
+   * Kalender initialisieren beim Tab-Wechsel
+   */
+  loadKalender() {
+    if (!this.kalenderState.datum) {
+      this.kalenderState.datum = this.getToday();
+    }
+    if (!this.kalenderState.initialized) {
+      this.kalenderState.initialized = true;
+      this.bindKalenderEvents();
+    }
+    this.updateKalenderDatumDisplay();
+    // Standard-Sub-Tab laden falls noch nicht geschehen
+    const activeSubTab = this.kalenderState.activeSubTab || 'kalenderWoche';
+    this.kalenderLoadActiveSubTab(activeSubTab);
+  }
+
+  /**
+   * Event-Listener für den Kalender-Tab binden
+   */
+  bindKalenderEvents() {
+    const kalenderContainer = document.getElementById('kalender');
+    if (!kalenderContainer) return;
+
+    // Navigation
+    const prevBtn = document.getElementById('kalenderPrev');
+    const nextBtn = document.getElementById('kalenderNext');
+    const heuteBtn = document.getElementById('kalenderHeute');
+    if (prevBtn) prevBtn.addEventListener('click', () => this.kalenderNavigate(-1));
+    if (nextBtn) nextBtn.addEventListener('click', () => this.kalenderNavigate(1));
+    if (heuteBtn) heuteBtn.addEventListener('click', () => this.kalenderGoToToday());
+
+    // Ansichts-Toggle (Zeitleiste / Liste)
+    kalenderContainer.querySelectorAll('.kalender-ansicht-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        const ansicht = e.currentTarget.dataset.ansicht;
+        this.toggleKalenderAnsicht(ansicht);
+      });
+    });
+
+    // Sub-Tab-Wechsel tracken
+    kalenderContainer.querySelectorAll('.kalender-sub-tabs .sub-tab-button').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const subTab = btn.dataset.subtab;
+        if (subTab) {
+          this.kalenderState.activeSubTab = subTab;
+          this.updateKalenderDatumDisplay();
+        }
+      });
+    });
+  }
+
+  /**
+   * Navigation: +1 / -1 je nach aktiver Sub-Tab-Ansicht
+   */
+  kalenderNavigate(direction) {
+    const d = new Date(this.kalenderState.datum);
+    switch (this.kalenderState.activeSubTab) {
+      case 'kalenderTag':
+        d.setDate(d.getDate() + direction);
+        break;
+      case 'kalenderWoche':
+        d.setDate(d.getDate() + (7 * direction));
+        break;
+      case 'kalenderMonat':
+        d.setMonth(d.getMonth() + direction);
+        break;
+      case 'kalenderJahr':
+        d.setFullYear(d.getFullYear() + direction);
+        break;
+    }
+    this.kalenderState.datum = d;
+    this.updateKalenderDatumDisplay();
+    this.kalenderLoadActiveSubTab(this.kalenderState.activeSubTab);
+  }
+
+  /**
+   * Zum heutigen Datum springen
+   */
+  kalenderGoToToday() {
+    this.kalenderState.datum = this.getToday();
+    this.updateKalenderDatumDisplay();
+    this.kalenderLoadActiveSubTab(this.kalenderState.activeSubTab);
+  }
+
+  /**
+   * Aktiven Sub-Tab laden
+   */
+  kalenderLoadActiveSubTab(subTab) {
+    switch (subTab) {
+      case 'kalenderTag': this.loadKalenderTag(); break;
+      case 'kalenderWoche': this.loadKalenderWoche(); break;
+      case 'kalenderMonat': this.loadKalenderMonat(); break;
+      case 'kalenderJahr': this.loadKalenderJahr(); break;
+    }
+  }
+
+  /**
+   * Datum-Anzeige aktualisieren
+   */
+  updateKalenderDatumDisplay() {
+    const display = document.getElementById('kalenderDatumDisplay');
+    if (!display) return;
+    const d = this.kalenderState.datum;
+    const wochentage = ['Sonntag', 'Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag', 'Samstag'];
+    const monate = ['Januar', 'Februar', 'März', 'April', 'Mai', 'Juni', 'Juli', 'August', 'September', 'Oktober', 'November', 'Dezember'];
+    
+    switch (this.kalenderState.activeSubTab) {
+      case 'kalenderTag':
+        display.textContent = `${wochentage[d.getDay()]}, ${d.getDate()}. ${monate[d.getMonth()]} ${d.getFullYear()}`;
+        break;
+      case 'kalenderWoche': {
+        const montag = this.kalenderGetMontag(d);
+        const samstag = new Date(montag);
+        samstag.setDate(samstag.getDate() + 5);
+        const kw = this.kalenderGetKW(d);
+        display.textContent = `KW ${kw}: ${montag.getDate()}.${montag.getMonth()+1}. – ${samstag.getDate()}.${samstag.getMonth()+1}.${samstag.getFullYear()}`;
+        break;
+      }
+      case 'kalenderMonat':
+        display.textContent = `${monate[d.getMonth()]} ${d.getFullYear()}`;
+        break;
+      case 'kalenderJahr':
+        display.textContent = `${d.getFullYear()}`;
+        break;
+    }
+  }
+
+  /**
+   * Ansicht umschalten (Zeitleiste / Liste)
+   */
+  toggleKalenderAnsicht(ansicht) {
+    this.kalenderState.ansicht = ansicht;
+    // Toggle-Buttons aktualisieren
+    const container = document.getElementById('kalender');
+    if (container) {
+      container.querySelectorAll('.kalender-ansicht-btn').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.ansicht === ansicht);
+      });
+    }
+    // Aktiven Sub-Tab neu rendern
+    this.kalenderLoadActiveSubTab(this.kalenderState.activeSubTab);
+  }
+
+  // --- Hilfsfunktionen ---
+
+  kalenderGetMontag(d) {
+    const date = new Date(d);
+    const day = date.getDay();
+    const diff = date.getDate() - day + (day === 0 ? -6 : 1);
+    date.setDate(diff);
+    date.setHours(0, 0, 0, 0);
+    return date;
+  }
+
+  kalenderGetKW(d) {
+    const date = new Date(d);
+    date.setHours(0, 0, 0, 0);
+    date.setDate(date.getDate() + 3 - (date.getDay() + 6) % 7);
+    const week1 = new Date(date.getFullYear(), 0, 4);
+    return 1 + Math.round(((date - week1) / 86400000 - 3 + (week1.getDay() + 6) % 7) / 7);
+  }
+
+  kalenderFormatDatum(d) {
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  }
+
+  kalenderIstHeute(d) {
+    const heute = this.getToday();
+    return d.getFullYear() === heute.getFullYear() && d.getMonth() === heute.getMonth() && d.getDate() === heute.getDate();
+  }
+
+  kalenderGetStatusCSS(status) {
+    if (!status) return '';
+    return 'status-' + status.toLowerCase().replace(/\s+/g, '-').replace(/_/g, '_');
+  }
+
+  kalenderGetStatusFarbe(status) {
+    const map = {
+      'geplant': '#ffc107', 'offen': '#ffc107',
+      'in_bearbeitung': '#17a2b8', 'in bearbeitung': '#17a2b8',
+      'abgeschlossen': '#28a745',
+      'storniert': '#dc3545'
+    };
+    return map[(status || '').toLowerCase()] || '#6c757d';
+  }
+
+  kalenderGetStatusLabel(status) {
+    const map = {
+      'geplant': 'Geplant', 'offen': 'Offen',
+      'in_bearbeitung': 'In Arbeit', 'in bearbeitung': 'In Arbeit',
+      'abgeschlossen': 'Fertig',
+      'storniert': 'Storniert'
+    };
+    return map[(status || '').toLowerCase()] || status || '—';
+  }
+
+  /**
+   * Termine für einen Datumsbereich laden (aus Cache oder API)
+   */
+  async kalenderLadeTermine(datumVon, datumBis) {
+    try {
+      // Alle Termine laden und im Frontend filtern
+      const response = await TermineService.getAll();
+      const alle = response.termine || response || [];
+      const von = datumVon;
+      const bis = datumBis;
+      return alle.filter(t => {
+        const d = t.datum;
+        return d >= von && d <= bis && !t.geloescht_am;
+      });
+    } catch (err) {
+      console.error('Kalender: Fehler beim Laden der Termine:', err);
+      return [];
+    }
+  }
+
+  /**
+   * Abwesenheiten für einen Datumsbereich laden
+   */
+  async kalenderLadeAbwesenheiten(datumVon, datumBis) {
+    try {
+      const response = await EinstellungenService.getAbwesenheitenByDateRange(datumVon, datumBis);
+      return response.abwesenheiten || response || [];
+    } catch (err) {
+      console.error('Kalender: Fehler beim Laden der Abwesenheiten:', err);
+      return [];
+    }
+  }
+
+  // =====================================================
+  // ========== TAGESANSICHT =============================
+  // =====================================================
+
+  async loadKalenderTag() {
+    const datum = this.kalenderState.datum;
+    const datumStr = this.kalenderFormatDatum(datum);
+    const wochentage = ['Sonntag', 'Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag', 'Samstag'];
+    
+    // Header
+    const header = document.getElementById('kalenderTagHeader');
+    if (header) {
+      header.innerHTML = `
+        <span class="tag-datum">${wochentage[datum.getDay()]}, ${datum.getDate()}.${datum.getMonth()+1}.${datum.getFullYear()}</span>
+        <button class="kalender-tag-neu-btn" data-datum="${datumStr}">➕ Neuer Termin</button>
+      `;
+      header.querySelector('.kalender-tag-neu-btn')?.addEventListener('click', () => {
+        this.openKalenderNeuerTerminModal(datumStr, '08:00');
+      });
+    }
+
+    // Termine laden
+    const termine = await this.kalenderLadeTermine(datumStr, datumStr);
+    
+    // Abwesenheiten
+    const abwesenheiten = await this.kalenderLadeAbwesenheiten(datumStr, datumStr);
+    const abwContainer = document.getElementById('kalenderTagAbwesenheiten');
+    if (abwContainer) {
+      if (abwesenheiten.length > 0) {
+        abwContainer.innerHTML = abwesenheiten.map(a => `
+          <div class="kalender-abwesenheit-bar">
+            <span class="abw-icon">${a.grund === 'Urlaub' ? '🏖️' : a.grund === 'Krank' ? '🤒' : a.grund === 'Lehrgang' ? '📚' : a.grund === 'Berufsschule' ? '🎓' : '📋'}</span>
+            <span>${a.person_name || 'Mitarbeiter'}: ${a.grund || 'Abwesend'}${a.ganztags ? ' (ganztags)' : ''}</span>
+          </div>
+        `).join('');
+      } else {
+        abwContainer.innerHTML = '';
+      }
+    }
+
+    // Zeitleiste oder Liste rendern
+    const zeitleisteEl = document.getElementById('kalenderTagZeitleiste');
+    const listeEl = document.getElementById('kalenderTagListe');
+
+    if (this.kalenderState.ansicht === 'zeitleiste') {
+      if (zeitleisteEl) { zeitleisteEl.style.display = 'block'; }
+      if (listeEl) { listeEl.style.display = 'none'; }
+      this.renderKalenderTagZeitleiste(termine, zeitleisteEl);
+    } else {
+      if (zeitleisteEl) { zeitleisteEl.style.display = 'none'; }
+      if (listeEl) { listeEl.style.display = 'block'; }
+      this.renderKalenderTagListe(termine, listeEl, datumStr);
+    }
+  }
+
+  /**
+   * Tagesansicht: Zeitleiste rendern (8:00 - 18:00)
+   */
+  renderKalenderTagZeitleiste(termine, container) {
+    if (!container) return;
+    const startStunde = 7;
+    const endStunde = 18;
+    const slotHoehe = 50; // px pro Stunde
+    
+    let html = '';
+    for (let h = startStunde; h <= endStunde; h++) {
+      const zeitLabel = `${String(h).padStart(2, '0')}:00`;
+      html += `
+        <div class="kalender-zeit-spalte">
+          <div class="kalender-zeit-label">${zeitLabel}</div>
+          <div class="kalender-zeit-slot" data-stunde="${h}" data-datum="${this.kalenderFormatDatum(this.kalenderState.datum)}">
+            <div class="slot-halbstunde"></div>
+          </div>
+        </div>
+      `;
+    }
+    container.innerHTML = html;
+
+    // Termin-Blöcke positionieren
+    termine.forEach(termin => {
+      const startzeit = termin.bring_zeit || termin.startzeit || termin.abholung_zeit || '08:00';
+      const dauer = termin.geschaetzte_zeit || 60;
+      const [sh, sm] = startzeit.split(':').map(Number);
+      if (isNaN(sh)) return;
+      const topOffset = (sh - startStunde + sm / 60) * slotHoehe;
+      const height = Math.max((dauer / 60) * slotHoehe, 25);
+      const statusClass = this.kalenderGetStatusCSS(termin.status);
+      const schwebendClass = termin.ist_schwebend ? ' schwebend' : '';
+      
+      const block = document.createElement('div');
+      block.className = `kalender-termin-block ${statusClass}${schwebendClass}`;
+      block.style.top = `${topOffset}px`;
+      block.style.height = `${height}px`;
+      block.dataset.terminId = termin.id;
+      
+      const arbeiten = (termin.arbeit || '').split('\n').filter(Boolean);
+      block.innerHTML = `
+        <div class="termin-block-zeit">${startzeit} (${dauer} Min.)</div>
+        <div class="termin-block-titel">${termin.kunde_name || 'Unbekannt'} · ${termin.kennzeichen || ''}</div>
+        <div class="termin-block-arbeit">${arbeiten[0] || ''}${arbeiten.length > 1 ? ` +${arbeiten.length - 1}` : ''}</div>
+      `;
+      block.addEventListener('click', () => this.kalenderTerminClick(termin.id));
+      container.appendChild(block);
+    });
+
+    // Klick auf leere Slots → neuer Termin
+    container.querySelectorAll('.kalender-zeit-slot').forEach(slot => {
+      slot.addEventListener('click', (e) => {
+        if (e.target.closest('.kalender-termin-block')) return;
+        const stunde = slot.dataset.stunde;
+        const datum = slot.dataset.datum;
+        this.openKalenderNeuerTerminModal(datum, `${String(stunde).padStart(2, '0')}:00`);
+      });
+    });
+
+    // "Jetzt"-Linie
+    if (this.kalenderIstHeute(this.kalenderState.datum)) {
+      const jetzt = new Date();
+      const jetztH = jetzt.getHours();
+      const jetztM = jetzt.getMinutes();
+      if (jetztH >= startStunde && jetztH <= endStunde) {
+        const jetztTop = (jetztH - startStunde + jetztM / 60) * slotHoehe;
+        const jetztLinie = document.createElement('div');
+        jetztLinie.style.cssText = `position:absolute;left:70px;right:0;top:${jetztTop}px;height:2px;background:var(--accent);z-index:5;`;
+        const jetztDot = document.createElement('div');
+        jetztDot.style.cssText = `position:absolute;left:62px;top:${jetztTop - 5}px;width:12px;height:12px;background:var(--accent);border-radius:50%;z-index:5;`;
+        container.appendChild(jetztLinie);
+        container.appendChild(jetztDot);
+      }
+    }
+  }
+
+  /**
+   * Tagesansicht: Listenansicht rendern
+   */
+  renderKalenderTagListe(termine, container, datumStr) {
+    if (!container) return;
+    if (termine.length === 0) {
+      container.innerHTML = `
+        <div class="kalender-tag-leer">
+          <div class="leer-icon">📭</div>
+          <div>Keine Termine an diesem Tag</div>
+          <button class="kalender-tag-neu-btn" data-datum="${datumStr}">➕ Neuer Termin erstellen</button>
+        </div>
+      `;
+      container.querySelector('.kalender-tag-neu-btn')?.addEventListener('click', () => {
+        this.openKalenderNeuerTerminModal(datumStr, '08:00');
+      });
+      return;
+    }
+    
+    // Termine nach Uhrzeit sortieren
+    const sortiert = [...termine].sort((a, b) => {
+      const za = a.bring_zeit || a.startzeit || a.abholung_zeit || '99:99';
+      const zb = b.bring_zeit || b.startzeit || b.abholung_zeit || '99:99';
+      return za.localeCompare(zb);
+    });
+
+    container.innerHTML = sortiert.map(t => {
+      const zeit = t.bring_zeit || t.startzeit || t.abholung_zeit || '–';
+      const statusClass = this.kalenderGetStatusCSS(t.status);
+      const statusLabel = this.kalenderGetStatusLabel(t.status);
+      const statusFarbe = this.kalenderGetStatusFarbe(t.status);
+      const arbeiten = (t.arbeit || '').split('\n').filter(Boolean);
+      return `
+        <div class="kalender-liste-termin ${statusClass}" data-termin-id="${t.id}">
+          <div class="liste-zeit">${zeit}</div>
+          <div class="liste-info">
+            <div class="liste-kunde">${t.kunde_name || 'Unbekannt'}</div>
+            <div class="liste-kennzeichen">${t.kennzeichen || ''} · ${t.geschaetzte_zeit || '?'} Min.</div>
+            <div class="liste-arbeit">${arbeiten.join(', ')}</div>
+          </div>
+          <span class="liste-status" style="background:${statusFarbe}22;color:${statusFarbe}">${statusLabel}</span>
+        </div>
+      `;
+    }).join('');
+
+    container.querySelectorAll('.kalender-liste-termin').forEach(el => {
+      el.addEventListener('click', () => {
+        this.kalenderTerminClick(parseInt(el.dataset.terminId));
+      });
+    });
+  }
+
+  // =====================================================
+  // ========== WOCHENANSICHT ============================
+  // =====================================================
+
+  async loadKalenderWoche() {
+    const montag = this.kalenderGetMontag(this.kalenderState.datum);
+    const tage = [];
+    for (let i = 0; i < 6; i++) {
+      const d = new Date(montag);
+      d.setDate(d.getDate() + i);
+      tage.push(d);
+    }
+
+    const datumVon = this.kalenderFormatDatum(tage[0]);
+    const datumBis = this.kalenderFormatDatum(tage[5]);
+    
+    const [termine, abwesenheiten] = await Promise.all([
+      this.kalenderLadeTermine(datumVon, datumBis),
+      this.kalenderLadeAbwesenheiten(datumVon, datumBis)
+    ]);
+
+    // Termine nach Datum gruppieren
+    const terminePropTag = {};
+    tage.forEach(d => { terminePropTag[this.kalenderFormatDatum(d)] = []; });
+    termine.forEach(t => {
+      if (terminePropTag[t.datum]) {
+        terminePropTag[t.datum].push(t);
+      }
+    });
+
+    // Abwesenheiten nach Datum gruppieren
+    const abwProTag = {};
+    abwesenheiten.forEach(a => {
+      if (!abwProTag[a.datum]) abwProTag[a.datum] = [];
+      abwProTag[a.datum].push(a);
+    });
+
+    const grid = document.getElementById('kalenderWochenGrid');
+    if (!grid) return;
+
+    const wt = ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa'];
+    const isZeitleiste = this.kalenderState.ansicht === 'zeitleiste';
+
+    grid.innerHTML = tage.map((tag, i) => {
+      const datumStr = this.kalenderFormatDatum(tag);
+      const istHeute = this.kalenderIstHeute(tag);
+      const tageTermine = terminePropTag[datumStr] || [];
+      const tageAbw = abwProTag[datumStr] || [];
+
+      let bodyContent = '';
+      if (isZeitleiste) {
+        bodyContent = this.renderKalenderWocheZeitleiste(tageTermine, datumStr);
+      } else {
+        bodyContent = this.renderKalenderWocheListe(tageTermine, datumStr);
+      }
+
+      // Abwesenheiten-Anzeige
+      let abwHtml = '';
+      if (tageAbw.length > 0) {
+        abwHtml = tageAbw.map(a => `<div class="kalender-abwesenheit-bar" style="padding:4px 8px;font-size:0.72em;">${a.grund === 'Urlaub' ? '🏖️' : a.grund === 'Krank' ? '🤒' : '📋'} ${a.person_name || ''}</div>`).join('');
+      }
+
+      return `
+        <div class="kalender-wochen-tag${istHeute ? ' ist-heute' : ''}">
+          <div class="kalender-wochen-tag-header${istHeute ? ' ist-heute' : ''}" data-datum="${datumStr}">
+            <span class="wt-name">${wt[i]}</span>
+            <span class="wt-datum">${tag.getDate()}.${tag.getMonth()+1}.</span>
+            <span class="wt-count">${tageTermine.length} Termin${tageTermine.length !== 1 ? 'e' : ''}</span>
+          </div>
+          ${abwHtml}
+          <div class="kalender-wochen-tag-body ${isZeitleiste ? 'zeitleiste-modus' : 'listen-modus'}">
+            ${bodyContent}
+          </div>
+          <div class="kalender-wochen-tag-footer">
+            <button class="kalender-woche-neu-btn" data-datum="${datumStr}">+ Termin</button>
+          </div>
+        </div>
+      `;
+    }).join('');
+
+    // Event-Listener
+    grid.querySelectorAll('.kalender-wochen-tag-header').forEach(el => {
+      el.addEventListener('click', () => {
+        const datum = el.dataset.datum;
+        this.kalenderState.datum = new Date(datum + 'T00:00:00');
+        this.kalenderState.activeSubTab = 'kalenderTag';
+        // Sub-Tab UI umschalten
+        const kalenderEl = document.getElementById('kalender');
+        if (kalenderEl) {
+          kalenderEl.querySelectorAll('.kalender-sub-tabs .sub-tab-button').forEach(btn => {
+            btn.classList.toggle('active', btn.dataset.subtab === 'kalenderTag');
+          });
+          kalenderEl.querySelectorAll('.sub-tab-content').forEach(el => {
+            el.classList.remove('active');
+            el.style.display = 'none';
+          });
+          const tagContent = document.getElementById('kalenderTag');
+          if (tagContent) {
+            tagContent.classList.add('active');
+            tagContent.style.display = 'block';
+          }
+        }
+        this.updateKalenderDatumDisplay();
+        this.loadKalenderTag();
+      });
+    });
+
+    grid.querySelectorAll('.kalender-woche-neu-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        this.openKalenderNeuerTerminModal(btn.dataset.datum, '08:00');
+      });
+    });
+
+    // Termin-Blöcke / Listen-Items klickbar machen
+    grid.querySelectorAll('[data-termin-id]').forEach(el => {
+      el.addEventListener('click', (e) => {
+        if (e.target.closest('.kalender-woche-neu-btn')) return;
+        this.kalenderTerminClick(parseInt(el.dataset.terminId));
+      });
+    });
+
+    // Klick auf leere Zeitleisten-Slots
+    grid.querySelectorAll('.kalender-woche-zeit-row').forEach(row => {
+      row.addEventListener('click', (e) => {
+        if (e.target.closest('[data-termin-id]')) return;
+        const stunde = row.dataset.stunde;
+        const tagEl = row.closest('.kalender-wochen-tag');
+        const datum = tagEl?.querySelector('.kalender-wochen-tag-header')?.dataset.datum;
+        if (datum && stunde) {
+          this.openKalenderNeuerTerminModal(datum, `${String(stunde).padStart(2, '0')}:00`);
+        }
+      });
+    });
+  }
+
+  /**
+   * Wochenansicht: Zeitleiste pro Tag
+   */
+  renderKalenderWocheZeitleiste(termine, datumStr) {
+    const startStunde = 7;
+    const endStunde = 18;
+    const slotHoehe = 50;
+
+    let html = '<div class="kalender-woche-zeitachse" style="position:relative;">';
+    for (let h = startStunde; h <= endStunde; h++) {
+      html += `<div class="kalender-woche-zeit-row" data-stunde="${h}" style="height:${slotHoehe}px;"><span class="wz-label">${h}:00</span></div>`;
+    }
+
+    // Termin-Blöcke
+    termine.forEach(t => {
+      const startzeit = t.bring_zeit || t.startzeit || t.abholung_zeit || '08:00';
+      const dauer = t.geschaetzte_zeit || 60;
+      const [sh, sm] = startzeit.split(':').map(Number);
+      if (isNaN(sh)) return;
+      const top = (sh - startStunde + (sm || 0) / 60) * slotHoehe;
+      const height = Math.max((dauer / 60) * slotHoehe, 20);
+      const statusClass = this.kalenderGetStatusCSS(t.status);
+      const schwebendClass = t.ist_schwebend ? ' schwebend' : '';
+      const arbeiten = (t.arbeit || '').split('\n').filter(Boolean);
+
+      html += `<div class="kalender-woche-termin-block ${statusClass}${schwebendClass}" data-termin-id="${t.id}" style="top:${top}px;height:${height}px;">
+        <div class="wb-titel">${t.kennzeichen || t.kunde_name || '?'}</div>
+        <div class="wb-arbeit">${arbeiten[0] || ''}</div>
+      </div>`;
+    });
+
+    html += '</div>';
+    return html;
+  }
+
+  /**
+   * Wochenansicht: Listenansicht pro Tag
+   */
+  renderKalenderWocheListe(termine, datumStr) {
+    if (termine.length === 0) {
+      return '<div style="text-align:center;color:#ccc;padding:20px;font-size:0.8em;">Keine Termine</div>';
+    }
+    const sortiert = [...termine].sort((a, b) => {
+      const za = a.bring_zeit || a.startzeit || a.abholung_zeit || '99:99';
+      const zb = b.bring_zeit || b.startzeit || b.abholung_zeit || '99:99';
+      return za.localeCompare(zb);
+    });
+
+    return sortiert.map(t => {
+      const zeit = t.bring_zeit || t.startzeit || t.abholung_zeit || '–';
+      const statusClass = this.kalenderGetStatusCSS(t.status);
+      const arbeiten = (t.arbeit || '').split('\n').filter(Boolean);
+      return `
+        <div class="kalender-woche-liste-termin ${statusClass}" data-termin-id="${t.id}">
+          <div class="wl-zeit">${zeit}</div>
+          <div class="wl-kunde">${t.kunde_name || t.kennzeichen || 'Unbekannt'}</div>
+          <div class="wl-arbeit">${arbeiten[0] || ''}${arbeiten.length > 1 ? ` +${arbeiten.length - 1}` : ''}</div>
+        </div>
+      `;
+    }).join('');
+  }
+
+  // =====================================================
+  // ========== MONATSANSICHT ============================
+  // =====================================================
+
+  async loadKalenderMonat() {
+    const d = this.kalenderState.datum;
+    const year = d.getFullYear();
+    const month = d.getMonth();
+
+    // Erster Tag des Monats
+    const ersterTag = new Date(year, month, 1);
+    // Letzter Tag des Monats
+    const letzterTag = new Date(year, month + 1, 0);
+
+    // Grid beginnt beim Montag der ersten Woche
+    const startGrid = this.kalenderGetMontag(ersterTag);
+    // Grid endet am Sonntag der letzten Woche
+    const endGrid = new Date(letzterTag);
+    const endDay = endGrid.getDay();
+    if (endDay !== 0) endGrid.setDate(endGrid.getDate() + (7 - endDay));
+
+    const datumVon = this.kalenderFormatDatum(startGrid);
+    const datumBis = this.kalenderFormatDatum(endGrid);
+
+    const termine = await this.kalenderLadeTermine(datumVon, datumBis);
+    
+    // Termine nach Datum gruppieren
+    const terminePropTag = {};
+    termine.forEach(t => {
+      if (!terminePropTag[t.datum]) terminePropTag[t.datum] = [];
+      terminePropTag[t.datum].push(t);
+    });
+
+    const grid = document.getElementById('kalenderMonatGrid');
+    if (!grid) return;
+
+    let html = '';
+    const cursor = new Date(startGrid);
+    while (cursor <= endGrid) {
+      const datumStr = this.kalenderFormatDatum(cursor);
+      const istAktuellerMonat = cursor.getMonth() === month;
+      const istHeute = this.kalenderIstHeute(cursor);
+      const tageTermine = terminePropTag[datumStr] || [];
+      
+      // Auslastung berechnen (vereinfacht: Minuten / 480 * 100)
+      const gesamtMinuten = tageTermine.reduce((sum, t) => sum + (t.geschaetzte_zeit || 0), 0);
+      const auslastungProzent = Math.min(Math.round((gesamtMinuten / 480) * 100), 100);
+      const auslastungFarbe = auslastungProzent < 50 ? '#28a745' : auslastungProzent < 75 ? '#ffc107' : auslastungProzent < 90 ? '#ff9800' : '#dc3545';
+
+      // Mini-Termine (max 3)
+      const miniTermine = tageTermine.slice(0, 3).map(t => {
+        const statusClass = this.kalenderGetStatusCSS(t.status);
+        return `<div class="mz-termin-mini ${statusClass}">${t.kennzeichen || ''} ${(t.arbeit || '').split('\n')[0] || ''}</div>`;
+      }).join('');
+      const mehrAnzahl = tageTermine.length > 3 ? `<div class="mz-mehr">+${tageTermine.length - 3} weitere</div>` : '';
+
+      html += `
+        <div class="kalender-monat-zelle${istHeute ? ' ist-heute' : ''}${!istAktuellerMonat ? ' anderer-monat' : ''}" data-datum="${datumStr}">
+          <div class="mz-datum">
+            <span class="mz-tag">${cursor.getDate()}</span>
+            <button class="mz-neu-btn" data-datum="${datumStr}" title="Neuer Termin">+</button>
+          </div>
+          ${tageTermine.length > 0 ? `<div class="mz-auslastung"><div class="mz-auslastung-bar" style="width:${auslastungProzent}%;background:${auslastungFarbe}"></div></div>` : ''}
+          <div class="mz-termine">${miniTermine}${mehrAnzahl}</div>
+        </div>
+      `;
+      cursor.setDate(cursor.getDate() + 1);
+    }
+
+    grid.innerHTML = html;
+
+    // Event-Listener
+    grid.querySelectorAll('.kalender-monat-zelle').forEach(zelle => {
+      zelle.addEventListener('click', (e) => {
+        if (e.target.closest('.mz-neu-btn')) return;
+        const datum = zelle.dataset.datum;
+        this.kalenderState.datum = new Date(datum + 'T00:00:00');
+        this.kalenderState.activeSubTab = 'kalenderTag';
+        const kalenderEl = document.getElementById('kalender');
+        if (kalenderEl) {
+          kalenderEl.querySelectorAll('.kalender-sub-tabs .sub-tab-button').forEach(btn => {
+            btn.classList.toggle('active', btn.dataset.subtab === 'kalenderTag');
+          });
+          kalenderEl.querySelectorAll('.sub-tab-content').forEach(el => {
+            el.classList.remove('active');
+            el.style.display = 'none';
+          });
+          const tagContent = document.getElementById('kalenderTag');
+          if (tagContent) {
+            tagContent.classList.add('active');
+            tagContent.style.display = 'block';
+          }
+        }
+        this.updateKalenderDatumDisplay();
+        this.loadKalenderTag();
+      });
+    });
+
+    grid.querySelectorAll('.mz-neu-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        this.openKalenderNeuerTerminModal(btn.dataset.datum, '08:00');
+      });
+    });
+  }
+
+  // =====================================================
+  // ========== JAHRESANSICHT ============================
+  // =====================================================
+
+  async loadKalenderJahr() {
+    const year = this.kalenderState.datum.getFullYear();
+    const datumVon = `${year}-01-01`;
+    const datumBis = `${year}-12-31`;
+
+    // Termine werden für die Auslastungsanzeige geladen
+    const termine = await this.kalenderLadeTermine(datumVon, datumBis);
+    
+    // Termine pro Tag als Map
+    const termineProTag = {};
+    termine.forEach(t => {
+      if (!termineProTag[t.datum]) termineProTag[t.datum] = 0;
+      termineProTag[t.datum] += (t.geschaetzte_zeit || 0);
+    });
+
+    const grid = document.getElementById('kalenderJahrGrid');
+    if (!grid) return;
+
+    const monate = ['Januar', 'Februar', 'März', 'April', 'Mai', 'Juni', 'Juli', 'August', 'September', 'Oktober', 'November', 'Dezember'];
+    const wtKurz = ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'];
+
+    let html = '';
+    for (let m = 0; m < 12; m++) {
+      const ersterTag = new Date(year, m, 1);
+      const letzterTag = new Date(year, m + 1, 0);
+      const startDay = (ersterTag.getDay() + 6) % 7; // 0=Mo
+
+      html += `<div class="kalender-mini-monat">
+        <div class="kalender-mini-monat-header" data-monat="${m}">${monate[m]}</div>
+        <div class="kalender-mini-monat-tage-header">${wtKurz.map(w => `<span>${w}</span>`).join('')}</div>
+        <div class="kalender-mini-monat-grid">`;
+
+      // Leere Tage am Anfang
+      for (let i = 0; i < startDay; i++) {
+        html += '<div class="kalender-mini-tag leer"></div>';
+      }
+
+      // Tage des Monats
+      for (let tag = 1; tag <= letzterTag.getDate(); tag++) {
+        const d = new Date(year, m, tag);
+        const datumStr = this.kalenderFormatDatum(d);
+        const istHeute = this.kalenderIstHeute(d);
+        const minuten = termineProTag[datumStr] || 0;
+        
+        // Auslastungs-Klasse (0-4)
+        let auslastungKlasse = 'auslastung-0';
+        if (minuten > 0 && minuten < 240) auslastungKlasse = 'auslastung-1';
+        else if (minuten >= 240 && minuten < 400) auslastungKlasse = 'auslastung-2';
+        else if (minuten >= 400 && minuten < 480) auslastungKlasse = 'auslastung-3';
+        else if (minuten >= 480) auslastungKlasse = 'auslastung-4';
+
+        html += `<div class="kalender-mini-tag ${auslastungKlasse}${istHeute ? ' ist-heute' : ''}" data-datum="${datumStr}" title="${minuten > 0 ? Math.round(minuten/60) + 'h geplant' : 'Frei'}">${tag}</div>`;
+      }
+
+      html += '</div></div>';
+    }
+
+    grid.innerHTML = html;
+
+    // Event-Listener
+    grid.querySelectorAll('.kalender-mini-monat-header').forEach(el => {
+      el.addEventListener('click', () => {
+        const monat = parseInt(el.dataset.monat);
+        this.kalenderState.datum = new Date(year, monat, 1);
+        this.kalenderState.activeSubTab = 'kalenderMonat';
+        const kalenderEl = document.getElementById('kalender');
+        if (kalenderEl) {
+          kalenderEl.querySelectorAll('.kalender-sub-tabs .sub-tab-button').forEach(btn => {
+            btn.classList.toggle('active', btn.dataset.subtab === 'kalenderMonat');
+          });
+          kalenderEl.querySelectorAll('.sub-tab-content').forEach(el => {
+            el.classList.remove('active');
+            el.style.display = 'none';
+          });
+          const monatContent = document.getElementById('kalenderMonat');
+          if (monatContent) {
+            monatContent.classList.add('active');
+            monatContent.style.display = 'block';
+          }
+        }
+        this.updateKalenderDatumDisplay();
+        this.loadKalenderMonat();
+      });
+    });
+
+    grid.querySelectorAll('.kalender-mini-tag:not(.leer)').forEach(el => {
+      el.addEventListener('click', () => {
+        const datum = el.dataset.datum;
+        this.kalenderState.datum = new Date(datum + 'T00:00:00');
+        this.kalenderState.activeSubTab = 'kalenderTag';
+        const kalenderEl = document.getElementById('kalender');
+        if (kalenderEl) {
+          kalenderEl.querySelectorAll('.kalender-sub-tabs .sub-tab-button').forEach(btn => {
+            btn.classList.toggle('active', btn.dataset.subtab === 'kalenderTag');
+          });
+          kalenderEl.querySelectorAll('.sub-tab-content').forEach(el => {
+            el.classList.remove('active');
+            el.style.display = 'none';
+          });
+          const tagContent = document.getElementById('kalenderTag');
+          if (tagContent) {
+            tagContent.classList.add('active');
+            tagContent.style.display = 'block';
+          }
+        }
+        this.updateKalenderDatumDisplay();
+        this.loadKalenderTag();
+      });
+    });
+  }
+
+  // =====================================================
+  // ========== TERMIN-KLICK =============================
+  // =====================================================
+
+  kalenderTerminClick(terminId) {
+    // Bestehendes Termin-Details-Modal verwenden (falls vorhanden)
+    if (typeof this.showTerminDetails === 'function') {
+      this.showTerminDetails(terminId);
+    } else if (typeof this.openTerminDetailsModal === 'function') {
+      this.openTerminDetailsModal(terminId);
+    } else {
+      // Fallback: zum Termine-Tab wechseln
+      console.log('Kalender: Termin angeklickt:', terminId);
+    }
+  }
+
+  // =====================================================
+  // ========== NEUER TERMIN MODAL =======================
+  // =====================================================
+
+  openKalenderNeuerTerminModal(datum, uhrzeit) {
+    const modal = document.getElementById('kalenderNeuerTerminModal');
+    if (!modal) return;
+
+    // Felder zurücksetzen
+    const form = document.getElementById('kalenderTerminForm');
+    if (form) form.reset();
+    
+    // Datum und Uhrzeit vorausfüllen
+    const datumInput = document.getElementById('kalTerminDatum');
+    const uhrzeitInput = document.getElementById('kalTerminUhrzeit');
+    if (datumInput) datumInput.value = datum;
+    if (uhrzeitInput) uhrzeitInput.value = uhrzeit || '08:00';
+
+    // Hidden fields resetten
+    const kundeIdInput = document.getElementById('kalTerminKundeId');
+    if (kundeIdInput) kundeIdInput.value = '';
+
+    // Modal anzeigen
+    modal.style.display = 'flex';
+    setTimeout(() => modal.classList.add('active'), 10);
+
+    // Event-Listener binden (einmalig)
+    if (!this._kalenderModalBound) {
+      this._kalenderModalBound = true;
+      
+      // Schließen-Buttons
+      document.getElementById('closeKalenderTerminModal')?.addEventListener('click', () => this.closeKalenderTerminModal());
+      document.getElementById('kalenderTerminAbbrechen')?.addEventListener('click', () => this.closeKalenderTerminModal());
+      
+      // Overlay-Klick schließt Modal
+      modal.addEventListener('click', (e) => {
+        if (e.target === modal) this.closeKalenderTerminModal();
+      });
+
+      // Speichern
+      document.getElementById('kalenderTerminSpeichern')?.addEventListener('click', () => this.handleKalenderTerminSubmit());
+
+      // Kundensuche Autocomplete
+      const kundenSuche = document.getElementById('kalTerminKundenSuche');
+      if (kundenSuche) {
+        let debounceTimer;
+        kundenSuche.addEventListener('input', () => {
+          clearTimeout(debounceTimer);
+          debounceTimer = setTimeout(() => this.kalenderKundenSuche(kundenSuche.value), 300);
+        });
+        kundenSuche.addEventListener('blur', () => {
+          setTimeout(() => {
+            const ergebnisse = document.getElementById('kalTerminKundenSucheErgebnisse');
+            if (ergebnisse) ergebnisse.style.display = 'none';
+          }, 200);
+        });
+      }
+    }
+
+    // Fokus auf Kundensuche
+    setTimeout(() => {
+      document.getElementById('kalTerminKundenSuche')?.focus();
+    }, 100);
+  }
+
+  closeKalenderTerminModal() {
+    const modal = document.getElementById('kalenderNeuerTerminModal');
+    if (modal) {
+      modal.classList.remove('active');
+      setTimeout(() => { modal.style.display = 'none'; }, 200);
+    }
+  }
+
+  /**
+   * Kundensuche im Kalender-Modal
+   */
+  async kalenderKundenSuche(suchtext) {
+    const ergebnisseEl = document.getElementById('kalTerminKundenSucheErgebnisse');
+    if (!ergebnisseEl) return;
+    
+    if (!suchtext || suchtext.length < 2) {
+      ergebnisseEl.style.display = 'none';
+      return;
+    }
+
+    try {
+      const response = await KundenService.search(suchtext);
+      const kunden = response.kunden || response || [];
+      
+      if (kunden.length === 0) {
+        ergebnisseEl.innerHTML = '<div class="autocomplete-item" style="color:#999;">Kein Kunde gefunden</div>';
+        ergebnisseEl.style.display = 'block';
+        return;
+      }
+
+      ergebnisseEl.innerHTML = kunden.slice(0, 8).map(k => `
+        <div class="autocomplete-item" data-kunde-id="${k.id}" data-name="${k.name || ''}" data-kennzeichen="${k.kennzeichen || ''}">
+          <strong>${k.name || 'Unbekannt'}</strong>
+          ${k.kennzeichen ? ` · ${k.kennzeichen}` : ''}
+          ${k.telefon ? ` · ${k.telefon}` : ''}
+        </div>
+      `).join('');
+      ergebnisseEl.style.display = 'block';
+
+      ergebnisseEl.querySelectorAll('.autocomplete-item').forEach(item => {
+        item.addEventListener('click', () => {
+          const kundeId = item.dataset.kundeId;
+          const name = item.dataset.name;
+          const kennzeichen = item.dataset.kennzeichen;
+
+          document.getElementById('kalTerminKundenSuche').value = name;
+          document.getElementById('kalTerminKundeId').value = kundeId;
+          if (kennzeichen) {
+            document.getElementById('kalTerminKennzeichen').value = kennzeichen;
+          }
+          ergebnisseEl.style.display = 'none';
+        });
+      });
+    } catch (err) {
+      console.error('Kalender: Kundensuche Fehler:', err);
+    }
+  }
+
+  /**
+   * Termin-Erstellung aus dem Kalender-Modal
+   */
+  async handleKalenderTerminSubmit() {
+    const datum = document.getElementById('kalTerminDatum')?.value;
+    const uhrzeit = document.getElementById('kalTerminUhrzeit')?.value;
+    const kundeId = document.getElementById('kalTerminKundeId')?.value;
+    const kundeName = document.getElementById('kalTerminKundenSuche')?.value?.trim();
+    const kennzeichen = document.getElementById('kalTerminKennzeichen')?.value?.trim();
+    const arbeitenRaw = document.getElementById('kalTerminArbeiten')?.value?.trim();
+    const abholtyp = document.querySelector('input[name="kalTerminAbholtyp"]:checked')?.value || 'bringen';
+    const vin = document.getElementById('kalTerminVin')?.value?.trim();
+    const fahrzeugtyp = document.getElementById('kalTerminFahrzeugtyp')?.value?.trim();
+    const kilometerstand = document.getElementById('kalTerminKilometerstand')?.value;
+    const dringlichkeit = document.getElementById('kalTerminDringlichkeit')?.value;
+    const ersatzauto = document.getElementById('kalTerminErsatzauto')?.checked ? 1 : 0;
+    const notizen = document.getElementById('kalTerminNotizen')?.value?.trim();
+
+    // Validierung
+    if (!datum) {
+      alert('Bitte ein Datum auswählen.');
+      return;
+    }
+    if (!kennzeichen) {
+      alert('Bitte ein Kennzeichen eingeben.');
+      return;
+    }
+    if (!arbeitenRaw) {
+      alert('Bitte mindestens eine Arbeit eingeben.');
+      return;
+    }
+    if (!kundeName && !kundeId) {
+      alert('Bitte einen Kunden angeben.');
+      return;
+    }
+
+    // Arbeiten und geschätzte Zeit berechnen
+    const arbeiten = arbeitenRaw.split('\n').filter(a => a.trim());
+    const arbeitText = arbeiten.join('\n');
+    let geschaetzteZeit = 60; // Default 60 Min.
+    if (typeof this.getGeschaetzteZeit === 'function') {
+      geschaetzteZeit = this.getGeschaetzteZeit(arbeiten) || 60;
+    }
+
+    const terminDaten = {
+      datum,
+      kennzeichen,
+      arbeit: arbeitText,
+      geschaetzte_zeit: geschaetzteZeit,
+      abholung_typ: abholtyp,
+      bring_zeit: uhrzeit || null,
+      status: 'geplant'
+    };
+
+    if (kundeId) terminDaten.kunde_id = parseInt(kundeId);
+    if (kundeName) terminDaten.kunde_name = kundeName;
+    if (vin) terminDaten.vin = vin;
+    if (fahrzeugtyp) terminDaten.fahrzeugtyp = fahrzeugtyp;
+    if (kilometerstand) terminDaten.kilometerstand = parseInt(kilometerstand);
+    if (dringlichkeit) terminDaten.dringlichkeit = dringlichkeit;
+    if (ersatzauto) terminDaten.ersatzauto = ersatzauto;
+    if (notizen) terminDaten.notizen = notizen;
+
+    try {
+      const speichernBtn = document.getElementById('kalenderTerminSpeichern');
+      if (speichernBtn) {
+        speichernBtn.disabled = true;
+        speichernBtn.textContent = '⏳ Speichern...';
+      }
+
+      await TermineService.create(terminDaten);
+      
+      this.closeKalenderTerminModal();
+      
+      // Kalender-Ansicht aktualisieren
+      this.kalenderLoadActiveSubTab(this.kalenderState.activeSubTab);
+      
+      // Erfolgs-Feedback
+      this.showToast?.('✅ Termin erfolgreich erstellt!', 'success') || alert('Termin erfolgreich erstellt!');
+
+    } catch (err) {
+      console.error('Kalender: Termin-Erstellung fehlgeschlagen:', err);
+      alert('Fehler beim Erstellen des Termins: ' + (err.message || 'Unbekannter Fehler'));
+    } finally {
+      const speichernBtn = document.getElementById('kalenderTerminSpeichern');
+      if (speichernBtn) {
+        speichernBtn.disabled = false;
+        speichernBtn.textContent = '✅ Termin speichern';
+      }
+    }
+  }
+
+  // === ENDE KALENDER TAB ===
 }
 
 
