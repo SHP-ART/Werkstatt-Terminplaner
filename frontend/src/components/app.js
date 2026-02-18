@@ -439,10 +439,7 @@ class App {
           badgeEl.title = `Server: ${response.platform} (${response.arch}) | Node ${response.nodeVersion}`;
         }
         
-        // Server-Auslastung Widget bei Linux und macOS anzeigen
-        if (response.serverType === 'linux-allinone' || response.serverType === 'macos') {
-          this.showServerStats(response.serverType);
-        }
+        // Server-Auslastung Widget: nur noch im Server/Info Tab (Einstellungen) sichtbar
       }
     } catch (error) {
       console.warn('Server-Version konnte nicht geladen werden:', error);
