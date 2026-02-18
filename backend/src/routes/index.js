@@ -70,12 +70,30 @@ router.get('/server-info', (req, res) => {
   const port = process.env.PORT || 3001;
   const ip = getLocalIPAddress();
   
+  // Server-Typ ermitteln
+  const platform = process.platform; // 'linux', 'win32', 'darwin'
+  const isElectron = !!process.versions.electron;
+  let serverType = 'standalone';
+  if (platform === 'linux') {
+    serverType = 'linux-allinone';
+  } else if (platform === 'win32' && isElectron) {
+    serverType = 'windows-electron';
+  } else if (platform === 'win32') {
+    serverType = 'windows-server';
+  } else if (platform === 'darwin') {
+    serverType = 'macos';
+  }
+  
   res.json({
     status: 'OK',
     version: VERSION,
     appName: APP_NAME,
     ip: ip,
     port: port,
+    platform: platform,
+    serverType: serverType,
+    arch: process.arch,
+    nodeVersion: process.version,
     apiUrl: `http://${ip}:${port}/api`,
     frontendUrl: `http://${ip}:${port}`,
     timestamp: new Date().toISOString()

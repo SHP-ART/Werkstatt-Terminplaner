@@ -412,7 +412,7 @@ class App {
     this.bindLazyEventListeners();
   }
 
-  // Lädt und zeigt die Server-Version im Header an
+  // Lädt und zeigt die Server-Version und den Server-Typ im Header an
   async loadServerVersion() {
     try {
       const response = await ApiService.get('/server-info');
@@ -420,6 +420,23 @@ class App {
         const versionEl = document.getElementById('appVersion');
         if (versionEl) {
           versionEl.textContent = `v${response.version}`;
+        }
+      }
+      // Server-Typ Badge anzeigen
+      if (response && response.serverType) {
+        const badgeEl = document.getElementById('serverTypeBadge');
+        if (badgeEl) {
+          const badges = {
+            'linux-allinone': { icon: '🐧', text: 'Linux All-in-One KI', cls: 'badge-linux' },
+            'windows-electron': { icon: '🖥️', text: 'Windows Desktop', cls: 'badge-windows' },
+            'windows-server': { icon: '🪟', text: 'Windows Server', cls: 'badge-windows' },
+            'macos': { icon: '🍎', text: 'macOS', cls: 'badge-macos' },
+            'standalone': { icon: '⚙️', text: 'Standalone', cls: 'badge-standalone' }
+          };
+          const badge = badges[response.serverType] || badges['standalone'];
+          badgeEl.innerHTML = `<span class="badge-icon">${badge.icon}</span> ${badge.text}`;
+          badgeEl.className = `header-server-badge ${badge.cls}`;
+          badgeEl.title = `Server: ${response.platform} (${response.arch}) | Node ${response.nodeVersion}`;
         }
       }
     } catch (error) {
