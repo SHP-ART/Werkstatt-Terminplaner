@@ -38,6 +38,12 @@ curl -fsSL https://...install-linux.sh | sudo bash -s -- --port=8080
 # Mit OpenAI API-Key Abfrage:
 sudo ./install-linux.sh --with-openai
 
+# Mit externer KI (Python ML-Service, automatisch installiert & konfiguriert):
+sudo ./install-linux.sh --with-ki
+
+# Komplett mit KI + OpenAI:
+sudo ./install-linux.sh --with-ki --with-openai --port=3001
+
 # Nur Backend (ohne Frontend-Build):
 sudo ./install-linux.sh --no-frontend
 
@@ -268,6 +274,39 @@ sudo systemctl start werkstatt-terminplaner
 ## 🤖 Externe KI anbinden (optional)
 
 Der Server kann mit einer externen Hardware-KI verbunden werden (z.B. Intel N100 mit ONNX Runtime oder Raspberry Pi mit KI-Beschleuniger).
+
+### Automatische Installation mit `--with-ki` (empfohlen)
+
+Die einfachste Methode: Bei der Installation `--with-ki` angeben. Damit wird der Python-basierte ML-Service (scikit-learn, FastAPI) direkt auf dem gleichen Server installiert und automatisch konfiguriert:
+
+```bash
+# Bei Neuinstallation:
+sudo ./install-linux.sh --with-ki
+
+# Oder per curl:
+curl -fsSL https://...install-linux.sh | sudo bash -s -- --with-ki
+```
+
+**Was passiert automatisch:**
+1. Python 3 + venv werden installiert
+2. KI-Service wird unter `/opt/werkstatt-ki/` eingerichtet
+3. Abhängigkeiten (scikit-learn, FastAPI, uvicorn, zeroconf) werden in venv installiert
+4. systemd-Service `werkstatt-ki.service` wird erstellt und gestartet (Port 5000)
+5. `KI_EXTERNAL_URL=http://localhost:5000` wird in `.env` gesetzt
+6. KI-Modus wird automatisch auf `external` umgestellt
+7. Backend wird neu gestartet, um die KI-Verbindung zu aktivieren
+
+**KI-Service verwalten:**
+```bash
+# Status prüfen
+sudo systemctl status werkstatt-ki
+
+# Logs anzeigen
+sudo journalctl -u werkstatt-ki -f
+
+# Neu starten
+sudo systemctl restart werkstatt-ki
+```
 
 ### Manuelle URL-Konfiguration
 

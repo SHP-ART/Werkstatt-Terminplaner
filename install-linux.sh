@@ -16,6 +16,7 @@
 #   --branch=NAME     Git-Branch (Standard: master)
 #   --no-frontend     Frontend-Build überspringen
 #   --with-openai     OpenAI API-Key interaktiv abfragen
+#   --with-ki         Externe KI (ML-Service) auf diesem Server installieren
 # ============================================================================
 
 set -e  # Bei Fehler abbrechen
@@ -46,6 +47,7 @@ PORT=3001
 GIT_BRANCH="master"
 BUILD_FRONTEND=true
 SETUP_OPENAI=false
+SETUP_KI=false
 ERRORS=0
 
 # Kommandozeilen-Argumente parsen
@@ -63,6 +65,9 @@ for arg in "$@"; do
         --with-openai)
             SETUP_OPENAI=true
             ;;
+        --with-ki)
+            SETUP_KI=true
+            ;;
         --help|-h)
             echo "Werkstatt Terminplaner - All-in-One KI-Server Installation"
             echo ""
@@ -71,6 +76,7 @@ for arg in "$@"; do
             echo "  --branch=NAME     Git-Branch (Standard: master)"
             echo "  --no-frontend     Frontend-Build überspringen"
             echo "  --with-openai     OpenAI API-Key interaktiv abfragen"
+            echo "  --with-ki         Externe KI (ML-Service) mitinstallieren"
             echo "  --help            Hilfe anzeigen"
             exit 0
             ;;
@@ -89,6 +95,9 @@ print_header() {
     echo -e "${BLUE}╚══════════════════════════════════════════════════════════════════╝${NC}"
     echo ""
     echo -e "  ${CYAN}Backend${NC}  + ${MAGENTA}Lokale KI${NC} + ${GREEN}Frontend${NC} + ${YELLOW}SQLite-Optimiert${NC} + ${BLUE}systemd${NC}"
+    if [ "$SETUP_KI" = true ]; then
+        echo -e "  + ${MAGENTA}Externe KI (ML-Service mit scikit-learn)${NC}"
+    fi
     echo ""
 }
 
@@ -160,6 +169,9 @@ print_info "RAM:     ${RAM_MB} MB"
 print_info "Disk:    ${DISK_FREE} frei"
 print_info "Port:    $PORT"
 print_info "Branch:  $GIT_BRANCH"
+if [ "$SETUP_KI" = true ]; then
+    print_info "KI:      Externe KI wird mitinstalliert (--with-ki)"
+fi
 
 if [[ "$OS_NAME" != "debian" && "$OS_NAME" != "ubuntu" && "$OS_NAME" != "raspbian" ]]; then
     print_warning "Nicht offiziell getestet auf $OS_NAME - fahre trotzdem fort..."
@@ -236,6 +248,15 @@ apt-get install -y build-essential python3 &>/dev/null || {
     print_warning "Build-Tools teilweise fehlgeschlagen - native Module koennten Probleme machen"
 }
 print_success "Build-Tools installiert"
+
+# Python-venv fuer externe KI (falls --with-ki)
+if [ "$SETUP_KI" = true ]; then
+    print_substep "Installiere Python-venv (fuer ML KI-Service)..."
+    apt-get install -y python3-venv python3-pip &>/dev/null || {
+        print_warning "Python-venv nicht installiert - --with-ki koennte fehlschlagen"
+    }
+    print_success "Python-venv installiert"
+fi
 
 # mDNS/Avahi fuer KI-Discovery im Netzwerk
 print_substep "Installiere Avahi/mDNS (KI-Discovery)..."
@@ -435,6 +456,9 @@ $OPENAI_COST_LINE
 # KI_EXTERNAL_URL=http://192.168.1.100:5000
 # KI_EXTERNAL_TIMEOUT_MS=4000
 
+# Lokale externe KI (wird bei --with-ki automatisch gesetzt)
+# KI_LOCAL_SERVICE=true
+
 # mDNS Backend-Discovery
 BACKEND_DISCOVERY_ENABLED=1
 EOF
@@ -528,6 +552,140 @@ done
 echo ""
 
 # ============================================================================
+# SCHRITT 10b: EXTERNE KI INSTALLIEREN (optional, --with-ki)
+# ============================================================================
+if [ "$SETUP_KI" = true ]; then
+    print_step "10b/11 - Externe KI (ML-Service) installieren"
+
+    KI_INSTALL_DIR="/opt/werkstatt-ki"
+    KI_PORT=5000
+    KI_SERVICE_NAME="werkstatt-ki"
+    KI_SOURCE="$INSTALL_DIR/tools/ki-service"
+
+    if [ ! -d "$KI_SOURCE/app" ]; then
+        print_error "KI-Service Quellcode nicht gefunden: $KI_SOURCE/app"
+        print_info "Ueberspringe externe KI-Installation"
+    else
+        # KI-Verzeichnis erstellen und Dateien kopieren
+        print_substep "Kopiere KI-Service nach $KI_INSTALL_DIR..."
+        mkdir -p "$KI_INSTALL_DIR/app" "$KI_INSTALL_DIR/data"
+        cp -R "$KI_SOURCE/app/"* "$KI_INSTALL_DIR/app/"
+        cp "$KI_SOURCE/requirements.txt" "$KI_INSTALL_DIR/requirements.txt"
+        chown -R "$SERVICE_USER":"$SERVICE_USER" "$KI_INSTALL_DIR"
+        print_success "KI-Service kopiert"
+
+        # Python venv + Dependencies
+        print_substep "Erstelle Python-Umgebung und installiere ML-Abhaengigkeiten..."
+        sudo -u "$SERVICE_USER" python3 -m venv "$KI_INSTALL_DIR/venv" 2>/dev/null || {
+            print_error "Python-venv Erstellung fehlgeschlagen"
+            print_info "Versuche ohne venv..."
+        }
+
+        if [ -f "$KI_INSTALL_DIR/venv/bin/pip" ]; then
+            sudo -u "$SERVICE_USER" "$KI_INSTALL_DIR/venv/bin/pip" install --upgrade pip -q 2>/dev/null || true
+            sudo -u "$SERVICE_USER" "$KI_INSTALL_DIR/venv/bin/pip" install -r "$KI_INSTALL_DIR/requirements.txt" -q 2>&1 | tail -3 || {
+                print_error "ML-Abhaengigkeiten konnten nicht installiert werden"
+            }
+            print_success "Python-Umgebung + ML-Pakete installiert (scikit-learn, FastAPI, uvicorn)"
+        fi
+
+        # Backend-URL fuer KI-Service (localhost, da auf demselben Server)
+        BACKEND_URL_LOCAL="http://localhost:$PORT"
+
+        # Environment-Datei
+        print_substep "Erstelle KI-Service Konfiguration..."
+        cat > "$KI_INSTALL_DIR/werkstatt-ki.env" << KIEOF
+BACKEND_URL=$BACKEND_URL_LOCAL
+SERVICE_PORT=$KI_PORT
+TRAINING_INTERVAL_MINUTES=1440
+TRAINING_LIMIT=0
+TRAINING_LOOKBACK_DAYS=14
+TRAINING_MAX_RETRIES=5
+TRAINING_BACKOFF_INITIAL_SECONDS=5
+TRAINING_BACKOFF_MAX_SECONDS=300
+DISCOVERY_ENABLED=1
+BACKEND_DISCOVERY_ENABLED=1
+KIEOF
+        chown "$SERVICE_USER":"$SERVICE_USER" "$KI_INSTALL_DIR/werkstatt-ki.env"
+        print_success "KI-Konfiguration erstellt"
+
+        # systemd-Service fuer KI
+        print_substep "Erstelle systemd-Service fuer KI..."
+        cat > /lib/systemd/system/"$KI_SERVICE_NAME.service" << KIEOF
+[Unit]
+Description=Werkstatt KI Service (ML/scikit-learn)
+Documentation=https://github.com/SHP-ART/Werkstatt-Terminplaner
+After=network.target $SERVICE_NAME.service
+Wants=$SERVICE_NAME.service
+
+[Service]
+Type=simple
+User=$SERVICE_USER
+Group=$SERVICE_USER
+WorkingDirectory=$KI_INSTALL_DIR
+EnvironmentFile=$KI_INSTALL_DIR/werkstatt-ki.env
+ExecStart=$KI_INSTALL_DIR/venv/bin/uvicorn app.main:app --host 0.0.0.0 --port $KI_PORT
+Restart=always
+RestartSec=10
+
+# Security
+NoNewPrivileges=true
+PrivateTmp=true
+ReadWritePaths=$KI_INSTALL_DIR
+
+# Resource limits
+MemoryMax=256M
+
+[Install]
+WantedBy=multi-user.target
+KIEOF
+        systemctl daemon-reload
+        systemctl enable "$KI_SERVICE_NAME.service" &>/dev/null
+        systemctl restart "$KI_SERVICE_NAME.service"
+        print_success "KI-Service gestartet (Port $KI_PORT)"
+
+        # Warte auf KI-Service Health
+        print_substep "Warte auf KI-Service..."
+        KI_READY=false
+        for i in $(seq 1 8); do
+            if curl -sf "http://localhost:$KI_PORT/health" &>/dev/null; then
+                KI_READY=true
+                print_success "KI-Service antwortet auf Health-Check"
+                break
+            fi
+            sleep 2
+        done
+
+        if [ "$KI_READY" = true ]; then
+            # Backend automatisch auf external-Modus umschalten
+            print_substep "Konfiguriere Backend fuer externe KI..."
+
+            # KI-URL in .env setzen (falls noch nicht vorhanden)
+            if ! grep -q "^KI_EXTERNAL_URL=" "$CONFIG_DIR/.env" 2>/dev/null; then
+                sed -i "s|^# KI_EXTERNAL_URL=.*|KI_EXTERNAL_URL=http://localhost:$KI_PORT|" "$CONFIG_DIR/.env" 2>/dev/null || \
+                echo "KI_EXTERNAL_URL=http://localhost:$KI_PORT" >> "$CONFIG_DIR/.env"
+            fi
+
+            # KI-Modus auf 'external' setzen via API
+            sleep 2
+            curl -sf -X PUT "http://localhost:$PORT/api/einstellungen" \
+                -H "Content-Type: application/json" \
+                -d '{"ki_mode":"external","ki_enabled":1}' &>/dev/null && \
+                print_success "KI-Modus auf 'external' gesetzt (ML-basiert)" || \
+                print_warning "KI-Modus konnte nicht automatisch gesetzt werden - bitte manuell unter Einstellungen > KI"
+
+            # Backend neustarten damit es die KI-URL aus .env liest
+            systemctl restart "$SERVICE_NAME.service" &>/dev/null
+            sleep 3
+            print_success "Backend neu gestartet mit externer KI-Anbindung"
+        else
+            print_warning "KI-Service reagiert nicht - pruefe: journalctl -u $KI_SERVICE_NAME"
+            print_info "Backend nutzt weiterhin lokale KI als Fallback"
+        fi
+    fi
+fi
+
+# ============================================================================
 # SCHRITT 11: ABSCHLUSS UND STATUS
 # ============================================================================
 print_step "11/11 - Installation abgeschlossen"
@@ -558,6 +716,9 @@ if systemctl is-active --quiet "$SERVICE_NAME.service"; then
     echo ""
     echo -e "  ${CYAN}Version:${NC}     v$APP_VERSION"
     echo -e "  ${CYAN}KI-Status:${NC}   $KI_STATUS"
+    if [ "$SETUP_KI" = true ] && systemctl is-active --quiet werkstatt-ki.service 2>/dev/null; then
+        echo -e "  ${CYAN}KI-Service:${NC}  ML-Engine laeuft auf Port 5000"
+    fi
     echo ""
     echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
     echo -e "${BOLD} Zugriff auf die Anwendung${NC}"
@@ -583,6 +744,14 @@ if systemctl is-active --quiet "$SERVICE_NAME.service"; then
     echo -e "  ${MAGENTA}Externe KI im LAN (optional):${NC}"
     echo -e "    Wird per mDNS automatisch erkannt (avahi)"
     echo -e "    Oder manuell: ${YELLOW}KI_EXTERNAL_URL=http://IP:PORT${NC}"
+    if [ "$SETUP_KI" = true ]; then
+        echo ""
+        echo -e "  ${GREEN}Externe KI (lokal installiert):${NC}"
+        echo -e "    ML-basiert (scikit-learn) - trainiert alle 24h automatisch"
+        echo -e "    Status:  ${YELLOW}systemctl status werkstatt-ki${NC}"
+        echo -e "    Logs:    ${YELLOW}journalctl -u werkstatt-ki -f${NC}"
+        echo -e "    Health:  ${YELLOW}curl http://localhost:5000/health${NC}"
+    fi
     echo ""
     echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
     echo -e "${BOLD} Server-Verwaltung${NC}"
@@ -593,6 +762,11 @@ if systemctl is-active --quiet "$SERVICE_NAME.service"; then
     echo -e "  ${YELLOW}Logs:${NC}             sudo journalctl -u $SERVICE_NAME -f"
     echo -e "  ${YELLOW}Konfiguration:${NC}    sudo nano $CONFIG_DIR/.env"
     echo -e "  ${YELLOW}Update:${NC}           sudo $INSTALL_DIR/update-linux.sh"
+    if [ "$SETUP_KI" = true ]; then
+        echo -e "  ${YELLOW}KI-Status:${NC}        systemctl status werkstatt-ki"
+        echo -e "  ${YELLOW}KI-Logs:${NC}          sudo journalctl -u werkstatt-ki -f"
+        echo -e "  ${YELLOW}KI-Neustart:${NC}      sudo systemctl restart werkstatt-ki"
+    fi
     echo ""
     echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
     echo -e "${BOLD} Wichtige Verzeichnisse${NC}"
