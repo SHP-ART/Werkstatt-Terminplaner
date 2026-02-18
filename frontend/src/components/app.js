@@ -439,9 +439,9 @@ class App {
           badgeEl.title = `Server: ${response.platform} (${response.arch}) | Node ${response.nodeVersion}`;
         }
         
-        // Server-Auslastung Widget bei Linux anzeigen
-        if (response.serverType === 'linux-allinone') {
-          this.showServerStats();
+        // Server-Auslastung Widget bei Linux und macOS anzeigen
+        if (response.serverType === 'linux-allinone' || response.serverType === 'macos') {
+          this.showServerStats(response.serverType);
         }
       }
     } catch (error) {
@@ -449,17 +449,163 @@ class App {
     }
   }
 
-  // Server-Auslastung Widget anzeigen und Polling starten (nur Linux)
-  showServerStats() {
+  // Server-Auslastung Widget anzeigen und Polling starten
+  showServerStats(serverType) {
     const section = document.getElementById('serverStatsSection');
     if (section) {
       section.style.display = 'block';
+    }
+    // Badge-Text je nach Plattform setzen
+    const badgeText = document.getElementById('serverStatsBadgeText');
+    if (badgeText) {
+      const labels = {
+        'linux-allinone': 'Linux All-in-One',
+        'macos': 'macOS'
+      };
+      badgeText.textContent = labels[serverType] || 'Server';
     }
     // Sofort laden und dann alle 30 Sekunden aktualisieren
     this.updateServerStats();
     if (!this._serverStatsInterval) {
       this._serverStatsInterval = setInterval(() => this.updateServerStats(), 30000);
     }
+  }
+
+  // === Server/Info Tab in Einstellungen ===
+  async loadServerInfoTab() {
+    try {
+      // Server-Info und System-Stats parallel laden
+      const [serverInfo, systemStats, healthResult] = await Promise.allSettled([
+        ApiService.get('/server-info'),
+        ApiService.get('/system-stats'),
+        this._checkApiHealth()
+      ]);
+
+      // Server-Info
+      if (serverInfo.status === 'fulfilled' && serverInfo.value) {
+        const info = serverInfo.value;
+        const typeLabels = {
+          'linux-allinone': '🐧 Linux All-in-One KI',
+          'windows-electron': '🖥️ Windows Desktop',
+          'windows-server': '🪟 Windows Server',
+          'macos': '🍎 macOS',
+          'standalone': '⚙️ Standalone'
+        };
+        this._setTextIfExists('sinfoServerType', typeLabels[info.serverType] || info.serverType);
+        this._setTextIfExists('sinfoPlatform', info.platform || '--');
+        this._setTextIfExists('sinfoArch', info.arch || '--');
+        this._setTextIfExists('sinfoNodeVersion', info.nodeVersion || '--');
+        this._setTextIfExists('sinfoAppVersion', info.version || '--');
+      }
+
+      // System-Stats
+      if (systemStats.status === 'fulfilled' && systemStats.value) {
+        this._updateServerInfoStats(systemStats.value);
+      }
+
+      // Health
+      if (healthResult.status === 'fulfilled') {
+        const h = healthResult.value;
+        this._setTextIfExists('sinfoApiStatus', h.ok ? '✅ Online' : '❌ Fehler');
+        this._setTextIfExists('sinfoDbStatus', h.dbOk ? '✅ Verbunden' : '❌ Getrennt');
+        this._setTextIfExists('sinfoResponseTime', h.responseTime ? `${h.responseTime}ms` : '--');
+        this._setTextIfExists('sinfoServerUrl', h.url || '--');
+      }
+
+      // Refresh-Button binden
+      const refreshBtn = document.getElementById('sinfoRefreshBtn');
+      if (refreshBtn && !refreshBtn.dataset.bound) {
+        refreshBtn.dataset.bound = 'true';
+        refreshBtn.addEventListener('click', () => this.loadServerInfoTab());
+      }
+
+      // Auto-Refresh starten (alle 15s während Tab aktiv)
+      this._startServerInfoAutoRefresh();
+
+    } catch (error) {
+      console.warn('Server-Info konnte nicht geladen werden:', error);
+    }
+  }
+
+  _updateServerInfoStats(stats) {
+    // CPU
+    const cpuPct = parseFloat(stats.cpuUsage) || 0;
+    this._setTextIfExists('sinfoCpuValue', `${stats.cpuUsage}%`);
+    const cpuBar = document.getElementById('sinfoCpuBar');
+    if (cpuBar) {
+      cpuBar.style.width = `${cpuPct}%`;
+      cpuBar.className = `server-info-progress-fill ${this.getStatBarClass(cpuPct)}`;
+    }
+
+    // RAM
+    const memPct = parseFloat(stats.memoryUsage) || 0;
+    this._setTextIfExists('sinfoMemValue', `${stats.memoryUsage}%`);
+    this._setTextIfExists('sinfoMemDetail', `${stats.memoryUsed} / ${stats.memoryTotal} GB belegt`);
+    const memBar = document.getElementById('sinfoMemBar');
+    if (memBar) {
+      memBar.style.width = `${memPct}%`;
+      memBar.className = `server-info-progress-fill ${this.getStatBarClass(memPct)}`;
+    }
+
+    // Uptime
+    this._setTextIfExists('sinfoUptimeValue', this.formatUptime(stats.uptime));
+    this._setTextIfExists('sinfoUptimeDetail', `Gestartet: ${this._uptimeToStartDate(stats.uptime)}`);
+
+    // Hostname
+    this._setTextIfExists('sinfoHostname', stats.hostname || '--');
+
+    // Letztes Update
+    this._setTextIfExists('sinfoLastUpdate', `Letztes Update: ${new Date().toLocaleTimeString('de-DE')}`);
+  }
+
+  _uptimeToStartDate(seconds) {
+    if (!seconds || seconds < 0) return '--';
+    const start = new Date(Date.now() - seconds * 1000);
+    return start.toLocaleString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+  }
+
+  async _checkApiHealth() {
+    const serverConfig = CONFIG.getServerConfig();
+    const url = serverConfig.url + '/health';
+    const startTime = performance.now();
+    try {
+      const res = await fetch(url, { signal: AbortSignal.timeout(5000) });
+      const responseTime = Math.round(performance.now() - startTime);
+      const data = await res.json();
+      return {
+        ok: data.status === 'ok',
+        dbOk: data.database === 'connected',
+        responseTime,
+        url: serverConfig.url
+      };
+    } catch {
+      return { ok: false, dbOk: false, responseTime: null, url: serverConfig.url };
+    }
+  }
+
+  _setTextIfExists(id, text) {
+    const el = document.getElementById(id);
+    if (el) el.textContent = text;
+  }
+
+  _startServerInfoAutoRefresh() {
+    // Stoppe vorherigen Timer
+    if (this._serverInfoRefreshInterval) {
+      clearInterval(this._serverInfoRefreshInterval);
+    }
+    // Nur aktualisieren wenn der Tab sichtbar ist
+    this._serverInfoRefreshInterval = setInterval(async () => {
+      const tab = document.getElementById('settingsServerInfo');
+      if (tab && tab.style.display !== 'none') {
+        try {
+          const stats = await ApiService.get('/system-stats');
+          if (stats) this._updateServerInfoStats(stats);
+        } catch (e) { /* silent */ }
+      } else {
+        clearInterval(this._serverInfoRefreshInterval);
+        this._serverInfoRefreshInterval = null;
+      }
+    }, 15000);
   }
 
   async updateServerStats() {
@@ -2829,6 +2975,10 @@ class App {
 
     if (subTabName === 'settingsTablet') {
       this.loadTabletEinstellungen();
+    }
+
+    if (subTabName === 'settingsServerInfo') {
+      this.loadServerInfoTab();
     }
 
     if (subTabName === 'teileStatus') {

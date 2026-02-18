@@ -94,6 +94,49 @@
                 </div>
             </div>
 
+            <!-- Server-Auslastung (nur bei Linux/macOS Server) -->
+            <div class="dashboard-section server-stats-section" id="serverStatsSection" style="display: none;">
+                <h3>🖥️ Server-Auslastung <span class="server-stats-badge" id="serverStatsBadgeText">Server</span></h3>
+                <div class="server-stats-grid">
+                    <div class="server-stat-card">
+                        <div class="server-stat-icon">🔲</div>
+                        <div class="server-stat-content">
+                            <div class="server-stat-label">CPU</div>
+                            <div class="server-stat-value" id="serverCpuValue">--%</div>
+                            <div class="server-stat-bar">
+                                <div class="server-stat-fill" id="serverCpuBar" style="width: 0%"></div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="server-stat-card">
+                        <div class="server-stat-icon">💾</div>
+                        <div class="server-stat-content">
+                            <div class="server-stat-label">RAM</div>
+                            <div class="server-stat-value" id="serverMemValue">--</div>
+                            <div class="server-stat-bar">
+                                <div class="server-stat-fill" id="serverMemBar" style="width: 0%"></div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="server-stat-card">
+                        <div class="server-stat-icon">⏱️</div>
+                        <div class="server-stat-content">
+                            <div class="server-stat-label">Uptime</div>
+                            <div class="server-stat-value" id="serverUptimeValue">--</div>
+                            <div class="server-stat-detail" id="serverHostname"></div>
+                        </div>
+                    </div>
+                    <div class="server-stat-card">
+                        <div class="server-stat-icon">🌐</div>
+                        <div class="server-stat-content">
+                            <div class="server-stat-label">Node.js</div>
+                            <div class="server-stat-value" id="serverNodeValue">--</div>
+                            <div class="server-stat-detail" id="serverPlatformInfo"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             <div class="dashboard-section">
                 <h3>Auslastung Heute</h3>
                 <div class="auslastung-info" style="margin-bottom: 15px;">
@@ -218,49 +261,6 @@
                 <h3>📅 Monatsübersicht (5 Wochen)</h3>
                 <div class="monats-uebersicht" id="monatsUebersicht">
                     <div class="loading">Monatsübersicht wird geladen...</div>
-                </div>
-            </div>
-
-            <!-- Server-Auslastung (nur bei Linux All-in-One Server) -->
-            <div class="dashboard-section server-stats-section" id="serverStatsSection" style="display: none;">
-                <h3>🐧 Server-Auslastung <span class="server-stats-badge">Linux All-in-One</span></h3>
-                <div class="server-stats-grid">
-                    <div class="server-stat-card">
-                        <div class="server-stat-icon">🔲</div>
-                        <div class="server-stat-content">
-                            <div class="server-stat-label">CPU</div>
-                            <div class="server-stat-value" id="serverCpuValue">--%</div>
-                            <div class="server-stat-bar">
-                                <div class="server-stat-fill" id="serverCpuBar" style="width: 0%"></div>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="server-stat-card">
-                        <div class="server-stat-icon">💾</div>
-                        <div class="server-stat-content">
-                            <div class="server-stat-label">RAM</div>
-                            <div class="server-stat-value" id="serverMemValue">--</div>
-                            <div class="server-stat-bar">
-                                <div class="server-stat-fill" id="serverMemBar" style="width: 0%"></div>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="server-stat-card">
-                        <div class="server-stat-icon">⏱️</div>
-                        <div class="server-stat-content">
-                            <div class="server-stat-label">Uptime</div>
-                            <div class="server-stat-value" id="serverUptimeValue">--</div>
-                            <div class="server-stat-detail" id="serverHostname"></div>
-                        </div>
-                    </div>
-                    <div class="server-stat-card">
-                        <div class="server-stat-icon">🌐</div>
-                        <div class="server-stat-content">
-                            <div class="server-stat-label">Node.js</div>
-                            <div class="server-stat-value" id="serverNodeValue">--</div>
-                            <div class="server-stat-detail" id="serverPlatformInfo"></div>
-                        </div>
-                    </div>
                 </div>
             </div>
 
@@ -2268,6 +2268,10 @@
                     <span class="tab-icon">📱</span>
                     <span class="tab-label">Tablet-Steuerung</span>
                 </button>
+                <button class="sub-tab-button" data-subtab="settingsServerInfo">
+                    <span class="tab-icon">🖥️</span>
+                    <span class="tab-label">Server / Info</span>
+                </button>
             </div>
 
             <div id="settingsServer" class="sub-tab-content active">
@@ -2878,6 +2882,105 @@
                         <li>📱 <strong>Lokale Einstellungen:</strong> Tablets können weiterhin lokal konfiguriert werden (Fallback bei Server-Ausfall).</li>
                         <li>🔌 <strong>Offline-Betrieb:</strong> Bei Verbindungsausfall nutzen Tablets ihre lokalen Einstellungen.</li>
                     </ul>
+                </div>
+            </div>
+
+            <div id="settingsServerInfo" class="sub-tab-content">
+                <h3>🖥️ Server-Informationen</h3>
+                <p>Systemübersicht, Auslastung und Versionsinformationen des Servers.</p>
+
+                <!-- Server-Info Karten -->
+                <div class="form-section" style="margin-bottom: 25px;">
+                    <h3>📊 Allgemein</h3>
+                    <div class="server-info-grid">
+                        <div class="server-info-item">
+                            <span class="server-info-label">Server-Typ</span>
+                            <span class="server-info-value" id="sinfoServerType">--</span>
+                        </div>
+                        <div class="server-info-item">
+                            <span class="server-info-label">Plattform</span>
+                            <span class="server-info-value" id="sinfoPlatform">--</span>
+                        </div>
+                        <div class="server-info-item">
+                            <span class="server-info-label">Architektur</span>
+                            <span class="server-info-value" id="sinfoArch">--</span>
+                        </div>
+                        <div class="server-info-item">
+                            <span class="server-info-label">Node.js</span>
+                            <span class="server-info-value" id="sinfoNodeVersion">--</span>
+                        </div>
+                        <div class="server-info-item">
+                            <span class="server-info-label">App-Version</span>
+                            <span class="server-info-value" id="sinfoAppVersion">--</span>
+                        </div>
+                        <div class="server-info-item">
+                            <span class="server-info-label">Hostname</span>
+                            <span class="server-info-value" id="sinfoHostname">--</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Echtzeit-Auslastung -->
+                <div class="form-section" style="margin-bottom: 25px;">
+                    <h3>📈 Server-Auslastung <span class="server-info-live-badge">LIVE</span></h3>
+                    <div class="server-info-stats">
+                        <div class="server-info-stat-card">
+                            <div class="server-info-stat-header">
+                                <span class="server-info-stat-icon">🔲</span>
+                                <span class="server-info-stat-title">CPU-Auslastung</span>
+                            </div>
+                            <div class="server-info-stat-value" id="sinfoCpuValue">--%</div>
+                            <div class="server-info-progress">
+                                <div class="server-info-progress-fill" id="sinfoCpuBar" style="width: 0%"></div>
+                            </div>
+                        </div>
+                        <div class="server-info-stat-card">
+                            <div class="server-info-stat-header">
+                                <span class="server-info-stat-icon">💾</span>
+                                <span class="server-info-stat-title">Arbeitsspeicher (RAM)</span>
+                            </div>
+                            <div class="server-info-stat-value" id="sinfoMemValue">--</div>
+                            <div class="server-info-progress">
+                                <div class="server-info-progress-fill" id="sinfoMemBar" style="width: 0%"></div>
+                            </div>
+                            <div class="server-info-stat-detail" id="sinfoMemDetail"></div>
+                        </div>
+                        <div class="server-info-stat-card">
+                            <div class="server-info-stat-header">
+                                <span class="server-info-stat-icon">⏱️</span>
+                                <span class="server-info-stat-title">Server-Uptime</span>
+                            </div>
+                            <div class="server-info-stat-value" id="sinfoUptimeValue">--</div>
+                            <div class="server-info-stat-detail" id="sinfoUptimeDetail"></div>
+                        </div>
+                    </div>
+                    <div style="margin-top: 12px; text-align: right;">
+                        <button id="sinfoRefreshBtn" class="btn btn-secondary btn-sm">🔄 Aktualisieren</button>
+                        <span class="server-info-update-hint" id="sinfoLastUpdate">Letztes Update: --</span>
+                    </div>
+                </div>
+
+                <!-- API Health -->
+                <div class="form-section">
+                    <h3>🟢 API-Gesundheit</h3>
+                    <div class="server-info-grid">
+                        <div class="server-info-item">
+                            <span class="server-info-label">Status</span>
+                            <span class="server-info-value" id="sinfoApiStatus">⏳ Prüfe...</span>
+                        </div>
+                        <div class="server-info-item">
+                            <span class="server-info-label">Datenbank</span>
+                            <span class="server-info-value" id="sinfoDbStatus">⏳ Prüfe...</span>
+                        </div>
+                        <div class="server-info-item">
+                            <span class="server-info-label">Antwortzeit</span>
+                            <span class="server-info-value" id="sinfoResponseTime">--</span>
+                        </div>
+                        <div class="server-info-item">
+                            <span class="server-info-label">Server-URL</span>
+                            <span class="server-info-value" id="sinfoServerUrl">--</span>
+                        </div>
+                    </div>
                 </div>
             </div>
         </template>
