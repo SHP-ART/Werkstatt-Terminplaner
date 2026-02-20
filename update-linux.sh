@@ -99,31 +99,36 @@ else
     CURRENT_VERSION="unknown"
 fi
 
-# 2. Neueste Version von GitHub prüfen
+# 2. Prüfe ob neue Commits verfügbar sind (via git fetch)
 print_step "Prüfe auf Updates..."
-LATEST_VERSION=$(curl -s "https://api.github.com/repos/$GITHUB_REPO/releases/latest" | grep '"tag_name":' | sed -E 's/.*"v?([^"]+)".*/\1/' 2>/dev/null || echo "")
 
-if [ -z "$LATEST_VERSION" ]; then
-    print_error "Kann neueste Version nicht von GitHub abrufen"
-    exit 1
-fi
+if [ -d "$INSTALL_DIR/.git" ]; then
+    git config --global --add safe.directory "$INSTALL_DIR" 2>/dev/null || true
+    git fetch origin "$GIT_BRANCH" 2>/dev/null || {
+        print_warning "Kann GitHub nicht erreichen - fahre trotzdem mit lokalem Stand fort"
+    }
+    LOCAL=$(git rev-parse HEAD 2>/dev/null || echo "")
+    REMOTE=$(git rev-parse "origin/$GIT_BRANCH" 2>/dev/null || echo "")
 
-print_info "Neueste Version: $LATEST_VERSION"
-
-# 3. Versions-Vergleich
-if [ "$CURRENT_VERSION" = "$LATEST_VERSION" ]; then
-    print_success "System ist bereits auf dem neuesten Stand!"
-    
-    if [ "$AUTO_MODE" = true ]; then
-        exit 0
+    if [ -n "$LOCAL" ] && [ -n "$REMOTE" ] && [ "$LOCAL" = "$REMOTE" ]; then
+        print_info "Kein neuer Code auf GitHub (Branch: $GIT_BRANCH)"
+        if [ "$AUTO_MODE" = true ]; then
+            print_success "System ist aktuell - kein Update nötig"
+            exit 0
+        fi
+        echo ""
+        read -p "  Trotzdem neu bauen (npm install + Frontend)? (j/N): " -n 1 -r
+        echo
+        if [[ ! $REPLY =~ ^[Jj]$ ]]; then
+            print_info "Abgebrochen."
+            exit 0
+        fi
+    else
+        COMMIT_COUNT=$(git rev-list HEAD..origin/"$GIT_BRANCH" --count 2>/dev/null || echo "?")
+        print_info "Neue Commits verfügbar: $COMMIT_COUNT Commit(s) auf origin/$GIT_BRANCH"
     fi
-    
-    echo ""
-    read -p "Trotzdem neu installieren? (j/N): " -n 1 -r
-    echo
-    if [[ ! $REPLY =~ ^[Jj]$ ]]; then
-        exit 0
-    fi
+else
+    print_warning "Kein git-Repository - überspringe Versionscheck"
 fi
 
 # 4. Backup erstellen
@@ -142,7 +147,8 @@ fi
 
 # 5. Service stoppen
 print_step "Stoppe Server..."
-systemctl stop "$SERVICE_NAME.service"
+systemctl stop "$SERVICE_NAME.service" 2>/dev/null || systemctl kill "$SERVICE_NAME.service" 2>/dev/null || true
+sleep 2
 print_success "Server gestoppt"
 
 # 6. Alten Code sichern
