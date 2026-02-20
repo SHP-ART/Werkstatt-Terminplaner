@@ -23701,7 +23701,7 @@ class App {
     btn && (btn.disabled = true);
     btn && (btn.textContent = '⏳ Teste...');
     result.style.display = 'block';
-    content.innerHTML = '<em style="color:#888">⏳ Pruefe Ollama und verfuegbare Modelle... (max. 30 s)</em>';
+    content.innerHTML = '<em style="color:#888">⏳ Prüfe Ollama und verfügbare Modelle...<br>Beim ersten Start muss das Modell in den RAM geladen werden – das kann 60–90 Sekunden dauern.</em>';
 
     const _esc = (s) => this._escapeHtml(String(s || ''));
 
@@ -23758,7 +23758,11 @@ class App {
             </div>`;
         } else if (res.fehler_typ === 'timeout') {
           titelIcon = '⏱️';
-          titelText = 'Timeout - Modell zu gross fuer diesen Server';
+          titelText = 'Timeout (90 s) – Modell antwortet nicht';
+          extra = `<div style="margin-top:10px;padding:10px;background:#fff8e1;border:1px solid #ffcc80;border-radius:6px;font-size:0.88em">
+            <strong>Beim ersten Start lädt Ollama das Modell in den RAM (Cold Start).</strong><br>
+            👉 Bitte nochmals auf ⚡ Performance-Test klicken – der zweite Aufruf ist deutlich schneller.
+          </div>`;
         } else if (res.fehler_typ === 'nicht_erreichbar') {
           titelIcon = '🔌';
           titelText = 'Ollama nicht erreichbar';

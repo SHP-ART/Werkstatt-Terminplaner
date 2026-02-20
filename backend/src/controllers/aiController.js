@@ -1221,7 +1221,7 @@ async function benchmarkOllama(req, res) {
   const start = Date.now();
   try {
     const controller = new AbortController();
-    const tid = setTimeout(() => controller.abort(), 30000);
+    const tid = setTimeout(() => controller.abort(), 90000);
     let response;
     try {
       response = await fetch(`${ollamaService.OLLAMA_BASE_URL}/api/chat`, {
@@ -1309,9 +1309,9 @@ async function benchmarkOllama(req, res) {
     res.json({
       success: false,
       fehler_typ: abgebrochen ? 'timeout' : 'fehler',
-      error: abgebrochen ? `Timeout nach 30 Sekunden – Modell '${testModell}' zu langsam für diesen Server` : error.message,
+      error: abgebrochen ? `Timeout nach 90 Sekunden – Modell '${testModell}' antwortet nicht` : error.message,
       hinweis: abgebrochen
-        ? `Versuche ein kleineres Modell: ollama pull ${MODELL_KATALOG[0].name}`
+        ? `Modell lädt zu lange. Beim ersten Start braucht Ollama oft 60–90 s. Erneut versuchen oder: ollama pull ${MODELL_KATALOG[0].name}`
         : 'Prüfe Ollama-Logs: journalctl -u ollama -n 20',
       dauer_ms,
       test_modell: testModell,
