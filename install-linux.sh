@@ -840,10 +840,9 @@ if [ "$SETUP_OLLAMA" = true ]; then
     fi
 
     if [ "$SETUP_OLLAMA" = true ]; then
-        # systemd-Service fuer Ollama (falls nicht automatisch erstellt)
-        if ! systemctl is-enabled ollama &>/dev/null 2>&1; then
-            print_substep "Erstelle Ollama systemd-Service..."
-            cat > /etc/systemd/system/ollama.service << 'OLLAMAEOF'
+        # systemd-Service fuer Ollama immer aktualisieren (HOME-Variable sicherstellen)
+        print_substep "Erstelle/Aktualisiere Ollama systemd-Service..."
+        cat > /etc/systemd/system/ollama.service << 'OLLAMAEOF'
 [Unit]
 Description=Ollama LLM Service
 After=network.target
@@ -859,10 +858,9 @@ Environment="HOME=/root"
 [Install]
 WantedBy=multi-user.target
 OLLAMAEOF
-            systemctl daemon-reload
-            systemctl enable ollama &>/dev/null
-            print_success "Ollama systemd-Service registriert"
-        fi
+        systemctl daemon-reload
+        systemctl enable ollama &>/dev/null
+        print_success "Ollama systemd-Service aktualisiert"
 
         # Ollama-Daemon starten
         print_substep "Starte Ollama-Daemon..."
