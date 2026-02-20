@@ -275,7 +275,10 @@ OS_NAME=$(grep "^ID=" /etc/os-release 2>/dev/null | cut -d= -f2 | tr -d '"' || e
 OS_VERSION=$(grep "^VERSION_ID=" /etc/os-release 2>/dev/null | cut -d= -f2 | tr -d '"' || echo "?")
 OS_PRETTY=$(grep "^PRETTY_NAME=" /etc/os-release 2>/dev/null | cut -d= -f2 | tr -d '"' || echo "$OS_NAME $OS_VERSION")
 ARCH=$(uname -m)
-RAM_MB=$(free -m 2>/dev/null | awk '/^Mem:/ {print $2}' || echo "?")
+RAM_MB=$(free -m 2>/dev/null | awk '/^Mem:/ {print $2}')
+if [ -z "$RAM_MB" ]; then
+    RAM_MB=$(awk '/^MemTotal:/ {printf "%.0f", $2/1024}' /proc/meminfo 2>/dev/null || echo "?")
+fi
 [ -z "$RAM_MB" ] && RAM_MB="?"
 DISK_FREE=$(df -h / 2>/dev/null | awk 'NR==2 {print $4}' || echo "?")
 
