@@ -12073,14 +12073,15 @@ class App {
       this.prefillKIExternalSettings(einstellungen);
       this.updateApiKeyStatus(einstellungen); // Setzt this._hasOpenAIKey
       this.updateRealtimeEnabledStatus(einstellungen?.realtime_enabled !== false);
+      // Ollama-Modell vorbelegen (vor updateKIModeStatus, damit Badge korrekt angezeigt wird)
+      if (einstellungen?.ollama_model) {
+        this._ollamaModelName = einstellungen.ollama_model;
+        const ollamaModelInput = document.getElementById('ollamaModelInput');
+        if (ollamaModelInput) ollamaModelInput.value = einstellungen.ollama_model;
+      }
       this.updateKIModeStatus(einstellungen?.ki_mode || 'local', !!einstellungen?.chatgpt_api_key_configured);
       if ((einstellungen?.ki_mode || 'local') === 'ollama') {
         this.checkOllamaStatus();
-      }
-      // Ollama-Modell im Eingabefeld vorbelegen
-      const ollamaModelInput = document.getElementById('ollamaModelInput');
-      if (ollamaModelInput && einstellungen?.ollama_model) {
-        ollamaModelInput.value = einstellungen.ollama_model;
       }
       this.updateSmartSchedulingStatus(einstellungen?.smart_scheduling_enabled !== false);
       this.updateAnomalyDetectionStatus(einstellungen?.anomaly_detection_enabled !== false);
@@ -12240,7 +12241,7 @@ class App {
         statusContainer.style.borderColor = '#ce93d8';
         statusIcon.textContent = '🦙';
         statusText.textContent = 'Aktiv: Ollama (lokales LLM)';
-        statusHint.textContent = `Modell: ${window._ollamaModel || 'llama3.2'} · Läuft direkt auf dem Server · kein Internet erforderlich`;
+        statusHint.textContent = `Modell: ${this._ollamaModelName || 'wird geladen...'} · Läuft direkt auf dem Server · kein Internet erforderlich`;
         this._updateKIBadge('Ollama');
       } else if (this.kiMode === 'external') {
         this._updateKIBadge('Externe KI');
@@ -23677,8 +23678,10 @@ class App {
     try {
       const res = await AIService.updateOllamaModel(model);
       if (res.success !== false) {
+        this._ollamaModelName = model;
         this.showToast(`✅ Modell gespeichert: ${model} – Änderung ist sofort aktiv`, 'success');
         this.checkOllamaStatus();
+        this.updateKIModeStatus(this.kiMode);
       } else {
         this.showToast(res.error || 'Fehler beim Speichern', 'error');
       }
@@ -23833,6 +23836,7 @@ class App {
     try {
       const res = await AIService.getOllamaStatus();
       if (res.success) {
+        this._ollamaModelName = res.konfiguriertes_modell || null;
         box.style.background = '#f3e5f5';
         box.style.borderColor = '#ce93d8';
         icon && (icon.textContent = '🟢');
