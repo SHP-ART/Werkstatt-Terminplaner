@@ -22,6 +22,9 @@
 
 set -e  # Bei Fehler abbrechen
 
+# Sicherstellen dass /usr/sbin und /sbin im PATH sind (Debian 13 / minimal-Umgebungen)
+export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:$PATH"
+
 # ============================================================================
 # KONFIGURATION
 # ============================================================================
@@ -272,7 +275,8 @@ OS_NAME=$(grep "^ID=" /etc/os-release 2>/dev/null | cut -d= -f2 | tr -d '"' || e
 OS_VERSION=$(grep "^VERSION_ID=" /etc/os-release 2>/dev/null | cut -d= -f2 | tr -d '"' || echo "?")
 OS_PRETTY=$(grep "^PRETTY_NAME=" /etc/os-release 2>/dev/null | cut -d= -f2 | tr -d '"' || echo "$OS_NAME $OS_VERSION")
 ARCH=$(uname -m)
-RAM_MB=$(free -m 2>/dev/null | awk '/Mem:/ {print $2}' || echo "?")
+RAM_MB=$(free -m 2>/dev/null | awk '/^Mem:/ {print $2}' || echo "?")
+[ -z "$RAM_MB" ] && RAM_MB="?"
 DISK_FREE=$(df -h / 2>/dev/null | awk 'NR==2 {print $4}' || echo "?")
 
 print_info "System:  $OS_PRETTY ($ARCH)"
@@ -292,7 +296,7 @@ if [[ "$OS_NAME" != "debian" && "$OS_NAME" != "ubuntu" && "$OS_NAME" != "raspbia
 fi
 
 # RAM-Warnung
-if [ "$RAM_MB" != "?" ] && [ "$RAM_MB" -lt 512 ]; then
+if [ -n "$RAM_MB" ] && [ "$RAM_MB" != "?" ] && [ "$RAM_MB" -gt 0 ] 2>/dev/null && [ "$RAM_MB" -lt 512 ]; then
     print_warning "Wenig RAM (${RAM_MB} MB) - mindestens 512 MB empfohlen"
 fi
 
@@ -497,7 +501,8 @@ print_step "7/11 - System-User und Verzeichnisse"
 if id "$SERVICE_USER" &>/dev/null; then
     print_info "User '$SERVICE_USER' existiert bereits"
 else
-    useradd -r -s /bin/false -d "$DATA_DIR" "$SERVICE_USER"
+    USERADD_CMD=$(command -v useradd || echo "/usr/sbin/useradd")
+    "$USERADD_CMD" -r -s /bin/false -d "$DATA_DIR" "$SERVICE_USER"
     print_success "System-User '$SERVICE_USER' erstellt"
 fi
 
