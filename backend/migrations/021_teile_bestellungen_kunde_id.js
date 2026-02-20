@@ -35,6 +35,10 @@ module.exports = {
 /**
  * Macht termin_id in teile_bestellungen nullable durch Tabellen-Neubau.
  * Nötig weil SQLite kein ALTER COLUMN unterstützt.
+ *
+ * WICHTIG: Keine eigene BEGIN TRANSACTION / COMMIT hier – der Migration-Runner
+ * verwaltet bereits eine äußere Transaktion. SQLite unterstützt keine
+ * verschachtelten Transaktionen und würde mit SQLITE_ERROR abbrechen.
  */
 function makeTerminIdNullable(db) {
   return new Promise((resolve, reject) => {
@@ -50,10 +54,11 @@ function makeTerminIdNullable(db) {
         return resolve();
       }
 
-      // Tabellen-Rebuild: neue Tabelle ohne NOT NULL auf termin_id
-      db.serialize(() => {
-        db.run('BEGIN TRANSACTION', (e) => { if (e) return reject(e); });
+      // Tabellen-Rebuild: neue Tabelle ohne NOT NULL auf termin_id.
+      // Kein BEGIN/COMMIT hier – läuft in der äußeren Transaktion des Migration-Runners.
+      let failed = false;
 
+      db.serialize(() => {
         db.run(`CREATE TABLE teile_bestellungen_new (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
           termin_id INTEGER,
@@ -70,35 +75,34 @@ function makeTerminIdNullable(db) {
           aktualisiert_am DATETIME DEFAULT CURRENT_TIMESTAMP,
           FOREIGN KEY (termin_id) REFERENCES termine(id) ON DELETE CASCADE
         )`, (e) => {
-          if (e) { db.run('ROLLBACK'); return reject(e); }
+          if (e && !failed) { failed = true; return reject(e); }
+        });
 
-          db.run(`INSERT INTO teile_bestellungen_new
-            (id, termin_id, kunde_id, teil_name, teil_oe_nummer, menge, fuer_arbeit,
-             status, bestellt_am, geliefert_am, notiz, erstellt_am, aktualisiert_am)
-            SELECT id, termin_id, kunde_id, teil_name, teil_oe_nummer, menge, fuer_arbeit,
-             status, bestellt_am, geliefert_am, notiz, erstellt_am, aktualisiert_am
-            FROM teile_bestellungen`, (e) => {
-            if (e) { db.run('ROLLBACK'); return reject(e); }
+        db.run(`INSERT INTO teile_bestellungen_new
+          (id, termin_id, kunde_id, teil_name, teil_oe_nummer, menge, fuer_arbeit,
+           status, bestellt_am, geliefert_am, notiz, erstellt_am, aktualisiert_am)
+          SELECT id, termin_id, kunde_id, teil_name, teil_oe_nummer, menge, fuer_arbeit,
+           status, bestellt_am, geliefert_am, notiz, erstellt_am, aktualisiert_am
+          FROM teile_bestellungen`, (e) => {
+          if (e && !failed) { failed = true; return reject(e); }
+        });
 
-            db.run(`DROP TABLE teile_bestellungen`, (e) => {
-              if (e) { db.run('ROLLBACK'); return reject(e); }
+        db.run(`DROP TABLE teile_bestellungen`, (e) => {
+          if (e && !failed) { failed = true; return reject(e); }
+        });
 
-              db.run(`ALTER TABLE teile_bestellungen_new RENAME TO teile_bestellungen`, (e) => {
-                if (e) { db.run('ROLLBACK'); return reject(e); }
+        db.run(`ALTER TABLE teile_bestellungen_new RENAME TO teile_bestellungen`, (e) => {
+          if (e && !failed) { failed = true; return reject(e); }
+        });
 
-                // Indizes neu erstellen
-                db.run(`CREATE INDEX IF NOT EXISTS idx_teile_termin ON teile_bestellungen(termin_id)`);
-                db.run(`CREATE INDEX IF NOT EXISTS idx_teile_status ON teile_bestellungen(status)`);
-                db.run(`CREATE INDEX IF NOT EXISTS idx_teile_kunde ON teile_bestellungen(kunde_id)`);
-
-                db.run('COMMIT', (e) => {
-                  if (e) return reject(e);
-                  console.log('[Migration 021] teile_bestellungen: termin_id ist jetzt nullable, kunde_id hinzugefügt');
-                  resolve();
-                });
-              });
-            });
-          });
+        // Indizes neu erstellen
+        db.run(`CREATE INDEX IF NOT EXISTS idx_teile_termin ON teile_bestellungen(termin_id)`);
+        db.run(`CREATE INDEX IF NOT EXISTS idx_teile_status ON teile_bestellungen(status)`);
+        db.run(`CREATE INDEX IF NOT EXISTS idx_teile_kunde ON teile_bestellungen(kunde_id)`, (e) => {
+          if (failed) return;
+          if (e) return reject(e);
+          console.log('[Migration 021] teile_bestellungen: termin_id ist jetzt nullable, kunde_id hinzugefügt');
+          resolve();
         });
       });
     });
