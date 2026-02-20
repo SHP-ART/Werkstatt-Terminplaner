@@ -23669,51 +23669,111 @@ class App {
     btn && (btn.disabled = true);
     btn && (btn.textContent = '⏳ Teste...');
     result.style.display = 'block';
-    content.innerHTML = '<em style="color:#888">Sende Testprompt an Ollama… (kann einige Sekunden dauern)</em>';
+    content.innerHTML = '<em style="color:#888">⏳ Pruefe Ollama und verfuegbare Modelle... (max. 30 s)</em>';
+
+    const _esc = (s) => this._escapeHtml(String(s || ''));
+
+    const _empfehlungsHTML = (empfehlungen, empfohlen) => {
+      if (!empfehlungen || empfehlungen.length === 0) return '';
+      const zeilen = empfehlungen.map(m => {
+        const hl = m.name === empfohlen?.name ? 'background:#e8f5e9; font-weight:600;' : '';
+        return `<tr style="${hl}">
+          <td style="padding:3px 8px">${m.name === empfohlen?.name ? '⭐' : ''} <code>${_esc(m.name)}</code></td>
+          <td style="padding:3px 8px; color:#888">${m.groesse_gb} GB</td>
+          <td style="padding:3px 8px; color:#555">${_esc(m.qualitaet)}</td>
+          <td style="padding:3px 8px"><code style="font-size:0.82em;color:#1565c0">ollama pull ${_esc(m.name)}</code></td>
+        </tr>`;
+      }).join('');
+      return `
+        <div style="margin-top:12px; border-top:1px solid #e0e0e0; padding-top:10px">
+          <strong style="font-size:0.88em; color:#333">📋 Modell-Empfehlungen fuer diesen Server:</strong>
+          <table style="width:100%; border-collapse:collapse; margin-top:6px; font-size:0.82em">
+            <thead><tr style="color:#888; border-bottom:1px solid #eee">
+              <th style="text-align:left; padding:2px 8px">Modell</th>
+              <th style="text-align:left; padding:2px 8px">Groesse</th>
+              <th style="text-align:left; padding:2px 8px">Eignung</th>
+              <th style="text-align:left; padding:2px 8px">Installation</th>
+            </tr></thead>
+            <tbody>${zeilen}</tbody>
+          </table>
+          ${empfohlen ? `<div style="margin-top:6px;font-size:0.82em;color:#1b5e20">⭐ Empfohlen: <code>ollama pull ${_esc(empfohlen.name)}</code></div>` : ''}
+        </div>`;
+    };
 
     try {
       const res = await AIService.benchmarkOllama();
-
       const sys = res.system || {};
       const sysInfo = [
-        sys.cpuKerne     ? `🖥 CPU: ${sys.cpuKerne} Kerne`                                : null,
-        sys.ramGesamt_mb ? `🧠 RAM: ${sys.ramFrei_mb} MB frei / ${sys.ramGesamt_mb} MB gesamt` : null
-      ].filter(Boolean).join('&nbsp;&nbsp;│&nbsp;&nbsp;');
+        sys.cpuKerne     ? `🖥️ CPU: ${sys.cpuKerne} Kerne` : null,
+        sys.ramGesamt_gb ? `🧠 RAM: ${sys.ramFrei_mb} MB frei / ${sys.ramGesamt_gb} GB gesamt` : null
+      ].filter(Boolean).join('&nbsp;&nbsp;|&nbsp;&nbsp;');
 
       if (!res.success) {
+        let titelIcon = '🔴', titelText = res.error || 'Benchmark fehlgeschlagen';
+        let extra = '';
+        if (res.fehler_typ === 'kein_modell') {
+          titelIcon = '📥';
+          titelText = 'Kein Ollama-Modell installiert';
+          extra = `
+            <div style="margin-top:10px;padding:10px;background:#fff8e1;border:1px solid #ffcc80;border-radius:6px;font-size:0.88em">
+              <strong>Passendes Modell fuer diesen Server (${sys.ramGesamt_gb} GB RAM):</strong><br>
+              <code style="font-size:1.05em;color:#e65100">${_esc(res.empfohlenes_modell?.name || 'tinyllama')}</code>
+              &nbsp;&ndash;&nbsp;${_esc(res.empfohlenes_modell?.qualitaet || '')}<br>
+              <div style="margin-top:8px;font-family:monospace;background:#f5f5f5;padding:6px 10px;border-radius:4px;color:#1565c0">
+                ollama pull ${_esc(res.empfohlenes_modell?.name || 'tinyllama')}
+              </div>
+              <small style="color:#888;margin-top:4px;display:block">Danach ~2-5 Minuten warten und Test erneut starten.</small>
+            </div>`;
+        } else if (res.fehler_typ === 'timeout') {
+          titelIcon = '⏱️';
+          titelText = 'Timeout - Modell zu gross fuer diesen Server';
+        } else if (res.fehler_typ === 'nicht_erreichbar') {
+          titelIcon = '🔌';
+          titelText = 'Ollama nicht erreichbar';
+        }
         content.innerHTML = `
-          <span style="color:#e53935; font-weight:600">🔴 Benchmark fehlgeschlagen</span><br>
-          <span style="color:#555">${this._escapeHtml(res.error || 'Unbekannter Fehler')}</span><br>
-          ${res.hinweis ? `<small style="color:#888">${this._escapeHtml(res.hinweis)}</small><br>` : ''}
-          ${sysInfo ? `<small style="color:#aaa; margin-top:6px; display:block">${sysInfo}</small>` : ''}
+          <div style="font-weight:600;font-size:1.05em;margin-bottom:6px">${titelIcon} ${_esc(titelText)}</div>
+          ${res.hinweis ? `<div style="color:#555;font-size:0.9em;margin-bottom:6px">${_esc(res.hinweis)}</div>` : ''}
+          ${sysInfo ? `<small style="color:#aaa">${sysInfo}</small>` : ''}
+          ${extra}
+          ${_empfehlungsHTML(res.modell_empfehlungen, res.empfohlenes_modell)}
         `;
         return;
       }
 
-      const dauer_s    = (res.dauer_ms / 1000).toFixed(1);
-      const tokenInfo  = res.token_s ? `&nbsp;&nbsp;│&nbsp;&nbsp;🔤 ${res.token_s} Token/s` : '';
-      const empfehlung = {
-        ausgezeichnet: 'Bestens geeignet für produktiven Einsatz.',
-        gut:           'Gut geeignet für den täglichen Einsatz.',
-        langsam:       'Für Texte nutzbar, aber mit Wartezeit.',
-        zu_langsam:    'Für Produktivbetrieb nicht empfohlen (CPU zu schwach oder RAM zu knapp).'
+      const dauer_s   = (res.dauer_ms / 1000).toFixed(1);
+      const tokenInfo = res.token_s ? `&nbsp;&nbsp;|&nbsp;&nbsp;🔤 ${res.token_s} Token/s` : '';
+      const empfText  = {
+        ausgezeichnet: 'Bestens geeignet - auch groessere Modelle moeglich.',
+        gut:           'Gut geeignet fuer den taeglichen Einsatz.',
+        langsam:       'Nutzbar, aber mit spuerbarer Wartezeit. Kleineres Modell empfohlen.',
+        zu_langsam:    'Fuer Produktivbetrieb zu langsam. Bitte kleineres Modell verwenden (z.B. tinyllama).'
       }[res.bewertung] || '';
+
+      const installierteListe = (res.installierte_modelle || [])
+        .map(m => `<code>${_esc(m.name)}</code> (${m.size_mb} MB)`).join(', ');
+
+      const modellHinweis = res.test_modell !== res.konfig_modell
+        ? ` <small style="color:#888">(kleinste verfuegbare - konfiguriert: <code>${_esc(res.konfig_modell)}</code>)</small>`
+        : '';
 
       content.innerHTML = `
         <div style="margin-bottom:10px">
-          <span style="font-size:1.3em; font-weight:700; color:${res.bewertungFarbe}">${res.bewertungLabel}</span>
+          <span style="font-size:1.3em;font-weight:700;color:${res.bewertungFarbe}">${res.bewertungLabel}</span>
           &nbsp;&nbsp;
-          <span style="color:#555">${dauer_s} s Antwortzeit${tokenInfo}</span>
+          <span style="color:#555">${dauer_s} s Antwortzeit${tokenInfo}</span>
         </div>
-        <div style="display:flex; gap:12px; flex-wrap:wrap; margin-bottom:8px; font-size:0.88em; color:#666">
-          <span>🦙 Modell: <strong>${this._escapeHtml(res.modell || '?')}</strong></span>
-          ${sysInfo ? `<span>${sysInfo}</span>` : ''}
+        <div style="font-size:0.88em;color:#666;margin-bottom:4px">
+          🦙 Getestetes Modell: <strong>${_esc(res.test_modell)}</strong>${modellHinweis}
         </div>
-        ${empfehlung ? `<div style="color:#555; font-size:0.88em; border-top:1px solid #e0e0e0; padding-top:8px">ℹ️ ${empfehlung}</div>` : ''}
-        ${res.antwort ? `<div style="margin-top:10px; padding:8px 10px; background:#fff; border:1px solid #e8e8e8; border-radius:5px; white-space:pre-wrap; color:#333; font-size:0.87em">${this._escapeHtml(res.antwort)}</div>` : ''}
+        ${sysInfo ? `<div style="font-size:0.85em;color:#888;margin-bottom:8px">${sysInfo}</div>` : ''}
+        ${empfText ? `<div style="color:#555;font-size:0.88em;border-top:1px solid #e0e0e0;padding-top:8px">ℹ️ ${empfText}</div>` : ''}
+        ${installierteListe ? `<div style="font-size:0.82em;color:#888;margin-top:6px">Installierte Modelle: ${installierteListe}</div>` : ''}
+        ${res.antwort ? `<div style="margin-top:10px;padding:8px 10px;background:#fff;border:1px solid #e8e8e8;border-radius:5px;white-space:pre-wrap;color:#333;font-size:0.87em">${_esc(res.antwort)}</div>` : ''}
+        ${_empfehlungsHTML(res.modell_empfehlungen, res.empfohlenes_modell)}
       `;
     } catch (err) {
-      content.innerHTML = `<span style="color:red">Fehler: ${this._escapeHtml(err.message || String(err))}</span>`;
+      content.innerHTML = `<span style="color:red">Fehler: ${_esc(err.message || String(err))}</span>`;
     } finally {
       btn && (btn.disabled = false);
       btn && (btn.textContent = '⚡ Performance-Test');

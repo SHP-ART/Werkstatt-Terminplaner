@@ -1113,38 +1113,89 @@ async function testOllamaTermin(req, res) {
 
 /**
  * GET /api/ai/ollama/benchmark
- * Sendet einen fixen Kurzprompt an Ollama, misst die Antwortzeit und
- * bewertet die Server-Performance. Gibt zusätzlich CPU/RAM-Info zurück.
+ * Intelligenter Performance-Test:
+ * - Prüft verfügbare (heruntergeladene) Modelle
+ * - Wählt das kleinste verfügbare Modell für den Test
+ * - Bei keinem Modell: RAM-basierte Empfehlung
+ * - Timeout: 30 Sekunden
  */
 async function benchmarkOllama(req, res) {
   const os = require('os');
-  const TEST_PROMPT = 'Antworte in einem kurzen Satz auf Deutsch: Was ist ein Ölwechsel?';
+  const TEST_PROMPT = 'Ein Satz auf Deutsch: Was ist ein Ölwechsel?';
 
-  const cpuKerne    = os.cpus().length;
+  const cpuKerne     = os.cpus().length;
   const ramGesamt_mb = Math.round(os.totalmem() / 1024 / 1024);
   const ramFrei_mb   = Math.round(os.freemem()  / 1024 / 1024);
+  const ramGesamt_gb = Math.round(ramGesamt_mb / 1024 * 10) / 10;
 
-  // Erreichbarkeits-Check
+  // Modell-Empfehlungen nach RAM (Name, Größe in GB, Typ)
+  const MODELL_EMPFEHLUNGEN = [
+    { name: 'tinyllama',   groesse_gb: 0.6,  min_ram_gb: 1,  qualitaet: 'Minimal – für sehr schwache Server' },
+    { name: 'phi3:mini',   groesse_gb: 2.3,  min_ram_gb: 3,  qualitaet: 'Gut – schnell und kompakt (empfohlen für 4 GB RAM)' },
+    { name: 'llama3.2',    groesse_gb: 2.0,  min_ram_gb: 4,  qualitaet: 'Sehr gut – Meta Llama 3.2 3B' },
+    { name: 'mistral',     groesse_gb: 4.1,  min_ram_gb: 6,  qualitaet: 'Exzellent – Mistral 7B' },
+    { name: 'llama3.1',    groesse_gb: 4.9,  min_ram_gb: 8,  qualitaet: 'Exzellent – Meta Llama 3.1 8B' },
+  ];
+
+  function empfehlungFuerRam(ram_gb) {
+    // Passende Modelle: mind. eines das in RAM passt (etwas Puffer einplanen)
+    const passend = MODELL_EMPFEHLUNGEN.filter(m => m.min_ram_gb <= ram_gb);
+    const empfohlen = passend.length > 0 ? passend[passend.length - 1] : MODELL_EMPFEHLUNGEN[0];
+    return { empfohlen, alle: MODELL_EMPFEHLUNGEN.filter(m => m.min_ram_gb <= ram_gb + 2) };
+  }
+
+  // Erreichbarkeits-Check + Modell-Liste holen
+  let verfuegbareModelle = [];
   let ollamaErreichbar = false;
   try {
     const tagRes = await fetch(`${ollamaService.OLLAMA_BASE_URL}/api/tags`,
-      { signal: AbortSignal.timeout(3000) });
-    ollamaErreichbar = tagRes.ok;
+      { signal: AbortSignal.timeout(4000) });
+    if (tagRes.ok) {
+      ollamaErreichbar = true;
+      const tagData = await tagRes.json();
+      verfuegbareModelle = (tagData.models || []).map(m => ({
+        name: m.name,
+        size_mb: Math.round((m.size || 0) / 1024 / 1024)
+      }));
+    }
   } catch (_) {}
+
+  const { empfohlen, alle: alleEmpfehlungen } = empfehlungFuerRam(ramGesamt_gb);
 
   if (!ollamaErreichbar) {
     return res.json({
       success: false,
+      fehler_typ: 'nicht_erreichbar',
       error: 'Ollama nicht erreichbar',
-      hinweis: 'Stelle sicher dass Ollama läuft: systemctl status ollama',
-      system: { cpuKerne, ramGesamt_mb, ramFrei_mb }
+      hinweis: 'Starte Ollama: systemctl start ollama && systemctl status ollama',
+      system: { cpuKerne, ramGesamt_mb, ramGesamt_gb, ramFrei_mb },
+      empfohlenes_modell: empfohlen,
+      modell_empfehlungen: alleEmpfehlungen
     });
   }
+
+  // Kein Modell heruntergeladen
+  if (verfuegbareModelle.length === 0) {
+    return res.json({
+      success: false,
+      fehler_typ: 'kein_modell',
+      error: 'Kein Modell installiert',
+      hinweis: `Lade ein passendes Modell: ollama pull ${empfohlen.name}`,
+      system: { cpuKerne, ramGesamt_mb, ramGesamt_gb, ramFrei_mb },
+      empfohlenes_modell: empfohlen,
+      modell_empfehlungen: alleEmpfehlungen,
+      installierte_modelle: []
+    });
+  }
+
+  // Kleinstes verfügbares Modell für Benchmark wählen
+  const sortiertNachGroesse = [...verfuegbareModelle].sort((a, b) => a.size_mb - b.size_mb);
+  const testModell = sortiertNachGroesse[0].name;
 
   const start = Date.now();
   try {
     const controller = new AbortController();
-    const tid = setTimeout(() => controller.abort(), 90000);
+    const tid = setTimeout(() => controller.abort(), 30000);
     let response;
     try {
       response = await fetch(`${ollamaService.OLLAMA_BASE_URL}/api/chat`, {
@@ -1152,13 +1203,13 @@ async function benchmarkOllama(req, res) {
         headers: { 'Content-Type': 'application/json' },
         signal: controller.signal,
         body: JSON.stringify({
-          model: ollamaService.OLLAMA_MODEL,
+          model: testModell,
           messages: [
-            { role: 'system', content: 'Du bist ein hilfreicher Assistent.' },
+            { role: 'system', content: 'Antworte sehr kurz auf Deutsch.' },
             { role: 'user',   content: TEST_PROMPT }
           ],
           stream: false,
-          options: { temperature: 0.1, num_predict: 80 }
+          options: { temperature: 0.1, num_predict: 60 }
         })
       });
     } finally {
@@ -1170,16 +1221,21 @@ async function benchmarkOllama(req, res) {
     if (!response.ok) {
       return res.json({
         success: false,
+        fehler_typ: 'api_fehler',
         error: `Ollama HTTP ${response.status}`,
         dauer_ms,
-        system: { cpuKerne, ramGesamt_mb, ramFrei_mb }
+        test_modell: testModell,
+        system: { cpuKerne, ramGesamt_mb, ramGesamt_gb, ramFrei_mb },
+        empfohlenes_modell: empfohlen,
+        modell_empfehlungen: alleEmpfehlungen,
+        installierte_modelle: verfuegbareModelle
       });
     }
 
-    const data = await response.json();
-    const antwort   = data?.message?.content || data?.response || '';
-    const tokens    = data?.eval_count || null;
-    const token_s   = (tokens && data?.eval_duration)
+    const data    = await response.json();
+    const antwort = data?.message?.content || data?.response || '';
+    const tokens  = data?.eval_count || null;
+    const token_s = (tokens && data?.eval_duration)
       ? Math.round(tokens / (data.eval_duration / 1e9) * 10) / 10
       : null;
 
@@ -1189,9 +1245,18 @@ async function benchmarkOllama(req, res) {
     else if (dauer_ms < 20000)  { bewertung = 'langsam';       bewertungLabel = '🟠 Langsam';       bewertungFarbe = '#f57c00'; }
     else                         { bewertung = 'zu_langsam';    bewertungLabel = '🔴 Zu langsam';    bewertungFarbe = '#e53935'; }
 
+    // Passendes Modell für Produktion empfehlen (basierend auf Geschwindigkeit + RAM)
+    let produktionsModell = empfohlen;
+    if (bewertung !== 'zu_langsam' && ramGesamt_gb >= 4) {
+      // Wenn Server schnell genug ist, empfehle ein besseres Modell
+      const bessere = alleEmpfehlungen.filter(m => m.min_ram_gb <= ramGesamt_gb);
+      if (bessere.length > 0) produktionsModell = bessere[bessere.length - 1];
+    }
+
     res.json({
       success: true,
-      modell: ollamaService.OLLAMA_MODEL,
+      test_modell: testModell,
+      konfig_modell: ollamaService.OLLAMA_MODEL,
       dauer_ms,
       token_s,
       tokens,
@@ -1199,14 +1264,27 @@ async function benchmarkOllama(req, res) {
       bewertung,
       bewertungLabel,
       bewertungFarbe,
-      system: { cpuKerne, ramGesamt_mb, ramFrei_mb }
+      system: { cpuKerne, ramGesamt_mb, ramGesamt_gb, ramFrei_mb },
+      empfohlenes_modell: produktionsModell,
+      modell_empfehlungen: alleEmpfehlungen,
+      installierte_modelle: verfuegbareModelle
     });
   } catch (error) {
+    const dauer_ms = Date.now() - start;
+    const abgebrochen = error.name === 'AbortError';
     res.json({
       success: false,
-      error: error.message,
-      dauer_ms: Date.now() - start,
-      system: { cpuKerne, ramGesamt_mb, ramFrei_mb }
+      fehler_typ: abgebrochen ? 'timeout' : 'fehler',
+      error: abgebrochen ? `Timeout nach 30 Sekunden – Modell '${testModell}' zu langsam für diesen Server` : error.message,
+      hinweis: abgebrochen
+        ? `Versuche ein kleineres Modell: ollama pull ${MODELL_EMPFEHLUNGEN[0].name}`
+        : 'Prüfe Ollama-Logs: journalctl -u ollama -n 20',
+      dauer_ms,
+      test_modell: testModell,
+      system: { cpuKerne, ramGesamt_mb, ramGesamt_gb, ramFrei_mb },
+      empfohlenes_modell: empfohlen,
+      modell_empfehlungen: alleEmpfehlungen,
+      installierte_modelle: verfuegbareModelle
     });
   }
 }
