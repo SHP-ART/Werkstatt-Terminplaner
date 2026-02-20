@@ -1127,32 +1127,46 @@ async function testOllamaTermin(req, res) {
  * Intelligenter Performance-Test:
  * - Prüft verfügbare (heruntergeladene) Modelle
  * - Wählt das kleinste verfügbare Modell für den Test
- * - Bei keinem Modell: RAM-basierte Empfehlung
+ * - Bewertet primär nach Token/s (realistischer als Wandzeit)
+ * - Empfiehlt passendes Modell abhängig von gemessener Geschwindigkeit + RAM
  * - Timeout: 30 Sekunden
  */
 async function benchmarkOllama(req, res) {
   const os = require('os');
-  const TEST_PROMPT = 'Ein Satz auf Deutsch: Was ist ein Ölwechsel?';
+  const TEST_PROMPT = 'Was ist ein Ölwechsel? Antworte in maximal zwei Sätzen.';
 
   const cpuKerne     = os.cpus().length;
   const ramGesamt_mb = Math.round(os.totalmem() / 1024 / 1024);
   const ramFrei_mb   = Math.round(os.freemem()  / 1024 / 1024);
   const ramGesamt_gb = Math.round(ramGesamt_mb / 1024 * 10) / 10;
 
-  // Modell-Empfehlungen nach RAM (Name, Größe in GB, Typ)
-  const MODELL_EMPFEHLUNGEN = [
-    { name: 'tinyllama',   groesse_gb: 0.6,  min_ram_gb: 1,  qualitaet: 'Minimal – für sehr schwache Server' },
-    { name: 'phi3:mini',   groesse_gb: 2.3,  min_ram_gb: 3,  qualitaet: 'Gut – schnell und kompakt (empfohlen für 4 GB RAM)' },
-    { name: 'llama3.2',    groesse_gb: 2.0,  min_ram_gb: 4,  qualitaet: 'Sehr gut – Meta Llama 3.2 3B' },
-    { name: 'mistral',     groesse_gb: 4.1,  min_ram_gb: 6,  qualitaet: 'Exzellent – Mistral 7B' },
-    { name: 'llama3.1',    groesse_gb: 4.9,  min_ram_gb: 8,  qualitaet: 'Exzellent – Meta Llama 3.1 8B' },
+  // Modell-Katalog: vom kleinsten zum größten
+  const MODELL_KATALOG = [
+    { name: 'tinyllama',   groesse_gb: 0.6,  min_ram_gb: 1,  min_toks: 0,  qualitaet: 'Minimal – ideal für CPU-Server mit wenig RAM' },
+    { name: 'phi3:mini',   groesse_gb: 2.3,  min_ram_gb: 3,  min_toks: 5,  qualitaet: 'Gut – schnell und kompakt' },
+    { name: 'llama3.2',    groesse_gb: 2.0,  min_ram_gb: 4,  min_toks: 5,  qualitaet: 'Sehr gut – Meta Llama 3.2 3B' },
+    { name: 'mistral',     groesse_gb: 4.1,  min_ram_gb: 8,  min_toks: 8,  qualitaet: 'Exzellent – Mistral 7B' },
+    { name: 'llama3.1',    groesse_gb: 4.9,  min_ram_gb: 10, min_toks: 8,  qualitaet: 'Exzellent – Meta Llama 3.1 8B' },
   ];
 
-  function empfehlungFuerRam(ram_gb) {
-    // Passende Modelle: mind. eines das in RAM passt (etwas Puffer einplanen)
-    const passend = MODELL_EMPFEHLUNGEN.filter(m => m.min_ram_gb <= ram_gb);
-    const empfohlen = passend.length > 0 ? passend[passend.length - 1] : MODELL_EMPFEHLUNGEN[0];
-    return { empfohlen, alle: MODELL_EMPFEHLUNGEN.filter(m => m.min_ram_gb <= ram_gb + 2) };
+  // Welche Modelle passen in den RAM?
+  function empfehlungenFuerRam(ram_gb) {
+    return MODELL_KATALOG.filter(m => m.min_ram_gb <= ram_gb);
+  }
+
+  // Welches Modell ist für gemessene Token/s + RAM optimal?
+  function empfehlungFuerPerformance(token_s, ram_gb) {
+    const passend = empfehlungenFuerRam(ram_gb);
+    if (passend.length === 0) return MODELL_KATALOG[0];
+    // Auf langsamen CPUs (< 8 Token/s): kleinstes Modell empfehlen das passt
+    if (token_s !== null && token_s < 8) {
+      // Nur Modelle die ähnlich klein wie das getestete sind (max. 50% mehr RAM)
+      const schnell = passend.filter(m => m.min_toks <= token_s);
+      if (schnell.length > 0) return schnell[schnell.length - 1];
+      return passend[0];
+    }
+    // Auf schnellen CPUs/GPU: bestes Modell empfehlen
+    return passend[passend.length - 1];
   }
 
   // Erreichbarkeits-Check + Modell-Liste holen
@@ -1171,7 +1185,8 @@ async function benchmarkOllama(req, res) {
     }
   } catch (_) {}
 
-  const { empfohlen, alle: alleEmpfehlungen } = empfehlungFuerRam(ramGesamt_gb);
+  const alleEmpfehlungen = empfehlungenFuerRam(ramGesamt_gb);
+  const defaultEmpfehlung = alleEmpfehlungen[0] || MODELL_KATALOG[0];
 
   if (!ollamaErreichbar) {
     return res.json({
@@ -1180,7 +1195,7 @@ async function benchmarkOllama(req, res) {
       error: 'Ollama nicht erreichbar',
       hinweis: 'Starte Ollama: systemctl start ollama && systemctl status ollama',
       system: { cpuKerne, ramGesamt_mb, ramGesamt_gb, ramFrei_mb },
-      empfohlenes_modell: empfohlen,
+      empfohlenes_modell: defaultEmpfehlung,
       modell_empfehlungen: alleEmpfehlungen
     });
   }
@@ -1191,9 +1206,9 @@ async function benchmarkOllama(req, res) {
       success: false,
       fehler_typ: 'kein_modell',
       error: 'Kein Modell installiert',
-      hinweis: `Lade ein passendes Modell: ollama pull ${empfohlen.name}`,
+      hinweis: `Lade ein passendes Modell: ollama pull ${defaultEmpfehlung.name}`,
       system: { cpuKerne, ramGesamt_mb, ramGesamt_gb, ramFrei_mb },
-      empfohlenes_modell: empfohlen,
+      empfohlenes_modell: defaultEmpfehlung,
       modell_empfehlungen: alleEmpfehlungen,
       installierte_modelle: []
     });
@@ -1216,11 +1231,11 @@ async function benchmarkOllama(req, res) {
         body: JSON.stringify({
           model: testModell,
           messages: [
-            { role: 'system', content: 'Antworte sehr kurz auf Deutsch.' },
+            { role: 'system', content: 'Antworte kurz und präzise auf Deutsch.' },
             { role: 'user',   content: TEST_PROMPT }
           ],
           stream: false,
-          options: { temperature: 0.1, num_predict: 60 }
+          options: { temperature: 0.1, num_predict: 80 }
         })
       });
     } finally {
@@ -1237,7 +1252,7 @@ async function benchmarkOllama(req, res) {
         dauer_ms,
         test_modell: testModell,
         system: { cpuKerne, ramGesamt_mb, ramGesamt_gb, ramFrei_mb },
-        empfohlenes_modell: empfohlen,
+        empfohlenes_modell: defaultEmpfehlung,
         modell_empfehlungen: alleEmpfehlungen,
         installierte_modelle: verfuegbareModelle
       });
@@ -1250,19 +1265,26 @@ async function benchmarkOllama(req, res) {
       ? Math.round(tokens / (data.eval_duration / 1e9) * 10) / 10
       : null;
 
+    // Bewertung primär nach Token/s (unabhängig von Antwortlänge)
+    // Fallback auf Zeit wenn keine Token-Info vorhanden
     let bewertung, bewertungLabel, bewertungFarbe;
-    if      (dauer_ms <  3000)  { bewertung = 'ausgezeichnet'; bewertungLabel = '🟢 Ausgezeichnet'; bewertungFarbe = '#4caf50'; }
-    else if (dauer_ms <  8000)  { bewertung = 'gut';           bewertungLabel = '🟡 Gut';           bewertungFarbe = '#ff9800'; }
-    else if (dauer_ms < 20000)  { bewertung = 'langsam';       bewertungLabel = '🟠 Langsam';       bewertungFarbe = '#f57c00'; }
-    else                         { bewertung = 'zu_langsam';    bewertungLabel = '🔴 Zu langsam';    bewertungFarbe = '#e53935'; }
-
-    // Passendes Modell für Produktion empfehlen (basierend auf Geschwindigkeit + RAM)
-    let produktionsModell = empfohlen;
-    if (bewertung !== 'zu_langsam' && ramGesamt_gb >= 4) {
-      // Wenn Server schnell genug ist, empfehle ein besseres Modell
-      const bessere = alleEmpfehlungen.filter(m => m.min_ram_gb <= ramGesamt_gb);
-      if (bessere.length > 0) produktionsModell = bessere[bessere.length - 1];
+    if (token_s !== null) {
+      if      (token_s >= 15) { bewertung = 'ausgezeichnet'; bewertungLabel = '🟢 Ausgezeichnet'; bewertungFarbe = '#4caf50'; }
+      else if (token_s >=  8) { bewertung = 'gut';           bewertungLabel = '🟡 Gut';           bewertungFarbe = '#ff9800'; }
+      else if (token_s >=  2) { bewertung = 'akzeptabel';    bewertungLabel = '🟠 Akzeptabel';    bewertungFarbe = '#f57c00'; }
+      else                     { bewertung = 'zu_langsam';    bewertungLabel = '🔴 Zu langsam';    bewertungFarbe = '#e53935'; }
+    } else {
+      if      (dauer_ms <  5000)  { bewertung = 'ausgezeichnet'; bewertungLabel = '🟢 Ausgezeichnet'; bewertungFarbe = '#4caf50'; }
+      else if (dauer_ms < 15000)  { bewertung = 'gut';           bewertungLabel = '🟡 Gut';           bewertungFarbe = '#ff9800'; }
+      else if (dauer_ms < 40000)  { bewertung = 'akzeptabel';    bewertungLabel = '🟠 Akzeptabel';    bewertungFarbe = '#f57c00'; }
+      else                         { bewertung = 'zu_langsam';    bewertungLabel = '🔴 Zu langsam';    bewertungFarbe = '#e53935'; }
     }
+
+    // Modell-Empfehlung basierend auf gemessener Leistung
+    const produktionsModell = empfehlungFuerPerformance(token_s, ramGesamt_gb);
+
+    // cpu_only flag wenn kein GPU-Speed erkennbar (< 15 Token/s)
+    const cpu_only = token_s === null || token_s < 15;
 
     res.json({
       success: true,
@@ -1275,6 +1297,7 @@ async function benchmarkOllama(req, res) {
       bewertung,
       bewertungLabel,
       bewertungFarbe,
+      cpu_only,
       system: { cpuKerne, ramGesamt_mb, ramGesamt_gb, ramFrei_mb },
       empfohlenes_modell: produktionsModell,
       modell_empfehlungen: alleEmpfehlungen,
@@ -1288,12 +1311,12 @@ async function benchmarkOllama(req, res) {
       fehler_typ: abgebrochen ? 'timeout' : 'fehler',
       error: abgebrochen ? `Timeout nach 30 Sekunden – Modell '${testModell}' zu langsam für diesen Server` : error.message,
       hinweis: abgebrochen
-        ? `Versuche ein kleineres Modell: ollama pull ${MODELL_EMPFEHLUNGEN[0].name}`
+        ? `Versuche ein kleineres Modell: ollama pull ${MODELL_KATALOG[0].name}`
         : 'Prüfe Ollama-Logs: journalctl -u ollama -n 20',
       dauer_ms,
       test_modell: testModell,
       system: { cpuKerne, ramGesamt_mb, ramGesamt_gb, ramFrei_mb },
-      empfohlenes_modell: empfohlen,
+      empfohlenes_modell: defaultEmpfehlung,
       modell_empfehlungen: alleEmpfehlungen,
       installierte_modelle: verfuegbareModelle
     });

@@ -23776,11 +23776,13 @@ class App {
       const dauer_s   = (res.dauer_ms / 1000).toFixed(1);
       const tokenInfo = res.token_s ? `&nbsp;&nbsp;|&nbsp;&nbsp;🔤 ${res.token_s} Token/s` : '';
       const empfText  = {
-        ausgezeichnet: 'Bestens geeignet - auch groessere Modelle moeglich.',
-        gut:           'Gut geeignet fuer den taeglichen Einsatz.',
-        langsam:       'Nutzbar, aber mit spuerbarer Wartezeit. Kleineres Modell empfohlen.',
-        zu_langsam:    'Fuer Produktivbetrieb zu langsam. Bitte kleineres Modell verwenden (z.B. tinyllama).'
+        ausgezeichnet: 'Bestens geeignet – auch größere Modelle möglich.',
+        gut:           'Gut geeignet für den täglichen Einsatz.',
+        akzeptabel:    'Nutzbar mit kleinen Modellen (empfohlen: tinyllama). Auf CPU-Servern ist das normal.',
+        langsam:       'Nutzbar, aber mit spürbarer Wartezeit. Kleineres Modell empfohlen.',
+        zu_langsam:    'Für Produktivbetrieb zu langsam. Bitte kleineres Modell verwenden (z.B. tinyllama).'
       }[res.bewertung] || '';
+      const cpuHinweis = res.cpu_only ? `<div style="margin-top:4px;padding:5px 8px;background:#e3f2fd;border-radius:4px;font-size:0.83em;color:#1565c0">🖥️ CPU-Betrieb erkannt – Token/s ist der relevante Wert; Antwortzeit schwankt je nach Modelllänge.</div>` : '';
 
       const installierteListe = (res.installierte_modelle || [])
         .map(m => `<code>${_esc(m.name)}</code> (${m.size_mb} MB)`).join(', ');
@@ -23800,6 +23802,7 @@ class App {
         </div>
         ${sysInfo ? `<div style="font-size:0.85em;color:#888;margin-bottom:8px">${sysInfo}</div>` : ''}
         ${empfText ? `<div style="color:#555;font-size:0.88em;border-top:1px solid #e0e0e0;padding-top:8px">ℹ️ ${empfText}</div>` : ''}
+        ${cpuHinweis}
         ${installierteListe ? `<div style="font-size:0.82em;color:#888;margin-top:6px">Installierte Modelle: ${installierteListe}</div>` : ''}
         ${res.antwort ? `<div style="margin-top:10px;padding:8px 10px;background:#fff;border:1px solid #e8e8e8;border-radius:5px;white-space:pre-wrap;color:#333;font-size:0.87em">${_esc(res.antwort)}</div>` : ''}
         ${_empfehlungsHTML(res.modell_empfehlungen, res.empfohlenes_modell)}
