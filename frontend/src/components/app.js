@@ -23714,7 +23714,11 @@ class App {
     try {
       const res = await AIService.testOllamaPrompt(prompt);
       result.style.display = 'block';
-      result.innerHTML = `<strong>Modell:</strong> ${res.modell || '?'} &nbsp;·&nbsp; <strong>Dauer:</strong> ${res.dauer_ms ? (res.dauer_ms / 1000).toFixed(1) + 's' : '?'}<br><br>${this._escapeHtml(res.antwort || '')}`;
+      if (res.success === false || res.error) {
+        result.innerHTML = `<span style="color:#e53935">⚠ Ollama nicht erreichbar: ${this._escapeHtml(res.error || 'Unbekannter Fehler')}</span><br><small style="color:#999">${this._escapeHtml(res.hinweis || 'Stelle sicher dass Ollama läuft: systemctl status ollama')}</small>`;
+      } else {
+        result.innerHTML = `<strong>Modell:</strong> ${this._escapeHtml(res.modell || '?')} &nbsp;·&nbsp; <strong>Dauer:</strong> ${res.dauer_ms ? (res.dauer_ms / 1000).toFixed(1) + 's' : '?'}<br><br>${this._escapeHtml(res.antwort || '')}`;
+      }
     } catch (err) {
       result.style.display = 'block';
       result.innerHTML = `<span style="color:red">Fehler: ${this._escapeHtml(err.message || String(err))}</span>`;

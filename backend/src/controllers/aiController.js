@@ -983,14 +983,15 @@ async function notifyBackendUrl(req, res) {
 async function getOllamaStatus(req, res) {
   try {
     const status = await ollamaService.testConnection();
-    const httpStatus = status.success ? 200 : 503;
-    res.status(httpStatus).json({
+    // Immer HTTP 200 – es ist ein Status-Check, kein Fehler-Endpunkt.
+    // 503 würde den ApiService-Retry auslösen und unnötige Fehlermeldungen erzeugen.
+    res.status(200).json({
       ...status,
       konfiguriertes_modell: ollamaService.OLLAMA_MODEL,
       base_url: ollamaService.OLLAMA_BASE_URL
     });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(200).json({ success: false, error: error.message, konfiguriertes_modell: ollamaService.OLLAMA_MODEL });
   }
 }
 
@@ -1058,7 +1059,7 @@ async function testOllamaPrompt(req, res) {
 
     if (!response.ok) {
       const body = await response.text().catch(() => '');
-      return res.status(503).json({ error: `Ollama HTTP ${response.status}`, details: body.slice(0, 200) });
+      return res.status(200).json({ success: false, error: `Ollama HTTP ${response.status}`, details: body.slice(0, 200) });
     }
 
     const data = await response.json();
@@ -1073,7 +1074,7 @@ async function testOllamaPrompt(req, res) {
       tokens: data?.eval_count || null
     });
   } catch (error) {
-    res.status(503).json({ error: error.message });
+    res.status(200).json({ success: false, error: error.message });
   }
 }
 
@@ -1102,7 +1103,7 @@ async function testOllamaTermin(req, res) {
       ergebnis
     });
   } catch (error) {
-    res.status(503).json({
+    res.status(200).json({
       success: false,
       error: error.message,
       hinweis: 'Stelle sicher dass Ollama läuft und das Modell geladen ist'
