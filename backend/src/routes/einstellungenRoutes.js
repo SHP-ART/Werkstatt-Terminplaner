@@ -24,5 +24,7 @@ router.put('/anomaly-detection-enabled', EinstellungenController.updateAnomalyDe
 router.put('/ki-mode', EinstellungenController.updateKIMode);
 // Externe KI-URL speichern
 router.put('/ki-external-url', EinstellungenController.updateKIExternalUrl);
+// Ollama-Modell speichern
+router.put('/ollama-model', EinstellungenController.updateOllamaModel);
 
 module.exports = router;

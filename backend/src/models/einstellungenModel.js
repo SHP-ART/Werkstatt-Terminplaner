@@ -69,6 +69,7 @@ class EinstellungenModel {
       settings.realtime_enabled = settings.realtime_enabled !== undefined ? !!settings.realtime_enabled : true;
       settings.ki_mode = settings.ki_mode || (settings.chatgpt_api_key_configured ? 'openai' : 'local');
       settings.ki_external_url = settings.ki_external_url || null;
+      settings.ollama_model = settings.ollama_model || null;
       settings.smart_scheduling_enabled = settings.smart_scheduling_enabled !== undefined
         ? !!settings.smart_scheduling_enabled
         : true;
@@ -136,6 +137,21 @@ class EinstellungenModel {
     }
 
     return { success: true, ki_external_url: value, message: 'Externe KI-URL gespeichert' };
+  }
+
+  static async updateOllamaModel(model) {
+    const value = model && model.trim() ? model.trim() : null;
+    const result = await runAsync(
+      `UPDATE werkstatt_einstellungen SET ollama_model = ? WHERE id = 1`,
+      [value]
+    );
+    if (result.changes === 0) {
+      await runAsync(
+        `INSERT OR REPLACE INTO werkstatt_einstellungen (id, ollama_model) VALUES (1, ?)`,
+        [value]
+      );
+    }
+    return { success: true, ollama_model: value, message: 'Ollama-Modell aktualisiert' };
   }
 
   // Echtzeit-Updates aktivieren/deaktivieren

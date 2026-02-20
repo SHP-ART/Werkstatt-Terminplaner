@@ -15,9 +15,16 @@
 // =============================================================================
 
 const OLLAMA_BASE_URL = process.env.OLLAMA_BASE_URL || 'http://localhost:11434';
-const OLLAMA_MODEL = process.env.OLLAMA_MODEL || 'llama3.2';
+let OLLAMA_MODEL = process.env.OLLAMA_MODEL || 'llama3.2';
 const OLLAMA_TIMEOUT_MS = parseInt(process.env.OLLAMA_TIMEOUT_MS) || 15000;
 const OLLAMA_TEMPERATURE = parseFloat(process.env.OLLAMA_TEMPERATURE) || 0.3;
+
+// Modell zur Laufzeit wechseln (aus DB-Einstellungen)
+function setModel(model) {
+  if (model && typeof model === 'string' && model.trim()) {
+    OLLAMA_MODEL = model.trim();
+  }
+}
 
 // =============================================================================
 // CITROËN-SPEZIFISCHE KONFIGURATION (identisch zu openaiService)
@@ -489,5 +496,8 @@ module.exports = {
 
   // Konfiguration
   OLLAMA_BASE_URL,
-  OLLAMA_MODEL
+  setModel
 };
+
+// Dynamischer Getter damit ollamaService.OLLAMA_MODEL nach setModel() immer aktuell ist
+Object.defineProperty(module.exports, 'OLLAMA_MODEL', { get: () => OLLAMA_MODEL, enumerable: true });

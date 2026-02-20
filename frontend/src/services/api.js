@@ -923,11 +923,19 @@ class AIService {
 
   /**
    * Führt einen Ollama Performance-Test durch.
-   * Sendet einen fixen Kurzprompt und misst Antwortzeit + Token/s.
    * @returns {Promise<Object>} Bewertung + System-Info (CPU, RAM)
    */
   static async benchmarkOllama() {
     return ApiService.get('/ai/ollama/benchmark');
+  }
+
+  /**
+   * Speichert das Ollama-Modell in den Einstellungen.
+   * Das Modell wird sofort live angewendet (kein Neustart nötig).
+   * @param {string} model - Modellname (z.B. 'tinyllama', 'llama3.2')
+   */
+  static async updateOllamaModel(model) {
+    return ApiService.put('/einstellungen/ollama-model', { model });
   }
 }
 

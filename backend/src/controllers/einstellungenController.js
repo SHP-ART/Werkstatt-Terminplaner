@@ -281,6 +281,22 @@ class EinstellungenController {
       res.status(500).json({ error: err.message });
     }
   }
+  // Ollama-Modell speichern
+  static async updateOllamaModel(req, res) {
+    try {
+      const { model } = req.body;
+      if (!model || typeof model !== 'string') {
+        return res.status(400).json({ error: 'model muss ein String sein (z.B. tinyllama, llama3.2)' });
+      }
+      const result = await EinstellungenModel.updateOllamaModel(model);
+      // Sofort live anwenden – kein Server-Neustart nötig
+      const ollamaService = require('../services/ollamaService');
+      ollamaService.setModel(model);
+      res.json(result);
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  }
 }
 
 module.exports = EinstellungenController;

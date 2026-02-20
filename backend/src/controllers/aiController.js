@@ -13,6 +13,17 @@ const ollamaService = require('../services/ollamaService');
 const kiDiscoveryService = require('../services/kiDiscoveryService');
 const EinstellungenModel = require('../models/einstellungenModel');
 
+// Beim Serverstart: Ollama-Modell aus DB laden und live anwenden
+(async () => {
+  try {
+    const settings = await EinstellungenModel.getWerkstatt();
+    if (settings?.ollama_model) {
+      ollamaService.setModel(settings.ollama_model);
+      console.log(`[Ollama] Modell aus DB geladen: ${settings.ollama_model}`);
+    }
+  } catch (_) {}
+})();
+
 async function getKISettings() {
   const settings = await EinstellungenModel.getWerkstatt();
   const enabled = settings?.ki_enabled !== false && settings?.ki_enabled !== 0;

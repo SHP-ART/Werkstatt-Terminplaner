@@ -930,6 +930,9 @@ class App {
     const ollamaBenchmarkBtn = document.getElementById('ollamaBenchmarkBtn');
     this.bindEventListenerOnce(ollamaBenchmarkBtn, 'click', () => this.runOllamaBenchmark(), 'OllamaBenchmark');
 
+    const saveOllamaModelBtn = document.getElementById('saveOllamaModelBtn');
+    this.bindEventListenerOnce(saveOllamaModelBtn, 'click', () => this.saveOllamaModel(), 'SaveOllamaModel');
+
     // KI-Trainingsdaten Buttons
     const btnExcludeOutliers = document.getElementById('btnExcludeOutliers');
     this.bindEventListenerOnce(btnExcludeOutliers, 'click', () => this.handleExcludeOutliers(), 'ExcludeOutliers');
@@ -12073,6 +12076,11 @@ class App {
       this.updateKIModeStatus(einstellungen?.ki_mode || 'local', !!einstellungen?.chatgpt_api_key_configured);
       if ((einstellungen?.ki_mode || 'local') === 'ollama') {
         this.checkOllamaStatus();
+      }
+      // Ollama-Modell im Eingabefeld vorbelegen
+      const ollamaModelInput = document.getElementById('ollamaModelInput');
+      if (ollamaModelInput && einstellungen?.ollama_model) {
+        ollamaModelInput.value = einstellungen.ollama_model;
       }
       this.updateSmartSchedulingStatus(einstellungen?.smart_scheduling_enabled !== false);
       this.updateAnomalyDetectionStatus(einstellungen?.anomaly_detection_enabled !== false);
@@ -23655,6 +23663,30 @@ class App {
     this.bindEventListenerOnce(filterBestellt, 'change', debouncedLoad, 'TeileFilterBestellt');
     this.bindEventListenerOnce(filterGeliefert, 'change', debouncedLoad, 'TeileFilterGeliefert');
     this.bindEventListenerOnce(filterZeitraum, 'change', debouncedLoad, 'TeileFilterZeitraum');
+  }
+
+  async saveOllamaModel() {
+    const input = document.getElementById('ollamaModelInput');
+    const btn   = document.getElementById('saveOllamaModelBtn');
+    if (!input) return;
+
+    const model = input.value.trim();
+    if (!model) { this.showToast('Bitte einen Modellnamen eingeben', 'warning'); return; }
+
+    btn && (btn.disabled = true);
+    try {
+      const res = await AIService.updateOllamaModel(model);
+      if (res.success !== false) {
+        this.showToast(`✅ Modell gespeichert: ${model} – Änderung ist sofort aktiv`, 'success');
+        this.checkOllamaStatus();
+      } else {
+        this.showToast(res.error || 'Fehler beim Speichern', 'error');
+      }
+    } catch (err) {
+      this.showToast('Fehler: ' + (err.message || String(err)), 'error');
+    } finally {
+      btn && (btn.disabled = false);
+    }
   }
 
   /**
