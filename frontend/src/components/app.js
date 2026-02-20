@@ -927,6 +927,9 @@ class App {
     const ollamaPromptSendBtn = document.getElementById('ollamaPromptSendBtn');
     this.bindEventListenerOnce(ollamaPromptSendBtn, 'click', () => this.sendOllamaTestPrompt(), 'OllamaPromptSend');
 
+    const ollamaBenchmarkBtn = document.getElementById('ollamaBenchmarkBtn');
+    this.bindEventListenerOnce(ollamaBenchmarkBtn, 'click', () => this.runOllamaBenchmark(), 'OllamaBenchmark');
+
     // KI-Trainingsdaten Buttons
     const btnExcludeOutliers = document.getElementById('btnExcludeOutliers');
     this.bindEventListenerOnce(btnExcludeOutliers, 'click', () => this.handleExcludeOutliers(), 'ExcludeOutliers');
@@ -23657,6 +23660,66 @@ class App {
   /**
    * Prüft den Status der KI-Integration und passt UI an
    */
+  async runOllamaBenchmark() {
+    const btn     = document.getElementById('ollamaBenchmarkBtn');
+    const result  = document.getElementById('ollamaBenchmarkResult');
+    const content = document.getElementById('ollamaBenchmarkContent');
+    if (!result || !content) return;
+
+    btn && (btn.disabled = true);
+    btn && (btn.textContent = '⏳ Teste...');
+    result.style.display = 'block';
+    content.innerHTML = '<em style="color:#888">Sende Testprompt an Ollama… (kann einige Sekunden dauern)</em>';
+
+    try {
+      const res = await AIService.benchmarkOllama();
+
+      const sys = res.system || {};
+      const sysInfo = [
+        sys.cpuKerne     ? `🖥 CPU: ${sys.cpuKerne} Kerne`                                : null,
+        sys.ramGesamt_mb ? `🧠 RAM: ${sys.ramFrei_mb} MB frei / ${sys.ramGesamt_mb} MB gesamt` : null
+      ].filter(Boolean).join('&nbsp;&nbsp;│&nbsp;&nbsp;');
+
+      if (!res.success) {
+        content.innerHTML = `
+          <span style="color:#e53935; font-weight:600">🔴 Benchmark fehlgeschlagen</span><br>
+          <span style="color:#555">${this._escapeHtml(res.error || 'Unbekannter Fehler')}</span><br>
+          ${res.hinweis ? `<small style="color:#888">${this._escapeHtml(res.hinweis)}</small><br>` : ''}
+          ${sysInfo ? `<small style="color:#aaa; margin-top:6px; display:block">${sysInfo}</small>` : ''}
+        `;
+        return;
+      }
+
+      const dauer_s    = (res.dauer_ms / 1000).toFixed(1);
+      const tokenInfo  = res.token_s ? `&nbsp;&nbsp;│&nbsp;&nbsp;🔤 ${res.token_s} Token/s` : '';
+      const empfehlung = {
+        ausgezeichnet: 'Bestens geeignet für produktiven Einsatz.',
+        gut:           'Gut geeignet für den täglichen Einsatz.',
+        langsam:       'Für Texte nutzbar, aber mit Wartezeit.',
+        zu_langsam:    'Für Produktivbetrieb nicht empfohlen (CPU zu schwach oder RAM zu knapp).'
+      }[res.bewertung] || '';
+
+      content.innerHTML = `
+        <div style="margin-bottom:10px">
+          <span style="font-size:1.3em; font-weight:700; color:${res.bewertungFarbe}">${res.bewertungLabel}</span>
+          &nbsp;&nbsp;
+          <span style="color:#555">${dauer_s} s Antwortzeit${tokenInfo}</span>
+        </div>
+        <div style="display:flex; gap:12px; flex-wrap:wrap; margin-bottom:8px; font-size:0.88em; color:#666">
+          <span>🦙 Modell: <strong>${this._escapeHtml(res.modell || '?')}</strong></span>
+          ${sysInfo ? `<span>${sysInfo}</span>` : ''}
+        </div>
+        ${empfehlung ? `<div style="color:#555; font-size:0.88em; border-top:1px solid #e0e0e0; padding-top:8px">ℹ️ ${empfehlung}</div>` : ''}
+        ${res.antwort ? `<div style="margin-top:10px; padding:8px 10px; background:#fff; border:1px solid #e8e8e8; border-radius:5px; white-space:pre-wrap; color:#333; font-size:0.87em">${this._escapeHtml(res.antwort)}</div>` : ''}
+      `;
+    } catch (err) {
+      content.innerHTML = `<span style="color:red">Fehler: ${this._escapeHtml(err.message || String(err))}</span>`;
+    } finally {
+      btn && (btn.disabled = false);
+      btn && (btn.textContent = '⚡ Performance-Test');
+    }
+  }
+
   async checkOllamaStatus(showToast = false) {
     const box = document.getElementById('ollamaStatusBox');
     const icon = document.getElementById('ollamaStatusIcon');

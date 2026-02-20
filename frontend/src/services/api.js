@@ -920,6 +920,15 @@ class AIService {
   static async testOllamaTermin(text) {
     return ApiService.post('/ai/ollama/test-termin', { text });
   }
+
+  /**
+   * Führt einen Ollama Performance-Test durch.
+   * Sendet einen fixen Kurzprompt und misst Antwortzeit + Token/s.
+   * @returns {Promise<Object>} Bewertung + System-Info (CPU, RAM)
+   */
+  static async benchmarkOllama() {
+    return ApiService.get('/ai/ollama/benchmark');
+  }
 }
 
 /**

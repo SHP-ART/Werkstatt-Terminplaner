@@ -274,6 +274,13 @@ router.post('/ollama/test-prompt', aiController.testOllamaPrompt);
  */
 router.post('/ollama/test-termin', aiController.testOllamaTermin);
 
+/**
+ * GET /api/ai/ollama/benchmark
+ * Sendet einen fixen Kurzprompt an Ollama und bewertet die Server-Performance.
+ * Gibt Antwortzeit, Token/s und CPU/RAM-Info zurück.
+ */
+router.get('/ollama/benchmark', aiController.benchmarkOllama);
+
 // =============================================================================
 // EXPORT
 // =============================================================================

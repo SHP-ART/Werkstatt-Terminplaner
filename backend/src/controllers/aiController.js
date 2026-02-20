@@ -1111,6 +1111,106 @@ async function testOllamaTermin(req, res) {
   }
 }
 
+/**
+ * GET /api/ai/ollama/benchmark
+ * Sendet einen fixen Kurzprompt an Ollama, misst die Antwortzeit und
+ * bewertet die Server-Performance. Gibt zusätzlich CPU/RAM-Info zurück.
+ */
+async function benchmarkOllama(req, res) {
+  const os = require('os');
+  const TEST_PROMPT = 'Antworte in einem kurzen Satz auf Deutsch: Was ist ein Ölwechsel?';
+
+  const cpuKerne    = os.cpus().length;
+  const ramGesamt_mb = Math.round(os.totalmem() / 1024 / 1024);
+  const ramFrei_mb   = Math.round(os.freemem()  / 1024 / 1024);
+
+  // Erreichbarkeits-Check
+  let ollamaErreichbar = false;
+  try {
+    const tagRes = await fetch(`${ollamaService.OLLAMA_BASE_URL}/api/tags`,
+      { signal: AbortSignal.timeout(3000) });
+    ollamaErreichbar = tagRes.ok;
+  } catch (_) {}
+
+  if (!ollamaErreichbar) {
+    return res.json({
+      success: false,
+      error: 'Ollama nicht erreichbar',
+      hinweis: 'Stelle sicher dass Ollama läuft: systemctl status ollama',
+      system: { cpuKerne, ramGesamt_mb, ramFrei_mb }
+    });
+  }
+
+  const start = Date.now();
+  try {
+    const controller = new AbortController();
+    const tid = setTimeout(() => controller.abort(), 90000);
+    let response;
+    try {
+      response = await fetch(`${ollamaService.OLLAMA_BASE_URL}/api/chat`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        signal: controller.signal,
+        body: JSON.stringify({
+          model: ollamaService.OLLAMA_MODEL,
+          messages: [
+            { role: 'system', content: 'Du bist ein hilfreicher Assistent.' },
+            { role: 'user',   content: TEST_PROMPT }
+          ],
+          stream: false,
+          options: { temperature: 0.1, num_predict: 80 }
+        })
+      });
+    } finally {
+      clearTimeout(tid);
+    }
+
+    const dauer_ms = Date.now() - start;
+
+    if (!response.ok) {
+      return res.json({
+        success: false,
+        error: `Ollama HTTP ${response.status}`,
+        dauer_ms,
+        system: { cpuKerne, ramGesamt_mb, ramFrei_mb }
+      });
+    }
+
+    const data = await response.json();
+    const antwort   = data?.message?.content || data?.response || '';
+    const tokens    = data?.eval_count || null;
+    const token_s   = (tokens && data?.eval_duration)
+      ? Math.round(tokens / (data.eval_duration / 1e9) * 10) / 10
+      : null;
+
+    let bewertung, bewertungLabel, bewertungFarbe;
+    if      (dauer_ms <  3000)  { bewertung = 'ausgezeichnet'; bewertungLabel = '🟢 Ausgezeichnet'; bewertungFarbe = '#4caf50'; }
+    else if (dauer_ms <  8000)  { bewertung = 'gut';           bewertungLabel = '🟡 Gut';           bewertungFarbe = '#ff9800'; }
+    else if (dauer_ms < 20000)  { bewertung = 'langsam';       bewertungLabel = '🟠 Langsam';       bewertungFarbe = '#f57c00'; }
+    else                         { bewertung = 'zu_langsam';    bewertungLabel = '🔴 Zu langsam';    bewertungFarbe = '#e53935'; }
+
+    res.json({
+      success: true,
+      modell: ollamaService.OLLAMA_MODEL,
+      dauer_ms,
+      token_s,
+      tokens,
+      antwort,
+      bewertung,
+      bewertungLabel,
+      bewertungFarbe,
+      system: { cpuKerne, ramGesamt_mb, ramFrei_mb }
+    });
+  } catch (error) {
+    res.json({
+      success: false,
+      error: error.message,
+      dauer_ms: Date.now() - start,
+      system: { cpuKerne, ramGesamt_mb, ramFrei_mb }
+    });
+  }
+}
+
 module.exports = {
   getStatus,
   testConnection,
@@ -1135,5 +1235,6 @@ module.exports = {
   getOllamaStatus,
   getOllamaModelle,
   testOllamaPrompt,
-  testOllamaTermin
+  testOllamaTermin,
+  benchmarkOllama
 };
