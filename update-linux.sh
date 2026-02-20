@@ -11,6 +11,9 @@
 
 set -e
 
+# Sicherstellen dass /usr/sbin und /sbin im PATH sind (Debian 13 / minimal-Umgebungen)
+export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:$PATH"
+
 # Farben für Output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -154,6 +157,8 @@ cd "$INSTALL_DIR"
 
 # Git pull wenn möglich
 if [ -d ".git" ]; then
+    # Safe directory fuer Root (verhindert Git-Ownership-Fehler)
+    git config --global --add safe.directory "$INSTALL_DIR" 2>/dev/null || true
     git fetch origin "$GIT_BRANCH"
     git reset --hard "origin/$GIT_BRANCH"
     print_success "Code aktualisiert via git"
