@@ -98,9 +98,9 @@ class EinstellungenModel {
     return { success: true, ki_enabled: !!enabled, message: enabled ? 'KI-Funktionen aktiviert' : 'KI-Funktionen deaktiviert' };
   }
 
-  // KI-Modus aktualisieren (local/openai/external)
+  // KI-Modus aktualisieren (local/openai/external/ollama)
   static async updateKIMode(mode) {
-    const allowed = new Set(['local', 'openai', 'external']);
+    const allowed = new Set(['local', 'openai', 'external', 'ollama']);
     if (!allowed.has(mode)) {
       throw new Error('Ungültiger KI-Modus');
     }

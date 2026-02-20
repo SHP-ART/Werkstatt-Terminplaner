@@ -251,7 +251,7 @@ class EinstellungenController {
       if (typeof mode !== 'string') {
         return res.status(400).json({ error: 'mode muss ein String sein' });
       }
-      const allowed = new Set(['local', 'openai', 'external']);
+      const allowed = new Set(['local', 'openai', 'external', 'ollama']);
       if (!allowed.has(mode)) {
         return res.status(400).json({ error: 'Ungültiger KI-Modus' });
       }
