@@ -11799,7 +11799,13 @@ mark.highlight {
 
 /* KI Lokal/Extern-Modus - OpenAI-only Elemente ausblenden */
 .ki-mode-local .openai-only,
-.ki-mode-external .openai-only {
+.ki-mode-external .openai-only,
+.ki-mode-ollama .openai-only {
+    display: none !important;
+}
+
+/* KI-Assistent Banner: nur bei Lokal verstecken */
+.ki-mode-local .ki-mode-required {
     display: none !important;
 }
 

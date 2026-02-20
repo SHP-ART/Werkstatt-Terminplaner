@@ -12215,6 +12215,7 @@ class App {
           statusIcon.textContent = '🔵';
           statusText.textContent = 'Aktiv: OpenAI (ChatGPT)';
           statusHint.textContent = 'Nutzt OpenAI API für intelligente Vorschläge (Internet erforderlich)';
+          this._updateKIBadge('ChatGPT');
         } else {
           statusContainer.style.background = '#fff3e0';
           statusContainer.style.borderColor = '#ffcc80';
@@ -12229,7 +12230,9 @@ class App {
         statusIcon.textContent = '🦙';
         statusText.textContent = 'Aktiv: Ollama (lokales LLM)';
         statusHint.textContent = `Modell: ${window._ollamaModel || 'llama3.2'} · Läuft direkt auf dem Server · kein Internet erforderlich`;
+        this._updateKIBadge('Ollama');
       } else if (this.kiMode === 'external') {
+        this._updateKIBadge('Externe KI');
         // Externer KI-Service
         const status = externalStatus || this._externalKIStatus;
         const deviceInfo = status?.device ? ` Gerät: ${status.device}` : '';
@@ -23719,6 +23722,11 @@ class App {
       btn && (btn.disabled = false);
       btn && (btn.textContent = '▶ Senden');
     }
+  }
+
+  _updateKIBadge(label) {
+    const badge = document.getElementById('kiAssistentBadge');
+    if (badge) badge.textContent = label;
   }
 
   _escapeHtml(str) {
