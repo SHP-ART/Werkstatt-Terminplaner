@@ -915,6 +915,18 @@ class App {
     const testExternalKiBtn = document.getElementById('testExternalKiBtn');
     this.bindEventListenerOnce(testExternalKiBtn, 'click', () => this.checkKIStatus(true), 'TestExternalKi');
 
+    const testOllamaBtn = document.getElementById('testOllamaBtn');
+    this.bindEventListenerOnce(testOllamaBtn, 'click', () => this.checkOllamaStatus(true), 'TestOllama');
+
+    const testOllamaPromptBtn = document.getElementById('testOllamaPromptBtn');
+    this.bindEventListenerOnce(testOllamaPromptBtn, 'click', () => {
+      const box = document.getElementById('ollamaPromptBox');
+      if (box) box.style.display = box.style.display === 'none' ? 'block' : 'none';
+    }, 'ToggleOllamaPromptBox');
+
+    const ollamaPromptSendBtn = document.getElementById('ollamaPromptSendBtn');
+    this.bindEventListenerOnce(ollamaPromptSendBtn, 'click', () => this.sendOllamaTestPrompt(), 'OllamaPromptSend');
+
     // KI-Trainingsdaten Buttons
     const btnExcludeOutliers = document.getElementById('btnExcludeOutliers');
     this.bindEventListenerOnce(btnExcludeOutliers, 'click', () => this.handleExcludeOutliers(), 'ExcludeOutliers');
@@ -12056,6 +12068,9 @@ class App {
       this.updateApiKeyStatus(einstellungen); // Setzt this._hasOpenAIKey
       this.updateRealtimeEnabledStatus(einstellungen?.realtime_enabled !== false);
       this.updateKIModeStatus(einstellungen?.ki_mode || 'local', !!einstellungen?.chatgpt_api_key_configured);
+      if ((einstellungen?.ki_mode || 'local') === 'ollama') {
+        this.checkOllamaStatus();
+      }
       this.updateSmartSchedulingStatus(einstellungen?.smart_scheduling_enabled !== false);
       this.updateAnomalyDetectionStatus(einstellungen?.anomaly_detection_enabled !== false);
       this.checkKIStatus();
@@ -12587,6 +12602,7 @@ class App {
         this.updateKIModeStatus(mode);
         this.showToast(`🧠 KI-Modus: ${modeLabels[mode] || mode}`, 'success');
         this.checkKIStatus();
+        if (mode === 'ollama') this.checkOllamaStatus();
       } else {
         e.target.value = previous;
         this.showToast('Fehler beim Speichern des KI-Modus', 'error');
@@ -23638,6 +23654,77 @@ class App {
   /**
    * Prüft den Status der KI-Integration und passt UI an
    */
+  async checkOllamaStatus(showToast = false) {
+    const box = document.getElementById('ollamaStatusBox');
+    const icon = document.getElementById('ollamaStatusIcon');
+    const text = document.getElementById('ollamaStatusText');
+    const hint = document.getElementById('ollamaStatusHint');
+    if (!box) return;
+
+    icon && (icon.textContent = '⏳');
+    text && (text.textContent = 'Prüfe Ollama...');
+    hint && (hint.textContent = '');
+
+    try {
+      const res = await AIService.getOllamaStatus();
+      if (res.success) {
+        box.style.background = '#f3e5f5';
+        box.style.borderColor = '#ce93d8';
+        icon && (icon.textContent = '🟢');
+        text && (text.textContent = `Ollama erreichbar · Modell: ${res.konfiguriertes_modell || 'unbekannt'}`);
+        const modelle = res.verfuegbareModelle?.length
+          ? `Verfügbare Modelle: ${res.verfuegbareModelle.map(m => m.name || m).join(', ')}`
+          : `URL: ${res.base_url || 'localhost:11434'}`;
+        hint && (hint.textContent = modelle);
+        if (showToast) this.showToast('🦙 Ollama ist erreichbar', 'success');
+      } else {
+        box.style.background = '#fff3e0';
+        box.style.borderColor = '#ffcc80';
+        icon && (icon.textContent = '🔴');
+        text && (text.textContent = 'Ollama nicht erreichbar');
+        hint && (hint.textContent = res.error || `Prüfe ob Ollama läuft: systemctl status ollama`);
+        if (showToast) this.showToast('Ollama nicht erreichbar – läuft der Service?', 'warning');
+      }
+    } catch (err) {
+      box.style.background = '#ffebee';
+      box.style.borderColor = '#ef9a9a';
+      icon && (icon.textContent = '🔴');
+      text && (text.textContent = 'Fehler beim Abrufen des Ollama-Status');
+      hint && (hint.textContent = err.message || '');
+      if (showToast) this.showToast('Ollama-Status konnte nicht abgerufen werden', 'error');
+    }
+  }
+
+  async sendOllamaTestPrompt() {
+    const input = document.getElementById('ollamaTestPromptInput');
+    const result = document.getElementById('ollamaPromptResult');
+    const btn = document.getElementById('ollamaPromptSendBtn');
+    if (!input || !result) return;
+
+    const prompt = input.value.trim();
+    if (!prompt) { this.showToast('Bitte einen Prompt eingeben', 'warning'); return; }
+
+    btn && (btn.disabled = true);
+    btn && (btn.textContent = '⏳ Warte auf Antwort...');
+    result.style.display = 'none';
+
+    try {
+      const res = await AIService.testOllamaPrompt(prompt);
+      result.style.display = 'block';
+      result.innerHTML = `<strong>Modell:</strong> ${res.modell || '?'} &nbsp;·&nbsp; <strong>Dauer:</strong> ${res.dauer_ms ? (res.dauer_ms / 1000).toFixed(1) + 's' : '?'}<br><br>${this._escapeHtml(res.antwort || '')}`;
+    } catch (err) {
+      result.style.display = 'block';
+      result.innerHTML = `<span style="color:red">Fehler: ${this._escapeHtml(err.message || String(err))}</span>`;
+    } finally {
+      btn && (btn.disabled = false);
+      btn && (btn.textContent = '▶ Senden');
+    }
+  }
+
+  _escapeHtml(str) {
+    return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  }
+
   async checkKIStatus(showToast = false) {
     try {
       const response = await AIService.getStatus();

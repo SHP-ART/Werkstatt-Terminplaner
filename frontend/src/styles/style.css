@@ -11805,7 +11805,15 @@ mark.highlight {
 
 /* Externe KI Sektion nur bei externer KI anzeigen */
 .ki-mode-local .external-only,
-.ki-mode-openai .external-only {
+.ki-mode-openai .external-only,
+.ki-mode-ollama .external-only {
+    display: none !important;
+}
+
+/* Ollama-Sektion nur bei Ollama anzeigen */
+.ki-mode-local .ollama-only,
+.ki-mode-openai .ollama-only,
+.ki-mode-external .ollama-only {
     display: none !important;
 }
 
