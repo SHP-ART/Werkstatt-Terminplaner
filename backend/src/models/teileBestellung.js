@@ -114,7 +114,8 @@ class TeileBestellung {
       
       db.all(sql, [heute, bisStr], (err, rows) => {
         if (err) {
-          reject(err);
+          console.error('[Teile] getFaellige SQL-Fehler:', err.message);
+          resolve([]);
         } else {
           resolve(rows || []);
         }
@@ -157,7 +158,8 @@ class TeileBestellung {
       
       db.all(sql, [], (err, rows) => {
         if (err) {
-          reject(err);
+          console.error('[Teile] getSchwebende SQL-Fehler:', err.message);
+          resolve([]);
         } else {
           resolve(rows || []);
         }
@@ -511,7 +513,8 @@ class TeileBestellung {
       
       db.all(sql, [heute, bisStr], (err, rows) => {
         if (err) {
-          reject(err);
+          console.error('[Teile] getTermineMitTeileStatusBestellen SQL-Fehler:', err.message);
+          resolve([]);
         } else {
           // Formatiere die Ergebnisse so, dass sie wie Teile-Bestellungen aussehen
           const formattiert = (rows || []).map(row => ({
@@ -576,7 +579,8 @@ class TeileBestellung {
       
       db.all(sql, [], (err, rows) => {
         if (err) {
-          reject(err);
+          console.error('[Teile] getSchwbendeTermineMitTeileStatusBestellen SQL-Fehler:', err.message);
+          resolve([]);
         } else {
           const formattiert = (rows || []).map(row => ({
             id: `termin_${row.termin_id}`,
@@ -642,7 +646,8 @@ class TeileBestellung {
       
       db.all(sql, [heute, bisStr], (err, rows) => {
         if (err) {
-          reject(err);
+          console.error('[Teile] getTermineMitArbeitenTeileStatusBestellen SQL-Fehler:', err.message);
+          resolve([]);
         } else {
           const ergebnisse = [];
           
