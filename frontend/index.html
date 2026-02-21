@@ -3060,12 +3060,33 @@
                 <!-- Server-Update -->
                 <div class="form-section" style="margin-bottom: 25px;">
                     <h3>🔄 Server-Update</h3>
-                    <p style="margin-bottom:12px; color:#555;">Führt <code>git pull</code>, <code>npm install</code> und einen Service-Neustart durch.<br>
-                    <strong>⚠️ Nur auf Linux-Servern möglich.</strong> Die Verbindung wird kurz unterbrochen.<br>
-                    <small style="color:#888;">Einmalig auf dem Server einrichten (als root):<br>
-                    <code>echo "werkstatt ALL=NOPASSWD: /bin/systemctl restart werkstatt-terminplaner.service" &gt;&gt; /etc/sudoers.d/werkstatt-update</code></small></p>
-                    <button id="triggerUpdateBtn" class="btn btn-primary">🔄 Update jetzt starten</button>
+
+                    <!-- Versions-Status -->
+                    <div id="updateCheckInfo" style="margin-bottom:14px; padding:10px 14px; background:#f5f5f5; border-radius:8px; font-size:0.88em; display:flex; align-items:center; gap:10px;">
+                        <span id="updateCheckIcon">⏳</span>
+                        <span id="updateCheckText">Prüfe auf Updates...</span>
+                        <button onclick="window._checkUpdateStatus && window._checkUpdateStatus()" style="margin-left:auto; border:none; background:none; cursor:pointer; color:#888; font-size:0.9em;">🔄</button>
+                    </div>
+
+                    <!-- Neue Commits Liste -->
+                    <div id="updateCommitsList" style="display:none; margin-bottom:14px; max-height:140px; overflow-y:auto; padding:8px 12px; background:#fff8e1; border:1px solid #ffe082; border-radius:6px; font-size:0.82em; font-family:monospace; color:#5d4037;"></div>
+
+                    <!-- Buttons -->
+                    <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:center;">
+                        <button id="triggerUpdateBtn" class="btn btn-primary" disabled>🔄 Update starten</button>
+                        <button id="triggerRestartBtn" class="btn btn-secondary">⚡ Nur neu starten</button>
+                    </div>
+
+                    <!-- Status / Log -->
                     <div id="updateStatusInfo" style="display:none; margin-top:12px; padding:10px 14px; border-radius:6px; font-size:0.9em;"></div>
+
+                    <!-- Live-Log -->
+                    <div id="updateLogBox" style="display:none; margin-top:12px;">
+                        <div style="font-size:0.8em; color:#666; margin-bottom:4px;">📋 Update-Log:</div>
+                        <pre id="updateLogContent" style="max-height:200px; overflow-y:auto; background:#1e1e1e; color:#d4d4d4; padding:10px; border-radius:6px; font-size:0.78em; white-space:pre-wrap; word-break:break-all;"></pre>
+                    </div>
+
+                    <p style="margin-top:10px; color:#999; font-size:0.8em;">⚠️ Nur auf Linux-Servern möglich. Die Verbindung wird beim Update kurz unterbrochen.</p>
                 </div>
 
                 <!-- API Health -->

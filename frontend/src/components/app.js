@@ -523,6 +523,17 @@ class App {
         updateBtn.addEventListener('click', () => this._triggerServerUpdate());
       }
 
+      // Nur-Neustart-Button binden
+      const restartBtn = document.getElementById('triggerRestartBtn');
+      if (restartBtn && !restartBtn.dataset.bound) {
+        restartBtn.dataset.bound = 'true';
+        restartBtn.addEventListener('click', () => this._triggerServerRestart());
+      }
+
+      // Update-Status prüfen
+      window._checkUpdateStatus = () => this._checkUpdateStatus();
+      this._checkUpdateStatus();
+
       // Auto-Refresh starten (alle 15s während Tab aktiv)
       this._startServerInfoAutoRefresh();
 
@@ -25603,25 +25614,79 @@ class App {
     } catch (_) { /* Banner bleibt verborgen bei Fehler */ }
   }
 
+  async _checkUpdateStatus() {
+    const icon = document.getElementById('updateCheckIcon');
+    const text = document.getElementById('updateCheckText');
+    const box = document.getElementById('updateCheckInfo');
+    const commitsList = document.getElementById('updateCommitsList');
+    const updateBtn = document.getElementById('triggerUpdateBtn');
+    if (!icon || !text) return;
+
+    icon.textContent = '⏳';
+    text.textContent = 'Prüfe auf Updates...';
+    if (box) box.style.background = '#f5f5f5';
+
+    try {
+      const res = await SystemService.checkForUpdates();
+      if (!res?.success) throw new Error(res?.message || 'Fehler');
+
+      if (res.upToDate) {
+        icon.textContent = '✅';
+        text.textContent = `Aktuell (${res.version || ''} · ${res.currentHash})`;
+        if (box) box.style.background = '#e8f5e9';
+        if (commitsList) commitsList.style.display = 'none';
+        if (updateBtn) { updateBtn.disabled = true; updateBtn.textContent = '✅ Aktuell'; }
+      } else {
+        icon.textContent = '🟡';
+        text.textContent = `${res.commits.length} neues Update verfügbar (${res.version || ''} · ${res.currentHash} → ${res.remoteHash})`;
+        if (box) box.style.background = '#fff8e1';
+        if (commitsList) {
+          commitsList.innerHTML = res.commits.map(c => `• ${c}`).join('<br>');
+          commitsList.style.display = 'block';
+        }
+        if (updateBtn) { updateBtn.disabled = false; updateBtn.textContent = `🔄 Update starten (${res.commits.length} Commit${res.commits.length > 1 ? 's' : ''})`; }
+      }
+    } catch (err) {
+      icon.textContent = '⚠️';
+      text.textContent = 'Versionscheck nicht verfügbar (nur Linux)';
+      if (box) box.style.background = '#f5f5f5';
+      if (updateBtn) { updateBtn.disabled = false; updateBtn.textContent = '🔄 Update starten'; }
+    }
+  }
+
   async _triggerServerUpdate() {
     const btn = document.getElementById('triggerUpdateBtn');
     const statusBox = document.getElementById('updateStatusInfo');
-    if (!confirm('Server-Update jetzt starten?\n\nDer Server führt git pull, npm install durch und startet neu.\nDie Verbindung wird kurz unterbrochen.')) return;
+    const logBox = document.getElementById('updateLogBox');
+    const logContent = document.getElementById('updateLogContent');
+    if (!confirm('Update jetzt starten?\n\ngit pull + npm install + Server-Neustart.\nDie Verbindung wird kurz unterbrochen.')) return;
 
-    if (btn) { btn.disabled = true; btn.textContent = '⏳ Update wird gestartet...'; }
+    if (btn) { btn.disabled = true; btn.textContent = '⏳ Starte Update...'; }
     if (statusBox) { statusBox.style.display = 'none'; }
 
     try {
       const res = await SystemService.triggerUpdate();
       if (res?.success) {
         if (statusBox) {
-          statusBox.style.background = '#e8f5e9';
-          statusBox.style.border = '1px solid #a5d6a7';
-          statusBox.style.color = '#1b5e20';
-          statusBox.textContent = '✅ ' + (res.message || 'Update gestartet. Seite wird in 30 Sekunden neu geladen...');
-          statusBox.style.display = 'block';
+          statusBox.style.cssText = 'display:block; background:#e8f5e9; border:1px solid #a5d6a7; color:#1b5e20; margin-top:12px; padding:10px 14px; border-radius:6px; font-size:0.9em;';
+          statusBox.textContent = '✅ Update gestartet – lese Log...';
         }
-        // Automatisch neu laden, sobald der Server wieder verfügbar ist
+        // Log anzeigen und live pollen
+        if (logBox) logBox.style.display = 'block';
+        let logAttempts = 0;
+        const pollLog = setInterval(async () => {
+          try {
+            const logRes = await SystemService.getUpdateLog(80);
+            if (logRes?.log && logContent) {
+              logContent.textContent = logRes.log;
+              logContent.scrollTop = logContent.scrollHeight;
+            }
+          } catch (_) {}
+          logAttempts++;
+          if (logAttempts > 72) clearInterval(pollLog); // max 6min
+        }, 5000);
+
+        // Auf Server-Neustart warten
         let attempts = 0;
         const tryReload = setInterval(async () => {
           attempts++;
@@ -25629,31 +25694,62 @@ class App {
             const baseUrl = CONFIG.API_URL.replace(/\/$/, '');
             await fetch(`${baseUrl}/api/health`);
             clearInterval(tryReload);
-            location.reload();
+            clearInterval(pollLog);
+            if (statusBox) statusBox.textContent = '✅ Update abgeschlossen – Seite wird neu geladen...';
+            setTimeout(() => location.reload(), 1500);
           } catch (_) {
             if (statusBox) statusBox.textContent = `🔄 Warte auf Server-Neustart... (${attempts * 5}s)`;
-            if (attempts >= 60) { clearInterval(tryReload); location.reload(); }
+            if (attempts >= 60) { clearInterval(tryReload); clearInterval(pollLog); location.reload(); }
           }
         }, 5000);
       } else {
         if (statusBox) {
-          statusBox.style.background = '#fff3e0';
-          statusBox.style.border = '1px solid #ffcc80';
-          statusBox.style.color = '#e65100';
+          statusBox.style.cssText = 'display:block; background:#fff3e0; border:1px solid #ffcc80; color:#e65100; margin-top:12px; padding:10px 14px; border-radius:6px; font-size:0.9em;';
           statusBox.textContent = '⚠️ ' + (res?.message || 'Update nicht möglich');
-          statusBox.style.display = 'block';
         }
-        if (btn) { btn.disabled = false; btn.textContent = '🔄 Update jetzt starten'; }
+        if (btn) { btn.disabled = false; btn.textContent = '🔄 Update starten'; }
       }
     } catch (err) {
       if (statusBox) {
-        statusBox.style.background = '#ffebee';
-        statusBox.style.border = '1px solid #ef9a9a';
-        statusBox.style.color = '#b71c1c';
+        statusBox.style.cssText = 'display:block; background:#ffebee; border:1px solid #ef9a9a; color:#b71c1c; margin-top:12px; padding:10px 14px; border-radius:6px; font-size:0.9em;';
         statusBox.textContent = '❌ Fehler: ' + err.message;
-        statusBox.style.display = 'block';
       }
-      if (btn) { btn.disabled = false; btn.textContent = '🔄 Update jetzt starten'; }
+      if (btn) { btn.disabled = false; btn.textContent = '🔄 Update starten'; }
+    }
+  }
+
+  async _triggerServerRestart() {
+    const btn = document.getElementById('triggerRestartBtn');
+    const statusBox = document.getElementById('updateStatusInfo');
+    if (!confirm('Server jetzt neu starten?\n\nKein git pull – nur Dienst-Neustart.')) return;
+
+    if (btn) { btn.disabled = true; btn.textContent = '⏳ Neustart...'; }
+    try {
+      await SystemService.restartService();
+      if (statusBox) {
+        statusBox.style.cssText = 'display:block; background:#e3f2fd; border:1px solid #90caf9; color:#0d47a1; margin-top:12px; padding:10px 14px; border-radius:6px; font-size:0.9em;';
+        statusBox.textContent = '⚡ Neustart gestartet – warte auf Server...';
+      }
+      let attempts = 0;
+      const wait = setInterval(async () => {
+        attempts++;
+        try {
+          const baseUrl = CONFIG.API_URL.replace(/\/$/, '');
+          await fetch(`${baseUrl}/api/health`);
+          clearInterval(wait);
+          if (statusBox) statusBox.textContent = '✅ Server wieder erreichbar – Seite wird neu geladen...';
+          setTimeout(() => location.reload(), 1000);
+        } catch (_) {
+          if (statusBox) statusBox.textContent = `⚡ Warte auf Neustart... (${attempts * 3}s)`;
+          if (attempts >= 40) { clearInterval(wait); location.reload(); }
+        }
+      }, 3000);
+    } catch (err) {
+      if (statusBox) {
+        statusBox.style.cssText = 'display:block; background:#ffebee; border:1px solid #ef9a9a; color:#b71c1c; margin-top:12px; padding:10px 14px; border-radius:6px; font-size:0.9em;';
+        statusBox.textContent = '❌ ' + err.message;
+      }
+      if (btn) { btn.disabled = false; btn.textContent = '⚡ Nur neu starten'; }
     }
   }
 

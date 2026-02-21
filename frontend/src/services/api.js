@@ -1112,12 +1112,17 @@ class TabletService {
 }
 
 class SystemService {
-  /**
-   * POST /api/system/update
-   * Löst update-linux.sh auf dem Server aus.
-   */
   static async triggerUpdate() {
     return ApiService.post('/system/update', {});
+  }
+  static async checkForUpdates() {
+    return ApiService.get('/system/update-check');
+  }
+  static async getUpdateLog(lines = 80) {
+    return ApiService.get(`/system/update-log?lines=${lines}`);
+  }
+  static async restartService() {
+    return ApiService.post('/system/restart', {});
   }
 }
 

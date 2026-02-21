@@ -251,6 +251,136 @@ class SystemController {
       res.status(500).json({ success: false, message: error.message });
     }
   }
+
+  /**
+   * GET /api/system/update-check
+   * Prüft ob neue Commits auf GitHub verfügbar sind (git fetch + log).
+   */
+  static async checkForUpdates(req, res) {
+    if (process.platform !== 'linux') {
+      return res.json({ upToDate: true, message: 'Nur auf Linux-Servern verfügbar', commits: [] });
+    }
+    try {
+      const { execSync } = require('child_process');
+      const path = require('path');
+      const cwd = path.resolve(__dirname, '../../../');
+
+      // Aktuellen Hash
+      let currentHash = '';
+      try { currentHash = execSync('git rev-parse --short HEAD', { cwd }).toString().trim(); } catch (_) {}
+
+      // Fetch + Remote-Hash
+      try { execSync('git fetch origin master --quiet', { cwd, timeout: 15000 }); } catch (_) {}
+
+      let remoteHash = '';
+      try { remoteHash = execSync('git rev-parse --short origin/master', { cwd }).toString().trim(); } catch (_) {}
+
+      // Neue Commits auflisten
+      let commits = [];
+      try {
+        const log = execSync('git log HEAD..origin/master --oneline', { cwd }).toString().trim();
+        commits = log ? log.split('\n').filter(Boolean) : [];
+      } catch (_) {}
+
+      // App-Version
+      let version = '';
+      try {
+        const pkg = require(path.join(cwd, 'backend/package.json'));
+        version = pkg.version || '';
+      } catch (_) {}
+
+      res.json({
+        success: true,
+        upToDate: commits.length === 0,
+        currentHash,
+        remoteHash,
+        commits,
+        version,
+        timestamp: new Date().toISOString()
+      });
+    } catch (error) {
+      res.status(500).json({ success: false, message: error.message });
+    }
+  }
+
+  /**
+   * GET /api/system/update-log
+   * Gibt die letzten Zeilen des Update-Logs zurück.
+   */
+  static getUpdateLog(req, res) {
+    const fs = require('fs');
+    const logFile = '/tmp/werkstatt-api-update.log';
+    const lines = parseInt(req.query.lines) || 50;
+    try {
+      if (!fs.existsSync(logFile)) {
+        return res.json({ success: true, log: '', exists: false });
+      }
+      const content = fs.readFileSync(logFile, 'utf8');
+      const allLines = content.split('\n');
+      const last = allLines.slice(-lines).join('\n');
+      res.json({ success: true, log: last, exists: true, lines: allLines.length });
+    } catch (error) {
+      res.status(500).json({ success: false, message: error.message });
+    }
+  }
+
+  /**
+   * POST /api/system/restart
+   * Startet nur den Service neu (kein git pull).
+   */
+  static restartService(req, res) {
+    if (process.platform !== 'linux') {
+      return res.status(400).json({ success: false, message: 'Nur auf Linux-Servern verfügbar.' });
+    }
+    try {
+      const { spawn } = require('child_process');
+      res.json({ success: true, message: 'Server wird neu gestartet...' });
+      // Kurz warten damit die Antwort noch rausgeht
+      setTimeout(() => {
+        const child = spawn('bash', ['-c',
+          'sudo systemctl restart werkstatt-terminplaner.service 2>/dev/null || pkill -f "node.*server.js"'
+        ], { detached: true, stdio: 'ignore' });
+        child.unref();
+      }, 500);
+    } catch (error) {
+      res.status(500).json({ success: false, message: error.message });
+    }
+  }
+}
+
+module.exports = SystemController;
+  static async triggerUpdate(req, res) {
+    if (process.platform !== 'linux') {
+      return res.status(400).json({
+        success: false,
+        message: 'Server-Update ist nur auf Linux-Servern verfügbar.'
+      });
+    }
+    try {
+      const { spawn } = require('child_process');
+      const path = require('path');
+      const fs = require('fs');
+      // Dediziertes nicht-interaktives Update-Skript (kein Root/sudo nötig für git/npm)
+      const scriptPath = path.resolve(__dirname, '../../../update-via-api.sh');
+      // chmod +x sicherstellen
+      try { fs.chmodSync(scriptPath, 0o755); } catch (_) {}
+      // Detached + stdio ignore: Prozess läuft weiter, auch wenn der Server neu startet
+      const child = spawn('bash', [scriptPath], {
+        detached: true,
+        stdio: 'ignore',
+        cwd: path.resolve(__dirname, '../../../')
+      });
+      child.unref();
+      console.log('[Update] update-via-api.sh gestartet (PID:', child.pid, ')');
+      res.json({
+        success: true,
+        message: 'Update läuft. Der Server wird in Kürze neu gestartet...'
+      });
+    } catch (error) {
+      console.error('[Update] Fehler:', error);
+      res.status(500).json({ success: false, message: error.message });
+    }
+  }
 }
 
 module.exports = SystemController;

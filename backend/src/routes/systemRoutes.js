@@ -26,4 +26,13 @@ router.get('/schema-info', SystemController.getSchemaInfo);
 // Server-Update auslösen (Linux only)
 router.post('/update', SystemController.triggerUpdate);
 
+// Verfügbare Updates prüfen (git fetch + log)
+router.get('/update-check', SystemController.checkForUpdates);
+
+// Update-Log lesen
+router.get('/update-log', SystemController.getUpdateLog);
+
+// Nur Service-Neustart (ohne git pull)
+router.post('/restart', SystemController.restartService);
+
 module.exports = router;

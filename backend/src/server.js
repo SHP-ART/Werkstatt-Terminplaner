@@ -394,6 +394,9 @@ async function startServer(clientCountCallback, requestLogCallback) {
         app.get('*', (req, res, next) => {
             // Nur wenn es keine API-Route ist
             if (!req.path.startsWith('/api')) {
+                res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+                res.set('Pragma', 'no-cache');
+                res.set('Expires', '0');
                 res.sendFile(path.join(frontendPath, 'index.html'));
             } else {
                 next();
