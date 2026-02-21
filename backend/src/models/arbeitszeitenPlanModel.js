@@ -145,12 +145,23 @@ class ArbeitszeitenPlanModel {
    * Erstellt oder aktualisiert ein Wochentag-Muster
    */
   static async upsertWochentagMuster(data) {
-    const { mitarbeiter_id, lehrling_id, wochentag, arbeitsstunden, pausenzeit_minuten, ist_frei, beschreibung } = data;
+    const { mitarbeiter_id, lehrling_id, wochentag, arbeitsstunden, pausenzeit_minuten, ist_frei, beschreibung, arbeitszeit_start, arbeitszeit_ende } = data;
+
+    // Falls keine explizite Endzeit angegeben: aus Arbeitsstunden berechnen
+    const startStr = arbeitszeit_start || '08:00';
+    let endeStr = arbeitszeit_ende;
+    if (!endeStr || endeStr === startStr) {
+      const [sh, sm] = startStr.split(':').map(Number);
+      const totalMin = sm + ((arbeitsstunden || 0) * 60) + (ist_frei ? 0 : (pausenzeit_minuten || 30));
+      const eh = sh + Math.floor(totalMin / 60);
+      const em = totalMin % 60;
+      endeStr = `${String(eh).padStart(2, '0')}:${String(em).padStart(2, '0')}`;
+    }
 
     const query = `
       INSERT INTO arbeitszeiten_plan 
-      (mitarbeiter_id, lehrling_id, wochentag, arbeitsstunden, pausenzeit_minuten, ist_frei, beschreibung, aktualisiert_am)
-      VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+      (mitarbeiter_id, lehrling_id, wochentag, arbeitsstunden, pausenzeit_minuten, ist_frei, beschreibung, arbeitszeit_start, arbeitszeit_ende, aktualisiert_am)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
       ON CONFLICT(
         COALESCE(mitarbeiter_id, -1), 
         COALESCE(lehrling_id, -1), 
@@ -161,6 +172,8 @@ class ArbeitszeitenPlanModel {
         pausenzeit_minuten = excluded.pausenzeit_minuten,
         ist_frei = excluded.ist_frei,
         beschreibung = excluded.beschreibung,
+        arbeitszeit_start = excluded.arbeitszeit_start,
+        arbeitszeit_ende = excluded.arbeitszeit_ende,
         aktualisiert_am = CURRENT_TIMESTAMP
     `;
 
@@ -171,7 +184,9 @@ class ArbeitszeitenPlanModel {
       arbeitsstunden,
       pausenzeit_minuten || 30,
       ist_frei || 0,
-      beschreibung || null
+      beschreibung || null,
+      startStr,
+      endeStr
     ]);
 
     return { id: result.lastID, changes: result.changes };

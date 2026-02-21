@@ -26967,7 +26967,7 @@ class App {
           </div>
           <div class="intern-person-badge ${badgeClass}">${badgeText}</div>
         </div>
-        ${zeigeArbeitszeit && arbeitszeit && arbeitszeit.arbeitszeit_start && arbeitszeit.arbeitszeit_ende ? `
+        ${zeigeArbeitszeit && arbeitszeit && !arbeitszeit.ist_frei && arbeitszeit.arbeitszeit_start && arbeitszeit.arbeitszeit_ende && arbeitszeit.arbeitszeit_start !== arbeitszeit.arbeitszeit_ende ? `
         <div class="intern-person-arbeitszeit">
           <span class="arbeitszeit-label">⏰ Arbeitszeit:</span>
           <span class="arbeitszeit-wert">${arbeitszeit.arbeitszeit_start} - ${arbeitszeit.arbeitszeit_ende}</span>
