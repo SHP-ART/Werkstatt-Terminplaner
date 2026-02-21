@@ -9218,6 +9218,9 @@ class App {
       // Lade Zeitleiste
       await this.loadZeitleiste(datum);
 
+      // Anomalien-Check im Hintergrund
+      this._loadAuslastungWarnungenZeitleiste(datum);
+
       // Zeige die Zeiten nach Status
       document.getElementById('geplant').textContent = this.formatMinutesToHours(data.geplant_minuten || 0);
       document.getElementById('inArbeit').textContent = this.formatMinutesToHours(data.in_arbeit_minuten || 0);
@@ -25568,6 +25571,20 @@ class App {
   async _loadAuslastungWarnungen(datum) {
     const banner = document.getElementById('auslastungWarnungBanner');
     const liste  = document.getElementById('auslastungWarnungListe');
+    if (!banner || !liste) return;
+    banner.style.display = 'none';
+    try {
+      const res = await KIPlanungService.getAnomalien(datum);
+      if (res?.success && res.warnungen?.length > 0) {
+        liste.innerHTML = res.warnungen.map(w => `<li>${w}</li>`).join('');
+        banner.style.display = 'block';
+      }
+    } catch (_) { /* Banner bleibt verborgen bei Fehler */ }
+  }
+
+  async _loadAuslastungWarnungenZeitleiste(datum) {
+    const banner = document.getElementById('auslastungWarnungBannerZeitleiste');
+    const liste  = document.getElementById('auslastungWarnungListeZeitleiste');
     if (!banner || !liste) return;
     banner.style.display = 'none';
     try {
