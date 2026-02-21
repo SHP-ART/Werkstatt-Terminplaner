@@ -3060,7 +3060,10 @@
                 <!-- Server-Update -->
                 <div class="form-section" style="margin-bottom: 25px;">
                     <h3>🔄 Server-Update</h3>
-                    <p style="margin-bottom:12px; color:#555;">Führt <code>update-linux.sh</code> aus: Git-Pull, npm install und Server-Neustart.<br><strong>⚠️ Nur auf Linux-Servern möglich.</strong> Der Server ist nach dem Update kurz nicht erreichbar.</p>
+                    <p style="margin-bottom:12px; color:#555;">Führt <code>git pull</code>, <code>npm install</code> und einen Service-Neustart durch.<br>
+                    <strong>⚠️ Nur auf Linux-Servern möglich.</strong> Die Verbindung wird kurz unterbrochen.<br>
+                    <small style="color:#888;">Einmalig auf dem Server einrichten (als root):<br>
+                    <code>echo "werkstatt ALL=NOPASSWD: /bin/systemctl restart werkstatt-terminplaner.service" &gt;&gt; /etc/sudoers.d/werkstatt-update</code></small></p>
                     <button id="triggerUpdateBtn" class="btn btn-primary">🔄 Update jetzt starten</button>
                     <div id="updateStatusInfo" style="display:none; margin-top:12px; padding:10px 14px; border-radius:6px; font-size:0.9em;"></div>
                 </div>

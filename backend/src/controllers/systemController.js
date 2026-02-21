@@ -215,7 +215,8 @@ class SystemController {
 
   /**
    * POST /api/system/update
-   * Führt update-linux.sh aus (nur auf Linux-Servern).
+   * Führt update-via-api.sh aus (nicht-interaktiv, kein Root nötig für git/npm).
+   * systemctl restart benötigt einmalige sudoers-Freigabe auf dem Server.
    * Gibt sofort eine Antwort zurück – der Server startet danach neu.
    */
   static async triggerUpdate(req, res) {
@@ -228,8 +229,11 @@ class SystemController {
     try {
       const { spawn } = require('child_process');
       const path = require('path');
-      // Pfad: backend/src/controllers -> ../../../ -> Projektroot
-      const scriptPath = path.resolve(__dirname, '../../../update-linux.sh');
+      const fs = require('fs');
+      // Dediziertes nicht-interaktives Update-Skript (kein Root/sudo nötig für git/npm)
+      const scriptPath = path.resolve(__dirname, '../../../update-via-api.sh');
+      // chmod +x sicherstellen
+      try { fs.chmodSync(scriptPath, 0o755); } catch (_) {}
       // Detached + stdio ignore: Prozess läuft weiter, auch wenn der Server neu startet
       const child = spawn('bash', [scriptPath], {
         detached: true,
@@ -237,7 +241,7 @@ class SystemController {
         cwd: path.resolve(__dirname, '../../../')
       });
       child.unref();
-      console.log('[Update] update-linux.sh gestartet (PID:', child.pid, ')');
+      console.log('[Update] update-via-api.sh gestartet (PID:', child.pid, ')');
       res.json({
         success: true,
         message: 'Update läuft. Der Server wird in Kürze neu gestartet...'
