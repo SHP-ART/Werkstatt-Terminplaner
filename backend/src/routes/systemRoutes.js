@@ -23,4 +23,7 @@ router.get('/migrations/all', SystemController.getAllMigrationsList);
 // Schema-Informationen
 router.get('/schema-info', SystemController.getSchemaInfo);
 
+// Server-Update auslösen (Linux only)
+router.post('/update', SystemController.triggerUpdate);
+
 module.exports = router;

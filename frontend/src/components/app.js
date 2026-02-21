@@ -516,6 +516,13 @@ class App {
         refreshBtn.addEventListener('click', () => this.loadServerInfoTab());
       }
 
+      // Update-Button binden
+      const updateBtn = document.getElementById('triggerUpdateBtn');
+      if (updateBtn && !updateBtn.dataset.bound) {
+        updateBtn.dataset.bound = 'true';
+        updateBtn.addEventListener('click', () => this._triggerServerUpdate());
+      }
+
       // Auto-Refresh starten (alle 15s während Tab aktiv)
       this._startServerInfoAutoRefresh();
 
@@ -25594,6 +25601,60 @@ class App {
         banner.style.display = 'block';
       }
     } catch (_) { /* Banner bleibt verborgen bei Fehler */ }
+  }
+
+  async _triggerServerUpdate() {
+    const btn = document.getElementById('triggerUpdateBtn');
+    const statusBox = document.getElementById('updateStatusInfo');
+    if (!confirm('Server-Update jetzt starten?\n\nDer Server führt git pull, npm install durch und startet neu.\nDie Verbindung wird kurz unterbrochen.')) return;
+
+    if (btn) { btn.disabled = true; btn.textContent = '⏳ Update wird gestartet...'; }
+    if (statusBox) { statusBox.style.display = 'none'; }
+
+    try {
+      const res = await SystemService.triggerUpdate();
+      if (res?.success) {
+        if (statusBox) {
+          statusBox.style.background = '#e8f5e9';
+          statusBox.style.border = '1px solid #a5d6a7';
+          statusBox.style.color = '#1b5e20';
+          statusBox.textContent = '✅ ' + (res.message || 'Update gestartet. Seite wird in 30 Sekunden neu geladen...');
+          statusBox.style.display = 'block';
+        }
+        // Automatisch neu laden, sobald der Server wieder verfügbar ist
+        let attempts = 0;
+        const tryReload = setInterval(async () => {
+          attempts++;
+          try {
+            const baseUrl = CONFIG.API_URL.replace(/\/$/, '');
+            await fetch(`${baseUrl}/api/health`);
+            clearInterval(tryReload);
+            location.reload();
+          } catch (_) {
+            if (statusBox) statusBox.textContent = `🔄 Warte auf Server-Neustart... (${attempts * 5}s)`;
+            if (attempts >= 60) { clearInterval(tryReload); location.reload(); }
+          }
+        }, 5000);
+      } else {
+        if (statusBox) {
+          statusBox.style.background = '#fff3e0';
+          statusBox.style.border = '1px solid #ffcc80';
+          statusBox.style.color = '#e65100';
+          statusBox.textContent = '⚠️ ' + (res?.message || 'Update nicht möglich');
+          statusBox.style.display = 'block';
+        }
+        if (btn) { btn.disabled = false; btn.textContent = '🔄 Update jetzt starten'; }
+      }
+    } catch (err) {
+      if (statusBox) {
+        statusBox.style.background = '#ffebee';
+        statusBox.style.border = '1px solid #ef9a9a';
+        statusBox.style.color = '#b71c1c';
+        statusBox.textContent = '❌ Fehler: ' + err.message;
+        statusBox.style.display = 'block';
+      }
+      if (btn) { btn.disabled = false; btn.textContent = '🔄 Update jetzt starten'; }
+    }
   }
 
   /**

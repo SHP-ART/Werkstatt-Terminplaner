@@ -1111,6 +1111,16 @@ class TabletService {
   }
 }
 
+class SystemService {
+  /**
+   * POST /api/system/update
+   * Löst update-linux.sh auf dem Server aus.
+   */
+  static async triggerUpdate() {
+    return ApiService.post('/system/update', {});
+  }
+}
+
 // Global verfügbar machen (für Vite-Kompatibilität)
 window.ApiService = ApiService;
 window.KundenService = KundenService;
@@ -1128,3 +1138,4 @@ window.TeileBestellService = TeileBestellService;
 window.KIPlanungService = KIPlanungService;
 window.SchichtTemplateService = SchichtTemplateService;
 window.TabletService = TabletService;
+window.SystemService = SystemService;
