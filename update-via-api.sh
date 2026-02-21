@@ -26,8 +26,14 @@ git config --global --add safe.directory "$INSTALL_DIR" 2>/dev/null || true
 git pull origin master
 echo "✓ git pull erfolgreich"
 
-# 2. Frontend bauen (wenn npm vorhanden)
-if [ -f "package.json" ] && command -v npm &>/dev/null; then
+# 2. Frontend bauen (wenn npm und frontend/package.json vorhanden)
+if [ -f "frontend/package.json" ] && command -v npm &>/dev/null; then
+  echo "▶ npm install (frontend)..."
+  npm install --prefix frontend --prefer-offline 2>&1 | tail -5
+  echo "▶ Frontend bauen..."
+  npm run build --prefix frontend 2>&1 | tail -10
+  echo "✓ Frontend gebaut"
+elif [ -f "package.json" ] && command -v npm &>/dev/null; then
   echo "▶ npm install (root)..."
   npm install --prefer-offline 2>&1 | tail -5
   echo "▶ Frontend bauen..."

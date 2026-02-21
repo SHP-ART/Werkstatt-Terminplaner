@@ -28613,9 +28613,10 @@ class App {
       : `lehrling_id=${personId}`;
 
     try {
-      // Lade nur Einträge mit Datum
+      // Lade alle zukünftigen Datums-Einträge (ab heute bis weit in die Zukunft)
       const heute = new Date().toISOString().split('T')[0];
-      const response = await fetch(`${CONFIG.API_URL}/arbeitszeiten-plan/range?${queryParam}&von=${heute}`);
+      const bis = '2099-12-31';
+      const response = await fetch(`${CONFIG.API_URL}/arbeitszeiten-plan/range?${queryParam}&datum_von=${heute}&datum_bis=${bis}`);
       
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}`);
