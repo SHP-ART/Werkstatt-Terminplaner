@@ -349,38 +349,3 @@ class SystemController {
 }
 
 module.exports = SystemController;
-  static async triggerUpdate(req, res) {
-    if (process.platform !== 'linux') {
-      return res.status(400).json({
-        success: false,
-        message: 'Server-Update ist nur auf Linux-Servern verfügbar.'
-      });
-    }
-    try {
-      const { spawn } = require('child_process');
-      const path = require('path');
-      const fs = require('fs');
-      // Dediziertes nicht-interaktives Update-Skript (kein Root/sudo nötig für git/npm)
-      const scriptPath = path.resolve(__dirname, '../../../update-via-api.sh');
-      // chmod +x sicherstellen
-      try { fs.chmodSync(scriptPath, 0o755); } catch (_) {}
-      // Detached + stdio ignore: Prozess läuft weiter, auch wenn der Server neu startet
-      const child = spawn('bash', [scriptPath], {
-        detached: true,
-        stdio: 'ignore',
-        cwd: path.resolve(__dirname, '../../../')
-      });
-      child.unref();
-      console.log('[Update] update-via-api.sh gestartet (PID:', child.pid, ')');
-      res.json({
-        success: true,
-        message: 'Update läuft. Der Server wird in Kürze neu gestartet...'
-      });
-    } catch (error) {
-      console.error('[Update] Fehler:', error);
-      res.status(500).json({ success: false, message: error.message });
-    }
-  }
-}
-
-module.exports = SystemController;
