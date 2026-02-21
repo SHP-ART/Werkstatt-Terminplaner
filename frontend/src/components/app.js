@@ -26448,13 +26448,18 @@ class App {
     try {
       // Hole alle Daten parallel (inkl. Einstellungen für Nebenzeit)
       const heute = this.formatDateLocal(this.getToday());
-      const [mitarbeiter, lehrlinge, termineHeute, einstellungen, abwesenheiten] = await Promise.all([
+      const [mitarbeiterRaw, lehrlingeRaw, termineRaw, einstellungen, abwesenheiten] = await Promise.all([
         ApiService.get('/mitarbeiter'),
         ApiService.get('/lehrlinge'),
         ApiService.get(`/termine?datum=${heute}`),
         EinstellungenService.getWerkstatt(),
         ApiService.get(`/abwesenheiten/datum/${heute}`).catch(() => [])
       ]);
+
+      // Normalisieren: Controller gibt manchmal { termine, aktivePausen } statt reines Array
+      const mitarbeiter = Array.isArray(mitarbeiterRaw) ? mitarbeiterRaw : (mitarbeiterRaw?.mitarbeiter || []);
+      const lehrlinge   = Array.isArray(lehrlingeRaw)   ? lehrlingeRaw   : (lehrlingeRaw?.lehrlinge   || []);
+      const termineHeute = Array.isArray(termineRaw)    ? termineRaw     : (termineRaw?.termine        || []);
 
       // Globale Nebenzeit aus Einstellungen
       const globaleNebenzeitProzent = einstellungen?.nebenzeit_prozent || 0;
