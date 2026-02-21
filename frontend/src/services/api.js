@@ -1048,6 +1048,10 @@ class KIPlanungService {
   static async getWochenvorschlag(startDatum) {
     return ApiService.get(`/ki-planung/wochenplanung/${startDatum}`);
   }
+
+  static async getJobStatus(jobId) {
+    return ApiService.get(`/ki-planung/job/${jobId}`);
+  }
 }
 
 class SchichtTemplateService {

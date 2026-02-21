@@ -2,10 +2,23 @@ const EinstellungenModel = require('../models/einstellungenModel');
 const localAiService = require('../services/localAiService');
 const ollamaService = require('../services/ollamaService');
 const { getAsync, allAsync } = require('../utils/dbHelper');
+const { broadcastEvent } = require('../utils/websocket');
 
 const DEFAULT_ARBEITSBEGINN_MIN = 8 * 60;
 const DEFAULT_ARBEITSENDE_MIN = 18 * 60;
 const DEFAULT_TERMIN_DAUER_MIN = 60;
+
+// Job-Store für Hintergrundverarbeitung (In-Memory, TTL 15 Min)
+const _kiJobs = new Map();
+setInterval(() => {
+  const cutoff = Date.now() - 15 * 60 * 1000;
+  for (const [id, job] of _kiJobs) {
+    if (job.created < cutoff) _kiJobs.delete(id);
+  }
+}, 5 * 60 * 1000);
+function _newJobId() {
+  return `ki_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+}
 
 class KIPlanungController {
   
@@ -55,18 +68,43 @@ class KIPlanungController {
         });
       }
       
-      // API-Key prüfen (nicht für Ollama)
-      let apiKey = null;
-      if (mode !== 'ollama') {
-        apiKey = await EinstellungenModel.getChatGPTApiKey();
-        if (!apiKey) {
-          return res.status(400).json({ 
-            error: 'Kein ChatGPT API-Key konfiguriert. Bitte unter Einstellungen → KI / API einen API-Key hinterlegen.' 
-          });
-        }
+      // Ollama: sofort Job-ID zurückgeben, Verarbeitung im Hintergrund
+      if (mode === 'ollama') {
+        const jobId = _newJobId();
+        _kiJobs.set(jobId, { status: 'pending', created: Date.now(), type: 'tages' });
+        res.json({ success: true, async: true, jobId });
+
+        // Hintergrundverarbeitung
+        (async () => {
+          try {
+            const [mitarbeiter, lehrlinge, termine, schwebendeTermine, einstellungen, abwesenheiten] = await Promise.all([
+              KIPlanungController.getMitarbeiterMitDetails(),
+              KIPlanungController.getLehrlingeMitDetails(),
+              KIPlanungController.getTermineFuerDatum(datum),
+              KIPlanungController.getSchwebendeTermine(),
+              EinstellungenModel.getWerkstatt(),
+              KIPlanungController.getAbwesenheitenFuerDatum(datum)
+            ]);
+            const prompt = KIPlanungController.erstellePlanungsPrompt({ datum, mitarbeiter, lehrlinge, termine, schwebendeTermine, einstellungen, abwesenheiten });
+            const kiAntwort = await ollamaService.planungRequest(prompt);
+            const vorschlag = KIPlanungController.parseKIAntwort(kiAntwort, { mitarbeiter, lehrlinge, termine, schwebendeTermine });
+            _kiJobs.set(jobId, { status: 'done', created: Date.now(), result: { success: true, datum, vorschlag, mode: 'ollama' } });
+            broadcastEvent('ki_planung_done', { jobId, type: 'tages' });
+          } catch (err) {
+            console.error('KI-Planung Hintergrundfehler:', err);
+            _kiJobs.set(jobId, { status: 'error', created: Date.now(), error: err.message });
+            broadcastEvent('ki_planung_done', { jobId, type: 'tages', error: err.message });
+          }
+        })();
+        return;
+      }
+
+      // API-Key prüfen (ChatGPT)
+      const apiKey = await EinstellungenModel.getChatGPTApiKey();
+      if (!apiKey) {
+        return res.status(400).json({ error: 'Kein ChatGPT API-Key konfiguriert. Bitte unter Einstellungen → KI / API einen API-Key hinterlegen.' });
       }
       
-      // Alle relevanten Daten sammeln
       const [mitarbeiter, lehrlinge, termine, schwebendeTermine, einstellungen, abwesenheiten] = await Promise.all([
         KIPlanungController.getMitarbeiterMitDetails(),
         KIPlanungController.getLehrlingeMitDetails(),
@@ -75,43 +113,32 @@ class KIPlanungController {
         EinstellungenModel.getWerkstatt(),
         KIPlanungController.getAbwesenheitenFuerDatum(datum)
       ]);
-      
-      // Prompt für KI erstellen
-      const prompt = KIPlanungController.erstellePlanungsPrompt({
-        datum,
-        mitarbeiter,
-        lehrlinge,
-        termine,
-        schwebendeTermine,
-        einstellungen,
-        abwesenheiten
-      });
-      
-      // KI API aufrufen (Ollama oder ChatGPT)
-      const kiAntwort = mode === 'ollama'
-        ? await ollamaService.planungRequest(prompt)
-        : await KIPlanungController.chatGPTRequest(apiKey, prompt);
-      
-      // Antwort parsen und strukturieren
-      const vorschlag = KIPlanungController.parseKIAntwort(kiAntwort, {
-        mitarbeiter,
-        lehrlinge,
-        termine,
-        schwebendeTermine
-      });
-      
-      res.json({
-        success: true,
-        datum,
-        vorschlag,
-        rohAntwort: kiAntwort // Für Debug-Zwecke
-      });
+      const prompt = KIPlanungController.erstellePlanungsPrompt({ datum, mitarbeiter, lehrlinge, termine, schwebendeTermine, einstellungen, abwesenheiten });
+      const kiAntwort = await KIPlanungController.chatGPTRequest(apiKey, prompt);
+      const vorschlag = KIPlanungController.parseKIAntwort(kiAntwort, { mitarbeiter, lehrlinge, termine, schwebendeTermine });
+      res.json({ success: true, datum, vorschlag, rohAntwort: kiAntwort });
       
     } catch (error) {
       console.error('KI-Planungsvorschlag Fehler:', error);
-      res.status(500).json({ 
-        error: error.message || 'Fehler beim Generieren des KI-Vorschlags' 
-      });
+      res.status(500).json({ error: error.message || 'Fehler beim Generieren des KI-Vorschlags' });
+    }
+  }
+
+  /**
+   * Status eines Hintergrund-Jobs abfragen
+   */
+  static async getJobStatus(req, res) {
+    const { jobId } = req.params;
+    const job = _kiJobs.get(jobId);
+    if (!job) return res.status(404).json({ error: 'Job nicht gefunden oder abgelaufen (max. 15 Min)' });
+    if (job.status === 'pending') return res.json({ status: 'pending' });
+    if (job.status === 'done') {
+      _kiJobs.delete(jobId);
+      return res.json({ status: 'done', ...job.result });
+    }
+    if (job.status === 'error') {
+      _kiJobs.delete(jobId);
+      return res.status(500).json({ status: 'error', error: job.error });
     }
   }
 
@@ -167,21 +194,48 @@ class KIPlanungController {
         });
       }
       
-      // API-Key prüfen (nicht für Ollama)
-      let apiKey = null;
-      if (mode !== 'ollama') {
-        apiKey = await EinstellungenModel.getChatGPTApiKey();
-        if (!apiKey) {
-          return res.status(400).json({ 
-            error: 'Kein ChatGPT API-Key konfiguriert.' 
-          });
-        }
+      // Ollama: sofort Job-ID zurückgeben, Verarbeitung im Hintergrund
+      if (mode === 'ollama') {
+        const jobId = _newJobId();
+        _kiJobs.set(jobId, { status: 'pending', created: Date.now(), type: 'wochen' });
+        res.json({ success: true, async: true, jobId });
+
+        (async () => {
+          try {
+            const wochentage = KIPlanungController.getWochentage(startDatum);
+            const wochenDaten = await Promise.all(wochentage.map(async (tag) => {
+              const [termine, abwesenheiten] = await Promise.all([
+                KIPlanungController.getTermineFuerDatum(tag),
+                KIPlanungController.getAbwesenheitenFuerDatum(tag)
+              ]);
+              return { datum: tag, termine, abwesenheiten };
+            }));
+            const [mitarbeiter, lehrlinge, schwebendeTermine, einstellungen] = await Promise.all([
+              KIPlanungController.getMitarbeiterMitDetails(),
+              KIPlanungController.getLehrlingeMitDetails(),
+              KIPlanungController.getSchwebendeTermine(),
+              EinstellungenModel.getWerkstatt()
+            ]);
+            const prompt = KIPlanungController.erstelleWochenPrompt({ wochentage, wochenDaten, mitarbeiter, lehrlinge, schwebendeTermine, einstellungen });
+            const kiAntwort = await ollamaService.planungRequest(prompt);
+            const vorschlag = KIPlanungController.parseWochenAntwort(kiAntwort, { wochentage, schwebendeTermine, mitarbeiter, lehrlinge });
+            _kiJobs.set(jobId, { status: 'done', created: Date.now(), result: { success: true, wochentage, vorschlag, mode: 'ollama' } });
+            broadcastEvent('ki_planung_done', { jobId, type: 'wochen' });
+          } catch (err) {
+            console.error('KI-Wochenplanung Hintergrundfehler:', err);
+            _kiJobs.set(jobId, { status: 'error', created: Date.now(), error: err.message });
+            broadcastEvent('ki_planung_done', { jobId, type: 'wochen', error: err.message });
+          }
+        })();
+        return;
       }
-      
-      // Wochentage berechnen (Mo-Fr)
+
+      // ChatGPT
+      const apiKeyW = await EinstellungenModel.getChatGPTApiKey();
+      if (!apiKeyW) {
+        return res.status(400).json({ error: 'Kein ChatGPT API-Key konfiguriert.' });
+      }
       const wochentage = KIPlanungController.getWochentage(startDatum);
-      
-      // Daten für die ganze Woche sammeln
       const wochenDaten = await Promise.all(wochentage.map(async (tag) => {
         const [termine, abwesenheiten] = await Promise.all([
           KIPlanungController.getTermineFuerDatum(tag),
@@ -189,48 +243,20 @@ class KIPlanungController {
         ]);
         return { datum: tag, termine, abwesenheiten };
       }));
-      
       const [mitarbeiter, lehrlinge, schwebendeTermine, einstellungen] = await Promise.all([
         KIPlanungController.getMitarbeiterMitDetails(),
         KIPlanungController.getLehrlingeMitDetails(),
         KIPlanungController.getSchwebendeTermine(),
         EinstellungenModel.getWerkstatt()
       ]);
-      
-      // Prompt für Wochenplanung
-      const prompt = KIPlanungController.erstelleWochenPrompt({
-        wochentage,
-        wochenDaten,
-        mitarbeiter,
-        lehrlinge,
-        schwebendeTermine,
-        einstellungen
-      });
-      
-      // KI API aufrufen (Ollama oder ChatGPT)
-      const kiAntwort = mode === 'ollama'
-        ? await ollamaService.planungRequest(prompt)
-        : await KIPlanungController.chatGPTRequest(apiKey, prompt);
-      
-      const vorschlag = KIPlanungController.parseWochenAntwort(kiAntwort, {
-        wochentage,
-        schwebendeTermine,
-        mitarbeiter,
-        lehrlinge
-      });
-      
-      res.json({
-        success: true,
-        wochentage,
-        vorschlag,
-        rohAntwort: kiAntwort
-      });
+      const prompt = KIPlanungController.erstelleWochenPrompt({ wochentage, wochenDaten, mitarbeiter, lehrlinge, schwebendeTermine, einstellungen });
+      const kiAntwort = await KIPlanungController.chatGPTRequest(apiKeyW, prompt);
+      const vorschlag = KIPlanungController.parseWochenAntwort(kiAntwort, { wochentage, schwebendeTermine, mitarbeiter, lehrlinge });
+      res.json({ success: true, wochentage, vorschlag, rohAntwort: kiAntwort });
       
     } catch (error) {
       console.error('KI-Wochenvorschlag Fehler:', error);
-      res.status(500).json({ 
-        error: error.message || 'Fehler beim Generieren des Wochenvorschlags' 
-      });
+      res.status(500).json({ error: error.message || 'Fehler beim Generieren des Wochenvorschlags' });
     }
   }
 

@@ -25584,8 +25584,9 @@ class App {
     
     try {
       const result = await KIPlanungService.getTagesvorschlag(datum);
-      
-      if (result.success && result.vorschlag) {
+      if (result.async && result.jobId) {
+        this._pollKIPlanungJob(result.jobId, 'tages', datum);
+      } else if (result.success && result.vorschlag) {
         this.displayKITagesvorschlag(result.vorschlag, datum);
       } else {
         this.showKIPlanungError(result.error || 'Unbekannter Fehler');
@@ -25621,8 +25622,9 @@ class App {
     
     try {
       const result = await KIPlanungService.getWochenvorschlag(datum);
-      
-      if (result.success && result.vorschlag) {
+      if (result.async && result.jobId) {
+        this._pollKIPlanungJob(result.jobId, 'wochen', datum);
+      } else if (result.success && result.vorschlag) {
         this.displayKIWochenvorschlag(result.vorschlag, result.wochentage);
       } else {
         this.showKIPlanungError(result.error || 'Unbekannter Fehler');
@@ -25630,6 +25632,38 @@ class App {
     } catch (error) {
       console.error('KI-Wochenplanung Fehler:', error);
       this.showKIPlanungError(error.message || 'Verbindungsfehler zum Server');
+    }
+  }
+
+  /**
+   * Ollama-Job pollen bis fertig (alle 3 Sekunden)
+   */
+  async _pollKIPlanungJob(jobId, type, datum, attempt = 0) {
+    if (attempt > 40) { // max ~2 Minuten
+      this.showKIPlanungError('Timeout: Ollama hat zu lange gebraucht. Bitte erneut versuchen.');
+      return;
+    }
+    // Fortschrittstext aktualisieren
+    const loading = document.getElementById('kiPlanungLoading');
+    if (loading) {
+      const sek = attempt * 3;
+      const dots = '.'.repeat((attempt % 3) + 1);
+      const span = loading.querySelector('span') || loading;
+      span.textContent = `🦙 Ollama denkt${dots} (${sek}s) – läuft im Hintergrund`;
+    }
+    await new Promise(r => setTimeout(r, 3000));
+    try {
+      const res = await KIPlanungService.getJobStatus(jobId);
+      if (res.status === 'pending') {
+        this._pollKIPlanungJob(jobId, type, datum, attempt + 1);
+      } else if (res.status === 'done' && res.vorschlag) {
+        if (type === 'tages') this.displayKITagesvorschlag(res.vorschlag, datum);
+        else this.displayKIWochenvorschlag(res.vorschlag, res.wochentage);
+      } else {
+        this.showKIPlanungError(res.error || 'Fehler bei der KI-Verarbeitung');
+      }
+    } catch (err) {
+      this.showKIPlanungError(err.message || 'Verbindungsfehler beim Abrufen des Ergebnisses');
     }
   }
 
