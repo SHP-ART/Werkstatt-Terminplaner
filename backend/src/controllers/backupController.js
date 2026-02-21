@@ -297,6 +297,10 @@ const BackupController = {
       const buffer = Buffer.from(fileBase64, 'base64');
       fs.writeFileSync(target, buffer);
 
+      // Stats sofort nach dem Schreiben ermitteln – BEVOR restoreNow die Datei
+      // ggf. durch createAutoBackup-Cleanup löscht (Backups > 10 werden bereinigt)
+      const stats = fs.statSync(target);
+
       if (restoreNow) {
         // Wichtig: Erst Datenbankverbindung schließen, dann Datei ersetzen, dann neu verbinden
         console.log('🔄 Bereite Upload+Restore vor...');
@@ -319,7 +323,6 @@ const BackupController = {
         console.log('✅ Backup hochgeladen, eingespielt und Migrationen ausgeführt:', safeName);
       }
 
-      const stats = fs.statSync(target);
       res.json({
         message: restoreNow ? 'Backup hochgeladen, eingespielt und Migrationen ausgeführt' : 'Backup hochgeladen',
         backup: { name: safeName, sizeBytes: stats.size, createdAt: stats.mtime },
