@@ -1052,6 +1052,10 @@ class KIPlanungService {
   static async getJobStatus(jobId) {
     return ApiService.get(`/ki-planung/job/${jobId}`);
   }
+
+  static async getAnomalien(datum) {
+    return ApiService.get(`/ki-planung/anomalien/${datum}`);
+  }
 }
 
 class SchichtTemplateService {

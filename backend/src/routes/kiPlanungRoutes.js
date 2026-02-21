@@ -11,4 +11,7 @@ router.get('/wochenplanung/:startDatum', KIPlanungController.getWochenvorschlag)
 // Hintergrund-Job-Status abfragen (für Ollama-Langläufer)
 router.get('/job/:jobId', KIPlanungController.getJobStatus);
 
+// Schneller Anomalien-Check für einen Tag (kein Ollama, sofort)
+router.get('/anomalien/:datum', KIPlanungController.getAnomalienFuerDatum);
+
 module.exports = router;

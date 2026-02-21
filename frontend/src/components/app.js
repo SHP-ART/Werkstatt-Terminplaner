@@ -19270,6 +19270,9 @@ class App {
       // 3c. Auslastungsbalken aktualisieren
       this.updatePlanungAuslastungsbalken(auslastungData, mitarbeiterListe, lehrlingeListe);
 
+      // 3c2. Anomalien-Banner im Hintergrund laden (nicht blockierend)
+      this._loadAuslastungWarnungen(datum);
+
       // 3d. Arbeitszeiten für alle Mitarbeiter und Lehrlinge laden
       const arbeitszeitenMap = new Map(); // Speichert Arbeitszeiten: 'ma-{id}' oder 'l-{id}' -> {arbeitsbeginn, arbeitsende}
       
@@ -25558,6 +25561,23 @@ class App {
   }
 
   // ==================== KI-PLANUNGS-FUNKTIONEN ====================
+
+  /**
+   * Auslastungs-Warnungen für einen Tag laden und im Banner anzeigen (nicht blockierend)
+   */
+  async _loadAuslastungWarnungen(datum) {
+    const banner = document.getElementById('auslastungWarnungBanner');
+    const liste  = document.getElementById('auslastungWarnungListe');
+    if (!banner || !liste) return;
+    banner.style.display = 'none';
+    try {
+      const res = await KIPlanungService.getAnomalien(datum);
+      if (res?.success && res.warnungen?.length > 0) {
+        liste.innerHTML = res.warnungen.map(w => `<li>${w}</li>`).join('');
+        banner.style.display = 'block';
+      }
+    } catch (_) { /* Banner bleibt verborgen bei Fehler */ }
+  }
 
   /**
    * KI-Tagesplanungsvorschlag anfordern

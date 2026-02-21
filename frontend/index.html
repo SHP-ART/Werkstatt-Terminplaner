@@ -3142,6 +3142,16 @@
             </div>
 
             <div class="planning-layout">
+                <!-- Warnungs-Banner für Anomalien (wird dynamisch befüllt) -->
+                <div id="auslastungWarnungBanner" style="display:none; margin-bottom:10px; padding:10px 14px; background:#fff8e1; border:1px solid #ffcc80; border-radius:8px; font-size:0.88em;">
+                  <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:8px">
+                    <div>
+                      <strong style="color:#e65100">&#9888;&#65039; Warnungen für diesen Tag:</strong>
+                      <ul id="auslastungWarnungListe" style="margin:5px 0 0 16px; padding:0; color:#5d4037;"></ul>
+                    </div>
+                    <button onclick="document.getElementById('auslastungWarnungBanner').style.display='none'" style="border:none;background:none;cursor:pointer;color:#999;font-size:1.1em;line-height:1;padding:0;flex-shrink:0">&#x2715;</button>
+                  </div>
+                </div>
                 <!-- Hauptbereich: Timeline -->
                 <div class="timeline-panel">
                     <h3>⏰ Zeitplan</h3>

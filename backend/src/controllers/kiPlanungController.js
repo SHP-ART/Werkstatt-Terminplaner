@@ -787,6 +787,38 @@ class KIPlanungController {
     return Array.from(warnungen).slice(0, 12);
   }
 
+  /**
+   * GET /api/ki-planung/anomalien/:datum
+   * Schnell-Check für Auslastungs-Warnungen ohne volle KI-Planung (kein Ollama)
+   */
+  static async getAnomalienFuerDatum(req, res) {
+    try {
+      const { datum } = req.params;
+      if (!datum) return res.status(400).json({ error: 'Datum erforderlich' });
+
+      const settings = await EinstellungenModel.getWerkstatt();
+      if (settings?.anomaly_detection_enabled === 0) {
+        return res.json({ success: true, warnungen: [], deaktiviert: true });
+      }
+
+      const [mitarbeiter, lehrlinge, termine, abwesenheiten] = await Promise.all([
+        KIPlanungController.getMitarbeiterMitDetails(),
+        KIPlanungController.getLehrlingeMitDetails(),
+        KIPlanungController.getTermineFuerDatum(datum),
+        KIPlanungController.getAbwesenheitenFuerDatum(datum)
+      ]);
+
+      const personen  = KIPlanungController.buildPersonList(mitarbeiter, lehrlinge, abwesenheiten, settings);
+      const schedule  = KIPlanungController.buildExistingSchedules(termine, personen);
+      const warnungen = KIPlanungController.collectAnomalien(termine, schedule, personen, settings);
+
+      res.json({ success: true, datum, warnungen });
+    } catch (err) {
+      console.error('Anomalien-Check Fehler:', err);
+      res.status(500).json({ error: err.message });
+    }
+  }
+
   static erstellePlanungsPrompt({ datum, mitarbeiter, lehrlinge, termine, schwebendeTermine, einstellungen, abwesenheiten }) {
     const datumFormatiert = new Date(datum).toLocaleDateString('de-DE', { 
       weekday: 'long', day: '2-digit', month: '2-digit', year: 'numeric' 
