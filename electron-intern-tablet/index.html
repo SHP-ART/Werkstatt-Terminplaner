@@ -2085,7 +2085,7 @@
 
       try {
         const heute = formatDateLocal(new Date());
-        const [mitarbeiter, lehrlinge, termine, einstellungen, aktivePausen, abwesenheiten] = await Promise.all([
+        const [mitarbeiterRaw, lehrlingeRaw, termineRaw, einstellungen, aktivePausen, abwesenheiten] = await Promise.all([
           ApiService.get('/mitarbeiter'),
           ApiService.get('/lehrlinge'),
           ApiService.get(`/termine?datum=${heute}`),
@@ -2093,6 +2093,11 @@
           ApiService.get('/pause/aktive'),
           ApiService.get(`/abwesenheiten/datum/${heute}`)
         ]);
+
+        // Normalisieren: /termine kann {termine, aktivePausen} oder reines Array zurückgeben
+        const mitarbeiter = Array.isArray(mitarbeiterRaw) ? mitarbeiterRaw : (mitarbeiterRaw?.mitarbeiter || []);
+        const lehrlinge   = Array.isArray(lehrlingeRaw)   ? lehrlingeRaw   : (lehrlingeRaw?.lehrlinge   || []);
+        const termine     = Array.isArray(termineRaw)     ? termineRaw     : (termineRaw?.termine        || []);
 
         const globaleNebenzeit = einstellungen?.nebenzeit_prozent || 0;
         const aktiveMitarbeiter = mitarbeiter.filter(m => m.aktiv === 1);
