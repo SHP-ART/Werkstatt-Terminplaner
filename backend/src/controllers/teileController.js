@@ -36,20 +36,27 @@ const getFaellige = async (req, res) => {
   try {
     const tage = parseInt(req.query.tage) || 7;
     
-    // OPTIMIERT: Alle DB-Queries parallel ausführen statt sequentiell
-    const [
-      bestellungen,
-      schwebende,
-      termineMitTeileStatus,
-      schwebendeTermineMitTeileStatus,
-      termineMitArbeitenTeileStatus
-    ] = await Promise.all([
+    // allSettled statt all: ein fehlgeschlagener Query bricht nicht alles ab
+    const results = await Promise.allSettled([
       TeileBestellung.getFaellige(tage),
       TeileBestellung.getSchwebende(),
       TeileBestellung.getTermineMitTeileStatusBestellen(tage),
       TeileBestellung.getSchwbendeTermineMitTeileStatusBestellen(),
       TeileBestellung.getTermineMitArbeitenTeileStatusBestellen(tage)
     ]);
+
+    const [r0, r1, r2, r3, r4] = results;
+    if (r0.status === 'rejected') console.error('[Teile] getFaellige Fehler:', r0.reason?.message);
+    if (r1.status === 'rejected') console.error('[Teile] getSchwebende Fehler:', r1.reason?.message);
+    if (r2.status === 'rejected') console.error('[Teile] getTermineMitTeileStatusBestellen Fehler:', r2.reason?.message);
+    if (r3.status === 'rejected') console.error('[Teile] getSchwbendeTermineMitTeileStatusBestellen Fehler:', r3.reason?.message);
+    if (r4.status === 'rejected') console.error('[Teile] getTermineMitArbeitenTeileStatusBestellen Fehler:', r4.reason?.message);
+
+    const bestellungen               = r0.status === 'fulfilled' ? r0.value : [];
+    const schwebende                 = r1.status === 'fulfilled' ? r1.value : [];
+    const termineMitTeileStatus      = r2.status === 'fulfilled' ? r2.value : [];
+    const schwebendeTermineMitTeileStatus = r3.status === 'fulfilled' ? r3.value : [];
+    const termineMitArbeitenTeileStatus   = r4.status === 'fulfilled' ? r4.value : [];
     
     // Gruppiere nach Dringlichkeit
     const heute = new Date();
