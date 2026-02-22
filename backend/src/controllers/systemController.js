@@ -265,10 +265,13 @@ echo "Git HEAD: $(git rev-parse --short HEAD 2>/dev/null)"
 # 2. Frontend bauen
 if [ -f "frontend/package.json" ]; then
   echo "--- npm install vite (nur Build-Tool) ---"
-  NODE_ENV=development "$NPM" install --prefix frontend --save-dev vite
+  cd "${repoDir}/frontend"
+  NODE_ENV=development "$NPM" install --save-dev vite
+  export PATH="$(pwd)/node_modules/.bin:$PATH"
   echo "--- npm run build (vite) ---"
-  NODE_ENV=development "$NPM" run build --prefix frontend
+  NODE_ENV=development "$NPM" run build
   BUILD_CODE=$?
+  cd "${repoDir}"
   if [ $BUILD_CODE -eq 0 ]; then
     echo "BUILD OK – dist Dateien: $(find frontend/dist -type f 2>/dev/null | wc -l)"
   else
@@ -431,14 +434,15 @@ exec >> "${logFile}" 2>&1
 echo ""
 echo "=== FRONTEND-BUILD gestartet: $(date) ==="
 echo "NPM: ${npmPath}"
-cd "${repoDir}" || exit 1
+cd "${repoDir}/frontend" || exit 1
 echo "--- npm install vite (nur Build-Tool, kein electron) ---"
-"${npmPath}" install --prefix frontend --save-dev vite --no-audit --prefer-offline
+"${npmPath}" install --save-dev vite --no-audit --prefer-offline
+export PATH="$(pwd)/node_modules/.bin:$PATH"
 echo "--- npm run build ---"
-"${npmPath}" run build --prefix frontend
+"${npmPath}" run build
 BUILD_CODE=$?
 if [ $BUILD_CODE -eq 0 ]; then
-  echo "BUILD OK – dist Dateien: $(find frontend/dist -type f 2>/dev/null | wc -l)"
+  echo "BUILD OK – dist Dateien: $(find dist -type f 2>/dev/null | wc -l)"
 else
   echo "BUILD FEHLGESCHLAGEN (Exit $BUILD_CODE)"
 fi
