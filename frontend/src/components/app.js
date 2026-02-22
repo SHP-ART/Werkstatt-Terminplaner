@@ -11211,9 +11211,10 @@ class App {
     if (fahrzeuge.length === 0) {
       const kzMap = new Map();
 
-      // 1. Kennzeichen aus termineCache
+      // 1. Kennzeichen aus termineCache (== für Typsicherheit: id kann String oder Number sein)
       (this.termineCache || [])
-        .filter(t => t.kunde_id === kundeId && t.kennzeichen)
+        // eslint-disable-next-line eqeqeq
+        .filter(t => t.kunde_id == kundeId && t.kennzeichen)
         .forEach(t => {
           const kzNorm = t.kennzeichen.toUpperCase().replace(/[\s\-]/g, '');
           if (!kzMap.has(kzNorm)) {
@@ -11447,71 +11448,73 @@ class App {
 
   // Kunde und Fahrzeug auf das Formular anwenden
   applyKundeAuswahl(kunde, fahrzeug) {
-    // Kunden-Daten füllen
-    document.getElementById('kunde_id').value = kunde.id;
-    document.getElementById('terminNameSuche').value = kunde.name;
-    document.getElementById('neuer_kunde_telefon').value = kunde.telefon || '';
-    
-    // Fahrzeug-Daten füllen
-    if (fahrzeug) {
-      document.getElementById('kennzeichen').value = fahrzeug.kennzeichen || '';
-      
-      // Auch die Suchfelder füllen
-      if (fahrzeug.kennzeichen) {
-        const parts = this.parseKennzeichen(fahrzeug.kennzeichen);
-        document.getElementById('kzSucheBezirk').value = parts.bezirk;
-        document.getElementById('kzSucheBuchstaben').value = parts.buchstaben;
-        document.getElementById('kzSucheNummer').value = parts.nummer;
+    try {
+      // Hilfsfunktion: setzt Wert nur wenn Element existiert
+      const setVal = (id, val) => {
+        const el = document.getElementById(id);
+        if (el) el.value = val;
+      };
+
+      // Kunden-Daten füllen
+      setVal('kunde_id', kunde.id);
+      setVal('terminNameSuche', kunde.name);
+      setVal('neuer_kunde_telefon', kunde.telefon || '');
+
+      // Das Kennzeichen, das tatsächlich verwendet wird
+      const kzQuelle = fahrzeug?.kennzeichen || kunde.kennzeichen || '';
+      const fzTyp    = fahrzeug?.fahrzeugtyp  || kunde.fahrzeugtyp  || '';
+      const fzVin    = fahrzeug?.vin           || '';
+      const letzterKmStand = fahrzeug?.letzter_km_stand || fahrzeug?.letzterKmStand || null;
+
+      console.log('[applyKundeAuswahl]', { kunde: kunde.name, kz: kzQuelle, fahrzeug });
+
+      // Kennzeichen-Felder setzen
+      if (kzQuelle) {
+        setVal('kennzeichen', kzQuelle);
+        try {
+          const parts = this.parseKennzeichen(kzQuelle);
+          setVal('kzSucheBezirk',    parts.bezirk);
+          setVal('kzSucheBuchstaben', parts.buchstaben);
+          setVal('kzSucheNummer',    parts.nummer);
+        } catch (parseErr) {
+          console.warn('[applyKundeAuswahl] parseKennzeichen Fehler:', parseErr);
+        }
       }
-      
-      if (fahrzeug.fahrzeugtyp) {
-        document.getElementById('fahrzeugtyp').value = fahrzeug.fahrzeugtyp;
+
+      if (fzTyp) setVal('fahrzeugtyp', fzTyp);
+      if (fzVin) setVal('vin', fzVin);
+
+      // KM-Stand als Placeholder
+      const kmInput = document.getElementById('kilometerstand');
+      if (kmInput) {
+        if (letzterKmStand) {
+          kmInput.value = '';
+          kmInput.placeholder = `Letzter KM-Stand: ${Number(letzterKmStand).toLocaleString('de-DE')} km`;
+          kmInput.classList.add('has-previous-value');
+        } else if (kunde.id) {
+          // Fallback: letzten KM-Stand aus Termincache suchen
+          const fallbackKm = this.findLetztenKmStand(kunde.id, kunde.name, kzQuelle);
+          if (fallbackKm) {
+            kmInput.value = '';
+            kmInput.placeholder = `Letzter KM-Stand: ${fallbackKm.toLocaleString('de-DE')} km`;
+            kmInput.classList.add('has-previous-value');
+          }
+        }
       }
-      
-      if (fahrzeug.vin) {
-        document.getElementById('vin').value = fahrzeug.vin;
+
+      // Kunde-gefunden-Box anzeigen
+      const angezeigteFahrzeug = kzQuelle ? { kennzeichen: kzQuelle, fahrzeugtyp: fzTyp } : null;
+      this.showGefundenerKunde(kunde.name, kunde.telefon, angezeigteFahrzeug, kunde.id);
+
+      // Status-Badge
+      const statusBadge = document.getElementById('kundeStatusAnzeige');
+      if (statusBadge) {
+        statusBadge.textContent = '✓ Kunde ausgewählt';
+        statusBadge.className = 'kunde-status-badge gefunden';
+        statusBadge.style.display = 'inline-block';
       }
-      
-      // KM-Stand als Placeholder setzen (unterstütze beide Feldnamen)
-      const kmStandInput = document.getElementById('kilometerstand');
-      const letzterKmStand = fahrzeug.letzter_km_stand || fahrzeug.letzterKmStand;
-      if (letzterKmStand && kmStandInput) {
-        kmStandInput.value = '';
-        kmStandInput.placeholder = `Letzter KM-Stand: ${Number(letzterKmStand).toLocaleString('de-DE')} km`;
-        kmStandInput.classList.add('has-previous-value');
-      }
-    } else if (kunde.kennzeichen) {
-      // Fallback: Kennzeichen aus Kunden-Datensatz
-      document.getElementById('kennzeichen').value = kunde.kennzeichen;
-      const parts = this.parseKennzeichen(kunde.kennzeichen);
-      document.getElementById('kzSucheBezirk').value = parts.bezirk;
-      document.getElementById('kzSucheBuchstaben').value = parts.buchstaben;
-      document.getElementById('kzSucheNummer').value = parts.nummer;
-      
-      if (kunde.fahrzeugtyp) {
-        document.getElementById('fahrzeugtyp').value = kunde.fahrzeugtyp;
-      }
-      
-      // Letzten KM-Stand suchen
-      const letzterKmStand = this.findLetztenKmStand(kunde.id, kunde.name, kunde.kennzeichen);
-      const kmStandInput = document.getElementById('kilometerstand');
-      if (letzterKmStand && kmStandInput) {
-        kmStandInput.value = '';
-        kmStandInput.placeholder = `Letzter KM-Stand: ${letzterKmStand.toLocaleString('de-DE')} km`;
-        kmStandInput.classList.add('has-previous-value');
-      }
-    }
-    
-    // Kunde gefunden anzeigen (mit Fahrzeug-Info)
-    const angezeigteFahrzeug = fahrzeug || (kunde.kennzeichen ? { kennzeichen: kunde.kennzeichen, fahrzeugtyp: kunde.fahrzeugtyp } : null);
-    this.showGefundenerKunde(kunde.name, kunde.telefon, angezeigteFahrzeug, kunde.id);
-    
-    // Status-Badge aktualisieren (Kunde wurde ausgewählt)
-    const statusBadge = document.getElementById('kundeStatusAnzeige');
-    if (statusBadge) {
-      statusBadge.textContent = '✓ Kunde ausgewählt';
-      statusBadge.className = 'kunde-status-badge gefunden';
-      statusBadge.style.display = 'inline-block';
+    } catch (err) {
+      console.error('[applyKundeAuswahl] Fehler:', err);
     }
   }
 
