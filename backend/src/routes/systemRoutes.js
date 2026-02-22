@@ -35,4 +35,7 @@ router.get('/update-log', SystemController.getUpdateLog);
 // Nur Service-Neustart (ohne git pull)
 router.post('/restart', SystemController.restartService);
 
+// Frontend neu bauen (npm run build) – nutzt process.execPath für npm
+router.post('/build-frontend', SystemController.buildFrontend);
+
 module.exports = router;

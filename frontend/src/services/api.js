@@ -1115,6 +1115,10 @@ class SystemService {
   static async triggerUpdate() {
     return ApiService.post('/system/update', {});
   }
+
+  static async buildFrontend() {
+    return ApiService.post('/system/build-frontend', {});
+  }
   static async checkForUpdates() {
     return ApiService.get('/system/update-check');
   }

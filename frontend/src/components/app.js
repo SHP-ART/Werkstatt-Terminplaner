@@ -530,6 +530,13 @@ class App {
         restartBtn.addEventListener('click', () => this._triggerServerRestart());
       }
 
+      // Build-Frontend-Button binden
+      const buildBtn = document.getElementById('triggerBuildFrontendBtn');
+      if (buildBtn && !buildBtn.dataset.bound) {
+        buildBtn.dataset.bound = 'true';
+        buildBtn.addEventListener('click', () => this._buildFrontend());
+      }
+
       // Update-Status prüfen
       window._checkUpdateStatus = () => this._checkUpdateStatus();
       this._checkUpdateStatus();
@@ -25715,6 +25722,73 @@ class App {
         statusBox.textContent = '❌ Fehler: ' + err.message;
       }
       if (btn) { btn.disabled = false; btn.textContent = '🔄 Update starten'; }
+    }
+  }
+
+  /**
+   * Nur Frontend neu kompilieren (npm run build) ohne git pull oder Neustart.
+   * Nützt den neuen /api/system/build-frontend Endpoint mit process.execPath.
+   */
+  async _buildFrontend() {
+    const btn = document.getElementById('triggerBuildFrontendBtn');
+    const statusBox = document.getElementById('updateStatusInfo');
+    const logBox = document.getElementById('updateLogBox');
+    const logContent = document.getElementById('updateLogContent');
+
+    if (!confirm('Frontend jetzt neu kompilieren?\n\nnpm install + npm run build (ca. 30–60 Sek.)\nKein Server-Neustart – Änderungen sind sofort verfügbar.')) return;
+
+    if (btn) { btn.disabled = true; btn.textContent = '⏳ Build läuft...'; }
+    if (statusBox) { statusBox.style.display = 'none'; }
+
+    try {
+      const res = await SystemService.buildFrontend();
+      if (res?.success) {
+        if (statusBox) {
+          statusBox.style.cssText = 'display:block; background:#e8f5e9; border:1px solid #a5d6a7; color:#1b5e20; margin-top:12px; padding:10px 14px; border-radius:6px; font-size:0.9em;';
+          statusBox.textContent = '✅ Build gestartet – Log wird aktualisiert...';
+        }
+        if (logBox) logBox.style.display = 'block';
+
+        // Log live pollen
+        let attempts = 0;
+        const pollLog = setInterval(async () => {
+          try {
+            const logRes = await SystemService.getUpdateLog(60);
+            if (logRes?.log && logContent) {
+              logContent.textContent = logRes.log;
+              logContent.scrollTop = logContent.scrollHeight;
+              // Bei "BUILD OK" aufhören
+              if (logRes.log.includes('BUILD OK') || logRes.log.includes('FRONTEND-BUILD ABGESCHLOSSEN')) {
+                clearInterval(pollLog);
+                if (statusBox) statusBox.textContent = '✅ Build abgeschlossen! Seite wird neu geladen...';
+                setTimeout(() => location.reload(), 2000);
+              } else if (logRes.log.includes('BUILD FEHLGESCHLAGEN')) {
+                clearInterval(pollLog);
+                if (statusBox) {
+                  statusBox.style.background = '#fff3e0';
+                  statusBox.style.color = '#e65100';
+                  statusBox.textContent = '❌ Build fehlgeschlagen – siehe Log oben';
+                }
+              }
+            }
+          } catch (_) {}
+          attempts++;
+          if (attempts > 24) clearInterval(pollLog); // max 2min
+        }, 5000);
+
+      } else {
+        if (statusBox) {
+          statusBox.style.cssText = 'display:block; background:#fff3e0; border:1px solid #ffcc80; color:#e65100; margin-top:12px; padding:10px 14px; border-radius:6px; font-size:0.9em;';
+          statusBox.textContent = '⚠️ ' + (res?.message || 'Build nicht möglich (nur Linux)');
+        }
+      }
+    } catch (err) {
+      if (statusBox) {
+        statusBox.style.cssText = 'display:block; background:#ffebee; border:1px solid #ef9a9a; color:#b71c1c; margin-top:12px; padding:10px 14px; border-radius:6px; font-size:0.9em;';
+        statusBox.textContent = '❌ Fehler: ' + err.message;
+      }
+    } finally {
+      if (btn) { btn.disabled = false; btn.textContent = '🔨 Frontend neu bauen'; }
     }
   }
 

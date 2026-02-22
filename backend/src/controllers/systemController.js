@@ -215,7 +215,8 @@ class SystemController {
 
   /**
    * POST /api/system/update
-   * Führt update-via-api.sh aus (nicht-interaktiv, kein Root nötig für git/npm).
+   * Führt Update inline aus (git pull + npm build + restart).
+   * Inline-Logik im Controller – unabhängig vom Stand von update-via-api.sh auf dem Server.
    * systemctl restart benötigt einmalige sudoers-Freigabe auf dem Server.
    * Gibt sofort eine Antwort zurück – der Server startet danach neu.
    */
@@ -229,22 +230,86 @@ class SystemController {
     try {
       const { spawn } = require('child_process');
       const path = require('path');
-      const fs = require('fs');
-      // Dediziertes nicht-interaktives Update-Skript (kein Root/sudo nötig für git/npm)
-      const scriptPath = path.resolve(__dirname, '../../../update-via-api.sh');
-      // chmod +x sicherstellen
-      try { fs.chmodSync(scriptPath, 0o755); } catch (_) {}
-      // Detached + stdio ignore: Prozess läuft weiter, auch wenn der Server neu startet
-      const child = spawn('bash', [scriptPath], {
+      const repoDir = path.resolve(__dirname, '../../../');
+      const logFile = '/tmp/werkstatt-api-update.log';
+      const serviceName = 'werkstatt-terminplaner';
+
+      // Node & npm Pfad aus dem laufenden Prozess ableiten – 100% zuverlässig
+      const nodeBin = path.dirname(process.execPath); // z.B. /root/.nvm/versions/node/v20/bin
+      const npmPath = path.join(nodeBin, 'npm');
+
+      // Inline-Bash-Skript – läuft immer in der aktuell vom Controller definierten Logik.
+      // Dadurch ist es egal, ob update-via-api.sh auf dem Server veraltet ist.
+      const bashScript = `
+set +e
+LOG="${logFile}"
+REPO="${repoDir}"
+SVC="${serviceName}"
+NPM="${npmPath}"
+exec >> "$LOG" 2>&1
+
+echo ""
+echo "=== INLINE-UPDATE gestartet: $(date) ==="
+echo "REPO:  $REPO"
+echo "NODE:  ${process.execPath}"
+echo "NPM:   $NPM"
+
+cd "$REPO" || { echo "FEHLER: Repo-Verzeichnis nicht gefunden: $REPO"; exit 1; }
+
+# 1. Git Pull
+echo "--- git pull ---"
+git config --global --add safe.directory "$REPO" 2>/dev/null || true
+git pull origin master
+echo "Git HEAD: $(git rev-parse --short HEAD 2>/dev/null)"
+
+# 2. Frontend bauen
+if [ -f "frontend/package.json" ]; then
+  echo "--- npm install (frontend) ---"
+  "$NPM" install --prefix frontend
+  echo "--- npm run build (vite) ---"
+  "$NPM" run build --prefix frontend
+  BUILD_CODE=$?
+  if [ $BUILD_CODE -eq 0 ]; then
+    echo "BUILD OK – dist Dateien: $(find frontend/dist -type f 2>/dev/null | wc -l)"
+  else
+    echo "BUILD FEHLGESCHLAGEN (Exit $BUILD_CODE)"
+  fi
+else
+  echo "WARNUNG: frontend/package.json nicht gefunden"
+fi
+
+# 3. Backend Dependencies
+if [ -f "backend/package.json" ]; then
+  echo "--- npm install (backend) ---"
+  "$NPM" install --prefix backend
+fi
+
+# 4. Service-Neustart
+echo "--- systemctl restart $SVC ---"
+if sudo systemctl restart "$SVC.service" 2>/dev/null; then
+  echo "Service neugestartet (sudo systemctl)"
+elif systemctl restart "$SVC.service" 2>/dev/null; then
+  echo "Service neugestartet (systemctl ohne sudo)"
+else
+  echo "systemctl fehlgeschlagen – versuche kill+restart"
+  pkill -f "node.*server.js" 2>/dev/null || true
+  echo "Prozess beendet – Watchdog startet ihn neu"
+fi
+
+echo "=== UPDATE ABGESCHLOSSEN: $(date) ==="
+`;
+
+      // Inline-Script als detached bash-Prozess starten
+      const child = spawn('bash', ['-c', bashScript], {
         detached: true,
         stdio: 'ignore',
-        cwd: path.resolve(__dirname, '../../../')
+        cwd: repoDir
       });
       child.unref();
-      console.log('[Update] update-via-api.sh gestartet (PID:', child.pid, ')');
+      console.log('[Update] Inline-Update gestartet (PID:', child.pid, '), Log:', logFile);
       res.json({
         success: true,
-        message: 'Update läuft. Der Server wird in Kürze neu gestartet...'
+        message: 'Update läuft. Log unter /tmp/werkstatt-api-update.log einsehbar. Server startet in Kürze neu...'
       });
     } catch (error) {
       console.error('[Update] Fehler:', error);
@@ -345,6 +410,51 @@ class SystemController {
     } catch (error) {
       res.status(500).json({ success: false, message: error.message });
     }
+  }
+
+  /**
+   * POST /api/system/build-frontend
+   * Baut das Vite-Frontend neu (npm run build).
+   * Nutzt process.execPath → npm-Pfad ist immer korrekt, egal welcher User.
+   */
+  static buildFrontend(req, res) {
+    if (process.platform !== 'linux') {
+      return res.status(400).json({ success: false, message: 'Nur auf Linux-Servern verfügbar.' });
+    }
+    const path = require('path');
+    const { spawn } = require('child_process');
+    const repoDir = path.resolve(__dirname, '../../../');
+    const logFile = '/tmp/werkstatt-api-update.log';
+    // npm liegt immer im gleichen bin-Verzeichnis wie der laufende node-Prozess
+    const npmPath = path.join(path.dirname(process.execPath), 'npm');
+
+    const bashScript = `
+set +e
+exec >> "${logFile}" 2>&1
+echo ""
+echo "=== FRONTEND-BUILD gestartet: $(date) ==="
+echo "NPM: ${npmPath}"
+cd "${repoDir}" || exit 1
+echo "--- npm install (frontend) ---"
+"${npmPath}" install --prefix frontend
+echo "--- npm run build ---"
+"${npmPath}" run build --prefix frontend
+BUILD_CODE=$?
+if [ $BUILD_CODE -eq 0 ]; then
+  echo "BUILD OK – dist Dateien: $(find frontend/dist -type f 2>/dev/null | wc -l)"
+else
+  echo "BUILD FEHLGESCHLAGEN (Exit $BUILD_CODE)"
+fi
+echo "=== FRONTEND-BUILD ABGESCHLOSSEN: $(date) ==="
+`;
+
+    const child = spawn('bash', ['-c', bashScript], {
+      detached: true,
+      stdio: 'ignore',
+      cwd: repoDir
+    });
+    child.unref();
+    res.json({ success: true, message: 'Frontend-Build gestartet. Log unter /tmp/werkstatt-api-update.log' });
   }
 }
 
