@@ -30220,6 +30220,14 @@ class App {
     if (datumInput) datumInput.value = datum;
     if (uhrzeitInput) uhrzeitInput.value = uhrzeit || '08:00';
 
+    // Abholtermin und Ersatzauto-Status zurücksetzen
+    const abholDatumInput = document.getElementById('kalTerminAbholDatum');
+    const abholZeitInput = document.getElementById('kalTerminAbholZeit');
+    if (abholDatumInput) abholDatumInput.value = '';
+    if (abholZeitInput) abholZeitInput.value = '';
+    const ersatzautoStatusEl = document.getElementById('kalTerminErsatzautoStatus');
+    if (ersatzautoStatusEl) { ersatzautoStatusEl.style.display = 'none'; ersatzautoStatusEl.textContent = ''; }
+
     // Hidden fields resetten
     const kundeIdInput = document.getElementById('kalTerminKundeId');
     if (kundeIdInput) kundeIdInput.value = '';
@@ -30243,6 +30251,15 @@ class App {
 
       // Speichern
       document.getElementById('kalenderTerminSpeichern')?.addEventListener('click', () => this.handleKalenderTerminSubmit());
+
+      // Ersatzauto-Verfügbarkeitsprüfung
+      document.getElementById('kalTerminErsatzauto')?.addEventListener('change', () => this.kalenderCheckErsatzautoVerfuegbarkeit());
+      document.getElementById('kalTerminDatum')?.addEventListener('change', () => {
+        if (document.getElementById('kalTerminErsatzauto')?.checked) this.kalenderCheckErsatzautoVerfuegbarkeit();
+      });
+      document.getElementById('kalTerminAbholDatum')?.addEventListener('change', () => {
+        if (document.getElementById('kalTerminErsatzauto')?.checked) this.kalenderCheckErsatzautoVerfuegbarkeit();
+      });
 
       // Kundensuche Autocomplete
       const kundenSuche = document.getElementById('kalTerminKundenSuche');
@@ -30272,6 +30289,59 @@ class App {
     if (modal) {
       modal.classList.remove('active');
       setTimeout(() => { modal.style.display = 'none'; }, 200);
+    }
+  }
+
+  /**
+   * Ersatzauto-Verfügbarkeit im Kalender-Modal prüfen
+   */
+  async kalenderCheckErsatzautoVerfuegbarkeit() {
+    const statusEl = document.getElementById('kalTerminErsatzautoStatus');
+    const checkbox = document.getElementById('kalTerminErsatzauto');
+    if (!statusEl) return;
+
+    if (!checkbox?.checked) {
+      statusEl.style.display = 'none';
+      return;
+    }
+
+    const datum = document.getElementById('kalTerminDatum')?.value;
+    const abholDatum = document.getElementById('kalTerminAbholDatum')?.value;
+
+    if (!datum) {
+      statusEl.style.display = 'none';
+      return;
+    }
+
+    statusEl.style.display = 'block';
+    statusEl.style.cssText = 'display:block; padding:8px 12px; border-radius:6px; font-size:0.85rem; background:#f0f0f0; color:#666; border:1px solid #ddd;';
+    statusEl.textContent = '⏳ Prüfe Verfügbarkeit...';
+
+    try {
+      const start = await ErsatzautosService.getVerfuegbarkeit(datum);
+      let minVerfuegbar = start.verfuegbar;
+      let gesamtInfo = `${start.gesamt} Fahrzeug(e) gesamt, ${start.vergeben} vergeben`;
+
+      if (abholDatum && abholDatum !== datum) {
+        const end = await ErsatzautosService.getVerfuegbarkeit(abholDatum);
+        minVerfuegbar = Math.min(minVerfuegbar, end.verfuegbar);
+        // Anzahl Tage berechnen und anzeigen
+        const d1 = new Date(datum);
+        const d2 = new Date(abholDatum);
+        const tage = Math.round((d2 - d1) / (1000 * 60 * 60 * 24)) + 1;
+        if (tage > 0) gesamtInfo += ` · ${tage} Tag(e)`;
+      }
+
+      if (minVerfuegbar > 0) {
+        statusEl.style.cssText = 'display:block; padding:8px 12px; border-radius:6px; font-size:0.85rem; background:#e8f5e9; color:#2e7d32; border:1px solid #a5d6a7;';
+        statusEl.textContent = `✅ ${minVerfuegbar} Ersatzauto(s) verfügbar – ${gesamtInfo}`;
+      } else {
+        statusEl.style.cssText = 'display:block; padding:8px 12px; border-radius:6px; font-size:0.85rem; background:#ffebee; color:#c62828; border:1px solid #ef9a9a;';
+        statusEl.textContent = `❌ Kein Ersatzauto verfügbar – ${gesamtInfo}`;
+      }
+    } catch (err) {
+      statusEl.style.cssText = 'display:block; padding:8px 12px; border-radius:6px; font-size:0.85rem; background:#fff3e0; color:#e65100; border:1px solid #ffcc80;';
+      statusEl.textContent = '⚠️ Verfügbarkeit konnte nicht geprüft werden';
     }
   }
 
@@ -30341,6 +30411,8 @@ class App {
     const kilometerstand = document.getElementById('kalTerminKilometerstand')?.value;
     const dringlichkeit = document.getElementById('kalTerminDringlichkeit')?.value;
     const ersatzauto = document.getElementById('kalTerminErsatzauto')?.checked ? 1 : 0;
+    const abholDatum = document.getElementById('kalTerminAbholDatum')?.value;
+    const abholZeit = document.getElementById('kalTerminAbholZeit')?.value;
     const notizen = document.getElementById('kalTerminNotizen')?.value?.trim();
 
     // Validierung
@@ -30386,6 +30458,15 @@ class App {
     if (kilometerstand) terminDaten.kilometerstand = parseInt(kilometerstand);
     if (dringlichkeit) terminDaten.dringlichkeit = dringlichkeit;
     if (ersatzauto) terminDaten.ersatzauto = ersatzauto;
+    if (abholDatum) terminDaten.abholung_datum = abholDatum;
+    if (abholZeit) terminDaten.abholung_zeit = abholZeit;
+    // Ersatzauto-Tage automatisch aus Datumsrange berechnen
+    if (ersatzauto && abholDatum && datum) {
+      const d1 = new Date(datum);
+      const d2 = new Date(abholDatum);
+      const diffTage = Math.round((d2 - d1) / (1000 * 60 * 60 * 24)) + 1;
+      if (diffTage > 0) terminDaten.ersatzauto_tage = diffTage;
+    }
     if (notizen) terminDaten.notizen = notizen;
 
     try {

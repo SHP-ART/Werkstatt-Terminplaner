@@ -4506,8 +4506,28 @@
                         </div>
                     </div>
 
+                    <!-- Abholtermin -->
+                    <div class="form-row" style="margin-top: 10px; padding: 12px; background: #f0f7ff; border-radius: 8px; border-left: 4px solid #2196f3;">
+                        <div class="form-group">
+                            <label for="kalTerminAbholDatum">📅 Abholtermin (Datum)</label>
+                            <input type="date" id="kalTerminAbholDatum">
+                        </div>
+                        <div class="form-group">
+                            <label for="kalTerminAbholZeit">🕐 Abholzeit</label>
+                            <input type="time" id="kalTerminAbholZeit">
+                        </div>
+                    </div>
+
+                    <!-- Ersatzauto -->
+                    <div class="form-group" style="margin-top: 10px; padding: 12px; background: #fff8e1; border-radius: 8px; border-left: 4px solid #ffc107;">
+                        <label style="font-weight: 600; display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                            <input type="checkbox" id="kalTerminErsatzauto" style="width: 18px; height: 18px;"> 🚗 Ersatzauto benötigt
+                        </label>
+                        <div id="kalTerminErsatzautoStatus" style="display:none; margin-top:8px; padding:8px 12px; border-radius:6px; font-size:0.85rem;"></div>
+                    </div>
+
                     <!-- Optionale Felder (einklappbar) -->
-                    <details class="kalender-optionale-felder">
+                    <details class="kalender-optionale-felder" style="margin-top: 10px;">
                         <summary>➕ Weitere Optionen</summary>
                         <div class="form-row" style="margin-top: 10px;">
                             <div class="form-group">
@@ -4533,11 +4553,6 @@
                                     <option value="niedrig">🟢 Niedrig</option>
                                 </select>
                             </div>
-                        </div>
-                        <div class="form-group">
-                            <label>
-                                <input type="checkbox" id="kalTerminErsatzauto"> 🚗 Ersatzauto benötigt
-                            </label>
                         </div>
                         <div class="form-group">
                             <label for="kalTerminNotizen">Notizen</label>
