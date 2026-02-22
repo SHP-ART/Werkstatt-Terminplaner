@@ -19656,6 +19656,7 @@ class App {
         
         const track = row.querySelector('.timeline-track');
         lehrlingeMap[lehrling.id] = track;
+        console.log('[DEBUG] lehrlingeMap: Lehrling', lehrling.id, '(' + lehrling.name + ') eingetragen, track:', !!track);
         
         // Gesperrte Zeitbereiche, Mittagspause und Drop-Events nur wenn nicht abwesend
         if (!istAbwesend) {
@@ -19689,6 +19690,9 @@ class App {
         lehrlingePauseMap[l.id] = l.mittagspause_start || null;
       });
 
+      console.log('[DEBUG] Maps aufgebaut:');
+      console.log('[DEBUG]   mitarbeiterMap Keys:', Object.keys(mitarbeiterMap).join(', ') || '(leer)');
+      console.log('[DEBUG]   lehrlingeMap Keys:  ', Object.keys(lehrlingeMap).join(', ') || '(leer)');
       console.log('[DEBUG] Starte Termin-Verarbeitung für', termine.length, 'Termine');
       
       termine.forEach(termin => {
@@ -19950,9 +19954,9 @@ class App {
             console.log('[DEBUG] Termin', termin.termin_nr, '- Timeline-Elemente erstellt:', timelineElements.length);
           } else {
             console.log('[DEBUG] Termin', termin.termin_nr, '- NICHT ZUGEORDNET - platziere in "Nicht zugeordnet" Container');
-            console.log('[DEBUG] - Grund: zuordnungsTyp=', zuordnungsTyp, 'mitarbeiterId=', mitarbeiterId, 'lehrlingId=', lehrlingId);
-            console.log('[DEBUG] - mitarbeiterMap hat Key?', mitarbeiterId && mitarbeiterMap[mitarbeiterId] !== undefined);
-            console.log('[DEBUG] - lehrlingeMap hat Key?', lehrlingId && lehrlingeMap[lehrlingId] !== undefined);
+            console.log('[DEBUG] - Grund: zuordnungsTyp=', zuordnungsTyp, '| mitarbeiterId=', mitarbeiterId, '| lehrlingId=', lehrlingId);
+            console.log('[DEBUG] - mitarbeiterMap Keys:', Object.keys(mitarbeiterMap).join(', ') || '(leer)', '→ gesuchter Key', mitarbeiterId, ':', !!mitarbeiterMap[mitarbeiterId]);
+            console.log('[DEBUG] - lehrlingeMap  Keys:', Object.keys(lehrlingeMap).join(', ') || '(leer)', '→ gesuchter Key', lehrlingId, ':', !!lehrlingeMap[lehrlingId]);
             // Nicht zugeordnet - als normaler Termin anzeigen
             const card = this.createTerminMiniCard(termin);
             sourceContainer.appendChild(card);
