@@ -19883,11 +19883,11 @@ class App {
             
             if (details._gesamt_mitarbeiter_id && !hatIndividuelleArbeitsZuordnungen) {
               zuordnungsTyp = details._gesamt_mitarbeiter_id.type;
-              // Nur Mitarbeiter können auf Timeline platziert werden, Lehrlinge bleiben in "Nicht zugeordnet"
               if (zuordnungsTyp === 'mitarbeiter') {
                 mitarbeiterId = details._gesamt_mitarbeiter_id.id;
+              } else if (zuordnungsTyp === 'lehrling') {
+                lehrlingId = details._gesamt_mitarbeiter_id.id;
               }
-              // Lehrlinge NICHT automatisch zuordnen im Gesamtzeit-Modus
             }
             
             if (details._startzeit) {
