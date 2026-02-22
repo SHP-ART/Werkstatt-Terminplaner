@@ -10776,7 +10776,7 @@ class App {
     }
     
     vorschlaegeDiv.innerHTML = treffer.map((kunde, idx) => `
-      <div class="vorschlag-item" data-index="${idx}" onmousedown="event.preventDefault(); app.selectKundeVorschlag(${kunde.id})">
+      <div class="vorschlag-item" data-index="${idx}" onmousedown="event.preventDefault()" onclick="app.selectKundeVorschlag(${kunde.id})">
         <div>
           <span class="vorschlag-name">${this.highlightMatch(kunde.name, eingabe)}</span>
           ${kunde.telefon ? `<span class="vorschlag-telefon"> · ${kunde.telefon}</span>` : ''}
@@ -10972,7 +10972,7 @@ class App {
     }
     
     let html = maxTreffer.map((data, idx) => `
-      <div class="vorschlag-item" data-index="${idx}" onmousedown="event.preventDefault(); app.selectKennzeichenVorschlag('${data.kennzeichen.replace(/'/g, "\\'").replace(/"/g, '&quot;')}', ${data.kundeId || 'null'})">
+      <div class="vorschlag-item" data-index="${idx}" onmousedown="event.preventDefault()" onclick="app.selectKennzeichenVorschlag('${data.kennzeichen.replace(/'/g, "\\'").replace(/"/g, '&quot;')}', ${data.kundeId || 'null'})">
         <div>
           <span class="vorschlag-kennzeichen" style="margin-right: 10px;">${this.formatKennzeichenHighlight(data.kennzeichen, bezirk, buchstaben, nummer)}</span>
           <span class="vorschlag-name">${data.kundeName || 'Unbekannter Kunde'}</span>
@@ -11194,8 +11194,17 @@ class App {
         fahrzeuge: fahrzeuge.map(f => f.kennzeichen)
       });
       
-      // Modal immer anzeigen (auch bei nur 1 Fahrzeug), damit neue angelegt werden können
-      if (fahrzeuge.length >= 1) {
+      if (fahrzeuge.length === 1) {
+        // Genau 1 Fahrzeug → direkt übernehmen ohne Modal
+        console.log('Genau 1 Fahrzeug → direkt übernommen:', fahrzeuge[0].kennzeichen);
+        this.applyKundeAuswahl(kunde, fahrzeuge[0]);
+        this.showToast(`🚗 ${fahrzeuge[0].kennzeichen} übernommen`, 'success');
+        this.hideVorschlaege('name');
+        return;
+      }
+      
+      if (fahrzeuge.length > 1) {
+        // Mehrere Fahrzeuge → Auswahl-Modal zeigen
         console.log('Zeige Fahrzeugauswahl-Modal...');
         this.showFahrzeugAuswahlModal(kunde, fahrzeuge);
         this.hideVorschlaege('name');
@@ -11366,6 +11375,22 @@ class App {
     }
   }
 
+  // Fahrzeug wechseln: Auswahl-Modal für bereits ausgewählten Kunden nochmals laden
+  async fahrzeugWechseln(kundeId) {
+    const kunde = (this.kundenCache || []).find(k => k.id === kundeId);
+    if (!kunde) return;
+    try {
+      const fahrzeuge = await KundenService.getFahrzeuge(kundeId);
+      if (fahrzeuge.length === 0) {
+        this.showToast('Keine weiteren Fahrzeuge gespeichert', 'info');
+        return;
+      }
+      this.showFahrzeugAuswahlModal(kunde, fahrzeuge);
+    } catch (error) {
+      console.error('Fehler beim Laden der Fahrzeuge:', error);
+    }
+  }
+
   // Kunde und Fahrzeug auf das Formular anwenden
   applyKundeAuswahl(kunde, fahrzeug) {
     // Kunden-Daten füllen
@@ -11423,8 +11448,9 @@ class App {
       }
     }
     
-    // Kunde gefunden anzeigen
-    this.showGefundenerKunde(kunde.name, kunde.telefon);
+    // Kunde gefunden anzeigen (mit Fahrzeug-Info)
+    const angezeigteFahrzeug = fahrzeug || (kunde.kennzeichen ? { kennzeichen: kunde.kennzeichen, fahrzeugtyp: kunde.fahrzeugtyp } : null);
+    this.showGefundenerKunde(kunde.name, kunde.telefon, angezeigteFahrzeug, kunde.id);
     
     // Status-Badge aktualisieren (Kunde wurde ausgewählt)
     const statusBadge = document.getElementById('kundeStatusAnzeige');
@@ -11732,7 +11758,7 @@ class App {
     this.updateSchnellsucheStatus();
   }
 
-  showGefundenerKunde(name, telefon) {
+  showGefundenerKunde(name, telefon, fahrzeug = null, kundeId = null) {
     const anzeige = document.getElementById('gefundenerKundeAnzeige');
     const nameEl = document.getElementById('gefundenerKundeName');
     const telefonEl = document.getElementById('gefundenerKundeTelefon');
@@ -11742,6 +11768,25 @@ class App {
       nameEl.textContent = name || 'Unbekannt';
       if (telefonEl) {
         telefonEl.textContent = telefon ? `📞 ${telefon}` : '';
+      }
+      
+      // Fahrzeug-Info und Wechsel-Button anzeigen
+      let fahrzeugInfoEl = document.getElementById('gefundenerKundeFahrzeug');
+      if (!fahrzeugInfoEl) {
+        fahrzeugInfoEl = document.createElement('div');
+        fahrzeugInfoEl.id = 'gefundenerKundeFahrzeug';
+        fahrzeugInfoEl.style.cssText = 'margin-top:6px; font-size:0.9em; display:flex; align-items:center; gap:8px;';
+        anzeige.appendChild(fahrzeugInfoEl);
+      }
+      
+      if (fahrzeug && fahrzeug.kennzeichen) {
+        const kzText = `🚗 ${fahrzeug.kennzeichen}${fahrzeug.fahrzeugtyp ? ' – ' + fahrzeug.fahrzeugtyp : ''}`;
+        const wechselBtn = kundeId
+          ? `<button type="button" onclick="app.fahrzeugWechseln(${kundeId})" style="font-size:0.85em;padding:2px 8px;background:#fff;border:1px solid #4caf50;border-radius:4px;color:#2e7d32;cursor:pointer;">🔄 Wechseln</button>`
+          : '';
+        fahrzeugInfoEl.innerHTML = `<span style="color:#2e7d32;font-weight:600;">${kzText}</span>${wechselBtn}`;
+      } else {
+        fahrzeugInfoEl.innerHTML = '';
       }
     }
   }
