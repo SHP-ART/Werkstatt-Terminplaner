@@ -264,10 +264,10 @@ echo "Git HEAD: $(git rev-parse --short HEAD 2>/dev/null)"
 
 # 2. Frontend bauen
 if [ -f "frontend/package.json" ]; then
-  echo "--- npm install (frontend) ---"
-  "$NPM" install --prefix frontend
+  echo "--- npm install (frontend, inkl. devDependencies) ---"
+  NODE_ENV=development "$NPM" install --prefix frontend --include=dev
   echo "--- npm run build (vite) ---"
-  "$NPM" run build --prefix frontend
+  NODE_ENV=development "$NPM" run build --prefix frontend
   BUILD_CODE=$?
   if [ $BUILD_CODE -eq 0 ]; then
     echo "BUILD OK – dist Dateien: $(find frontend/dist -type f 2>/dev/null | wc -l)"
@@ -433,9 +433,9 @@ echo "=== FRONTEND-BUILD gestartet: $(date) ==="
 echo "NPM: ${npmPath}"
 cd "${repoDir}" || exit 1
 echo "--- npm install (frontend) ---"
-"${npmPath}" install --prefix frontend
+NODE_ENV=development "${npmPath}" install --prefix frontend --include=dev
 echo "--- npm run build ---"
-"${npmPath}" run build --prefix frontend
+NODE_ENV=development "${npmPath}" run build --prefix frontend
 BUILD_CODE=$?
 if [ $BUILD_CODE -eq 0 ]; then
   echo "BUILD OK – dist Dateien: $(find frontend/dist -type f 2>/dev/null | wc -l)"
