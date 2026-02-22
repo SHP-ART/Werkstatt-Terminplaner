@@ -29704,14 +29704,19 @@ class App {
       const jetzt = new Date();
       const jetztH = jetzt.getHours();
       const jetztM = jetzt.getMinutes();
+      const jetztZeit = `${String(jetztH).padStart(2,'0')}:${String(jetztM).padStart(2,'0')}`;
       if (jetztH >= startStunde && jetztH <= endStunde) {
         const jetztTop = (jetztH - startStunde + jetztM / 60) * slotHoehe;
         const jetztLinie = document.createElement('div');
-        jetztLinie.style.cssText = `position:absolute;left:70px;right:0;top:${jetztTop}px;height:2px;background:var(--accent);z-index:5;`;
+        jetztLinie.style.cssText = `position:absolute;left:70px;right:0;top:${jetztTop}px;height:2px;background:var(--accent);z-index:20;pointer-events:none;`;
         const jetztDot = document.createElement('div');
-        jetztDot.style.cssText = `position:absolute;left:62px;top:${jetztTop - 5}px;width:12px;height:12px;background:var(--accent);border-radius:50%;z-index:5;`;
+        jetztDot.style.cssText = `position:absolute;left:62px;top:${jetztTop - 5}px;width:12px;height:12px;background:var(--accent);border-radius:50%;z-index:20;pointer-events:none;`;
+        const jetztLabel = document.createElement('div');
+        jetztLabel.style.cssText = `position:absolute;left:72px;top:${jetztTop + 4}px;font-size:0.68em;font-weight:700;color:var(--accent);z-index:20;pointer-events:none;background:rgba(255,255,255,0.85);padding:1px 4px;border-radius:3px;`;
+        jetztLabel.textContent = jetztZeit;
         container.appendChild(jetztLinie);
         container.appendChild(jetztDot);
+        container.appendChild(jetztLabel);
       }
     }
   }

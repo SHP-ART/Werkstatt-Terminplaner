@@ -4534,7 +4534,11 @@ tr.schwebend {
 
 .kalender-tag-heute {
     border-color: var(--accent) !important;
+    border-width: 2px !important;
     font-weight: bold;
+    position: relative;
+    z-index: 1;
+    box-shadow: 0 0 0 2px var(--accent);
 }
 
 .kalender-tag-selected {
