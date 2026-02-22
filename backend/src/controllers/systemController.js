@@ -286,10 +286,8 @@ fi
 
 # 4. Service-Neustart
 echo "--- systemctl restart $SVC ---"
-if sudo systemctl restart "$SVC.service" 2>/dev/null; then
-  echo "Service neugestartet (sudo systemctl)"
-elif systemctl restart "$SVC.service" 2>/dev/null; then
-  echo "Service neugestartet (systemctl ohne sudo)"
+if systemctl restart "$SVC.service" 2>/dev/null; then
+  echo "Service neugestartet (systemctl)"
 else
   echo "systemctl fehlgeschlagen – versuche kill+restart"
   pkill -f "node.*server.js" 2>/dev/null || true
@@ -400,10 +398,9 @@ echo "=== UPDATE ABGESCHLOSSEN: $(date) ==="
     try {
       const { spawn } = require('child_process');
       res.json({ success: true, message: 'Server wird neu gestartet...' });
-      // Kurz warten damit die Antwort noch rausgeht
       setTimeout(() => {
         const child = spawn('bash', ['-c',
-          'sudo systemctl restart werkstatt-terminplaner.service 2>/dev/null || pkill -f "node.*server.js"'
+          'systemctl restart werkstatt-terminplaner.service 2>/dev/null || pkill -f "node.*server.js"'
         ], { detached: true, stdio: 'ignore' });
         child.unref();
       }, 500);

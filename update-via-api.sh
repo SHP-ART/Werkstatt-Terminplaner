@@ -75,15 +75,12 @@ if [ -f "backend/package.json" ]; then
   echo "✓ Backend Dependencies aktualisiert"
 fi
 
-# 4. Service neustarten (benötigt sudo-Freigabe, siehe oben)
+# 4. Service neustarten (kein sudo nötig wenn als root)
 echo "▶ Starte Service neu..."
-if sudo systemctl restart "$SERVICE_NAME.service" 2>/dev/null; then
+if systemctl restart "$SERVICE_NAME.service" 2>/dev/null; then
   echo "✓ Service neugestartet"
-elif systemctl restart "$SERVICE_NAME.service" 2>/dev/null; then
-  echo "✓ Service neugestartet (ohne sudo)"
 else
   echo "⚠ systemctl restart fehlgeschlagen - versuche kill+restart"
-  # Fallback: Node-Prozess töten (PM2 oder der Service-Watchdog startet ihn neu)
   pkill -f "node.*server.js" 2>/dev/null || true
   echo "✓ Prozess beendet (Watchdog startet ihn neu)"
 fi
