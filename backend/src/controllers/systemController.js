@@ -267,9 +267,14 @@ if [ -f "frontend/package.json" ]; then
   echo "--- npm install vite (nur Build-Tool) ---"
   cd "${repoDir}/frontend"
   NODE_ENV=development "$NPM" install --save-dev vite
-  export PATH="$(pwd)/node_modules/.bin:$PATH"
-  echo "--- npm run build (vite) ---"
-  NODE_ENV=development "$NPM" run build
+  echo "--- vite build (direkt via node) ---"
+  VITE_JS="${repoDir}/frontend/node_modules/vite/bin/vite.js"
+  if [ -f "$VITE_JS" ]; then
+    node "$VITE_JS" build
+  else
+    echo "FEHLER: $VITE_JS nicht gefunden"
+    exit 1
+  fi
   BUILD_CODE=$?
   cd "${repoDir}"
   if [ $BUILD_CODE -eq 0 ]; then
@@ -436,10 +441,15 @@ echo "=== FRONTEND-BUILD gestartet: $(date) ==="
 echo "NPM: ${npmPath}"
 cd "${repoDir}/frontend" || exit 1
 echo "--- npm install vite (nur Build-Tool, kein electron) ---"
-"${npmPath}" install --save-dev vite --no-audit --prefer-offline
-export PATH="$(pwd)/node_modules/.bin:$PATH"
-echo "--- npm run build ---"
-"${npmPath}" run build
+"${npmPath}" install --save-dev vite --no-audit
+echo "--- vite build (direkt via node) ---"
+VITE_JS="${repoDir}/frontend/node_modules/vite/bin/vite.js"
+if [ -f "$VITE_JS" ]; then
+  node "$VITE_JS" build
+else
+  echo "FEHLER: vite.js nicht gefunden: $VITE_JS"
+  exit 1
+fi
 BUILD_CODE=$?
 if [ $BUILD_CODE -eq 0 ]; then
   echo "BUILD OK – dist Dateien: $(find dist -type f 2>/dev/null | wc -l)"
