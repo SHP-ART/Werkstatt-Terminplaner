@@ -30461,7 +30461,82 @@ class App {
           setTimeout(() => {
             const ergebnisse = document.getElementById('kalTerminKundenSucheErgebnisse');
             if (ergebnisse) ergebnisse.style.display = 'none';
-          }, 200);
+          }, 400);
+        });
+      }
+
+      // Event-Delegation auf Ergebnisse-Container (mousedown verhindert blur)
+      const ergebnisseContainer = document.getElementById('kalTerminKundenSucheErgebnisse');
+      if (ergebnisseContainer) {
+        ergebnisseContainer.addEventListener('mousedown', async (e) => {
+          e.preventDefault(); // Verhindert blur auf dem Suchfeld
+
+          // Fahrzeugauswahl (2. Ebene)
+          const fzItem = e.target.closest('[data-fz-index]');
+          if (fzItem) {
+            const fz = this._kalTerminFahrzeugListe?.[parseInt(fzItem.dataset.fzIndex)];
+            if (fz) {
+              this.applyFahrzeugZuKalenderModal(fz);
+              ergebnisseContainer.style.display = 'none';
+            }
+            return;
+          }
+
+          // Kundenauswahl (1. Ebene)
+          const kundeItem = e.target.closest('[data-kunde-id]');
+          if (!kundeItem) return;
+
+          const kundeId = kundeItem.dataset.kundeId;
+          const name = kundeItem.dataset.name;
+          const kzFallback = kundeItem.dataset.kennzeichen;
+
+          document.getElementById('kalTerminKundenSuche').value = name;
+          document.getElementById('kalTerminKundeId').value = kundeId;
+
+          // Fahrzeuge des Kunden laden
+          let fahrzeuge = [];
+          try {
+            const resp = await KundenService.getFahrzeuge(kundeId);
+            fahrzeuge = Array.isArray(resp) ? resp : (resp.fahrzeuge || []);
+          } catch (_) {
+            // Fallback aus termineCache
+            if (this.termineCache?.length) {
+              const seen = new Set();
+              fahrzeuge = this.termineCache
+                .filter(t => t.kunde_id == kundeId && t.kennzeichen)
+                .filter(t => {
+                  const k = (t.kennzeichen || '').replace(/\s+/g, '').toUpperCase();
+                  if (seen.has(k)) return false;
+                  seen.add(k);
+                  return true;
+                })
+                .map(t => ({ kennzeichen: t.kennzeichen, fahrzeugtyp: t.fahrzeugtyp || '', vin: t.vin || '' }));
+            }
+          }
+
+          if (fahrzeuge.length === 1) {
+            this.applyFahrzeugZuKalenderModal(fahrzeuge[0]);
+            ergebnisseContainer.style.display = 'none';
+          } else if (fahrzeuge.length > 1) {
+            this._kalTerminFahrzeugListe = fahrzeuge;
+            ergebnisseContainer.innerHTML = `
+              <div style="padding:6px 10px;font-size:0.8em;color:#666;border-bottom:1px solid #eee;">🚗 Fahrzeug auswählen:</div>
+              ${fahrzeuge.map((fz, i) => `
+                <div class="autocomplete-item" data-fz-index="${i}">
+                  <strong>${fz.kennzeichen}</strong>
+                  ${fz.fahrzeugtyp ? `<span style="color:#666;"> · ${fz.fahrzeugtyp}</span>` : ''}
+                  ${i === 0 ? '<span style="float:right;font-size:0.75em;color:#aaa;">Letzter</span>' : ''}
+                </div>
+              `).join('')}
+            `;
+            ergebnisseContainer.style.display = 'block';
+          } else {
+            // Keine Fahrzeuge → Fallback aus Suchergebnis-Cache
+            if (kzFallback) {
+              document.getElementById('kalTerminKennzeichen').value = kzFallback;
+            }
+            ergebnisseContainer.style.display = 'none';
+          }
         });
       }
     }
@@ -30564,23 +30639,23 @@ class App {
       `).join('');
       ergebnisseEl.style.display = 'block';
 
-      ergebnisseEl.querySelectorAll('.autocomplete-item').forEach(item => {
-        item.addEventListener('click', () => {
-          const kundeId = item.dataset.kundeId;
-          const name = item.dataset.name;
-          const kennzeichen = item.dataset.kennzeichen;
-
-          document.getElementById('kalTerminKundenSuche').value = name;
-          document.getElementById('kalTerminKundeId').value = kundeId;
-          if (kennzeichen) {
-            document.getElementById('kalTerminKennzeichen').value = kennzeichen;
-          }
-          ergebnisseEl.style.display = 'none';
-        });
-      });
+      // Klick-Handler läuft via Event-Delegation in openKalenderNeuerTerminModal
     } catch (err) {
       console.error('Kalender: Kundensuche Fehler:', err);
     }
+  }
+
+  /**
+   * Fahrzeugdaten in das Kalender-Modal-Formular übernehmen
+   */
+  applyFahrzeugZuKalenderModal(fahrzeug) {
+    if (!fahrzeug) return;
+    const setVal = (id, val) => { const el = document.getElementById(id); if (el) el.value = val ?? ''; };
+    setVal('kalTerminKennzeichen', fahrzeug.kennzeichen || '');
+    setVal('kalTerminFahrzeugtyp', fahrzeug.fahrzeugtyp || '');
+    setVal('kalTerminVin', fahrzeug.vin || '');
+    const km = fahrzeug.letzter_km_stand || fahrzeug.letzterKmStand || '';
+    if (km) setVal('kalTerminKilometerstand', km);
   }
 
   /**
