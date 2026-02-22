@@ -1083,7 +1083,20 @@ class App {
     const terminNameSuche = document.getElementById('terminNameSuche');
     this.bindEventListenerOnce(terminNameSuche, 'input', () => this.handleNameSuche(), 'TerminNameSucheInput');
     this.bindEventListenerOnce(terminNameSuche, 'keydown', (e) => this.handleSucheKeydown(e, 'name'), 'TerminNameSucheKeydown');
-    this.bindEventListenerOnce(terminNameSuche, 'blur', () => setTimeout(() => this.hideVorschlaege('name'), 350), 'TerminNameSucheBlur');
+    this.bindEventListenerOnce(terminNameSuche, 'blur', () => setTimeout(() => this.hideVorschlaege('name'), 500), 'TerminNameSucheBlur');
+
+    // Event-Delegation: Klicks auf Namens-Vorschläge zentral abfangen
+    const nameSucheVorschlaege = document.getElementById('nameSucheVorschlaege');
+    if (nameSucheVorschlaege) {
+      this.bindEventListenerOnce(nameSucheVorschlaege, 'mousedown', (e) => {
+        e.preventDefault(); // verhindert Blur auf terminNameSuche
+        const item = e.target.closest('[data-kunde-id]');
+        if (item) {
+          const kundeId = parseInt(item.dataset.kundeId, 10);
+          if (!isNaN(kundeId)) this.selectKundeVorschlag(kundeId);
+        }
+      }, 'NameVorschlaegeDelegate');
+    }
 
     const kzFelder = ['kzSucheBezirk', 'kzSucheBuchstaben', 'kzSucheNummer'];
     const kzFelderSet = new Set(kzFelder);
@@ -10776,7 +10789,7 @@ class App {
     }
     
     vorschlaegeDiv.innerHTML = treffer.map((kunde, idx) => `
-      <div class="vorschlag-item" data-index="${idx}" onmousedown="event.preventDefault()" onclick="app.selectKundeVorschlag(${kunde.id})">
+      <div class="vorschlag-item" data-index="${idx}" data-kunde-id="${kunde.id}">
         <div>
           <span class="vorschlag-name">${this.highlightMatch(kunde.name, eingabe)}</span>
           ${kunde.telefon ? `<span class="vorschlag-telefon"> · ${kunde.telefon}</span>` : ''}
@@ -11182,44 +11195,79 @@ class App {
   async selectKundeVorschlag(kundeId) {
     const kunde = (this.kundenCache || []).find(k => k.id === kundeId);
     if (!kunde) return;
-    
-    // Fahrzeuge direkt vom Backend laden (inkl. aller Termine-Kennzeichen)
+
+    // Dropdown sofort schließen
+    this.hideVorschlaege('name');
+
+    // Fahrzeuge vom Backend laden
+    let fahrzeuge = [];
     try {
-      const fahrzeuge = await KundenService.getFahrzeuge(kundeId);
-      
-      console.log(`Kunde ${kunde.name} ausgewählt:`, {
-        kundeId,
-        kundeKennzeichen: kunde.kennzeichen,
-        gefundeneFahrzeuge: fahrzeuge.length,
-        fahrzeuge: fahrzeuge.map(f => f.kennzeichen)
-      });
-      
-      if (fahrzeuge.length === 1) {
-        // Genau 1 Fahrzeug → direkt übernehmen ohne Modal
-        console.log('Genau 1 Fahrzeug → direkt übernommen:', fahrzeuge[0].kennzeichen);
-        this.applyKundeAuswahl(kunde, fahrzeuge[0]);
-        this.showToast(`🚗 ${fahrzeuge[0].kennzeichen} übernommen`, 'success');
-        this.hideVorschlaege('name');
-        return;
-      }
-      
-      if (fahrzeuge.length > 1) {
-        // Mehrere Fahrzeuge → Auswahl-Modal zeigen
-        console.log('Zeige Fahrzeugauswahl-Modal...');
-        this.showFahrzeugAuswahlModal(kunde, fahrzeuge);
-        this.hideVorschlaege('name');
-        return;
-      }
-      
-      // Kein Fahrzeug vorhanden - direkt Kunde auswählen (Kennzeichen muss manuell eingegeben werden)
-      this.applyKundeAuswahl(kunde, null);
-      this.hideVorschlaege('name');
+      fahrzeuge = await KundenService.getFahrzeuge(kundeId);
     } catch (error) {
-      console.error('Fehler beim Laden der Fahrzeuge:', error);
-      // Fallback: Nur den Kunden ohne Fahrzeugauswahl übernehmen
-      this.applyKundeAuswahl(kunde, null);
-      this.hideVorschlaege('name');
+      console.warn('API-Fehler bei getFahrzeuge, nutze lokalen Fallback:', error);
     }
+
+    // Lokaler Fallback: Fahrzeuge aus termineCache sammeln, falls API leer/fehlerhaft
+    if (fahrzeuge.length === 0) {
+      const kzMap = new Map();
+
+      // 1. Kennzeichen aus termineCache
+      (this.termineCache || [])
+        .filter(t => t.kunde_id === kundeId && t.kennzeichen)
+        .forEach(t => {
+          const kzNorm = t.kennzeichen.toUpperCase().replace(/[\s\-]/g, '');
+          if (!kzMap.has(kzNorm)) {
+            kzMap.set(kzNorm, {
+              kennzeichen: t.kennzeichen,
+              fahrzeugtyp: t.fahrzeugtyp || '',
+              vin: t.vin || '',
+              letzter_termin: t.datum,
+              letzter_km_stand: t.kilometerstand || null
+            });
+          }
+        });
+
+      // 2. Kennzeichen aus Kundenstamm
+      if (kunde.kennzeichen) {
+        const kzNorm = kunde.kennzeichen.toUpperCase().replace(/[\s\-]/g, '');
+        if (!kzMap.has(kzNorm)) {
+          kzMap.set(kzNorm, {
+            kennzeichen: kunde.kennzeichen,
+            fahrzeugtyp: kunde.fahrzeugtyp || '',
+            vin: '',
+            letzter_termin: null,
+            letzter_km_stand: null
+          });
+        }
+      }
+
+      fahrzeuge = Array.from(kzMap.values());
+      if (fahrzeuge.length > 0) {
+        console.log(`Lokaler Fallback: ${fahrzeuge.length} Fahrzeug(e) für Kunde ${kunde.name}`);
+      }
+    }
+
+    console.log(`Kunde ${kunde.name} ausgewählt:`, {
+      kundeId,
+      gefundeneFahrzeuge: fahrzeuge.length,
+      fahrzeuge: fahrzeuge.map(f => f.kennzeichen)
+    });
+
+    if (fahrzeuge.length === 1) {
+      // Genau 1 Fahrzeug → direkt übernehmen
+      this.applyKundeAuswahl(kunde, fahrzeuge[0]);
+      this.showToast(`🚗 ${fahrzeuge[0].kennzeichen} übernommen`, 'success');
+      return;
+    }
+
+    if (fahrzeuge.length > 1) {
+      // Mehrere Fahrzeuge → Auswahl-Modal
+      this.showFahrzeugAuswahlModal(kunde, fahrzeuge);
+      return;
+    }
+
+    // Kein Fahrzeug gefunden – Kunde übernehmen, Kennzeichen manuell eintragen
+    this.applyKundeAuswahl(kunde, null);
   }
 
   // Fahrzeug-Auswahl Modal anzeigen
@@ -11227,6 +11275,12 @@ class App {
     const modal = document.getElementById('fahrzeugAuswahlModal');
     const kundeInfo = document.getElementById('fahrzeugAuswahlKunde');
     const liste = document.getElementById('fahrzeugAuswahlListe');
+
+    if (!modal || !kundeInfo || !liste) {
+      console.error('fahrzeugAuswahlModal-Elemente nicht gefunden – wähle erstes Fahrzeug direkt');
+      if (fahrzeuge.length > 0) this.applyKundeAuswahl(kunde, fahrzeuge[0]);
+      return;
+    }
     
     kundeInfo.innerHTML = `<strong>${kunde.name}</strong>${kunde.telefon ? ` · ${kunde.telefon}` : ''}<br>
       <span style="font-size: 0.9em;">Dieser Kunde hat ${fahrzeuge.length} Fahrzeuge:</span>`;
@@ -11525,7 +11579,14 @@ class App {
     } else if (e.key === 'Enter') {
       e.preventDefault();
       if (this[indexKey] >= 0 && items[this[indexKey]]) {
-        items[this[indexKey]].click();
+        const item = items[this[indexKey]];
+        if (type === 'name') {
+          // Direkt aufrufen statt .click(), da kein onclick mehr vorhanden
+          const kundeId = parseInt(item.dataset.kundeId, 10);
+          if (!isNaN(kundeId)) this.selectKundeVorschlag(kundeId);
+        } else {
+          item.click();
+        }
       }
     } else if (e.key === 'Escape') {
       this.hideVorschlaege(type);
