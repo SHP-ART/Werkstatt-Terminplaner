@@ -264,9 +264,9 @@ echo "Git HEAD: $(git rev-parse --short HEAD 2>/dev/null)"
 
 # 2. Frontend bauen
 if [ -f "frontend/package.json" ]; then
-  echo "--- npm install vite (nur Build-Tool) ---"
+  echo "--- npm install vite (force, damit kein Prod-node_modules gescannt wird) ---"
   cd "${repoDir}/frontend"
-  NODE_ENV=development "$NPM" install --save-dev vite
+  NODE_ENV=development "$NPM" install --save-dev vite --force --no-audit
   echo "--- vite build (direkt via node) ---"
   VITE_JS="${repoDir}/frontend/node_modules/vite/bin/vite.js"
   if [ -f "$VITE_JS" ]; then
@@ -441,7 +441,7 @@ echo "=== FRONTEND-BUILD gestartet: $(date) ==="
 echo "NPM: ${npmPath}"
 cd "${repoDir}/frontend" || exit 1
 echo "--- npm install vite (nur Build-Tool, kein electron) ---"
-"${npmPath}" install --save-dev vite --no-audit
+"${npmPath}" install --save-dev vite --force --no-audit
 echo "--- vite build (direkt via node) ---"
 VITE_JS="${repoDir}/frontend/node_modules/vite/bin/vite.js"
 if [ -f "$VITE_JS" ]; then
