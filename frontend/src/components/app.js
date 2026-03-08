@@ -31417,9 +31417,9 @@ class App {
     if (input) input.value = '';
     // Tab wechseln und Datensatz auswählen
     if (bereich === 'kunden') {
-      this.showTab('kunden');
+      this.switchToTab('kunden');
     } else if (bereich === 'termine') {
-      this.showTab('termine');
+      this.switchToTab('termine');
     }
   }
 
@@ -31434,12 +31434,12 @@ class App {
 
       if (e.altKey) {
         switch (e.key) {
-          case '1': e.preventDefault(); this.showTab('dashboard'); break;
-          case '2': e.preventDefault(); this.showTab('termine'); break;
-          case '3': e.preventDefault(); this.showTab('auslastung'); break;
-          case '4': e.preventDefault(); this.showTab('kunden'); break;
-          case '5': e.preventDefault(); this.showTab('einstellungen'); break;
-          case 'n': e.preventDefault(); this.showTab('termine'); window.switchSubTab && window.switchSubTab('neuerTermin'); break;
+          case '1': e.preventDefault(); this.switchToTab('dashboard'); break;
+          case '2': e.preventDefault(); this.switchToTab('termine'); break;
+          case '3': e.preventDefault(); this.switchToTab('auslastung'); break;
+          case '4': e.preventDefault(); this.switchToTab('kunden'); break;
+          case '5': e.preventDefault(); this.switchToTab('einstellungen'); break;
+          case 'n': e.preventDefault(); this.switchToTab('termine'); window.switchSubTab && window.switchSubTab('neuerTermin'); break;
           case 'f': e.preventDefault(); document.getElementById('globalesSuchfeld')?.focus(); break;
           case '?': e.preventDefault(); this.showShortcutHelp(); break;
         }
