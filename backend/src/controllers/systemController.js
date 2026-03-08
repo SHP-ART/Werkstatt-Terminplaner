@@ -433,11 +433,15 @@ echo "=== UPDATE ABGESCHLOSSEN: $(date) ==="
         const bashScript = `
           echo "=== SHUTDOWN $(date) ===" >> "${log}" 2>&1
           echo "USER: $(whoami)" >> "${log}" 2>&1
-          if command -v shutdown >/dev/null 2>&1; then
-            sudo shutdown -h now >> "${log}" 2>&1 && exit 0
+          # klibc/bin/poweroff verwendet direkten Syscall (kein D-Bus)
+          if [ -x "/usr/lib/klibc/bin/poweroff" ]; then
+            echo "using klibc poweroff" >> "${log}" 2>&1
+            /usr/lib/klibc/bin/poweroff >> "${log}" 2>&1 && exit 0
           fi
-          sudo systemctl poweroff >> "${log}" 2>&1 && exit 0
-          sudo poweroff >> "${log}" 2>&1
+          # Fallbacks
+          systemctl poweroff >> "${log}" 2>&1 || \\
+          shutdown -h now >> "${log}" 2>&1 || \\
+          echo "FEHLER: kein Shutdown-Tool verfuegbar" >> "${log}" 2>&1
         `;
         const child = spawn('bash', ['-c', bashScript], { detached: true, stdio: 'ignore' });
         child.unref();
