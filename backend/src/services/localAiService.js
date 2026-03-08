@@ -164,6 +164,17 @@ async function trainZeitModel(force = false) {
          AND (ki_training_exclude IS NULL OR ki_training_exclude = 0)`
     );
 
+    // Zusätzlich: ki_zeitlern_daten als dedizierte Lernquelle (feinere Granularität)
+    let lernRows = [];
+    try {
+      lernRows = await allAsync(
+        `SELECT arbeit, geschaetzte_min as geschaetzte_zeit, tatsaechliche_min as tatsaechliche_zeit
+         FROM ki_zeitlern_daten
+         WHERE exclude = 0 AND tatsaechliche_min > 0
+         ORDER BY erstellt_am DESC LIMIT 5000`
+      );
+    } catch (e) { /* Tabelle existiert ggf. noch nicht bei alten Installationen */ }
+
     // Erste Phase: Sammle alle Zeiten pro Arbeit für Ausreißer-Erkennung
     const rawStats = new Map();
     rows.forEach(row => {
@@ -190,6 +201,15 @@ async function trainZeitModel(force = false) {
         }
         rawStats.get(key).values.push(assigned);
       });
+    });
+
+    // Dedizierte Lerndaten aus ki_zeitlern_daten (direkter Datenpunkt pro Arbeit, höhere Qualität)
+    lernRows.forEach(row => {
+      const key = normalizeText(row.arbeit);
+      if (!rawStats.has(key)) {
+        rawStats.set(key, { name: row.arbeit, values: [] });
+      }
+      rawStats.get(key).values.push(row.tatsaechliche_zeit);
     });
 
     // Zweite Phase: Ausreißer filtern (IQR-Methode)

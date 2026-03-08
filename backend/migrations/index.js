@@ -39,7 +39,8 @@ const migrations = [
   require('./021_teile_bestellungen_kunde_id'),  // Version 21 - kunde_id fuer Teile-Bestellungen
   require('./022_ollama_model_einstellungen'),  // Version 22 - Ollama-Modell in Einstellungen
   require('./023_automatisierung'),   // Version 23 - Automatisierungs-Grundlagen
-  require('./024_auto_slot_enabled')  // Version 24 - Auto-Slot-Suche Einstellung
+  require('./024_auto_slot_enabled'),  // Version 24 - Auto-Slot-Suche Einstellung
+  require('./025_ki_zeitlern_daten')  // Version 25 - KI-Zeitlern-Datenbank
 ];
 
 /**

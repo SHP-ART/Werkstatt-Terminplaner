@@ -964,6 +964,10 @@ class AIService {
   static async getAutomationLog(limit = 50) {
     return ApiService.get(`/ai/automation-log?limit=${limit}`);
   }
+
+  static async getKiLernStatistiken() {
+    return ApiService.get('/ai/ki-lern-statistiken');
+  }
 }
 
 /**

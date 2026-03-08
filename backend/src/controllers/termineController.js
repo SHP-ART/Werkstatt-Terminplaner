@@ -910,15 +910,36 @@ class TermineController {
         invalidateAuslastungCache(termin.datum);
       }
 
-      // Lernfunktion deaktiviert - überschreibt sonst manuelle Einstellungen
-      // TODO: Später optional als Opt-In Feature mit Zeitstempel-Check implementieren
-      // if (sollteLernen && termin && termin.arbeit) {
-      //   TermineController.lerneAusTatsaechlicherZeit(termin.arbeit, tatsaechliche_zeit, (lernErr) => {
-      //     if (lernErr) {
-      //       console.error('Fehler bei Lernfunktion:', lernErr);
-      //     }
-      //   });
-      // }
+      // 🤖 KI-LERN-DATENBANK: Lernpunkt speichern wenn Termin abgeschlossen mit tatsächlicher Zeit
+      const gespeicherteZeit = updateData.tatsaechliche_zeit || tatsaechliche_zeit;
+      if (neuerStatus === 'abgeschlossen' && gespeicherteZeit > 0 && termin.arbeit) {
+        try {
+          const { kategorisiereArbeit } = require('../services/localAiService');
+          const { runAsync: dbRun, allAsync: dbAll } = require('../config/database');
+          const arbeiten = termin.arbeit.split(/[\r\n,]+/).map(a => a.trim()).filter(Boolean);
+          const zeitProArbeit = Math.round(gespeicherteZeit / Math.max(arbeiten.length, 1));
+          // Schätzzeitaufteilen proportional zur Standardzeit wenn bekannt
+          for (const arbeitItem of arbeiten) {
+            const kat = kategorisiereArbeit(arbeitItem);
+            await dbRun(
+              `INSERT INTO ki_zeitlern_daten (termin_id, arbeit, kategorie, geschaetzte_min, tatsaechliche_min, mitarbeiter_id, datum)
+               VALUES (?, ?, ?, ?, ?, ?, ?)`,
+              [
+                termin.id,
+                arbeitItem,
+                kat,
+                Math.round((termin.geschaetzte_zeit || gespeicherteZeit) / Math.max(arbeiten.length, 1)),
+                zeitProArbeit,
+                termin.mitarbeiter_id || null,
+                termin.datum
+              ]
+            );
+          }
+          console.log(`[KI-Lern] ${arbeiten.length} Datenpunkt(e) gespeichert für Termin ${termin.id}`);
+        } catch (lernErr) {
+          console.warn('[KI-Lern] Fehler beim Speichern von Lerndaten:', lernErr.message);
+        }
+      }
 
       if (changes === 0) {
         return res.status(200).json({ 

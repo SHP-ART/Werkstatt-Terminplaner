@@ -1328,6 +1328,47 @@ async function benchmarkOllama(req, res) {
 // =============================================================================
 
 /**
+ * GET /api/ai/ki-lern-statistiken
+ * Gibt Lernstatistiken aus ki_zeitlern_daten zurück:
+ * pro Kategorie: Anzahl Datenpunkte, Durchschnitt-Abweichung, Schätzgenauigkeit
+ */
+async function getKiLernStatistiken(req, res) {
+  try {
+    const { allAsync } = require('../config/database');
+    const gesamt = await allAsync(`SELECT COUNT(*) as n FROM ki_zeitlern_daten WHERE exclude = 0`);
+    const kategorien = await allAsync(`
+      SELECT
+        kategorie,
+        COUNT(*) as datenpunkte,
+        ROUND(AVG(tatsaechliche_min), 1) as avg_tatsaechlich,
+        ROUND(AVG(geschaetzte_min), 1) as avg_geschaetzt,
+        ROUND(AVG(abweichung_prozent), 1) as avg_abweichung_pct,
+        ROUND(100.0 - ABS(AVG(abweichung_prozent)), 1) as schaetzgenauigkeit
+      FROM ki_zeitlern_daten
+      WHERE exclude = 0
+      GROUP BY kategorie
+      ORDER BY datenpunkte DESC
+    `);
+    const neueste = await allAsync(`
+      SELECT arbeit, kategorie, geschaetzte_min, tatsaechliche_min, abweichung_prozent, datum
+      FROM ki_zeitlern_daten
+      WHERE exclude = 0
+      ORDER BY erstellt_am DESC
+      LIMIT 20
+    `);
+    res.json({
+      success: true,
+      gesamt_datenpunkte: gesamt[0]?.n || 0,
+      kategorien,
+      neueste
+    });
+  } catch (err) {
+    console.error('Fehler bei getKiLernStatistiken:', err);
+    res.status(500).json({ error: err.message });
+  }
+}
+
+/**
  * GET /api/ai/puffer-empfehlung?arbeit=...
  * Gibt die empfohlene ML-basierte Pufferzeit für eine Arbeitsart zurück
  */
@@ -1409,5 +1450,6 @@ module.exports = {
   // Automatisierungs-Endpunkte
   getPufferEmpfehlung,
   checkDuplikatArbeiten,
-  getAutomationLog
+  getAutomationLog,
+  getKiLernStatistiken
 };

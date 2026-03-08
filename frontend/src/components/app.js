@@ -31127,6 +31127,82 @@ class App {
     }
   }
 
+  async loadKiLernStatistiken() {
+    const container = document.getElementById('kiLernStatistiken');
+    if (!container) return;
+    container.innerHTML = '<p class="hint">Wird geladen...</p>';
+    try {
+      const data = await window.AIService.getKiLernStatistiken();
+      if (!data || data.gesamt_datenpunkte === 0) {
+        container.innerHTML = '<p class="hint">Noch keine Lerndaten vorhanden. Schliessen Sie Termine mit tatsächlicher Zeit ab – die KI lernt automatisch.</p>';
+        return;
+      }
+      const katRows = (data.kategorien || []).map(k => {
+        const genauigkeit = Math.max(0, Math.min(100, k.schaetzgenauigkeit || 0));
+        const farbe = genauigkeit >= 80 ? '#27ae60' : genauigkeit >= 60 ? '#e67e22' : '#e74c3c';
+        return `<tr>
+          <td><strong>${this._escapeHtml(k.kategorie || '–')}</strong></td>
+          <td>${k.datenpunkte}</td>
+          <td>${Math.round(k.avg_geschaetzt || 0)} min</td>
+          <td>${Math.round(k.avg_tatsaechlich || 0)} min</td>
+          <td style="color:${k.avg_abweichung_pct > 0 ? '#e74c3c' : '#27ae60'}">
+            ${k.avg_abweichung_pct > 0 ? '+' : ''}${Math.round(k.avg_abweichung_pct || 0)}%
+          </td>
+          <td>
+            <div style="display:flex;align-items:center;gap:6px;">
+              <div style="flex:1;background:#eee;border-radius:4px;height:8px;">
+                <div style="width:${genauigkeit}%;background:${farbe};height:8px;border-radius:4px;"></div>
+              </div>
+              <span style="font-size:0.85em;color:${farbe};min-width:35px;">${genauigkeit}%</span>
+            </div>
+          </td>
+        </tr>`;
+      }).join('');
+      container.innerHTML = `
+        <div style="margin-bottom:12px;">
+          <strong>📊 Gesamt: ${data.gesamt_datenpunkte} Lerndatenpunkte</strong>
+          <span style="color:#666;font-size:0.85em;"> – aus abgeschlossenen Terminen</span>
+        </div>
+        <table style="width:100%;border-collapse:collapse;font-size:0.9em;">
+          <thead>
+            <tr style="background:#f5f5f5;text-align:left;">
+              <th style="padding:6px 8px;">Kategorie</th>
+              <th style="padding:6px 8px;">Daten&shy;punkte</th>
+              <th style="padding:6px 8px;">Ø Geschätzt</th>
+              <th style="padding:6px 8px;">Ø Tatsächlich</th>
+              <th style="padding:6px 8px;">Ø Abweichung</th>
+              <th style="padding:6px 8px;min-width:120px;">Genauigkeit</th>
+            </tr>
+          </thead>
+          <tbody>${katRows}</tbody>
+        </table>
+        ${(data.neueste || []).length > 0 ? `
+        <details style="margin-top:14px;">
+          <summary style="cursor:pointer;color:#4a90e2;">Neueste Lerndaten anzeigen (${data.neueste.length})</summary>
+          <table style="width:100%;border-collapse:collapse;font-size:0.85em;margin-top:8px;">
+            <thead><tr style="background:#f5f5f5;">
+              <th style="padding:4px 6px;">Arbeit</th><th style="padding:4px 6px;">Kat.</th>
+              <th style="padding:4px 6px;">Geschätzt</th><th style="padding:4px 6px;">Tatsächlich</th>
+              <th style="padding:4px 6px;">Abw.</th><th style="padding:4px 6px;">Datum</th>
+            </tr></thead>
+            <tbody>${data.neueste.map(r => `<tr>
+              <td style="padding:3px 6px;">${this._escapeHtml(r.arbeit)}</td>
+              <td style="padding:3px 6px;color:#888;">${r.kategorie || '–'}</td>
+              <td style="padding:3px 6px;">${r.geschaetzte_min} min</td>
+              <td style="padding:3px 6px;">${r.tatsaechliche_min} min</td>
+              <td style="padding:3px 6px;color:${r.abweichung_prozent > 0 ? '#e74c3c' : '#27ae60'};">
+                ${r.abweichung_prozent > 0 ? '+' : ''}${Math.round(r.abweichung_prozent || 0)}%
+              </td>
+              <td style="padding:3px 6px;color:#888;">${r.datum}</td>
+            </tr>`).join('')}</tbody>
+          </table>
+        </details>` : ''}
+      `;
+    } catch (err) {
+      container.innerHTML = `<p class="hint" style="color:red;">Fehler: ${err.message}</p>`;
+    }
+  }
+
   _escapeHtml(str) {
     return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
   }
