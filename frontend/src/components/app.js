@@ -29878,7 +29878,28 @@ class App {
     const startStunde = 7;
     const endStunde = 18;
     const slotHoehe = 50; // px pro Stunde
-    
+
+    // Termine ohne Uhrzeit separat oben anzeigen
+    const ohneZeit = termine.filter(t => !t.bring_zeit && !t.startzeit && !t.abholung_zeit);
+    const mitZeit = termine.filter(t => t.bring_zeit || t.startzeit || t.abholung_zeit);
+
+    let ohneZeitHtml = '';
+    if (ohneZeit.length > 0) {
+      ohneZeitHtml = `<div class="kalender-ohne-zeit-section">
+        <div class="ohne-zeit-header">📋 Ohne Uhrzeit</div>
+        <div class="ohne-zeit-liste">${ohneZeit.map(t => {
+          const statusClass = this.kalenderGetStatusCSS(t.status);
+          const arbeiten = (t.arbeit || '').split('\n').filter(Boolean);
+          return `<div class="ohne-zeit-termin ${statusClass}" data-termin-id="${t.id}">
+            <span class="ohne-zeit-nr">${t.termin_nr || ''}</span>
+            <span class="ohne-zeit-kunde">${t.kunde_name || 'Unbekannt'}</span>
+            ${t.kennzeichen ? `<span class="ohne-zeit-kz">${t.kennzeichen}</span>` : ''}
+            <span class="ohne-zeit-arbeit">${arbeiten[0] || ''}</span>
+          </div>`;
+        }).join('')}</div>
+      </div>`;
+    }
+
     let html = '';
     for (let h = startStunde; h <= endStunde; h++) {
       const zeitLabel = `${String(h).padStart(2, '0')}:00`;
@@ -29891,10 +29912,15 @@ class App {
         </div>
       `;
     }
-    container.innerHTML = html;
+    container.innerHTML = ohneZeitHtml + html;
 
-    // Termin-Blöcke positionieren
-    termine.forEach(termin => {
+    // Klick auf Ohne-Zeit-Karten
+    container.querySelectorAll('.ohne-zeit-termin').forEach(el => {
+      el.addEventListener('click', () => this.kalenderTerminClick(parseInt(el.dataset.terminId)));
+    });
+
+    // Termin-Blöcke positionieren (nur Termine MIT Uhrzeit)
+    mitZeit.forEach(termin => {
       const startzeit = termin.bring_zeit || termin.startzeit || termin.abholung_zeit || '08:00';
       const dauer = termin.geschaetzte_zeit || 60;
       const [sh, sm] = startzeit.split(':').map(Number);
@@ -29971,15 +29997,16 @@ class App {
       return;
     }
     
-    // Termine nach Uhrzeit sortieren
-    const sortiert = [...termine].sort((a, b) => {
+    // Termine ohne Uhrzeit oben, dann Rest nach Uhrzeit sortiert
+    const ohneZeit = termine.filter(t => !t.bring_zeit && !t.startzeit && !t.abholung_zeit);
+    const mitZeit = termine.filter(t => t.bring_zeit || t.startzeit || t.abholung_zeit);
+    const sortiert = [...mitZeit].sort((a, b) => {
       const za = a.bring_zeit || a.startzeit || a.abholung_zeit || '99:99';
       const zb = b.bring_zeit || b.startzeit || b.abholung_zeit || '99:99';
       return za.localeCompare(zb);
     });
 
-    container.innerHTML = sortiert.map(t => {
-      const zeit = t.bring_zeit || t.startzeit || t.abholung_zeit || '–';
+    const renderEintrag = (t, zeit) => {
       const statusClass = this.kalenderGetStatusCSS(t.status);
       const statusLabel = this.kalenderGetStatusLabel(t.status);
       const statusFarbe = this.kalenderGetStatusFarbe(t.status);
@@ -29988,13 +30015,25 @@ class App {
         <div class="kalender-liste-termin ${statusClass}" data-termin-id="${t.id}">
           <div class="liste-zeit">${zeit}</div>
           <div class="liste-info">
-            <div class="liste-kunde">${t.kunde_name || 'Unbekannt'}</div>
+            <div class="liste-kunde">${t.termin_nr ? `<span class="liste-termin-nr">${t.termin_nr}</span> ` : ''}${t.kunde_name || 'Unbekannt'}</div>
             <div class="liste-kennzeichen">${t.kennzeichen || ''} · ${t.geschaetzte_zeit || '?'} Min.</div>
             <div class="liste-arbeit">${arbeiten.join(', ')}</div>
           </div>
           <span class="liste-status" style="background:${statusFarbe}22;color:${statusFarbe}">${statusLabel}</span>
         </div>
       `;
+    };
+
+    const ohneZeitHtml = ohneZeit.length > 0
+      ? `<div class="kalender-ohne-zeit-section liste-variante">
+          <div class="ohne-zeit-header">📋 Ohne Uhrzeit</div>
+          ${ohneZeit.map(t => renderEintrag(t, '–')).join('')}
+        </div>`
+      : '';
+
+    container.innerHTML = ohneZeitHtml + sortiert.map(t => {
+      const zeit = t.bring_zeit || t.startzeit || t.abholung_zeit || '–';
+      return renderEintrag(t, zeit);
     }).join('');
 
     container.querySelectorAll('.kalender-liste-termin').forEach(el => {
@@ -30147,13 +30186,28 @@ class App {
     const endStunde = 18;
     const slotHoehe = 50;
 
+    // Termine ohne Uhrzeit separat
+    const ohneZeit = termine.filter(t => !t.bring_zeit && !t.startzeit && !t.abholung_zeit);
+    const mitZeit = termine.filter(t => t.bring_zeit || t.startzeit || t.abholung_zeit);
+
     let html = '<div class="kalender-woche-zeitachse" style="position:relative;">';
+
+    // Ohne-Zeit-Chips oben im Tagesblock
+    if (ohneZeit.length > 0) {
+      html += `<div class="kalender-woche-ohne-zeit">${ohneZeit.map(t => {
+        const statusClass = this.kalenderGetStatusCSS(t.status);
+        return `<div class="kwoz-chip ${statusClass}" data-termin-id="${t.id}" title="${t.termin_nr || ''} – ${t.kunde_name || ''}">
+          ${t.termin_nr || t.kennzeichen || t.kunde_name || '?'}
+        </div>`;
+      }).join('')}</div>`;
+    }
+
     for (let h = startStunde; h <= endStunde; h++) {
       html += `<div class="kalender-woche-zeit-row" data-stunde="${h}" style="height:${slotHoehe}px;"><span class="wz-label">${h}:00</span></div>`;
     }
 
-    // Termin-Blöcke
-    termine.forEach(t => {
+    // Termin-Blöcke (nur mit Uhrzeit)
+    mitZeit.forEach(t => {
       const startzeit = t.bring_zeit || t.startzeit || t.abholung_zeit || '08:00';
       const dauer = t.geschaetzte_zeit || 60;
       const [sh, sm] = startzeit.split(':').map(Number);
@@ -30181,24 +30235,34 @@ class App {
     if (termine.length === 0) {
       return '<div style="text-align:center;color:#ccc;padding:20px;font-size:0.8em;">Keine Termine</div>';
     }
-    const sortiert = [...termine].sort((a, b) => {
+
+    const ohneZeit = termine.filter(t => !t.bring_zeit && !t.startzeit && !t.abholung_zeit);
+    const mitZeit = termine.filter(t => t.bring_zeit || t.startzeit || t.abholung_zeit);
+    const sortiert = [...mitZeit].sort((a, b) => {
       const za = a.bring_zeit || a.startzeit || a.abholung_zeit || '99:99';
       const zb = b.bring_zeit || b.startzeit || b.abholung_zeit || '99:99';
       return za.localeCompare(zb);
     });
 
-    return sortiert.map(t => {
-      const zeit = t.bring_zeit || t.startzeit || t.abholung_zeit || '–';
+    const renderZeile = (t, zeit) => {
       const statusClass = this.kalenderGetStatusCSS(t.status);
       const arbeiten = (t.arbeit || '').split('\n').filter(Boolean);
       return `
         <div class="kalender-woche-liste-termin ${statusClass}" data-termin-id="${t.id}">
           <div class="wl-zeit">${zeit}</div>
-          <div class="wl-kunde">${t.kunde_name || t.kennzeichen || 'Unbekannt'}</div>
+          <div class="wl-kunde">${t.termin_nr ? `<span style="font-size:0.78em;opacity:0.7">${t.termin_nr}</span><br>` : ''}${t.kunde_name || t.kennzeichen || 'Unbekannt'}</div>
           <div class="wl-arbeit">${arbeiten[0] || ''}${arbeiten.length > 1 ? ` +${arbeiten.length - 1}` : ''}</div>
         </div>
       `;
+    };
+
+    const ohneZeitBlock = ohneZeit.map(t => renderZeile(t, '–')).join('');
+    const mitZeitBlock = sortiert.map(t => {
+      const zeit = t.bring_zeit || t.startzeit || t.abholung_zeit || '–';
+      return renderZeile(t, zeit);
     }).join('');
+
+    return ohneZeitBlock + mitZeitBlock;
   }
 
   // =====================================================

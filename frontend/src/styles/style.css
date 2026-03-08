@@ -14428,6 +14428,131 @@ body.intern-tablet-mode-active #intern {
     color: #e65100;
 }
 
+/* ===== Ohne-Uhrzeit Sektion (wie "Ganztägig" in Google Calendar) ===== */
+.kalender-ohne-zeit-section {
+    background: #f8f9fa;
+    border-left: 4px solid #6c757d;
+    border-radius: 6px;
+    padding: 8px 12px;
+    margin-bottom: 12px;
+}
+
+.kalender-ohne-zeit-section.liste-variante {
+    margin: 0 16px 12px;
+}
+
+.ohne-zeit-header {
+    font-size: 0.72em;
+    font-weight: 700;
+    color: #6c757d;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-bottom: 6px;
+}
+
+.ohne-zeit-liste {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.ohne-zeit-termin {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: white;
+    border: 1px solid #dee2e6;
+    border-radius: 20px;
+    padding: 4px 10px;
+    font-size: 0.82em;
+    cursor: pointer;
+    transition: box-shadow 0.15s;
+    max-width: 100%;
+}
+
+.ohne-zeit-termin:hover {
+    box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+}
+
+.ohne-zeit-nr {
+    font-weight: 700;
+    color: #495057;
+    font-size: 0.92em;
+}
+
+.ohne-zeit-kunde {
+    color: #343a40;
+}
+
+.ohne-zeit-kz {
+    background: #e9ecef;
+    padding: 1px 6px;
+    border-radius: 10px;
+    font-size: 0.88em;
+    color: #495057;
+}
+
+.ohne-zeit-arbeit {
+    color: #6c757d;
+    font-size: 0.9em;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 150px;
+}
+
+/* Status-Rahmen für Ohne-Zeit-Chips */
+.ohne-zeit-termin.status-geplant { border-color: #ffc107; }
+.ohne-zeit-termin.status-offen { border-color: #ffc107; }
+.ohne-zeit-termin.status-in_bearbeitung,
+.ohne-zeit-termin.status-in-bearbeitung { border-color: #17a2b8; }
+.ohne-zeit-termin.status-abgeschlossen { border-color: #28a745; }
+.ohne-zeit-termin.status-storniert { border-color: #dc3545; opacity: 0.6; }
+.ohne-zeit-termin.schwebend { border-style: dashed; border-color: #ff9800; }
+
+/* Wochenansicht Ohne-Zeit-Chips */
+.kalender-woche-ohne-zeit {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    padding: 6px 4px;
+    border-bottom: 1px dashed #dee2e6;
+    margin-bottom: 4px;
+    min-height: 28px;
+}
+
+.kwoz-chip {
+    background: #f8f9fa;
+    border: 1px solid #adb5bd;
+    border-radius: 10px;
+    padding: 2px 7px;
+    font-size: 0.72em;
+    font-weight: 600;
+    cursor: pointer;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 120px;
+    color: #343a40;
+    transition: box-shadow 0.1s;
+}
+
+.kwoz-chip:hover { box-shadow: 0 1px 4px rgba(0,0,0,0.2); }
+.kwoz-chip.status-geplant { border-color: #ffc107; background: #fff8e1; }
+.kwoz-chip.status-offen { border-color: #ffc107; background: #fff8e1; }
+.kwoz-chip.status-in_bearbeitung,
+.kwoz-chip.status-in-bearbeitung { border-color: #17a2b8; background: #e3f7fc; }
+.kwoz-chip.status-abgeschlossen { border-color: #28a745; background: #e8f5e9; }
+.kwoz-chip.status-storniert { border-color: #dc3545; opacity: 0.5; }
+
+/* Termin-Nr in Listen-Ansicht */
+.liste-termin-nr {
+    font-size: 0.8em;
+    color: #6c757d;
+    font-weight: 600;
+    margin-right: 4px;
+}
+
 /* Listen-Ansicht (Tag) */
 .kalender-tag-liste {
     padding: 16px 20px;
