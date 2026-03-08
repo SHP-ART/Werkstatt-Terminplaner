@@ -38,6 +38,19 @@ router.post('/restart', SystemController.restartService);
 // Server herunterfahren (systemctl poweroff) – nur Linux
 router.post('/shutdown', SystemController.shutdownServer);
 
+// Shutdown-Log lesen (für Debugging)
+router.get('/shutdown-log', (req, res) => {
+  const fs = require('fs');
+  try {
+    const log = fs.existsSync('/tmp/werkstatt-shutdown.log')
+      ? fs.readFileSync('/tmp/werkstatt-shutdown.log', 'utf8')
+      : '(kein Log vorhanden)';
+    res.json({ log });
+  } catch (e) {
+    res.json({ log: e.message });
+  }
+});
+
 // Frontend neu bauen (npm run build) – nutzt process.execPath für npm
 router.post('/build-frontend', SystemController.buildFrontend);
 
