@@ -32,11 +32,11 @@ async function suche(req, res) {
       allAsync(
         `SELECT id, termin_nr, kunde_name, arbeit, datum, status
          FROM termine
-         WHERE (arbeit LIKE ? OR kunde_name LIKE ? OR notizen LIKE ? OR termin_nr LIKE ?)
+         WHERE (arbeit LIKE ? OR kunde_name LIKE ? OR termin_nr LIKE ?)
            AND geloescht_am IS NULL
          ORDER BY datum DESC
          LIMIT 5`,
-        [pattern, pattern, pattern, pattern]
+        [pattern, pattern, pattern]
       )
     ]);
 
