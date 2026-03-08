@@ -30849,6 +30849,15 @@ class App {
 
       const nq = kpis.nacharbeitsquote != null ? Math.round(kpis.nacharbeitsquote) : null;
       set('kpiNacharbeitWert', nq != null ? `${nq}%` : '—');
+
+      const ueberfaellig = kpis.ueberfaellige_termine ?? 0;
+      set('kpiUeberfaelligWert', ueberfaellig);
+      const ueberfaelligCard = document.getElementById('kpiUeberfaellig');
+      if (ueberfaelligCard) {
+        ueberfaelligCard.classList.toggle('kpi-schlecht', ueberfaellig > 0);
+        ueberfaelligCard.classList.toggle('kpi-gut', ueberfaellig === 0);
+      }
+      set('kpiUeberfaelligSub', ueberfaellig === 0 ? 'Alles im Plan ✓' : 'Datum vergangen');
     } catch (err) {
       console.warn('KPI-Ladung fehlgeschlagen:', err);
     } finally {

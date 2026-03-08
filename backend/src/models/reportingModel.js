@@ -17,7 +17,8 @@ async function getKPIs(vonDatum, bisDatum) {
     storniert,
     schwebend,
     teileOffen,
-    teileDringend
+    teileDringend,
+    ueberfaellig
   ] = await Promise.all([
     // Ø Durchlaufzeit abgeschlossener Termine
     getAsync(`
@@ -91,6 +92,16 @@ async function getKPIs(vonDatum, bisDatum) {
       FROM teile_bestellungen
       WHERE status IN ('bestellt', 'ausstehend')
         AND bestellt_am < date('now', '-7 days')
+    `, []),
+
+    // Überfällige Termine (Datum vergangen, noch nicht abgeschlossen/storniert)
+    getAsync(`
+      SELECT COUNT(*) as wert
+      FROM termine
+      WHERE datum < date('now')
+        AND status NOT IN ('abgeschlossen', 'storniert')
+        AND ist_schwebend = 0
+        AND geloescht_am IS NULL
     `, [])
   ]);
 
@@ -105,7 +116,8 @@ async function getKPIs(vonDatum, bisDatum) {
     schwebende_anzahl: schwebend?.anzahl || 0,
     avg_wartezeit_tage: Math.round((schwebend?.avg_wartezeit_tage || 0) * 10) / 10,
     teile_offen: teileOffen?.wert || 0,
-    teile_dringend: teileDringend?.wert || 0
+    teile_dringend: teileDringend?.wert || 0,
+    ueberfaellige_termine: ueberfaellig?.wert || 0
   };
 }
 
