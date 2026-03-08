@@ -1334,7 +1334,7 @@ async function benchmarkOllama(req, res) {
  */
 async function getKiLernStatistiken(req, res) {
   try {
-    const { allAsync } = require('../config/database');
+    const { allAsync } = require('../utils/dbHelper');
     const gesamt = await allAsync(`SELECT COUNT(*) as n FROM ki_zeitlern_daten WHERE exclude = 0`);
     const kategorien = await allAsync(`
       SELECT
@@ -1375,7 +1375,7 @@ async function getKiLernStatistiken(req, res) {
  */
 async function getKiLernDaten(req, res) {
   try {
-    const { allAsync } = require('../config/database');
+    const { allAsync } = require('../utils/dbHelper');
     const limit  = Math.min(parseInt(req.query.limit  || '100'), 500);
     const offset = parseInt(req.query.offset || '0');
     const kat    = (req.query.kategorie || '').trim();
@@ -1423,7 +1423,7 @@ async function getKiLernDaten(req, res) {
  */
 async function patchKiLernDatenExclude(req, res) {
   try {
-    const { runAsync } = require('../config/database');
+    const { runAsync } = require('../utils/dbHelper');
     const id      = parseInt(req.params.id);
     const exclude = req.body.exclude ? 1 : 0;
     if (!id) return res.status(400).json({ error: 'Ungültige ID' });
