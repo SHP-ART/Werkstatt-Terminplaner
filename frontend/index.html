@@ -4787,6 +4787,19 @@
         </div>
     </div>
 
+    <!-- Verlauf Modal (Kunde / Kennzeichen) -->
+    <div id="verlaufModal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,.5); z-index:9999; overflow:auto;">
+      <div style="background:#fff; max-width:680px; margin:40px auto; border-radius:12px; box-shadow:0 8px 32px rgba(0,0,0,.25); overflow:hidden;">
+        <div style="background:#1565c0; color:#fff; padding:16px 20px; display:flex; align-items:center; justify-content:space-between;">
+          <span id="verlaufModalTitel" style="font-size:1.1em; font-weight:600;">Terminverlauf</span>
+          <button onclick="document.getElementById('verlaufModal').style.display='none'" style="background:none;border:none;color:#fff;font-size:1.4em;cursor:pointer;line-height:1;">×</button>
+        </div>
+        <div id="verlaufModalInhalt" style="padding:16px 20px; max-height:70vh; overflow-y:auto;">
+          <div style="text-align:center; color:#999; padding:20px;">Wird geladen...</div>
+        </div>
+      </div>
+    </div>
+
     <!-- Vite Entry Point -->
     <script type="module" src="/src/main.js"></script>
     

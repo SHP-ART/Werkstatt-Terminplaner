@@ -31417,10 +31417,76 @@ class App {
     if (input) input.value = '';
     // Tab wechseln und Datensatz auswählen
     if (bereich === 'kunden') {
-      this.switchToTab('kunden');
+      this._openVerlaufModal({ kunde_id: id });
+    } else if (bereich === 'fahrzeuge') {
+      this._openVerlaufModal({ kennzeichen: id });
     } else if (bereich === 'termine') {
-      this.switchToTab('termine');
+      this.showTerminDetails(id);
     }
+  }
+
+  async _openVerlaufModal(params) {
+    const modal = document.getElementById('verlaufModal');
+    const titel = document.getElementById('verlaufModalTitel');
+    const inhalt = document.getElementById('verlaufModalInhalt');
+    if (!modal) return;
+    inhalt.innerHTML = '<div style="text-align:center;color:#999;padding:20px;">Wird geladen...</div>';
+    modal.style.display = 'block';
+    try {
+      const data = await window.SucheService.verlauf(params);
+      const info = data.info || {};
+      const termine = data.termine || [];
+
+      if (params.kunde_id) {
+        titel.textContent = `📋 Terminverlauf: ${info.name || 'Kunde'}`;
+      } else {
+        titel.textContent = `🚗 Terminverlauf: ${info.kennzeichen || params.kennzeichen}`;
+      }
+
+      if (termine.length === 0) {
+        inhalt.innerHTML = '<div style="text-align:center;color:#999;padding:30px;">Keine Termine gefunden.</div>';
+        return;
+      }
+
+      const statusBadge = (s) => {
+        const map = { abgeschlossen: '#2e7d32', geplant: '#1565c0', 'in-arbeit': '#e65100', storniert: '#b71c1c' };
+        return `<span style="background:${map[s]||'#555'};color:#fff;padding:2px 8px;border-radius:10px;font-size:0.78em;">${s}</span>`;
+      };
+
+      const rows = termine.map(t => `
+        <tr style="border-bottom:1px solid #f0f0f0;cursor:pointer;" onclick="app._openVerlaufModalTermin(${t.id})">
+          <td style="padding:8px 10px;white-space:nowrap;">${t.datum ? t.datum.slice(0,10) : '–'}</td>
+          <td style="padding:8px 10px;">${this._escapeHtml(t.arbeit || '').slice(0,50)}</td>
+          <td style="padding:8px 4px;">${statusBadge(t.status)}</td>
+          ${params.kennzeichen ? '' : `<td style="padding:8px 10px;color:#666;font-size:0.85em;">${this._escapeHtml(t.kennzeichen || '')}</td>`}
+          <td style="padding:8px 10px;text-align:right;">
+            <button onclick="event.stopPropagation();app._openVerlaufModalTermin(${t.id})" style="background:#1565c0;color:#fff;border:none;padding:3px 10px;border-radius:5px;cursor:pointer;font-size:0.82em;">Details</button>
+          </td>
+        </tr>`).join('');
+
+      inhalt.innerHTML = `
+        ${info.telefon ? `<div style="margin-bottom:12px;color:#555;font-size:0.9em;">📞 ${this._escapeHtml(info.telefon)}${info.email ? ` · ✉️ ${this._escapeHtml(info.email)}` : ''}</div>` : ''}
+        <div style="margin-bottom:8px;font-size:0.85em;color:#888;">${termine.length} Termin(e) gefunden – klicken für Details</div>
+        <table style="width:100%;border-collapse:collapse;font-size:0.9em;">
+          <thead>
+            <tr style="background:#f5f5f5;font-weight:600;">
+              <th style="padding:8px 10px;text-align:left;">Datum</th>
+              <th style="padding:8px 10px;text-align:left;">Arbeit</th>
+              <th style="padding:8px 4px;text-align:left;">Status</th>
+              ${params.kennzeichen ? '' : '<th style="padding:8px 10px;text-align:left;">Kennz.</th>'}
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>${rows}</tbody>
+        </table>`;
+    } catch (err) {
+      inhalt.innerHTML = `<div style="color:#c62828;padding:20px;">Fehler: ${err.message}</div>`;
+    }
+  }
+
+  _openVerlaufModalTermin(terminId) {
+    document.getElementById('verlaufModal').style.display = 'none';
+    this.showTerminDetails(terminId);
   }
 
   // =========================================================================

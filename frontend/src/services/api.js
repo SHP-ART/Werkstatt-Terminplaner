@@ -1207,6 +1207,12 @@ class SucheService {
   static async suche(q) {
     return ApiService.get(`/suche?q=${encodeURIComponent(q)}`);
   }
+  static async verlauf(params) {
+    const qs = params.kunde_id
+      ? `kunde_id=${params.kunde_id}`
+      : `kennzeichen=${encodeURIComponent(params.kennzeichen)}`;
+    return ApiService.get(`/suche/verlauf?${qs}`);
+  }
 }
 
 // Global verfügbar machen (für Vite-Kompatibilität)
