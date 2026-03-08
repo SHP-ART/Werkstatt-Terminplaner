@@ -2369,51 +2369,69 @@ class TermineController {
 
         // Aktive Mitarbeiter laden
         const mitarbeiterListe = await getCachedAktiveMitarbeiter();
-        const zuPruefende = mitarbeiterId
+        const verfuegbar = mitarbeiterId
           ? mitarbeiterListe.filter(m => m.id === mitarbeiterId && !abwesendIds.has(m.id))
           : mitarbeiterListe.filter(m => !abwesendIds.has(m.id));
 
-        if (!zuPruefende.length) continue;
+        if (!verfuegbar.length) continue;
+
+        // Service-Mitarbeiter (nur_service=1) nur als Fallback wenn kein anderer verfügbar
+        const nichtService = verfuegbar.filter(m => !m.nur_service);
+        const nurService = verfuegbar.filter(m => m.nur_service);
+        // Bei explizit gewähltem Mitarbeiter: keine Einschränkung
+        const zuPruefende = mitarbeiterId ? verfuegbar : (nichtService.length ? nichtService : nurService);
 
         // Bestehende Termine des Tages laden
         const termineDesTages = await TermineModel.getByDatum(datumStr);
 
-        for (const ma of zuPruefende) {
-          if (slots.length >= 5) break;
+        const KIPlanungController = require('./kiPlanungController');
+        let slotGefunden = false;
 
-          // Blöcke für diesen Mitarbeiter ermitteln
-          const maTermine = (termineDesTages || []).filter(t =>
-            (t.mitarbeiter_id === ma.id) && t.startzeit && t.geschaetzte_zeit
-          );
-          const blocks = maTermine.map(t => {
-            const [h, m] = (t.startzeit || '08:00').split(':').map(Number);
-            const start = h * 60 + m;
-            return { start, end: start + (t.geschaetzte_zeit || 60) };
-          });
+        const pruefeGruppe = (gruppe) => {
+          for (const ma of gruppe) {
+            if (slots.length >= 5) break;
 
-          // Freien Slot finden
-          const KIPlanungController = require('./kiPlanungController');
-          const slotStart = KIPlanungController.findAvailableSlot(
-            blocks, tagStart, benoetigt, tagStart, tagEnde
-          );
-
-          if (slotStart !== null) {
-            const auslastungMinuten = maTermine.reduce((s, t) => s + (t.geschaetzte_zeit || 0), 0);
-            const verfuegbarMinuten = (ma.arbeitsstunden_pro_tag || 8) * 60;
-            const auslastungProzent = Math.round((auslastungMinuten / verfuegbarMinuten) * 100);
-
-            const h = Math.floor(slotStart / 60);
-            const m = slotStart % 60;
-            const startzeit = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
-
-            slots.push({
-              datum: datumStr,
-              startzeit,
-              mitarbeiter_id: ma.id,
-              mitarbeiter_name: ma.name,
-              auslastung_prozent: auslastungProzent
+            // Blöcke für diesen Mitarbeiter ermitteln
+            const maTermine = (termineDesTages || []).filter(t =>
+              (t.mitarbeiter_id === ma.id) && t.startzeit && t.geschaetzte_zeit
+            );
+            const blocks = maTermine.map(t => {
+              const [h, m] = (t.startzeit || '08:00').split(':').map(Number);
+              const start = h * 60 + m;
+              return { start, end: start + (t.geschaetzte_zeit || 60) };
             });
+
+            // Freien Slot finden
+            const slotStart = KIPlanungController.findAvailableSlot(
+              blocks, tagStart, benoetigt, tagStart, tagEnde
+            );
+
+            if (slotStart !== null) {
+              const auslastungMinuten = maTermine.reduce((s, t) => s + (t.geschaetzte_zeit || 0), 0);
+              const verfuegbarMinuten = (ma.arbeitsstunden_pro_tag || 8) * 60;
+              const auslastungProzent = Math.round((auslastungMinuten / verfuegbarMinuten) * 100);
+
+              const h = Math.floor(slotStart / 60);
+              const m = slotStart % 60;
+              const startzeit = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+
+              slots.push({
+                datum: datumStr,
+                startzeit,
+                mitarbeiter_id: ma.id,
+                mitarbeiter_name: ma.name,
+                auslastung_prozent: auslastungProzent
+              });
+              slotGefunden = true;
+            }
           }
+        };
+
+        pruefeGruppe(zuPruefende);
+
+        // Kein Slot bei normalen Mitarbeitern → Service-Mitarbeiter als Fallback
+        if (!slotGefunden && !mitarbeiterId && nichtService.length && nurService.length) {
+          pruefeGruppe(nurService);
         }
       }
 
