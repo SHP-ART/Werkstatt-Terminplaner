@@ -30822,7 +30822,8 @@ class App {
       const heute = new Date();
       const von = new Date(heute.getFullYear(), heute.getMonth(), 1).toISOString().slice(0, 10);
       const bis = heute.toISOString().slice(0, 10);
-      const kpis = await window.ReportingService.getKPIs(von, bis);
+      const response = await window.ReportingService.getKPIs(von, bis);
+      const kpis = response.kpis || response;
 
       const set = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
 
@@ -30885,7 +30886,8 @@ class App {
     if (btn) { btn.disabled = true; btn.textContent = '⏳ Suche...'; }
 
     try {
-      const slots = await window.TermineService.getNaechsterSlot(geschaetzteZeit, null, null);
+      const slotResponse = await window.TermineService.getNaechsterSlot(geschaetzteZeit, null, null);
+      const slots = Array.isArray(slotResponse) ? slotResponse : (slotResponse.slots || []);
       this._zeigeSlotVorschlaege(slots);
     } catch (err) {
       this.showToast('Slot-Suche fehlgeschlagen: ' + (err.message || err), 'error');
