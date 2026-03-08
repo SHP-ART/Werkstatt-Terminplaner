@@ -94,12 +94,12 @@ async function getKPIs(vonDatum, bisDatum) {
         AND bestellt_am < date('now', '-7 days')
     `, []),
 
-    // Überfällige Termine (Datum vergangen, noch nicht abgeschlossen/storniert)
+    // Überfällige Termine (Datum vergangen, weder abgeschlossen/storniert noch aktiv in Bearbeitung)
     getAsync(`
       SELECT COUNT(*) as wert
       FROM termine
       WHERE datum < date('now')
-        AND status NOT IN ('abgeschlossen', 'storniert')
+        AND status NOT IN ('abgeschlossen', 'storniert', 'in_arbeit', 'verschoben')
         AND ist_schwebend = 0
         AND geloescht_am IS NULL
     `, [])
