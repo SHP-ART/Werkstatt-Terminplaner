@@ -747,8 +747,8 @@
                         </div>
                     </div>
 
-                    <!-- Phasen für mehrtägige Arbeiten (z.B. Unfallreparatur) -->
-                    <div id="phasenSection" class="form-section" style="margin-top: 20px; padding: 15px; background: #fff3e0; border-radius: 8px; border-left: 4px solid #ff9800; display: none;">
+                    <!-- Phasen für mehrtägige Arbeiten (z.B. Unfallreparatur) - ausgeblendet -->
+                    <div id="phasenSection" class="form-section" style="margin-top: 20px; padding: 15px; background: #fff3e0; border-radius: 8px; border-left: 4px solid #ff9800; display: none !important;">
                         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
                             <h4 style="margin: 0; color: #e65100;">🔧 Arbeitsphasen (mehrtägig)</h4>
                             <button type="button" class="btn btn-secondary" id="addPhaseBtn" style="padding: 5px 10px; font-size: 0.9em;">+ Phase hinzufügen</button>
@@ -766,7 +766,8 @@
                         </div>
                     </div>
 
-                    <div class="form-group" style="margin-top: 15px;">
+                    <!-- Mehrtägig-Checkbox ausgeblendet -->
+                    <div class="form-group" style="display: none;">  
                         <label class="checkbox-inline">
                             <input type="checkbox" id="mehrtaegigCheckbox"> Mehrtägige Arbeit (Phasen aktivieren)
                         </label>
