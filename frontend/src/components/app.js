@@ -29730,10 +29730,10 @@ class App {
         break;
       case 'kalenderWoche': {
         const montag = this.kalenderGetMontag(d);
-        const samstag = new Date(montag);
-        samstag.setDate(samstag.getDate() + 5);
+        const sonntag = new Date(montag);
+        sonntag.setDate(sonntag.getDate() + 6);
         const kw = this.kalenderGetKW(d);
-        display.textContent = `KW ${kw}: ${montag.getDate()}.${montag.getMonth()+1}. – ${samstag.getDate()}.${samstag.getMonth()+1}.${samstag.getFullYear()}`;
+        display.textContent = `KW ${kw}: ${montag.getDate()}.${montag.getMonth()+1}. – ${sonntag.getDate()}.${sonntag.getMonth()+1}.${sonntag.getFullYear()}`;
         break;
       }
       case 'kalenderMonat':
@@ -30085,14 +30085,14 @@ class App {
   async loadKalenderWoche() {
     const montag = this.kalenderGetMontag(this.kalenderState.datum);
     const tage = [];
-    for (let i = 0; i < 6; i++) {
+    for (let i = 0; i < 7; i++) {
       const d = new Date(montag);
       d.setDate(d.getDate() + i);
       tage.push(d);
     }
 
     const datumVon = this.kalenderFormatDatum(tage[0]);
-    const datumBis = this.kalenderFormatDatum(tage[5]);
+    const datumBis = this.kalenderFormatDatum(tage[6]);
     
     const [termine, abwesenheiten] = await Promise.all([
       this.kalenderLadeTermine(datumVon, datumBis),
@@ -30118,7 +30118,7 @@ class App {
     const grid = document.getElementById('kalenderWochenGrid');
     if (!grid) return;
 
-    const wt = ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa'];
+    const wt = ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'];
     const isZeitleiste = this.kalenderState.ansicht === 'zeitleiste';
 
     grid.innerHTML = tage.map((tag, i) => {
