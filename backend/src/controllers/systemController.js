@@ -433,13 +433,11 @@ echo "=== UPDATE ABGESCHLOSSEN: $(date) ==="
         const bashScript = `
           echo "=== SHUTDOWN $(date) ===" >> "${log}" 2>&1
           echo "USER: $(whoami)" >> "${log}" 2>&1
-          if command -v systemctl >/dev/null 2>&1; then
-            systemctl poweroff >> "${log}" 2>&1 && exit 0
-          fi
           if command -v shutdown >/dev/null 2>&1; then
-            shutdown -h now >> "${log}" 2>&1 && exit 0
+            sudo shutdown -h now >> "${log}" 2>&1 && exit 0
           fi
-          halt -f -p >> "${log}" 2>&1
+          sudo systemctl poweroff >> "${log}" 2>&1 && exit 0
+          sudo poweroff >> "${log}" 2>&1
         `;
         const child = spawn('bash', ['-c', bashScript], { detached: true, stdio: 'ignore' });
         child.unref();
