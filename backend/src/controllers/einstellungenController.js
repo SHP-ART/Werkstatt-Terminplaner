@@ -89,6 +89,9 @@ class EinstellungenController {
         : undefined,
       duplikat_erkennung_enabled: req.body.duplikat_erkennung_enabled !== undefined
         ? parseInt(req.body.duplikat_erkennung_enabled, 10)
+        : undefined,
+      auto_slot_enabled: req.body.auto_slot_enabled !== undefined
+        ? parseInt(req.body.auto_slot_enabled, 10)
         : undefined
     };
 

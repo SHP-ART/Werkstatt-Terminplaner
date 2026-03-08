@@ -258,7 +258,7 @@ class EinstellungenModel {
 
   static async updateWerkstatt(data) {
     const { pufferzeit_minuten, servicezeit_minuten, ersatzauto_anzahl, nebenzeit_prozent, mittagspause_minuten,
-            dynamischer_puffer_enabled, slot_nachfuellung_enabled, duplikat_erkennung_enabled } = data;
+            dynamischer_puffer_enabled, slot_nachfuellung_enabled, duplikat_erkennung_enabled, auto_slot_enabled } = data;
     
     // Lade erst die aktuellen Werte, um unveränderte Felder beizubehalten
     const current = await this.getWerkstatt();
@@ -288,13 +288,16 @@ class EinstellungenModel {
     const duplikatErk = duplikat_erkennung_enabled !== undefined
       ? parseInt(duplikat_erkennung_enabled, 10)
       : (current && current.duplikat_erkennung_enabled !== undefined ? current.duplikat_erkennung_enabled : 0);
+    const autoSlot = auto_slot_enabled !== undefined
+      ? parseInt(auto_slot_enabled, 10)
+      : (current && current.auto_slot_enabled !== undefined ? current.auto_slot_enabled : 1);
 
     const result = await runAsync(
       `UPDATE werkstatt_einstellungen
        SET pufferzeit_minuten = ?, servicezeit_minuten = ?, ersatzauto_anzahl = ?, nebenzeit_prozent = ?, mittagspause_minuten = ?,
-           dynamischer_puffer_enabled = ?, slot_nachfuellung_enabled = ?, duplikat_erkennung_enabled = ?
+           dynamischer_puffer_enabled = ?, slot_nachfuellung_enabled = ?, duplikat_erkennung_enabled = ?, auto_slot_enabled = ?
        WHERE id = 1`,
-      [pufferzeit, servicezeit, ersatzautos, nebenzeit, mittagspause, pufferML, slotNachf, duplikatErk]
+      [pufferzeit, servicezeit, ersatzautos, nebenzeit, mittagspause, pufferML, slotNachf, duplikatErk, autoSlot]
     );
 
     // Falls kein Datensatz existiert, lege ihn an.
@@ -302,9 +305,9 @@ class EinstellungenModel {
       await runAsync(
         `INSERT OR REPLACE INTO werkstatt_einstellungen
          (id, pufferzeit_minuten, servicezeit_minuten, ersatzauto_anzahl, nebenzeit_prozent, mittagspause_minuten,
-          dynamischer_puffer_enabled, slot_nachfuellung_enabled, duplikat_erkennung_enabled)
-         VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        [pufferzeit, servicezeit, ersatzautos, nebenzeit, mittagspause, pufferML, slotNachf, duplikatErk]
+          dynamischer_puffer_enabled, slot_nachfuellung_enabled, duplikat_erkennung_enabled, auto_slot_enabled)
+         VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [pufferzeit, servicezeit, ersatzautos, nebenzeit, mittagspause, pufferML, slotNachf, duplikatErk, autoSlot]
       );
     }
     

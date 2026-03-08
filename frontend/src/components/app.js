@@ -31113,6 +31113,7 @@ class App {
       set('pufferMLEnabled', settings.dynamischer_puffer_enabled);
       set('slotNachfuellungEnabled', settings.slot_nachfuellung_enabled);
       set('duplikatErkennungEnabled', settings.duplikat_erkennung_enabled);
+      set('autoSlotEnabled', settings.auto_slot_enabled);
     } catch (e) {
       console.warn('Automation-Einstellungen konnte nicht geladen werden:', e);
     }
@@ -31123,6 +31124,7 @@ class App {
       dynamischer_puffer_enabled: document.getElementById('pufferMLEnabled')?.checked ? 1 : 0,
       slot_nachfuellung_enabled: document.getElementById('slotNachfuellungEnabled')?.checked ? 1 : 0,
       duplikat_erkennung_enabled: document.getElementById('duplikatErkennungEnabled')?.checked ? 1 : 0,
+      auto_slot_enabled: document.getElementById('autoSlotEnabled')?.checked ? 1 : 0,
     };
     try {
       await window.EinstellungenService.updateWerkstatt(settings);

@@ -38,7 +38,8 @@ const migrations = [
   require('./020_tablet_einstellungen'),  // Version 20 - Tablet-Steuerung
   require('./021_teile_bestellungen_kunde_id'),  // Version 21 - kunde_id fuer Teile-Bestellungen
   require('./022_ollama_model_einstellungen'),  // Version 22 - Ollama-Modell in Einstellungen
-  require('./023_automatisierung')   // Version 23 - Automatisierungs-Grundlagen
+  require('./023_automatisierung'),   // Version 23 - Automatisierungs-Grundlagen
+  require('./024_auto_slot_enabled')  // Version 24 - Auto-Slot-Suche Einstellung
 ];
 
 /**
