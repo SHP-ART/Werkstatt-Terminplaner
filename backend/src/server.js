@@ -351,6 +351,19 @@ async function startServer(clientCountCallback, requestLogCallback) {
     // Lokales KI-Training (täglich)
     localAiService.scheduleDailyTraining();
 
+    // A6d: Wiederkehrende Termine – täglich prüfen
+    const WiederkehrendeTermineController = require('./controllers/wiederkehrendeTermineController');
+    WiederkehrendeTermineController.runScheduler().catch(err => {
+        logStartup(`WARNUNG: Wiederkehrende-Termine-Scheduler-Start fehlgeschlagen: ${err.message}`, 'WARN');
+    });
+    const MS_PER_DAY = 24 * 60 * 60 * 1000;
+    setInterval(() => {
+        WiederkehrendeTermineController.runScheduler().catch(err => {
+            console.warn('[WiederkehrendeTermine] Scheduler-Fehler:', err.message);
+        });
+    }, MS_PER_DAY);
+    logStartup('Wiederkehrende-Termine-Scheduler gestartet ✓');
+
     // Pause-Cleanup beim Start und alle 5 Minuten
     logStartup('Starte Pause-Cleanup-Job...');
     const PauseController = require('./controllers/pauseController');

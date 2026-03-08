@@ -197,6 +197,11 @@ router.post('/vin-teile-check', aiController.checkTeileKompatibilitaet);
  */
 router.get('/training-data', aiController.getTrainingData);
 
+// Automatisierungs-Endpoints
+router.get('/puffer-empfehlung', aiController.getPufferEmpfehlung);
+router.post('/check-duplikate', aiController.checkDuplikatArbeiten);
+router.get('/automation-log', aiController.getAutomationLog);
+
 /**
  * POST /api/ai/training-data/:id/exclude
  * Schließt einen einzelnen Termin vom Training aus/ein

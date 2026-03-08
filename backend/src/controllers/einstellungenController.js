@@ -79,6 +79,16 @@ class EinstellungenController {
         : undefined,
       mittagspause_minuten: req.body.mittagspause_minuten !== undefined 
         ? parseInt(req.body.mittagspause_minuten, 10) 
+        : undefined,
+      // Automatisierungs-Feature-Schalter
+      dynamischer_puffer_enabled: req.body.dynamischer_puffer_enabled !== undefined
+        ? parseInt(req.body.dynamischer_puffer_enabled, 10)
+        : undefined,
+      slot_nachfuellung_enabled: req.body.slot_nachfuellung_enabled !== undefined
+        ? parseInt(req.body.slot_nachfuellung_enabled, 10)
+        : undefined,
+      duplikat_erkennung_enabled: req.body.duplikat_erkennung_enabled !== undefined
+        ? parseInt(req.body.duplikat_erkennung_enabled, 10)
         : undefined
     };
 

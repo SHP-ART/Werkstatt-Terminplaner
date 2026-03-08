@@ -2328,6 +2328,158 @@ class TermineController {
       res.status(500).json({ error: err.message });
     }
   }
+
+  /**
+   * GET /termine/naechster-slot
+   * Findet die nächsten freien Zeitslots für einen neuen Termin.
+   */
+  static async getNaechsterSlot(req, res) {
+    try {
+      const geschaetzteZeit = parseInt(req.query.geschaetzte_zeit) || 60;
+      const mitarbeiterId = req.query.mitarbeiter_id ? parseInt(req.query.mitarbeiter_id) : null;
+      const maxTage = Math.min(parseInt(req.query.max_tage) || 14, 60);
+      let abDatum = req.query.ab_datum || new Date().toISOString().split('T')[0];
+
+      const einstellungen = await EinstellungenModel.getWerkstatt();
+      const pufferzeit = einstellungen.pufferzeit_minuten || 15;
+      const benoetigt = geschaetzteZeit + pufferzeit;
+      const tagStart = 8 * 60; // 08:00
+      const tagEnde = 18 * 60; // 18:00
+
+      const slots = [];
+      const startDate = new Date(abDatum);
+      let gepruefteTage = 0;
+      let tagOffset = 0;
+
+      while (slots.length < 5 && gepruefteTage < maxTage) {
+        const d = new Date(startDate);
+        d.setDate(d.getDate() + tagOffset);
+        tagOffset++;
+
+        // Nur Mo-Fr
+        const wochentag = d.getDay();
+        if (wochentag === 0 || wochentag === 6) continue;
+        gepruefteTage++;
+
+        const datumStr = d.toISOString().split('T')[0];
+
+        // Abwesenheiten prüfen
+        const abwesenheiten = await AbwesenheitenModel.getByDatum(datumStr);
+        const abwesendIds = new Set((abwesenheiten || []).map(a => a.mitarbeiter_id));
+
+        // Aktive Mitarbeiter laden
+        const mitarbeiterListe = await getCachedAktiveMitarbeiter();
+        const zuPruefende = mitarbeiterId
+          ? mitarbeiterListe.filter(m => m.id === mitarbeiterId && !abwesendIds.has(m.id))
+          : mitarbeiterListe.filter(m => !abwesendIds.has(m.id));
+
+        if (!zuPruefende.length) continue;
+
+        // Bestehende Termine des Tages laden
+        const termineDesTages = await TermineModel.getByDatum(datumStr);
+
+        for (const ma of zuPruefende) {
+          if (slots.length >= 5) break;
+
+          // Blöcke für diesen Mitarbeiter ermitteln
+          const maTermine = (termineDesTages || []).filter(t =>
+            (t.mitarbeiter_id === ma.id) && t.startzeit && t.geschaetzte_zeit
+          );
+          const blocks = maTermine.map(t => {
+            const [h, m] = (t.startzeit || '08:00').split(':').map(Number);
+            const start = h * 60 + m;
+            return { start, end: start + (t.geschaetzte_zeit || 60) };
+          });
+
+          // Freien Slot finden
+          const KIPlanungController = require('./kiPlanungController');
+          const slotStart = KIPlanungController.findAvailableSlot(
+            blocks, tagStart, benoetigt, tagStart, tagEnde
+          );
+
+          if (slotStart !== null) {
+            const auslastungMinuten = maTermine.reduce((s, t) => s + (t.geschaetzte_zeit || 0), 0);
+            const verfuegbarMinuten = (ma.arbeitsstunden_pro_tag || 8) * 60;
+            const auslastungProzent = Math.round((auslastungMinuten / verfuegbarMinuten) * 100);
+
+            const h = Math.floor(slotStart / 60);
+            const m = slotStart % 60;
+            const startzeit = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+
+            slots.push({
+              datum: datumStr,
+              startzeit,
+              mitarbeiter_id: ma.id,
+              mitarbeiter_name: ma.name,
+              auslastung_prozent: auslastungProzent
+            });
+          }
+        }
+      }
+
+      res.json({ success: true, slots });
+    } catch (err) {
+      console.error('Fehler bei getNaechsterSlot:', err);
+      res.status(500).json({ error: err.message });
+    }
+  }
+
+  /**
+   * PATCH /termine/batch
+   * Aktualisiert mehrere Termine auf einmal.
+   */
+  static async batchUpdate(req, res) {
+    const ERLAUBTE_FELDER = ['status', 'mitarbeiter_id', 'datum', 'ist_schwebend'];
+    try {
+      const { ids, aenderungen } = req.body;
+
+      if (!Array.isArray(ids) || ids.length === 0) {
+        return res.status(400).json({ error: 'ids (Array) erforderlich' });
+      }
+      if (ids.length > 50) {
+        return res.status(400).json({ error: 'Maximal 50 Termine pro Batch-Update' });
+      }
+      if (!aenderungen || typeof aenderungen !== 'object') {
+        return res.status(400).json({ error: 'aenderungen (Objekt) erforderlich' });
+      }
+
+      // Nur erlaubte Felder durchlassen
+      const gefilterteAenderungen = {};
+      ERLAUBTE_FELDER.forEach(feld => {
+        if (aenderungen[feld] !== undefined) gefilterteAenderungen[feld] = aenderungen[feld];
+      });
+
+      if (!Object.keys(gefilterteAenderungen).length) {
+        return res.status(400).json({ error: `Keine erlaubten Felder. Erlaubt: ${ERLAUBTE_FELDER.join(', ')}` });
+      }
+
+      let aktualisiert = 0;
+      let fehler = 0;
+      const datumSet = new Set();
+
+      for (const id of ids) {
+        try {
+          const aktuell = await TermineModel.getById(id);
+          if (!aktuell) { fehler++; continue; }
+          await TermineModel.update(id, gefilterteAenderungen);
+          if (aktuell.datum) datumSet.add(aktuell.datum);
+          if (gefilterteAenderungen.datum) datumSet.add(gefilterteAenderungen.datum);
+          aktualisiert++;
+        } catch (e) {
+          fehler++;
+        }
+      }
+
+      invalidateTermineCache();
+      datumSet.forEach(datum => invalidateAuslastungCache(datum));
+      broadcastEvent('termine_batch_updated', { count: aktualisiert });
+
+      res.json({ success: true, aktualisiert, fehler });
+    } catch (err) {
+      console.error('Fehler bei batchUpdate:', err);
+      res.status(500).json({ error: err.message });
+    }
+  }
 }
 
 // Hilfsfunktion: Addiert Minuten zu HH:MM

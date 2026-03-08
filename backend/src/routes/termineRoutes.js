@@ -23,6 +23,10 @@ router.post('/:id/erweiterung', TermineController.erweiterungErstellen);
 router.get('/:id/erweiterungen', TermineController.getErweiterungen);
 router.get('/:id/erweiterungen/count', TermineController.countErweiterungen);
 
+// Neue Automatisierungs-Routes
+router.get('/naechster-slot', TermineController.getNaechsterSlot);
+router.patch('/batch', TermineController.batchUpdate);
+
 // Andere spezifische Routes
 router.get('/datum/:datum', TermineController.getByDatumLegacy);
 router.get('/auslastung/:datum', TermineController.getAuslastung);

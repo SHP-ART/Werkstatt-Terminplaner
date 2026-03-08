@@ -7,6 +7,7 @@ router.get('/tagesplanung/:datum', KIPlanungController.getPlanungsvorschlag);
 
 // KI-Vorschlag für Wochenverteilung schwebender Termine
 router.get('/wochenplanung/:startDatum', KIPlanungController.getWochenvorschlag);
+router.post('/luecken-vorschlaege', KIPlanungController.getLueckenVorschlaege);
 
 // Hintergrund-Job-Status abfragen (für Ollama-Langläufer)
 router.get('/job/:jobId', KIPlanungController.getJobStatus);

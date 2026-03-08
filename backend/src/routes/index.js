@@ -23,6 +23,9 @@ const tabletRoutes = require('./tabletRoutes');
 const tabletUpdateRoutes = require('./tabletUpdateRoutes');
 const pauseRoutes = require('./pause');
 const systemRoutes = require('./systemRoutes');
+const reportingRoutes = require('./reportingRoutes');
+const sucheRoutes = require('./sucheRoutes');
+const wiederkehrendeTermineRoutes = require('./wiederkehrendeTermineRoutes');
 
 router.use('/kunden', kundenRoutes);
 router.use('/termine', termineRoutes);
@@ -45,6 +48,9 @@ router.use('/tablet', tabletRoutes);
 router.use('/tablet-update', tabletUpdateRoutes);
 router.use('/pause', pauseRoutes);
 router.use('/system', systemRoutes);
+router.use('/reports', reportingRoutes);
+router.use('/suche', sucheRoutes);
+router.use('/wiederkehrende-termine', wiederkehrendeTermineRoutes);
 
 router.get('/health', (req, res) => {
   res.json({ status: 'OK', timestamp: new Date().toISOString() });

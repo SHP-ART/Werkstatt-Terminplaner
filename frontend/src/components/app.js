@@ -153,6 +153,9 @@ class App {
     this.setupWebSocket();
     this.setupErsatzautoOptionHandlers();
     this.loadServerVersion();
+    this.setupKeyboardShortcuts();
+    this.setupGlobaleSuche();
+    setTimeout(() => this.setupBatchDelegation(), 500);
     
     // Sicherstellen, dass Abholdetails beim initialen Laden angezeigt werden
     // Timeout, um sicherzustellen, dass DOM vollständig geladen ist
@@ -3046,12 +3049,20 @@ class App {
       this.loadServerInfoTab();
     }
 
+    if (subTabName === 'settingsAutomatisierung') {
+      this.loadAutomationSettings();
+    }
+
     if (subTabName === 'teileStatus') {
       this.loadTeileStatusUebersicht();
     }
 
     if (subTabName === 'wartendeAktionen') {
       this.loadWartendeAktionen();
+    }
+
+    if (subTabName === 'wiederkehrendeTermine') {
+      this.loadWiederkehrendeTermine();
     }
 
     if (subTabName === 'internerTermin') {
@@ -4456,6 +4467,11 @@ class App {
     if (arbeitenListe.length === 0) {
       alert('Bitte mindestens eine Arbeit eingeben.');
       return;
+    }
+
+    // Duplikat-Erkennung (asynchron, blockiert nicht)
+    if (arbeitenListe.length >= 2) {
+      this.checkArbeitDuplikate(arbeitenListe).catch(() => {});
     }
 
     // Validiere Ersatzauto-Eingaben
@@ -9835,6 +9851,7 @@ class App {
     await this.loadWochenUebersicht();
     await this.loadMonatsUebersicht();
     await this.loadErsatzautoRueckgaben();
+    this.loadDashboardKPIs().catch(() => {}); // KPIs asynchron nachladen
   }
 
   async loadDashboardStats() {
@@ -10020,6 +10037,9 @@ class App {
       this.renderHeuteTabelle(sortedTermine); // Alle Termine (getrennt nach Status)
       this.renderHeuteKarten(aktiveTermine);  // Nur offene Termine für Karten
       this.updateHeuteInfoKacheln(sortedTermine);
+
+      // A6c Überlauf-Banner: zeige Warnung wenn Auslastung > 90%
+      this.pruefeUeberlaufBanner(sortedTermine);
     } catch (error) {
       console.error('Fehler beim Laden der heutigen Termine:', error);
       const tbody = document.querySelector('#heuteTermineTable tbody');
@@ -10104,12 +10124,21 @@ class App {
     // Arbeit-Anzeige (ohne Folgetermin-Prefix für bessere Lesbarkeit)
     const arbeitAnzeige = this.formatArbeitAnzeige(termin.arbeit);
 
-    // Wartet-Spalte nur bei offenen Terminen
+    // Wartet-Spalte + Batch-Checkbox nur bei offenen Terminen
     const wartetCell = showWartet 
       ? `<td style="text-align: center;">${kundeWartet}</td>` 
       : '';
+    const batchCell = showWartet
+      ? `<td class="batch-check-cell" style="width:30px;text-align:center;"><input type="checkbox" class="termin-batch-check" data-termin-id="${termin.id}"></td>`
+      : '';
+
+    // Quick-Action-Buttons (C1): direkte Status-Schnelltasten
+    const quickAktionen = showWartet ? `
+      ${aktuellerStatus !== 'in_arbeit' && aktuellerStatus !== 'abgeschlossen' ? `<button class="btn-quick-action" title="In Arbeit setzen" onclick="app.quickStatusChange(${termin.id},'in_arbeit')">▶</button>` : ''}
+      ${aktuellerStatus !== 'abgeschlossen' ? `<button class="btn-quick-action btn-quick-fertig" title="Fertig" onclick="app.quickStatusChange(${termin.id},'abgeschlossen')">✓</button>` : ''}` : '';
 
     row.innerHTML = `
+      ${batchCell}
       <td>${bringZeitDisplay}</td>
       <td>${termin.kunde_name || '-'}${dringlichkeitBadge}${folgeterminBadge}${teileStatusBadge}</td>
       <td>${termin.kunde_telefon || '-'}</td>
@@ -10128,8 +10157,8 @@ class App {
           <option value="abgesagt" ${aktuellerStatus === 'abgesagt' ? 'selected' : ''}>Abgesagt</option>
         </select>
       </td>
-      <td>
-        <button class="btn btn-edit" onclick="app.showTerminDetails(${termin.id})">Details</button>
+      <td style="white-space:nowrap;">
+        <button class="btn btn-edit" onclick="app.showTerminDetails(${termin.id})">Details</button>${quickAktionen}
       </td>
     `;
 
@@ -10251,6 +10280,8 @@ class App {
         </div>
         <div class="heute-karte-footer">
           <button class="btn btn-edit" onclick="app.showTerminDetails(${termin.id})">Details anzeigen</button>
+          ${aktuellerStatus !== 'in_arbeit' && aktuellerStatus !== 'abgeschlossen' ? `<button class="btn-quick-action" title="In Arbeit setzen" onclick="app.quickStatusChange(${termin.id},'in_arbeit')">▶ In Arbeit</button>` : ''}
+          ${aktuellerStatus !== 'abgeschlossen' ? `<button class="btn-quick-action btn-quick-fertig" title="Fertig" onclick="app.quickStatusChange(${termin.id},'abgeschlossen')">✓ Fertig</button>` : ''}
         </div>
       `;
       kartenGrid.appendChild(karte);
@@ -11516,16 +11547,24 @@ class App {
     } catch (err) {
       console.error('[applyKundeAuswahl] Fehler:', err);
     }
-  }
 
-  // Kennzeichen aus Kennzeichensuche auswählen
-  selectKennzeichenVorschlag(kennzeichen, kundeId) {
-    // Kennzeichen in das Hauptfeld setzen
-    document.getElementById('kennzeichen').value = kennzeichen;
-    
-    // Auch die Suchfelder aktualisieren
-    const parts = this.parseKennzeichen(kennzeichen);
-    document.getElementById('kzSucheBezirk').value = parts.bezirk;
+    // C6a Smart Default: letzte Arbeiten für diesen Kunden vorausfüllen
+    const hinweis = document.getElementById('smartDefaultHinweis');
+    if (hinweis) {
+      hinweis.style.display = 'none';
+      const letzterTermin = (this.termineCache || [])
+        .filter(t => (t.kunde_id && t.kunde_id === kunde.id) || t.kunde_name === kunde.name)
+        .sort((a, b) => (b.datum || '').localeCompare(a.datum || ''))
+        .find(t => t.arbeit);
+      if (letzterTermin) {
+        const ersteArbeit = letzterTermin.arbeit.split('\n')[0].trim();
+        const arbeitEl = document.getElementById('arbeitEingabe');
+        if (arbeitEl && !arbeitEl.value.trim()) {
+          hinweis.innerHTML = `💡 Letzter Termin: <em>${this._escapeHtml(ersteArbeit)}</em> &nbsp;<button type="button" class="btn-link" onclick="app.uebernimmLetzteArbeit('${encodeURIComponent(ersteArbeit)}')">Übernehmen</button>`;
+          hinweis.style.display = 'block';
+        }
+      }
+    }
     document.getElementById('kzSucheBuchstaben').value = parts.buchstaben;
     document.getElementById('kzSucheNummer').value = parts.nummer;
     
@@ -23388,6 +23427,11 @@ class App {
     
     // Vollständig neu laden um Konsistenz sicherzustellen
     this.loadAuslastungDragDrop();
+
+    // A4 Slot-Nachfüllung: Prüfe ob freie Lücken entstanden sind
+    if (erfolge > 0) {
+      this._pruefeSlotNachfuellung().catch(() => {});
+    }
   }
 
   // Alle Änderungen verwerfen
@@ -30766,6 +30810,641 @@ class App {
   }
 
   // === ENDE KALENDER TAB ===
+
+  // =========================================================================
+  // KPI DASHBOARD (Feature B2)
+  // =========================================================================
+  async loadDashboardKPIs() {
+    const kpiGrid = document.getElementById('kpiGrid');
+    if (!kpiGrid) return;
+    kpiGrid.style.opacity = '0.5';
+    try {
+      const heute = new Date();
+      const von = new Date(heute.getFullYear(), heute.getMonth(), 1).toISOString().slice(0, 10);
+      const bis = heute.toISOString().slice(0, 10);
+      const kpis = await window.ReportingService.getKPIs(von, bis);
+
+      const set = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
+
+      const auslMin = Math.round(kpis.avg_durchlaufzeit_minuten || 0);
+      set('kpiAuslastungWert', auslMin >= 60 ? `${Math.floor(auslMin/60)}h ${auslMin%60}m` : `${auslMin}m`);
+      set('kpiAuslastungSub', 'Ø Durchlaufzeit');
+
+      const gen = kpis.schaetzgenauigkeit != null ? Math.round(kpis.schaetzgenauigkeit) : null;
+      set('kpiGenauigkeitWert', gen != null ? `${gen}%` : '—');
+      const genCard = document.getElementById('kpiGenauigkeit');
+      if (genCard && gen != null) {
+        genCard.classList.toggle('kpi-gut', gen >= 80);
+        genCard.classList.toggle('kpi-schlecht', gen < 60);
+      }
+
+      set('kpiAbgeschlossenWert', kpis.abgeschlossene_termine ?? '—');
+
+      set('kpiSchwebendWert', kpis.schwebende_anzahl ?? '—');
+      const avg = kpis.avg_wartezeit_tage != null ? Math.round(kpis.avg_wartezeit_tage) : null;
+      set('kpiSchwebendSub', avg != null ? `Ø ${avg} Tage Wartezeit` : 'Termine');
+
+      set('kpiTeileWert', kpis.teile_offen ?? '—');
+      set('kpiTeileDringend', kpis.teile_dringend ?? '—');
+
+      const nq = kpis.nacharbeitsquote != null ? Math.round(kpis.nacharbeitsquote) : null;
+      set('kpiNacharbeitWert', nq != null ? `${nq}%` : '—');
+    } catch (err) {
+      console.warn('KPI-Ladung fehlgeschlagen:', err);
+    } finally {
+      kpiGrid.style.opacity = '1';
+    }
+  }
+
+  // =========================================================================
+  // AUTO-SLOT – Nächsten freien Termin finden (Feature A1)
+  // =========================================================================
+  async handleNaechsterSlot() {
+    const arbeitInput = document.getElementById('arbeitEingabe');
+    const zeitAnzeige = document.getElementById('zeitschaetzungAnzeige');
+    let geschaetzteZeit = null;
+    if (zeitAnzeige && zeitAnzeige.style.display !== 'none') {
+      const wertEl = document.getElementById('zeitschaetzungWert');
+      if (wertEl) {
+        const match = wertEl.textContent.match(/[\d.]+/);
+        if (match) geschaetzteZeit = Math.round(parseFloat(match[0]) * 60);
+      }
+    }
+    if (!geschaetzteZeit || geschaetzteZeit < 15) geschaetzteZeit = 60;
+
+    const btn = document.getElementById('btnFreienSlotFinden');
+    if (btn) { btn.disabled = true; btn.textContent = '⏳ Suche...'; }
+
+    try {
+      const slots = await window.TermineService.getNaechsterSlot(geschaetzteZeit, null, null);
+      this._zeigeSlotVorschlaege(slots);
+    } catch (err) {
+      this.showToast('Slot-Suche fehlgeschlagen: ' + (err.message || err), 'error');
+    } finally {
+      if (btn) { btn.disabled = false; btn.textContent = '🔍 Freien Slot finden'; }
+    }
+  }
+
+  _zeigeSlotVorschlaege(slots) {
+    const container = document.getElementById('slotVorschlaegeDropdown');
+    if (!container) return;
+    if (!slots || slots.length === 0) {
+      container.innerHTML = '<div class="slot-kein-ergebnis">Kein freier Slot in den nächsten 14 Tagen gefunden.</div>';
+      container.style.display = 'block';
+      return;
+    }
+    container.innerHTML = '<div class="slot-header">🗓️ Vorgeschlagene freie Slots:</div>' +
+      slots.map((s, i) => {
+        const datum = new Date(s.datum).toLocaleDateString('de-DE', { weekday: 'long', day: '2-digit', month: '2-digit' });
+        return `<div class="slot-item" onclick="app._uebernimmSlot('${s.datum}','${s.mitarbeiter_id}','${s.mitarbeiter_name}',${i})">
+          <strong>${datum}</strong> ab ${s.startzeit} Uhr
+          <span class="slot-ma">${s.mitarbeiter_name}</span>
+          <span class="slot-auslastung">${s.auslastung_prozent}% ausgelastet</span>
+        </div>`;
+      }).join('') +
+      '<div class="slot-close" onclick="document.getElementById(\'slotVorschlaegeDropdown\').style.display=\'none\'">✕ Schließen</div>';
+    container.style.display = 'block';
+  }
+
+  _uebernimmSlot(datum, mitarbeiterId, mitarbeiterName, idx) {
+    // Datum ins Terminformular übernehmen
+    const datumInput = document.getElementById('datum');
+    if (datumInput) {
+      datumInput.value = datum;
+      datumInput.dispatchEvent(new Event('change'));
+    }
+    // Kalender auf das Datum setzen
+    if (this.setupAuslastungKalender) {
+      const d = new Date(datum);
+      this.currentKalenderDatum = d;
+      this.selectedDatum = datum;
+      this.renderAuslastungKalender();
+      const display = document.getElementById('selectedDatumDisplay');
+      if (display) display.textContent = d.toLocaleDateString('de-DE', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' });
+    }
+    // Mitarbeiter vorauswählen falls Feld vorhanden
+    const maSelect = document.getElementById('mitarbeiterId') || document.getElementById('mitarbeiterSelect');
+    if (maSelect && mitarbeiterId) {
+      maSelect.value = mitarbeiterId;
+    }
+    document.getElementById('slotVorschlaegeDropdown').style.display = 'none';
+    this.showToast(`Slot ${datum} übernommen`, 'success');
+  }
+
+  // =========================================================================
+  // DUPLIKAT-ERKENNUNG (Feature D3)
+  // =========================================================================
+  async checkArbeitDuplikate(arbeiten) {
+    if (!Array.isArray(arbeiten) || arbeiten.length < 2) return;
+    try {
+      const result = await window.AIService.checkDuplikatArbeiten(arbeiten);
+      if (result && result.duplikate && result.duplikate.length > 0) {
+        const hinweis = result.duplikate.map(d => `"${d.a}" ≈ "${d.b}"`).join('\n');
+        this.showToast(`⚠️ Mögliche Duplikat-Arbeiten erkannt:\n${hinweis}`, 'warning');
+      }
+    } catch (e) { /* silent */ }
+  }
+
+  // =========================================================================
+  // AUTOMATISIERUNGS-PROTOKOLL (Feature C4)
+  // =========================================================================
+  async loadAutomationLog() {
+    const liste = document.getElementById('automationLogListe');
+    if (!liste) return;
+    const limitEl = document.getElementById('autoLogLimit');
+    const limit = limitEl ? parseInt(limitEl.value) : 20;
+    liste.innerHTML = '<p class="hint">Wird geladen...</p>';
+    try {
+      const data = await window.AIService.getAutomationLog(limit);
+      if (!data || !data.log || data.log.length === 0) {
+        liste.innerHTML = '<p class="hint">Keine Einträge vorhanden.</p>';
+        return;
+      }
+      liste.innerHTML = `<table class="automation-log-table">
+        <thead><tr><th>Zeit</th><th>Typ</th><th>Beschreibung</th><th>Ergebnis</th></tr></thead>
+        <tbody>${data.log.map(e => `<tr>
+          <td style="white-space:nowrap;font-size:0.85em;">${new Date(e.erstellt_am).toLocaleString('de-DE')}</td>
+          <td><span class="log-badge log-${e.typ}">${e.typ}</span></td>
+          <td>${this._escapeHtml(e.beschreibung || '')}</td>
+          <td style="font-size:0.85em;color:#666;">${this._escapeHtml(e.ergebnis || '')}</td>
+        </tr>`).join('')}</tbody>
+      </table>`;
+    } catch (err) {
+      liste.innerHTML = `<p class="hint" style="color:red;">Fehler: ${err.message}</p>`;
+    }
+  }
+
+  _escapeHtml(str) {
+    return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  }
+
+  // =========================================================================
+  // AUTOMATISIERUNGS-EINSTELLUNGEN laden & speichern
+  // =========================================================================
+  async loadAutomationSettings() {
+    try {
+      const settings = await window.EinstellungenService.getWerkstatt();
+      if (!settings) return;
+      const set = (id, val) => {
+        const el = document.getElementById(id);
+        if (el) el.checked = !!(val === 1 || val === true || val === '1');
+      };
+      set('pufferMLEnabled', settings.dynamischer_puffer_enabled);
+      set('slotNachfuellungEnabled', settings.slot_nachfuellung_enabled);
+      set('duplikatErkennungEnabled', settings.duplikat_erkennung_enabled);
+    } catch (e) {
+      console.warn('Automation-Einstellungen konnte nicht geladen werden:', e);
+    }
+  }
+
+  async saveAutomationSettings() {
+    const settings = {
+      dynamischer_puffer_enabled: document.getElementById('pufferMLEnabled')?.checked ? 1 : 0,
+      slot_nachfuellung_enabled: document.getElementById('slotNachfuellungEnabled')?.checked ? 1 : 0,
+      duplikat_erkennung_enabled: document.getElementById('duplikatErkennungEnabled')?.checked ? 1 : 0,
+    };
+    try {
+      await window.EinstellungenService.updateWerkstatt(settings);
+      this.showToast('Automatisierungs-Einstellungen gespeichert', 'success');
+    } catch (err) {
+      this.showToast('Fehler beim Speichern: ' + err.message, 'error');
+    }
+  }
+
+  // =========================================================================
+  // GLOBALE SUCHE (Feature C5)
+  // =========================================================================
+  setupGlobaleSuche() {
+    const input = document.getElementById('globalesSuchfeld');
+    if (!input) return;
+    let debounceTimer;
+    input.addEventListener('input', () => {
+      clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(() => this.executeGlobaleSuche(input.value), 300);
+    });
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        input.value = '';
+        const dropdown = document.getElementById('sucheDropdown');
+        if (dropdown) dropdown.style.display = 'none';
+      }
+    });
+    document.addEventListener('click', (e) => {
+      if (!e.target.closest('#globaleSucheContainer')) {
+        const dropdown = document.getElementById('sucheDropdown');
+        if (dropdown) dropdown.style.display = 'none';
+      }
+    });
+  }
+
+  async executeGlobaleSuche(q) {
+    const dropdown = document.getElementById('sucheDropdown');
+    if (!dropdown) return;
+    if (!q || q.length < 2) { dropdown.style.display = 'none'; return; }
+    try {
+      const data = await window.SucheService.suche(q);
+      const sections = [];
+      if (data.kunden && data.kunden.length > 0) {
+        sections.push('<div class="suche-gruppe"><div class="suche-gruppe-titel">👤 Kunden</div>' +
+          data.kunden.map(k => `<div class="suche-item" onclick="app._sucheNavigate('kunden',${k.id})">${this._escapeHtml(k.name)}${k.telefon ? ` · ${this._escapeHtml(k.telefon)}` : ''}</div>`).join('') + '</div>');
+      }
+      if (data.fahrzeuge && data.fahrzeuge.length > 0) {
+        sections.push('<div class="suche-gruppe"><div class="suche-gruppe-titel">🚗 Fahrzeuge</div>' +
+          data.fahrzeuge.map(f => `<div class="suche-item" onclick="app._sucheNavigate('fahrzeuge','${this._escapeHtml(f.kennzeichen)}')">${this._escapeHtml(f.kennzeichen)}${f.modell ? ` – ${this._escapeHtml(f.modell)}` : ''}</div>`).join('') + '</div>');
+      }
+      if (data.termine && data.termine.length > 0) {
+        sections.push('<div class="suche-gruppe"><div class="suche-gruppe-titel">📅 Termine</div>' +
+          data.termine.map(t => `<div class="suche-item" onclick="app._sucheNavigate('termine',${t.id})">#${t.id} ${this._escapeHtml(t.kunde_name || '')} – ${this._escapeHtml(t.arbeit || '').slice(0,40)}</div>`).join('') + '</div>');
+      }
+      if (sections.length === 0) {
+        dropdown.innerHTML = '<div class="suche-kein-ergebnis">Keine Ergebnisse gefunden</div>';
+      } else {
+        dropdown.innerHTML = sections.join('');
+      }
+      dropdown.style.display = 'block';
+    } catch (e) {
+      dropdown.style.display = 'none';
+    }
+  }
+
+  _sucheNavigate(bereich, id) {
+    const dropdown = document.getElementById('sucheDropdown');
+    if (dropdown) dropdown.style.display = 'none';
+    const input = document.getElementById('globalesSuchfeld');
+    if (input) input.value = '';
+    // Tab wechseln und Datensatz auswählen
+    if (bereich === 'kunden') {
+      this.showTab('kunden');
+    } else if (bereich === 'termine') {
+      this.showTab('termine');
+    }
+  }
+
+  // =========================================================================
+  // KEYBOARD SHORTCUTS (Feature C3)
+  // =========================================================================
+  setupKeyboardShortcuts() {
+    document.addEventListener('keydown', (e) => {
+      // Nicht wenn in Input/Textarea/Select
+      const tag = document.activeElement?.tagName;
+      if (['INPUT','TEXTAREA','SELECT'].includes(tag)) return;
+
+      if (e.altKey) {
+        switch (e.key) {
+          case '1': e.preventDefault(); this.showTab('dashboard'); break;
+          case '2': e.preventDefault(); this.showTab('termine'); break;
+          case '3': e.preventDefault(); this.showTab('auslastung'); break;
+          case '4': e.preventDefault(); this.showTab('kunden'); break;
+          case '5': e.preventDefault(); this.showTab('einstellungen'); break;
+          case 'n': e.preventDefault(); this.showTab('termine'); window.switchSubTab && window.switchSubTab('neuerTermin'); break;
+          case 'f': e.preventDefault(); document.getElementById('globalesSuchfeld')?.focus(); break;
+          case '?': e.preventDefault(); this.showShortcutHelp(); break;
+        }
+      }
+    });
+  }
+
+  showShortcutHelp() {
+    const shortcuts = [
+      ['Alt+1', 'Dashboard öffnen'],
+      ['Alt+2', 'Termine öffnen'],
+      ['Alt+3', 'Auslastung öffnen'],
+      ['Alt+4', 'Kunden öffnen'],
+      ['Alt+5', 'Einstellungen öffnen'],
+      ['Alt+N', 'Neuer Termin'],
+      ['Alt+F', 'Globale Suche fokussieren'],
+      ['Alt+?', 'Diese Hilfe anzeigen'],
+    ];
+    const html = `<div style="font-family:monospace;">
+      <table style="border-collapse:collapse;width:100%;">
+        ${shortcuts.map(([k, b]) => `<tr><td style="padding:4px 16px 4px 0;font-weight:bold;color:#1565c0;">${k}</td><td style="padding:4px 0;">${b}</td></tr>`).join('')}
+      </table>
+    </div>`;
+    // Einfaches Alert-Overlay
+    const overlay = document.createElement('div');
+    overlay.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);z-index:9999;display:flex;align-items:center;justify-content:center;';
+    overlay.innerHTML = `<div style="background:#fff;border-radius:12px;padding:30px;max-width:400px;width:90%;box-shadow:0 8px 32px rgba(0,0,0,0.3);">
+      <h3 style="margin-top:0;">⌨️ Tastenkürzel</h3>
+      ${html}
+      <button onclick="this.closest('.shortcut-overlay').remove()" style="margin-top:16px;padding:8px 20px;background:#1565c0;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:1em;">Schließen</button>
+    </div>`;
+    overlay.classList.add('shortcut-overlay');
+    overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
+    document.body.appendChild(overlay);
+  }
+
+  // =========================================================================
+  // C1 – QUICK-ACTION-BUTTONS (Schnell-Status auf Termin-Karten)
+  // =========================================================================
+  async quickStatusChange(terminId, neuerStatus) {
+    try {
+      await this.updateTerminStatus(terminId, neuerStatus);
+    } catch (e) {
+      this.showToast('Fehler beim Statuswechsel', 'error');
+    }
+  }
+
+  // =========================================================================
+  // C2 – BATCH-OPERATIONEN (Mehrfach-Auswahl & Massenaktionen)
+  // =========================================================================
+  setupBatchDelegation() {
+    const container = document.getElementById('heuteTabellenContainer');
+    if (!container) return;
+    container.addEventListener('change', (e) => {
+      if (e.target.classList.contains('termin-batch-check')) {
+        this.updateBatchLeiste();
+      }
+    });
+  }
+
+  toggleSelectAll(checkbox) {
+    document.querySelectorAll('.termin-batch-check').forEach(c => {
+      c.checked = checkbox.checked;
+    });
+    this.updateBatchLeiste();
+  }
+
+  updateBatchLeiste() {
+    const checked = document.querySelectorAll('.termin-batch-check:checked');
+    const leiste = document.getElementById('batchAktionsleiste');
+    const anzahlEl = document.getElementById('batchAnzahl');
+    if (!leiste) return;
+    if (checked.length > 0) {
+      leiste.style.display = 'flex';
+      if (anzahlEl) anzahlEl.textContent = `${checked.length} ausgewählt`;
+    } else {
+      leiste.style.display = 'none';
+      const selectAll = document.getElementById('selectAllTermine');
+      if (selectAll) selectAll.checked = false;
+    }
+  }
+
+  clearBatchSelection() {
+    document.querySelectorAll('.termin-batch-check').forEach(c => c.checked = false);
+    const selectAll = document.getElementById('selectAllTermine');
+    if (selectAll) selectAll.checked = false;
+    this.updateBatchLeiste();
+  }
+
+  async executeBatchAction(aktion) {
+    const checked = document.querySelectorAll('.termin-batch-check:checked');
+    if (checked.length === 0) return;
+    const ids = Array.from(checked).map(c => parseInt(c.dataset.terminId));
+    if (aktion === 'abgesagt') {
+      if (!confirm(`${ids.length} Termine wirklich absagen?`)) return;
+    }
+    try {
+      await window.TermineService.batchUpdate(ids, { status: aktion });
+      this.showToast(`${ids.length} Termine aktualisiert`, 'success');
+      this.clearBatchSelection();
+      await this.loadHeuteTermine();
+    } catch (e) {
+      this.showToast('Fehler beim Batch-Update', 'error');
+    }
+  }
+
+  // =========================================================================
+  // C6a – SMART DEFAULTS (Letzten Arbeit vorausfüllen)
+  // =========================================================================
+  uebernimmLetzteArbeit(enkodierteArbeit) {
+    const arbeit = decodeURIComponent(enkodierteArbeit);
+    const arbeitEl = document.getElementById('arbeitEingabe');
+    if (arbeitEl) {
+      arbeitEl.value = arbeit;
+      arbeitEl.dispatchEvent(new Event('input'));
+    }
+    const hinweis = document.getElementById('smartDefaultHinweis');
+    if (hinweis) hinweis.style.display = 'none';
+  }
+
+  // =========================================================================
+  // C6e – DRUCK-TAGESÜBERSICHT
+  // =========================================================================
+  druckTagesuebersicht() {
+    const titel = document.getElementById('heuteDatum')?.textContent || 'Heute';
+    const rows = document.querySelectorAll('#heuteTermineTable tbody tr');
+    let tabelleHtml = '';
+    rows.forEach(row => {
+      // Checkbox-Zelle überspringen, nur Datenzellen
+      const cells = Array.from(row.querySelectorAll('td')).slice(1);
+      if (cells.length === 0) return;
+      tabelleHtml += '<tr>' + cells.map(c => `<td>${c.textContent.trim()}</td>`).join('') + '</tr>';
+    });
+
+    const win = window.open('', '_blank');
+    win.document.write(`<!DOCTYPE html><html><head><title>Tagesübersicht ${titel}</title>
+      <style>
+        body{font-family:Arial,sans-serif;padding:20px;font-size:12px;}
+        h1{font-size:16px;margin-bottom:8px;}
+        table{border-collapse:collapse;width:100%;}
+        th,td{border:1px solid #ccc;padding:6px 8px;text-align:left;}
+        th{background:#f5f5f5;font-weight:bold;}
+        tr:nth-child(even){background:#fafafa;}
+      </style></head><body>
+      <h1>📋 Tagesübersicht — ${titel}</h1>
+      <table><thead><tr>
+        <th>Bringzeit</th><th>Kunde</th><th>Telefon</th><th>Kennzeichen</th>
+        <th>Wartet</th><th>Arbeit</th><th>Zeit</th><th>Status</th><th>Aktionen</th>
+      </tr></thead><tbody>${tabelleHtml}</tbody></table>
+      <script>window.print();<\/script></body></html>`);
+    win.document.close();
+  }
+
+  // =========================================================================
+  // A4 – SLOT-NACHFÜLLUNG nach Drag&Drop
+  // =========================================================================
+  async _pruefeSlotNachfuellung() {
+    // Ermittle aktuelles Planungsdatum aus dem Drag&Drop-State
+    const datumEl = document.getElementById('planungDatumInput') || document.getElementById('auslastungDatum');
+    const datum = datumEl?.value || this.formatDateLocal(new Date());
+
+    try {
+      const data = await window.KIPlanungService.getLueckenVorschlaege(datum, null, null, null);
+      if (data && data.vorschlaege && data.vorschlaege.length > 0) {
+        this._zeigeSlotNachfuellungPopup(data.vorschlaege, datum);
+      }
+    } catch (e) {
+      // Nicht kritisch, ignorieren
+    }
+  }
+
+  _zeigeSlotNachfuellungPopup(vorschlaege, datum) {
+    const overlay = document.createElement('div');
+    overlay.style.cssText = 'position:fixed;bottom:20px;right:20px;background:#fff;border:1px solid #ddd;border-radius:12px;padding:16px;max-width:320px;box-shadow:0 4px 16px rgba(0,0,0,0.15);z-index:9000;';
+    overlay.innerHTML = `
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+        <strong>💡 Freie Lücke — Vorschläge</strong>
+        <button onclick="this.closest('.slot-fill-popup').remove()" style="border:none;background:none;font-size:1.2em;cursor:pointer;">×</button>
+      </div>
+      <p style="font-size:0.85em;color:#666;margin-bottom:8px;">Schwebende Termine die jetzt passen würden:</p>
+      ${vorschlaege.slice(0, 3).map(v => `
+        <div class="slot-item" style="padding:8px;border:1px solid #e0e0e0;border-radius:6px;margin-bottom:6px;font-size:0.9em;">
+          <strong>${this._escapeHtml(v.kunde_name || 'Unbekannt')}</strong> — ${this._escapeHtml(v.arbeit || '')}<br>
+          <small>${v.geschaetzte_zeit || '?'} Min. · Wartet: ${v.wartezeit_tage || 0} Tage</small><br>
+          <button class="btn btn-sm" style="margin-top:4px;" onclick="app.showTerminDetails(${v.id}); this.closest('.slot-fill-popup').remove();">Einplanen</button>
+        </div>
+      `).join('')}
+    `;
+    overlay.classList.add('slot-fill-popup');
+    document.body.appendChild(overlay);
+    setTimeout(() => overlay.remove(), 20000);
+  }
+
+  // =========================================================================
+  // A6c – ÜBERLAUF-BANNER (>90% Auslastung)
+  // =========================================================================
+  pruefeUeberlaufBanner(termine) {
+    const banner = document.getElementById('ueberlaufBanner');
+    const details = document.getElementById('ueberlaufDetails');
+    if (!banner) return;
+
+    const offene = termine.filter(t => t.status !== 'abgeschlossen' && t.status !== 'abgesagt');
+    const gesamtMinuten = offene.reduce((s, t) => s + (parseInt(t.geschaetzte_zeit) || 0), 0);
+    // Standard: 8h = 480 Min. pro Tag (Fallback)
+    const kapazitaetMinuten = 480;
+    const auslastungProzent = Math.round(gesamtMinuten / kapazitaetMinuten * 100);
+
+    if (auslastungProzent > 90) {
+      if (details) details.textContent = `${auslastungProzent}% (${Math.round(gesamtMinuten / 60 * 10) / 10}h von ${kapazitaetMinuten / 60}h)`;
+      banner.style.display = 'block';
+    } else {
+      banner.style.display = 'none';
+    }
+  }
+
+  zeigeVerschiebbareTermine() {
+    const offene = (this.heuteTermine || []).filter(t =>
+      t.status === 'geplant' && parseInt(t.geschaetzte_zeit) >= 60
+    ).sort((a, b) => (parseInt(b.geschaetzte_zeit) || 0) - (parseInt(a.geschaetzte_zeit) || 0));
+
+    if (offene.length === 0) {
+      this.showToast('Keine verschiebbaren Termine gefunden', 'info');
+      return;
+    }
+
+    const liste = offene.slice(0, 5).map(t =>
+      `<li><strong>${this._escapeHtml(t.kunde_name || '')}:</strong> ${this._escapeHtml(t.arbeit?.split('\n')[0] || '')} · ${t.geschaetzte_zeit} Min.</li>`
+    ).join('');
+
+    const overlay = document.createElement('div');
+    overlay.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);z-index:9999;display:flex;align-items:center;justify-content:center;';
+    overlay.innerHTML = `<div style="background:#fff;border-radius:12px;padding:24px;max-width:420px;width:90%;box-shadow:0 8px 32px rgba(0,0,0,0.3);">
+      <h3 style="margin-top:0;">📅 Verschiebbare Termine</h3>
+      <p style="color:#666;">Folgende geplante Termine mit ≥60 Min. könnten auf morgen verschoben werden:</p>
+      <ul>${liste}</ul>
+      <button onclick="this.closest('div').parentElement.remove()" style="padding:8px 20px;background:#1565c0;color:#fff;border:none;border-radius:6px;cursor:pointer;">Schließen</button>
+    </div>`;
+    overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
+    document.body.appendChild(overlay);
+  }
+
+  // =========================================================================
+  // A6d – WIEDERKEHRENDE TERMINE (Frontend-Verwaltung)
+  // =========================================================================
+  async loadWiederkehrendeTermine() {
+    const tbody = document.getElementById('wiederkehrendeTbody');
+    if (!tbody) return;
+    tbody.innerHTML = '<tr><td colspan="8" class="loading">Wird geladen…</td></tr>';
+    try {
+      const data = await window.WiederkehrendeTermineService.getAll();
+      const liste = data.termine || data || [];
+      if (liste.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:#999;">Keine wiederkehrenden Termine vorhanden</td></tr>';
+        return;
+      }
+      const rhythmusLabel = { monatlich: 'Monatlich', quartal: 'Quartalsweise', halbjahr: 'Halbjährlich', jaehrlich: 'Jährlich' };
+      tbody.innerHTML = liste.map(w => `
+        <tr>
+          <td>${this._escapeHtml(w.kunde_name || '')}</td>
+          <td>${this._escapeHtml(w.kennzeichen || '')}</td>
+          <td>${this._escapeHtml(w.arbeit || '')}</td>
+          <td>${w.geschaetzte_zeit || '?'}</td>
+          <td>${rhythmusLabel[w.wiederholung] || w.wiederholung}</td>
+          <td>${w.naechste_erstellung || '–'}</td>
+          <td><span class="${w.aktiv ? 'log-badge log-ok' : 'log-badge log-error'}">${w.aktiv ? 'Aktiv' : 'Inaktiv'}</span></td>
+          <td style="white-space:nowrap;">
+            <button class="btn btn-sm" onclick="app.toggleWiederkehrend(${w.id}, ${w.aktiv ? 0 : 1})">${w.aktiv ? 'Deaktivieren' : 'Aktivieren'}</button>
+            <button class="btn btn-sm btn-danger" onclick="app.deleteWiederkehrend(${w.id})">🗑</button>
+          </td>
+        </tr>`).join('');
+    } catch (e) {
+      tbody.innerHTML = '<tr><td colspan="8" style="color:red;">Fehler beim Laden</td></tr>';
+    }
+  }
+
+  showWiederkehrendModal() {
+    const overlay = document.createElement('div');
+    overlay.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);z-index:9999;display:flex;align-items:center;justify-content:center;';
+    overlay.innerHTML = `<div style="background:#fff;border-radius:12px;padding:24px;max-width:480px;width:90%;box-shadow:0 8px 32px rgba(0,0,0,0.3);">
+      <h3 style="margin-top:0;">🔁 Neuer wiederkehrender Termin</h3>
+      <form id="wiederkehrendForm" style="display:grid;gap:12px;">
+        <div><label>Kundenname *</label><input type="text" id="wrKundeName" class="form-control" placeholder="Max Mustermann" required></div>
+        <div><label>Kennzeichen</label><input type="text" id="wrKennzeichen" class="form-control" placeholder="OSL-KI 123"></div>
+        <div><label>Arbeit(en) *</label><textarea id="wrArbeit" class="form-control" rows="2" placeholder="Ölwechsel" required></textarea></div>
+        <div><label>Geschätzte Zeit (Min.) *</label><input type="number" id="wrZeit" class="form-control" value="60" min="15" required></div>
+        <div><label>Wiederholung</label>
+          <select id="wrRhythmus" class="form-control">
+            <option value="monatlich">Monatlich</option>
+            <option value="quartal">Quartalsweise</option>
+            <option value="halbjahr" selected>Halbjährlich</option>
+            <option value="jaehrlich">Jährlich</option>
+          </select>
+        </div>
+        <div><label>Nächste Erstellung</label><input type="date" id="wrNaechste" class="form-control"></div>
+        <div style="display:flex;gap:8px;margin-top:8px;">
+          <button type="submit" class="btn btn-primary">Speichern</button>
+          <button type="button" class="btn btn-secondary" onclick="this.closest('.wr-overlay').remove()">Abbrechen</button>
+        </div>
+      </form>
+    </div>`;
+    overlay.classList.add('wr-overlay');
+
+    // Default: nächste Erstellung = in 6 Monaten
+    overlay.querySelector('#wrNaechste').value = new Date(Date.now() + 180 * 86400000).toISOString().split('T')[0];
+
+    overlay.querySelector('#wiederkehrendForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const payload = {
+        kunde_name: overlay.querySelector('#wrKundeName').value.trim(),
+        kennzeichen: overlay.querySelector('#wrKennzeichen').value.trim(),
+        arbeit: overlay.querySelector('#wrArbeit').value.trim(),
+        geschaetzte_zeit: parseInt(overlay.querySelector('#wrZeit').value),
+        wiederholung: overlay.querySelector('#wrRhythmus').value,
+        naechste_erstellung: overlay.querySelector('#wrNaechste').value,
+      };
+      try {
+        await window.WiederkehrendeTermineService.create(payload);
+        this.showToast('Wiederkehrender Termin gespeichert', 'success');
+        overlay.remove();
+        this.loadWiederkehrendeTermine();
+      } catch (err) {
+        this.showToast('Fehler beim Speichern', 'error');
+      }
+    });
+    overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
+    document.body.appendChild(overlay);
+  }
+
+  async toggleWiederkehrend(id, aktiv) {
+    try {
+      await window.WiederkehrendeTermineService.update(id, { aktiv });
+      this.loadWiederkehrendeTermine();
+    } catch (e) {
+      this.showToast('Fehler beim Aktualisieren', 'error');
+    }
+  }
+
+  async deleteWiederkehrend(id) {
+    if (!confirm('Wiederkehrenden Termin wirklich löschen?')) return;
+    try {
+      await window.WiederkehrendeTermineService.delete(id);
+      this.showToast('Gelöscht', 'success');
+      this.loadWiederkehrendeTermine();
+    } catch (e) {
+      this.showToast('Fehler beim Löschen', 'error');
+    }
+  }
+
 }
 
 
@@ -30776,7 +31455,7 @@ window.app = app;
 
 // Globale Funktion für Sub-Tab-Wechsel (Fallback für onclick)
 window.switchSubTab = function(tabName) {
-  const allTabs = ['neuerTermin', 'terminBearbeiten', 'internerTermin', 'wartendeAktionen'];
+  const allTabs = ['neuerTermin', 'terminBearbeiten', 'internerTermin', 'wartendeAktionen', 'wiederkehrendeTermine'];
   
   // Alle Sub-Tabs verstecken
   allTabs.forEach(name => {
@@ -30835,6 +31514,10 @@ window.switchSubTab = function(tabName) {
   
   if (tabName === 'wartendeAktionen' && window.app) {
     window.app.loadWartendeAktionen();
+  }
+
+  if (tabName === 'wiederkehrendeTermine' && window.app) {
+    window.app.loadWiederkehrendeTermine();
   }
 };
 // Export für globale Verwendung

@@ -535,6 +535,18 @@ class KIPlanungController {
 
     const offeneTermine = (termine || []).filter(t => !KIPlanungController.isTerminZugeordnet(t));
 
+    // A6a – Intelligente Termin-Gruppierung: gleiche Kategorie hintereinander
+    const { kategorisiereArbeit } = localAiService;
+    if (typeof kategorisiereArbeit === 'function') {
+      offeneTermine.sort((a, b) => {
+        const ka = kategorisiereArbeit(a.arbeit || '');
+        const kb = kategorisiereArbeit(b.arbeit || '');
+        if (ka < kb) return -1;
+        if (ka > kb) return 1;
+        return 0;
+      });
+    }
+
     offeneTermine.forEach(termin => {
       const duration = KIPlanungController.getTerminDauerMinuten(termin);
       const preferredStart = KIPlanungController.getTerminStartMinuten(termin) ?? DEFAULT_ARBEITSBEGINN_MIN;
@@ -1113,6 +1125,68 @@ Antworte NUR mit dem JSON.`;
         verteilung: [],
         warnungen: ['Fehler beim Parsen: ' + e.message]
       };
+    }
+  }
+
+  /**
+   * POST /ki-planung/luecken-vorschlaege
+   * Schlägt schwebende Termine vor, die in einen freigewordenen Zeitslot passen.
+   */
+  static async getLueckenVorschlaege(req, res) {
+    try {
+      const { datum, mitarbeiter_id, frei_von, frei_bis } = req.body;
+
+      if (!datum || !frei_von || !frei_bis) {
+        return res.status(400).json({ error: 'datum, frei_von, frei_bis erforderlich' });
+      }
+
+      // Freie Minuten berechnen
+      const parse = t => {
+        const [h, m] = (t || '').split(':').map(Number);
+        return (h || 0) * 60 + (m || 0);
+      };
+      const freiMinuten = parse(frei_bis) - parse(frei_von);
+      if (freiMinuten <= 0) {
+        return res.json({ success: true, vorschlaege: [] });
+      }
+
+      // Schwebende Termine laden
+      const schwebende = await allAsync(`
+        SELECT
+          id, kunde_name, arbeit, geschaetzte_zeit,
+          schwebend_prioritaet, dringlichkeit, erstellt_am
+        FROM termine
+        WHERE ist_schwebend = 1
+          AND geloescht_am IS NULL
+          AND status != 'storniert'
+          AND geschaetzte_zeit <= ?
+        ORDER BY
+          CASE dringlichkeit WHEN 'hoch' THEN 0 WHEN 'mittel' THEN 1 ELSE 2 END ASC,
+          schwebend_prioritaet DESC,
+          erstellt_am ASC
+        LIMIT 3
+      `, [freiMinuten]);
+
+      const heute = new Date().toISOString().split('T')[0];
+      const vorschlaege = schwebende.map(t => {
+        const erstelltAm = t.erstellt_am ? t.erstellt_am.split('T')[0] : heute;
+        const wartezeit_tage = Math.max(0, Math.round(
+          (new Date(heute) - new Date(erstelltAm)) / 86400000
+        ));
+        return {
+          id: t.id,
+          kunde_name: t.kunde_name,
+          arbeit: t.arbeit,
+          geschaetzte_zeit: t.geschaetzte_zeit,
+          prioritaet: t.dringlichkeit || t.schwebend_prioritaet || 'normal',
+          wartezeit_tage
+        };
+      });
+
+      res.json({ success: true, vorschlaege, frei_minuten: freiMinuten });
+    } catch (err) {
+      console.error('Fehler bei getLueckenVorschlaege:', err);
+      res.status(500).json({ error: err.message });
     }
   }
 }

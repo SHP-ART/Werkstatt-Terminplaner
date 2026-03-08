@@ -384,6 +384,20 @@ class TermineService {
   static async countErweiterungen(terminId) {
     return ApiService.get(`/termine/${terminId}/erweiterungen/count`);
   }
+
+  static async getNaechsterSlot(geschaetzteZeit, mitarbeiterId = null, abDatum = null) {
+    let url = `/termine/naechster-slot?geschaetzte_zeit=${geschaetzteZeit}`;
+    if (mitarbeiterId) url += `&mitarbeiter_id=${mitarbeiterId}`;
+    if (abDatum) url += `&ab_datum=${abDatum}`;
+    return ApiService.get(url);
+  }
+
+  static async batchUpdate(ids, aenderungen) {
+    return ApiService.request('/termine/batch', {
+      method: 'PATCH',
+      body: JSON.stringify({ ids, aenderungen })
+    });
+  }
 }
 
 class ArbeitszeitenService {
@@ -937,6 +951,19 @@ class AIService {
   static async updateOllamaModel(model) {
     return ApiService.put('/einstellungen/ollama-model', { model });
   }
+
+  // Automatisierungs-Methoden
+  static async getPufferEmpfehlung(arbeit) {
+    return ApiService.get(`/ai/puffer-empfehlung?arbeit=${encodeURIComponent(arbeit)}`);
+  }
+
+  static async checkDuplikatArbeiten(arbeiten) {
+    return ApiService.post('/ai/check-duplikate', { arbeiten });
+  }
+
+  static async getAutomationLog(limit = 50) {
+    return ApiService.get(`/ai/automation-log?limit=${limit}`);
+  }
 }
 
 /**
@@ -1056,6 +1083,15 @@ class KIPlanungService {
   static async getAnomalien(datum) {
     return ApiService.get(`/ki-planung/anomalien/${datum}`);
   }
+
+  static async getLueckenVorschlaege(datum, mitarbeiterId, freiVon, freiBis) {
+    return ApiService.post('/ki-planung/luecken-vorschlaege', {
+      datum,
+      mitarbeiter_id: mitarbeiterId,
+      frei_von: freiVon,
+      frei_bis: freiBis
+    });
+  }
 }
 
 class SchichtTemplateService {
@@ -1130,6 +1166,26 @@ class SystemService {
   }
 }
 
+class ReportingService {
+  static async getKPIs(von, bis) {
+    return ApiService.get(`/reports/kpis?von=${von}&bis=${bis}`);
+  }
+
+  static async getMitarbeiterReport(von, bis) {
+    return ApiService.get(`/reports/mitarbeiter?von=${von}&bis=${bis}`);
+  }
+
+  static async getTrend(kpi, intervall, monate) {
+    return ApiService.get(`/reports/trend?kpi=${kpi}&intervall=${intervall}&monate=${monate}`);
+  }
+}
+
+class SucheService {
+  static async suche(q) {
+    return ApiService.get(`/suche?q=${encodeURIComponent(q)}`);
+  }
+}
+
 // Global verfügbar machen (für Vite-Kompatibilität)
 window.ApiService = ApiService;
 window.KundenService = KundenService;
@@ -1148,3 +1204,22 @@ window.KIPlanungService = KIPlanungService;
 window.SchichtTemplateService = SchichtTemplateService;
 window.TabletService = TabletService;
 window.SystemService = SystemService;
+window.ReportingService = ReportingService;
+window.SucheService = SucheService;
+
+// A6d – Wiederkehrende Termine
+class WiederkehrendeTermineService {
+  static async getAll() {
+    return ApiService.get('/wiederkehrende-termine');
+  }
+  static async create(daten) {
+    return ApiService.post('/wiederkehrende-termine', daten);
+  }
+  static async update(id, daten) {
+    return ApiService.put(`/wiederkehrende-termine/${id}`, daten);
+  }
+  static async delete(id) {
+    return ApiService.delete(`/wiederkehrende-termine/${id}`);
+  }
+}
+window.WiederkehrendeTermineService = WiederkehrendeTermineService;

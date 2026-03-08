@@ -15,6 +15,11 @@ let zeitModelCache = {
 };
 let trainingPromise = null;
 
+let pufferModelCache = {
+  trainedAt: 0,
+  byKategorie: {}
+};
+
 const KATEGORIEN = [
   { name: 'Inspektion', keys: ['inspektion', 'service', 'wartung', 'durchsicht'] },
   { name: 'Bremsen', keys: ['bremse', 'brems'] },
@@ -593,6 +598,164 @@ function erkenneFremdmarke(text) {
   return openaiService.erkenneFremdmarke(text);
 }
 
+// ============================================================
+// PUFFER-ML: Dynamische Pufferzeit-Berechnung
+// ============================================================
+
+/**
+ * Trainiert das Puffer-Modell aus historischen Überziehungsdaten.
+ * Berechnet pro Kategorie Median + 80. Perzentil der Überziehung.
+ */
+async function trainPufferModel() {
+  try {
+    const rows = await allAsync(`
+      SELECT arbeit, geschaetzte_zeit, tatsaechliche_zeit
+      FROM termine
+      WHERE status = 'abgeschlossen'
+        AND tatsaechliche_zeit > 0
+        AND geschaetzte_zeit > 0
+        AND geloescht_am IS NULL
+        AND (ki_training_exclude IS NULL OR ki_training_exclude = 0)
+    `);
+
+    // Überziehung pro Kategorie sammeln
+    const rawByKat = {};
+    rows.forEach(row => {
+      const ueberzug = row.tatsaechliche_zeit - row.geschaetzte_zeit;
+      const kat = kategorisiereArbeit(row.arbeit);
+      if (!rawByKat[kat]) rawByKat[kat] = [];
+      rawByKat[kat].push(ueberzug);
+    });
+
+    const byKategorie = {};
+    Object.entries(rawByKat).forEach(([kat, values]) => {
+      if (values.length < 3) {
+        byKategorie[kat] = Math.max(0, Math.round(values.reduce((s, v) => s + v, 0) / values.length));
+        return;
+      }
+      const sorted = [...values].sort((a, b) => a - b);
+      const q1 = sorted[Math.floor(sorted.length * 0.25)];
+      const q3 = sorted[Math.floor(sorted.length * 0.75)];
+      const iqr = q3 - q1;
+      const filtered = sorted.filter(v => v >= q1 - 1.5 * iqr && v <= q3 + 1.5 * iqr);
+      if (!filtered.length) {
+        byKategorie[kat] = 0;
+        return;
+      }
+      // 80. Perzentil als empfohlener Puffer
+      const p80 = filtered[Math.floor(filtered.length * 0.8)];
+      byKategorie[kat] = Math.max(0, Math.round(p80));
+    });
+
+    pufferModelCache = { trainedAt: Date.now(), byKategorie };
+    console.log('[Puffer-ML] Training abgeschlossen:', byKategorie);
+  } catch (err) {
+    console.warn('[Puffer-ML] Training fehlgeschlagen:', err.message);
+  }
+}
+
+/**
+ * Gibt die empfohlene Pufferzeit für eine Arbeit zurück.
+ * @param {string} arbeit - Arbeitsbezeichnung
+ * @returns {{ puffer_minuten: number, kategorie: string, basis: string }}
+ */
+function getPufferEmpfehlung(arbeit) {
+  const kat = kategorisiereArbeit(arbeit);
+  if (pufferModelCache.byKategorie[kat] !== undefined) {
+    return {
+      puffer_minuten: pufferModelCache.byKategorie[kat],
+      kategorie: kat,
+      basis: 'ML'
+    };
+  }
+  // Standard-Fallbacks pro Kategorie
+  const standards = {
+    Inspektion: 15, Bremsen: 20, Motor: 30, Elektrik: 15,
+    Klima: 10, Reifen: 5, Karosserie: 25, Sonstiges: 10
+  };
+  return {
+    puffer_minuten: standards[kat] || 15,
+    kategorie: kat,
+    basis: 'standard'
+  };
+}
+
+// ============================================================
+// DUPLIKAT-ERKENNUNG
+// ============================================================
+
+/**
+ * Berechnet einfache Levenshtein-Distanz
+ */
+function levenshtein(a, b) {
+  const m = a.length, n = b.length;
+  const dp = Array.from({ length: m + 1 }, (_, i) =>
+    Array.from({ length: n + 1 }, (_, j) => (i === 0 ? j : j === 0 ? i : 0))
+  );
+  for (let i = 1; i <= m; i++) {
+    for (let j = 1; j <= n; j++) {
+      dp[i][j] = a[i - 1] === b[j - 1]
+        ? dp[i - 1][j - 1]
+        : 1 + Math.min(dp[i - 1][j], dp[i][j - 1], dp[i - 1][j - 1]);
+    }
+  }
+  return dp[m][n];
+}
+
+/**
+ * Token-Overlap-Score zwischen zwei normalisierten Texten
+ */
+function tokenOverlap(a, b) {
+  const tokA = new Set(tokenize(a));
+  const tokB = new Set(tokenize(b));
+  if (!tokA.size || !tokB.size) return 0;
+  let overlap = 0;
+  tokA.forEach(t => { if (tokB.has(t)) overlap++; });
+  return overlap / Math.max(tokA.size, tokB.size);
+}
+
+/**
+ * Erkennt ähnliche/doppelte Arbeitsbezeichnungen in einer Liste.
+ * @param {string[]} arbeiten - Array von Arbeit-Strings
+ * @returns {{ original: string, duplikat: string, similarity: number, empfohlener_name: string }[]}
+ */
+function erkenneDuplikatArbeiten(arbeiten) {
+  if (!Array.isArray(arbeiten) || arbeiten.length < 2) return [];
+
+  const duplikate = [];
+  const normalized = arbeiten.map(a => ({ original: a, norm: normalizeText(a) }));
+
+  for (let i = 0; i < normalized.length; i++) {
+    for (let j = i + 1; j < normalized.length; j++) {
+      const a = normalized[i];
+      const b = normalized[j];
+      if (!a.norm || !b.norm) continue;
+
+      const overlap = tokenOverlap(a.norm, b.norm);
+      const lev = levenshtein(a.norm, b.norm);
+      const maxLen = Math.max(a.norm.length, b.norm.length);
+      const levSim = maxLen > 0 ? 1 - lev / maxLen : 0;
+      const similarity = Math.max(overlap, levSim);
+
+      // Duplikat wenn hoher Overlap ODER geringe Levenshtein-Distanz
+      if (overlap > 0.6 || lev <= 3) {
+        // Längere Bezeichnung als empfohlener Name (mehr beschreibend)
+        const empfohlener_name = a.original.length >= b.original.length
+          ? a.original
+          : b.original;
+        duplikate.push({
+          original: a.original,
+          duplikat: b.original,
+          similarity: Math.round(similarity * 100) / 100,
+          empfohlener_name
+        });
+      }
+    }
+  }
+
+  return duplikate;
+}
+
 function scheduleDailyTraining() {
   const run = async () => {
     try {
@@ -602,6 +765,7 @@ function scheduleDailyTraining() {
         await dbWrapper.readyPromise;
       }
       await trainZeitModel(true);
+      await trainPufferModel();
     } catch (err) {
       console.warn('Lokales KI-Training fehlgeschlagen:', err.message);
     }
@@ -623,5 +787,8 @@ module.exports = {
   checkTeileKompatibilitaet,
   erkenneFremdmarke,
   trainZeitModel,
+  trainPufferModel,
+  getPufferEmpfehlung,
+  erkenneDuplikatArbeiten,
   scheduleDailyTraining
 };

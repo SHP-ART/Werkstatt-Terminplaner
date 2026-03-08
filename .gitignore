@@ -14,6 +14,9 @@ backend/backups/
 # Lokale Testdaten (nicht hochladen)
 testdaten/
 
+# Fernwartungs-Zugangsdaten (nur lokal, nie auf GitHub!)
+FERNWARTUNG.md
+
 # Build artifacts (will be distributed via GitHub Releases)
 /backend/dist/
 /backend/dist-*/

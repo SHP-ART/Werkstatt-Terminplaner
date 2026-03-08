@@ -36,7 +36,9 @@ const migrations = [
   require('./018_cleanup_legacy_tables'),  // Version 18
   require('./019_add_pause_tracking_and_verschoben'),  // Version 19
   require('./020_tablet_einstellungen'),  // Version 20 - Tablet-Steuerung
-  require('./021_teile_bestellungen_kunde_id')  // Version 21 - kunde_id fuer Teile-Bestellungen
+  require('./021_teile_bestellungen_kunde_id'),  // Version 21 - kunde_id fuer Teile-Bestellungen
+  require('./022_ollama_model_einstellungen'),  // Version 22 - Ollama-Modell in Einstellungen
+  require('./023_automatisierung')   // Version 23 - Automatisierungs-Grundlagen
 ];
 
 /**

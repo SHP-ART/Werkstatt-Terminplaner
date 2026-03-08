@@ -1323,6 +1323,63 @@ async function benchmarkOllama(req, res) {
   }
 }
 
+// =============================================================================
+// AUTOMATISIERUNG
+// =============================================================================
+
+/**
+ * GET /api/ai/puffer-empfehlung?arbeit=...
+ * Gibt die empfohlene ML-basierte Pufferzeit für eine Arbeitsart zurück
+ */
+async function getPufferEmpfehlung(req, res) {
+  try {
+    const arbeit = (req.query.arbeit || '').trim();
+    if (!arbeit) {
+      return res.status(400).json({ error: 'arbeit Parameter erforderlich' });
+    }
+    const empfehlung = localAiService.getPufferEmpfehlung(arbeit);
+    res.json({ success: true, arbeit, ...empfehlung });
+  } catch (err) {
+    console.error('Fehler bei getPufferEmpfehlung:', err);
+    res.status(500).json({ error: err.message });
+  }
+}
+
+/**
+ * POST /api/ai/check-duplikate
+ * Prüft eine Liste von Arbeitsbezeichnungen auf Duplikate
+ * Body: { arbeiten: ["Ölwechsel", "Öl wechseln"] }
+ */
+async function checkDuplikatArbeiten(req, res) {
+  try {
+    const { arbeiten } = req.body;
+    if (!Array.isArray(arbeiten) || arbeiten.length < 2) {
+      return res.status(400).json({ error: 'arbeiten (Array mit mind. 2 Einträgen) erforderlich' });
+    }
+    const duplikate = localAiService.erkenneDuplikatArbeiten(arbeiten);
+    res.json({ success: true, duplikate });
+  } catch (err) {
+    console.error('Fehler bei checkDuplikatArbeiten:', err);
+    res.status(500).json({ error: err.message });
+  }
+}
+
+/**
+ * GET /api/ai/automation-log?limit=50
+ * Letzte Automation-Log-Einträge laden
+ */
+async function getAutomationLog(req, res) {
+  try {
+    const automationLogModel = require('../models/automationLogModel');
+    const limit = parseInt(req.query.limit) || 50;
+    const log = await automationLogModel.getLetzteAktionen(limit);
+    res.json({ success: true, log });
+  } catch (err) {
+    console.error('Fehler bei getAutomationLog:', err);
+    res.status(500).json({ error: err.message });
+  }
+}
+
 module.exports = {
   getStatus,
   testConnection,
@@ -1348,5 +1405,9 @@ module.exports = {
   getOllamaModelle,
   testOllamaPrompt,
   testOllamaTermin,
-  benchmarkOllama
+  benchmarkOllama,
+  // Automatisierungs-Endpunkte
+  getPufferEmpfehlung,
+  checkDuplikatArbeiten,
+  getAutomationLog
 };

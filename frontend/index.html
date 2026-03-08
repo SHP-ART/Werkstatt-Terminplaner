@@ -35,6 +35,16 @@
             </div>
         </header>
 
+        <!-- Globale Suchleiste (Feature C5) -->
+        <div id="globaleSucheContainer" class="globale-suche-container">
+            <div class="globale-suche-wrapper">
+                <span class="suche-icon">🔍</span>
+                <input type="text" id="globalesSuchfeld" class="globale-suche-input" placeholder="Kunden, Kennzeichen, Termine suchen… (Alt+F)" autocomplete="off">
+                <kbd class="suche-shortcut">Alt+F</kbd>
+            </div>
+            <div id="sucheDropdown" class="suche-dropdown" style="display:none;"></div>
+        </div>
+
         <div class="tabs">
             <button class="tab-button active" data-tab="dashboard"><span>📊 Dashboard</span></button>
             <button class="tab-button" data-tab="heute"><span>📅 Heute</span></button>
@@ -91,6 +101,52 @@
                         <h3>Diese Woche</h3>
                         <div class="card-value" id="termineWoche">0</div>
                         <div class="card-detail">Termine geplant</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- KPI-Dashboard -->
+            <div class="dashboard-section" id="dashboardKPISection">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+                    <h3 style="margin:0;">📊 Werkstatt-KPIs (laufender Monat)</h3>
+                    <button type="button" class="btn btn-secondary" onclick="app.loadDashboardKPIs()" style="padding:4px 12px;font-size:0.85em;">🔄 Aktualisieren</button>
+                </div>
+                <div class="kpi-grid" id="kpiGrid">
+                    <div class="kpi-card" id="kpiAuslastung">
+                        <div class="kpi-icon">⚙️</div>
+                        <div class="kpi-label">Auslastung</div>
+                        <div class="kpi-value" id="kpiAuslastungWert">—</div>
+                        <div class="kpi-sub" id="kpiAuslastungSub"></div>
+                    </div>
+                    <div class="kpi-card" id="kpiGenauigkeit">
+                        <div class="kpi-icon">🎯</div>
+                        <div class="kpi-label">Schätzgenauigkeit</div>
+                        <div class="kpi-value" id="kpiGenauigkeitWert">—</div>
+                        <div class="kpi-sub" id="kpiGenauigkeitSub"></div>
+                    </div>
+                    <div class="kpi-card" id="kpiAbgeschlossen">
+                        <div class="kpi-icon">✅</div>
+                        <div class="kpi-label">Abgeschlossen</div>
+                        <div class="kpi-value" id="kpiAbgeschlossenWert">—</div>
+                        <div class="kpi-sub" id="kpiAbgeschlossenSub">Termine</div>
+                    </div>
+                    <div class="kpi-card" id="kpiSchwebend">
+                        <div class="kpi-icon">⏳</div>
+                        <div class="kpi-label">Schwebend</div>
+                        <div class="kpi-value" id="kpiSchwebendWert">—</div>
+                        <div class="kpi-sub" id="kpiSchwebendSub">Termine</div>
+                    </div>
+                    <div class="kpi-card" id="kpiTeile">
+                        <div class="kpi-icon">🔩</div>
+                        <div class="kpi-label">Teile ausstehend</div>
+                        <div class="kpi-value" id="kpiTeileWert">—</div>
+                        <div class="kpi-sub" id="kpiTeileSub">davon dringend: <span id="kpiTeileDringend">—</span></div>
+                    </div>
+                    <div class="kpi-card" id="kpiNacharbeit">
+                        <div class="kpi-icon">🔁</div>
+                        <div class="kpi-label">Nacharbeitsquote</div>
+                        <div class="kpi-value" id="kpiNacharbeitWert">—</div>
+                        <div class="kpi-sub" id="kpiNacharbeitSub"></div>
                     </div>
                 </div>
             </div>
@@ -271,10 +327,24 @@
                 <p style="font-size: 16px; color: #666;">
                     <strong>Datum:</strong> <span id="heuteDatum"></span>
                 </p>
-                <div style="margin-top: 15px; display: flex; gap: 10px;">
+                <div style="margin-top: 15px; display: flex; gap: 10px; flex-wrap: wrap; align-items: center;">
                     <button id="heuteTabellenAnsicht" class="btn btn-primary">📊 Tabellenansicht</button>
                     <button id="heuteKartenAnsicht" class="btn btn-secondary">🃏 Kartenansicht</button>
+                    <button class="btn btn-secondary" onclick="app.druckTagesuebersicht()" title="Tagesübersicht drucken">🖨️ Drucken</button>
                 </div>
+
+            <div id="ueberlaufBanner" class="ueberlauf-banner" style="display:none;">
+                ⚠️ <strong>Auslastung kritisch:</strong> <span id="ueberlaufDetails"></span>
+                <button type="button" class="btn-link" onclick="app.zeigeVerschiebbareTermine()">Termine umplanen →</button>
+            </div>
+
+            <div id="batchAktionsleiste" class="batch-aktionsleiste" style="display:none;">
+                <span id="batchAnzahl">0 ausgewählt</span>
+                <button class="btn btn-sm" onclick="app.executeBatchAction('in_arbeit')">▶ In Arbeit</button>
+                <button class="btn btn-sm" onclick="app.executeBatchAction('abgeschlossen')">✓ Fertig</button>
+                <button class="btn btn-sm btn-danger" onclick="app.executeBatchAction('abgesagt')">✕ Absagen</button>
+                <button class="btn btn-sm btn-secondary" onclick="app.clearBatchSelection()">✗ Aufheben</button>
+            </div>
             </div>
 
             <div id="heuteTabellenContainer" style="display: block;">
@@ -283,6 +353,7 @@
                     <table id="heuteTermineTable">
                         <thead>
                             <tr>
+                                <th style="width:30px"><input type="checkbox" id="selectAllTermine" title="Alle auswählen" onchange="app.toggleSelectAll(this)"></th>
                                 <th>Bring</th>
                                 <th>Kunde</th>
                                 <th>Tel.</th>
@@ -296,7 +367,7 @@
                         </thead>
                         <tbody>
                             <tr>
-                                <td colspan="9" class="loading">Termine werden geladen...</td>
+                                <td colspan="10" class="loading">Termine werden geladen...</td>
                             </tr>
                         </tbody>
                     </table>
@@ -355,6 +426,10 @@
                 <button class="sub-tab-button" data-subtab="wartendeAktionen" onclick="window.switchSubTab('wartendeAktionen')">
                     <span class="tab-icon">🕐</span>
                     <span class="tab-label">Wartende Aktionen</span>
+                </button>
+                <button class="sub-tab-button" data-subtab="wiederkehrendeTermine" onclick="window.switchSubTab('wiederkehrendeTermine')">
+                    <span class="tab-icon">🔁</span>
+                    <span class="tab-label">Wiederkehrend</span>
                 </button>
             </div>
 
@@ -452,11 +527,14 @@
                             <div id="kalenderTage" class="kalender-tage">
                                 <!-- Tage werden dynamisch gefüllt -->
                             </div>
-                            <div class="kalender-footer" style="margin-top: 10px; display: flex; justify-content: center;">
+                            <div class="kalender-footer" style="margin-top: 10px; display: flex; justify-content: center; gap: 10px;">
                                 <button type="button" class="btn btn-primary" id="kalenderHeuteBtn" style="padding: 8px 20px;">📅 Heute</button>
+                                <button type="button" class="btn btn-quick" id="btnFreienSlotFinden" onclick="app.handleNaechsterSlot()" title="Nächsten freien Termin automatisch finden">🔍 Freien Slot finden</button>
                             </div>
                         </div>
                     </div>
+                    <!-- Slot-Vorschläge Dropdown -->
+                    <div id="slotVorschlaegeDropdown" class="slot-vorschlaege-dropdown" style="display:none;"></div>
 
                     <div id="terminAuslastungAnzeige" style="margin-bottom: 20px; padding: 15px; background: #f8f9fa; border-radius: 8px; border-left: 4px solid #4a90e2; display: none;">
                         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
@@ -539,6 +617,7 @@
                             <textarea id="arbeitEingabe" class="arbeiten-textarea" rows="5" placeholder="z.B.&#10;Ölwechsel&#10;Bremsen vorne&#10;Inspektion" required autocomplete="off"></textarea>
                             <div id="arbeitAutocomplete" class="autocomplete-dropdown"></div>
                             <datalist id="arbeitListe"></datalist>
+                            <div id="smartDefaultHinweis" class="smart-default-hinweis" style="display:none;"></div>
                             
                             <!-- KI-Vorschläge Bereich -->
                             <div id="kiVorschlaegeBereich" class="ki-vorschlaege-bereich ki-element" style="display: none;">
@@ -1171,6 +1250,39 @@
                     <h4>📋 Aktuelle wartende Aktionen</h4>
                     <div id="wartendeAktionenListe" class="wartende-liste">
                         <div class="loading">Lade wartende Aktionen...</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Wiederkehrende Termine Sub-Tab -->
+            <div id="wiederkehrendeTermine" class="sub-tab-content">
+                <div class="form-section">
+                    <h3>🔁 Wiederkehrende Termine</h3>
+                    <p style="color:#666;">Automatisch neu erstellte schwebende Termine nach festgelegtem Rhythmus.</p>
+
+                    <div style="display:flex; gap:10px; margin-bottom:20px;">
+                        <button class="btn btn-primary" onclick="app.showWiederkehrendModal()">➕ Neuer wiederkehrender Termin</button>
+                        <button class="btn btn-secondary" onclick="app.loadWiederkehrendeTermine()">🔄 Aktualisieren</button>
+                    </div>
+
+                    <div class="table-scroll-container">
+                        <table id="wiederkehrendeTable">
+                            <thead>
+                                <tr>
+                                    <th>Kunde</th>
+                                    <th>Kennzeichen</th>
+                                    <th>Arbeit</th>
+                                    <th>Zeit (Min.)</th>
+                                    <th>Rhythmus</th>
+                                    <th>Nächste Erstellung</th>
+                                    <th>Aktiv</th>
+                                    <th>Aktionen</th>
+                                </tr>
+                            </thead>
+                            <tbody id="wiederkehrendeTbody">
+                                <tr><td colspan="8" class="loading">Wird geladen...</td></tr>
+                            </tbody>
+                        </table>
                     </div>
                 </div>
             </div>
@@ -2320,6 +2432,10 @@
                     <span class="tab-icon">🖥️</span>
                     <span class="tab-label">Server / Info</span>
                 </button>
+                <button class="sub-tab-button" data-subtab="settingsAutomatisierung">
+                    <span class="tab-icon">🤖</span>
+                    <span class="tab-label">Automatisierung</span>
+                </button>
             </div>
 
             <div id="settingsServer" class="sub-tab-content active">
@@ -3110,6 +3226,60 @@
                             <span class="server-info-label">Server-URL</span>
                             <span class="server-info-value" id="sinfoServerUrl">--</span>
                         </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Automatisierungs-Tab -->
+            <div id="settingsAutomatisierung" class="sub-tab-content">
+                <h3>🤖 Automatisierung & KI-Features</h3>
+                <p>Steuern Sie, welche Automatisierungsfeatures aktiv sind.</p>
+
+                <div class="form-section" style="margin-bottom:20px;">
+                    <h4>Feature-Schalter</h4>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="checkbox-label">
+                                <input type="checkbox" id="autoSlotEnabled" onchange="app.saveAutomationSettings()">
+                                🔍 Auto-Slot (Nächsten freien Termin finden)
+                            </label>
+                        </div>
+                        <div class="form-group">
+                            <label class="checkbox-label">
+                                <input type="checkbox" id="pufferMLEnabled" onchange="app.saveAutomationSettings()">
+                                🧠 Puffer-ML (KI-basierte Zeitpuffer)
+                            </label>
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="checkbox-label">
+                                <input type="checkbox" id="slotNachfuellungEnabled" onchange="app.saveAutomationSettings()">
+                                🔄 Slot-Nachfüllung (Lücken nach Drag&amp;Drop füllen)
+                            </label>
+                        </div>
+                        <div class="form-group">
+                            <label class="checkbox-label">
+                                <input type="checkbox" id="duplikatErkennungEnabled" onchange="app.saveAutomationSettings()">
+                                🔁 Duplikat-Erkennung beim Anlegen
+                            </label>
+                        </div>
+                    </div>
+                    <button class="btn btn-primary" onclick="app.saveAutomationSettings()">💾 Einstellungen speichern</button>
+                </div>
+
+                <div class="form-section">
+                    <h4>📋 Automatisierungs-Protokoll</h4>
+                    <div style="display:flex; gap:10px; margin-bottom:10px;">
+                        <button class="btn btn-secondary btn-sm" onclick="app.loadAutomationLog()">🔄 Aktualisieren</button>
+                        <select id="autoLogLimit" style="padding:4px 8px; border-radius:4px; border:1px solid #ccc;">
+                            <option value="20">Letzte 20</option>
+                            <option value="50">Letzte 50</option>
+                            <option value="100">Letzte 100</option>
+                        </select>
+                    </div>
+                    <div id="automationLogListe" style="max-height:400px; overflow-y:auto;">
+                        <p class="hint">Klicken Sie auf "Aktualisieren" um das Protokoll zu laden.</p>
                     </div>
                 </div>
             </div>
