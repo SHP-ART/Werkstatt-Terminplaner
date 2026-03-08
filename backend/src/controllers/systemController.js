@@ -433,14 +433,16 @@ echo "=== UPDATE ABGESCHLOSSEN: $(date) ==="
         const bashScript = `
           echo "=== SHUTDOWN $(date) ===" >> "${log}" 2>&1
           echo "USER: $(whoami)" >> "${log}" 2>&1
-          # klibc/bin/poweroff verwendet direkten Syscall (kein D-Bus)
+          # setuid-Binary: direkt reboot(RB_POWER_OFF)-Syscall als root
+          if [ -x "/usr/local/bin/werkstatt-poweroff" ]; then
+            echo "using werkstatt-poweroff (setuid)" >> "${log}" 2>&1
+            /usr/local/bin/werkstatt-poweroff >> "${log}" 2>&1 && exit 0
+          fi
+          # Fallback: klibc статik-binary mit CAP_SYS_BOOT
           if [ -x "/usr/lib/klibc/bin/poweroff" ]; then
             echo "using klibc poweroff" >> "${log}" 2>&1
             /usr/lib/klibc/bin/poweroff >> "${log}" 2>&1 && exit 0
           fi
-          # Fallbacks
-          systemctl poweroff >> "${log}" 2>&1 || \\
-          shutdown -h now >> "${log}" 2>&1 || \\
           echo "FEHLER: kein Shutdown-Tool verfuegbar" >> "${log}" 2>&1
         `;
         const child = spawn('bash', ['-c', bashScript], { detached: true, stdio: 'ignore' });
