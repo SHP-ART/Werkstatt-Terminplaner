@@ -163,6 +163,13 @@ class ApiService {
   static async delete(endpoint) {
     return this.requestWithRetry(endpoint, { method: 'DELETE' });
   }
+
+  static async patch(endpoint, data) {
+    return this.requestWithRetry(endpoint, {
+      method: 'PATCH',
+      body: JSON.stringify(data)
+    });
+  }
 }
 
 class KundenService {
@@ -967,6 +974,15 @@ class AIService {
 
   static async getKiLernStatistiken() {
     return ApiService.get('/ai/ki-lern-statistiken');
+  }
+
+  static async getKiLernDaten(params = {}) {
+    const qs = new URLSearchParams(params).toString();
+    return ApiService.get('/ai/ki-lern-daten' + (qs ? '?' + qs : ''));
+  }
+
+  static async patchKiLernDatenExclude(id, exclude) {
+    return ApiService.patch(`/ai/ki-lern-daten/${id}/exclude`, { exclude });
   }
 }
 

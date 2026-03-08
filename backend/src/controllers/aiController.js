@@ -1369,6 +1369,73 @@ async function getKiLernStatistiken(req, res) {
 }
 
 /**
+ * GET /api/ai/ki-lern-daten
+ * Gibt alle Lerndatensätze zurück (mit Filter + Paginierung)
+ * Query-Parameter: kategorie, arbeit, limit (default 100), offset (default 0)
+ */
+async function getKiLernDaten(req, res) {
+  try {
+    const { allAsync } = require('../config/database');
+    const limit  = Math.min(parseInt(req.query.limit  || '100'), 500);
+    const offset = parseInt(req.query.offset || '0');
+    const kat    = (req.query.kategorie || '').trim();
+    const arbeit = (req.query.arbeit    || '').trim();
+
+    const where  = [];
+    const params = [];
+    if (kat)    { where.push('kategorie LIKE ?');   params.push(`%${kat}%`); }
+    if (arbeit) { where.push('arbeit LIKE ?');       params.push(`%${arbeit}%`); }
+    const cond = where.length ? 'WHERE ' + where.join(' AND ') : '';
+
+    const rows = await allAsync(
+      `SELECT id, termin_id, arbeit, kategorie, geschaetzte_min, tatsaechliche_min,
+              abweichung_prozent, mitarbeiter_id, datum, exclude, erstellt_am
+       FROM ki_zeitlern_daten
+       ${cond}
+       ORDER BY erstellt_am DESC
+       LIMIT ? OFFSET ?`,
+      [...params, limit, offset]
+    );
+    const total = await allAsync(
+      `SELECT COUNT(*) as n FROM ki_zeitlern_daten ${cond}`,
+      params
+    );
+    const kategorien = await allAsync(
+      `SELECT DISTINCT kategorie FROM ki_zeitlern_daten ORDER BY kategorie`
+    );
+    res.json({
+      success: true,
+      total: total[0]?.n || 0,
+      limit,
+      offset,
+      rows,
+      kategorien: kategorien.map(k => k.kategorie)
+    });
+  } catch (err) {
+    console.error('Fehler bei getKiLernDaten:', err);
+    res.status(500).json({ error: err.message });
+  }
+}
+
+/**
+ * PATCH /api/ai/ki-lern-daten/:id/exclude
+ * Einen Lerndatensatz als fehlerhaft markieren (exclude=1) oder wieder einschließen (exclude=0)
+ */
+async function patchKiLernDatenExclude(req, res) {
+  try {
+    const { runAsync } = require('../config/database');
+    const id      = parseInt(req.params.id);
+    const exclude = req.body.exclude ? 1 : 0;
+    if (!id) return res.status(400).json({ error: 'Ungültige ID' });
+    await runAsync(`UPDATE ki_zeitlern_daten SET exclude = ? WHERE id = ?`, [exclude, id]);
+    res.json({ success: true, id, exclude });
+  } catch (err) {
+    console.error('Fehler bei patchKiLernDatenExclude:', err);
+    res.status(500).json({ error: err.message });
+  }
+}
+
+/**
  * GET /api/ai/puffer-empfehlung?arbeit=...
  * Gibt die empfohlene ML-basierte Pufferzeit für eine Arbeitsart zurück
  */
@@ -1451,5 +1518,7 @@ module.exports = {
   getPufferEmpfehlung,
   checkDuplikatArbeiten,
   getAutomationLog,
-  getKiLernStatistiken
+  getKiLernStatistiken,
+  getKiLernDaten,
+  patchKiLernDatenExclude
 };

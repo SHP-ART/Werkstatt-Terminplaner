@@ -3073,6 +3073,7 @@ class App {
 
     if (subTabName === 'settingsAutomatisierung') {
       this.loadAutomationSettings();
+      this.loadKiLernStatistiken();
     }
 
     if (subTabName === 'teileStatus') {
@@ -31142,10 +31143,10 @@ class App {
         const farbe = genauigkeit >= 80 ? '#27ae60' : genauigkeit >= 60 ? '#e67e22' : '#e74c3c';
         return `<tr>
           <td><strong>${this._escapeHtml(k.kategorie || '–')}</strong></td>
-          <td>${k.datenpunkte}</td>
-          <td>${Math.round(k.avg_geschaetzt || 0)} min</td>
-          <td>${Math.round(k.avg_tatsaechlich || 0)} min</td>
-          <td style="color:${k.avg_abweichung_pct > 0 ? '#e74c3c' : '#27ae60'}">
+          <td style="text-align:center;">${k.datenpunkte}</td>
+          <td style="text-align:center;">${Math.round(k.avg_geschaetzt || 0)} min</td>
+          <td style="text-align:center;">${Math.round(k.avg_tatsaechlich || 0)} min</td>
+          <td style="text-align:center;color:${k.avg_abweichung_pct > 0 ? '#e74c3c' : '#27ae60'}">
             ${k.avg_abweichung_pct > 0 ? '+' : ''}${Math.round(k.avg_abweichung_pct || 0)}%
           </td>
           <td>
@@ -31158,48 +31159,123 @@ class App {
           </td>
         </tr>`;
       }).join('');
+
       container.innerHTML = `
         <div style="margin-bottom:12px;">
           <strong>📊 Gesamt: ${data.gesamt_datenpunkte} Lerndatenpunkte</strong>
           <span style="color:#666;font-size:0.85em;"> – aus abgeschlossenen Terminen</span>
         </div>
-        <table style="width:100%;border-collapse:collapse;font-size:0.9em;">
+        <table style="width:100%;border-collapse:collapse;font-size:0.9em;margin-bottom:16px;">
           <thead>
             <tr style="background:#f5f5f5;text-align:left;">
               <th style="padding:6px 8px;">Kategorie</th>
-              <th style="padding:6px 8px;">Daten&shy;punkte</th>
-              <th style="padding:6px 8px;">Ø Geschätzt</th>
-              <th style="padding:6px 8px;">Ø Tatsächlich</th>
-              <th style="padding:6px 8px;">Ø Abweichung</th>
+              <th style="padding:6px 8px;text-align:center;">Datenpunkte</th>
+              <th style="padding:6px 8px;text-align:center;">Ø Geschätzt</th>
+              <th style="padding:6px 8px;text-align:center;">Ø Tatsächlich</th>
+              <th style="padding:6px 8px;text-align:center;">Ø Abweichung</th>
               <th style="padding:6px 8px;min-width:120px;">Genauigkeit</th>
             </tr>
           </thead>
           <tbody>${katRows}</tbody>
         </table>
-        ${(data.neueste || []).length > 0 ? `
-        <details style="margin-top:14px;">
-          <summary style="cursor:pointer;color:#4a90e2;">Neueste Lerndaten anzeigen (${data.neueste.length})</summary>
-          <table style="width:100%;border-collapse:collapse;font-size:0.85em;margin-top:8px;">
-            <thead><tr style="background:#f5f5f5;">
-              <th style="padding:4px 6px;">Arbeit</th><th style="padding:4px 6px;">Kat.</th>
-              <th style="padding:4px 6px;">Geschätzt</th><th style="padding:4px 6px;">Tatsächlich</th>
-              <th style="padding:4px 6px;">Abw.</th><th style="padding:4px 6px;">Datum</th>
-            </tr></thead>
-            <tbody>${data.neueste.map(r => `<tr>
-              <td style="padding:3px 6px;">${this._escapeHtml(r.arbeit)}</td>
-              <td style="padding:3px 6px;color:#888;">${r.kategorie || '–'}</td>
-              <td style="padding:3px 6px;">${r.geschaetzte_min} min</td>
-              <td style="padding:3px 6px;">${r.tatsaechliche_min} min</td>
-              <td style="padding:3px 6px;color:${r.abweichung_prozent > 0 ? '#e74c3c' : '#27ae60'};">
-                ${r.abweichung_prozent > 0 ? '+' : ''}${Math.round(r.abweichung_prozent || 0)}%
-              </td>
-              <td style="padding:3px 6px;color:#888;">${r.datum}</td>
-            </tr>`).join('')}</tbody>
-          </table>
-        </details>` : ''}
+        <div style="border-top:1px solid #eee;padding-top:14px;">
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:10px;">
+            <strong>📋 Alle Lerndaten</strong>
+            <input type="text" id="kiLernSuche" placeholder="Arbeit suchen..." style="padding:4px 8px;border:1px solid #ccc;border-radius:4px;flex:1;min-width:140px;" oninput="app._kiLernDatenLaden()">
+            <select id="kiLernKatFilter" style="padding:4px 8px;border:1px solid #ccc;border-radius:4px;" onchange="app._kiLernDatenLaden()">
+              <option value="">Alle Kategorien</option>
+            </select>
+            <button class="btn btn-secondary btn-sm" onclick="app._kiLernDatenLaden()">🔄</button>
+          </div>
+          <div id="kiLernDatenTabelle"><p class="hint">Lädt...</p></div>
+        </div>
       `;
+      // Daten laden
+      await this._kiLernDatenLaden();
     } catch (err) {
       container.innerHTML = `<p class="hint" style="color:red;">Fehler: ${err.message}</p>`;
+    }
+  }
+
+  async _kiLernDatenLaden(offset = 0) {
+    const tabelle = document.getElementById('kiLernDatenTabelle');
+    if (!tabelle) return;
+    const arbeit = document.getElementById('kiLernSuche')?.value || '';
+    const kat    = document.getElementById('kiLernKatFilter')?.value || '';
+    tabelle.innerHTML = '<p class="hint">Lädt...</p>';
+    try {
+      const data = await window.AIService.getKiLernDaten({ arbeit, kategorie: kat, limit: 100, offset });
+      // Kategorien-Dropdown befüllen (nur einmalig)
+      const katSelect = document.getElementById('kiLernKatFilter');
+      if (katSelect && data.kategorien && katSelect.options.length <= 1) {
+        data.kategorien.forEach(k => {
+          const o = document.createElement('option');
+          o.value = k; o.textContent = k;
+          if (k === kat) o.selected = true;
+          katSelect.appendChild(o);
+        });
+      }
+      if (!data.rows || data.rows.length === 0) {
+        tabelle.innerHTML = '<p class="hint">Keine Einträge gefunden.</p>';
+        return;
+      }
+      const rows = data.rows.map(r => {
+        const abw = Math.round(r.abweichung_prozent || 0);
+        const excBtnLabel = r.exclude ? '✅ Einschließen' : '❌ Ausschließen';
+        const excBtnClr   = r.exclude ? '#27ae60' : '#e74c3c';
+        const rowStyle    = r.exclude ? 'opacity:0.45;' : '';
+        return `<tr style="${rowStyle}">
+          <td style="padding:3px 6px;">${this._escapeHtml(r.arbeit)}</td>
+          <td style="padding:3px 6px;color:#888;">${r.kategorie || '–'}</td>
+          <td style="padding:3px 6px;text-align:center;">${r.geschaetzte_min} min</td>
+          <td style="padding:3px 6px;text-align:center;">${r.tatsaechliche_min} min</td>
+          <td style="padding:3px 6px;text-align:center;color:${abw > 0 ? '#e74c3c' : '#27ae60'};">
+            ${abw > 0 ? '+' : ''}${abw}%
+          </td>
+          <td style="padding:3px 6px;color:#888;">${r.datum || ''}</td>
+          <td style="padding:3px 6px;">
+            <button style="font-size:0.75em;padding:2px 6px;border:1px solid ${excBtnClr};color:${excBtnClr};background:transparent;border-radius:3px;cursor:pointer;"
+              onclick="app._kiLernExclude(${r.id}, ${r.exclude ? 0 : 1})">${excBtnLabel}</button>
+          </td>
+        </tr>`;
+      }).join('');
+      const showingFrom = offset + 1;
+      const showingTo   = offset + data.rows.length;
+      tabelle.innerHTML = `
+        <div style="font-size:0.85em;color:#666;margin-bottom:6px;">
+          Zeige ${showingFrom}–${showingTo} von ${data.total} Einträgen
+          ${data.total > 100 ? `
+            <button class="btn btn-secondary btn-sm" style="margin-left:8px;" ${offset === 0 ? 'disabled' : ''}
+              onclick="app._kiLernDatenLaden(${Math.max(0, offset - 100)})">◀ Zurück</button>
+            <button class="btn btn-secondary btn-sm" ${showingTo >= data.total ? 'disabled' : ''}
+              onclick="app._kiLernDatenLaden(${offset + 100})">Weiter ▶</button>
+          ` : ''}
+        </div>
+        <div style="overflow-x:auto;">
+          <table style="width:100%;border-collapse:collapse;font-size:0.85em;">
+            <thead><tr style="background:#f5f5f5;">
+              <th style="padding:4px 6px;text-align:left;">Arbeit</th>
+              <th style="padding:4px 6px;text-align:left;">Kategorie</th>
+              <th style="padding:4px 6px;text-align:center;">Geschätzt</th>
+              <th style="padding:4px 6px;text-align:center;">Tatsächlich</th>
+              <th style="padding:4px 6px;text-align:center;">Abweichung</th>
+              <th style="padding:4px 6px;text-align:left;">Datum</th>
+              <th style="padding:4px 6px;"></th>
+            </tr></thead>
+            <tbody>${rows}</tbody>
+          </table>
+        </div>`;
+    } catch (err) {
+      tabelle.innerHTML = `<p class="hint" style="color:red;">Fehler: ${err.message}</p>`;
+    }
+  }
+
+  async _kiLernExclude(id, exclude) {
+    try {
+      await window.AIService.patchKiLernDatenExclude(id, exclude);
+      await this._kiLernDatenLaden();
+    } catch (err) {
+      this.showToast('Fehler: ' + err.message, 'error');
     }
   }
 

@@ -202,6 +202,8 @@ router.get('/puffer-empfehlung', aiController.getPufferEmpfehlung);
 router.post('/check-duplikate', aiController.checkDuplikatArbeiten);
 router.get('/automation-log', aiController.getAutomationLog);
 router.get('/ki-lern-statistiken', aiController.getKiLernStatistiken);
+router.get('/ki-lern-daten', aiController.getKiLernDaten);
+router.patch('/ki-lern-daten/:id/exclude', aiController.patchKiLernDatenExclude);
 
 /**
  * POST /api/ai/training-data/:id/exclude
