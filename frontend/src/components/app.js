@@ -496,6 +496,13 @@ class App {
         this._setTextIfExists('sinfoArch', info.arch || '--');
         this._setTextIfExists('sinfoNodeVersion', info.nodeVersion || '--');
         this._setTextIfExists('sinfoAppVersion', info.version || '--');
+        // Verbindungs-Info Box
+        const ip = info.ip || '--';
+        const port = info.port || 3001;
+        const ipEl = document.getElementById('sinfoLocalIp');
+        const urlEl = document.getElementById('sinfoFrontendUrl');
+        if (ipEl) ipEl.textContent = ip;
+        if (urlEl) urlEl.textContent = `http://${ip}:${port}`;
       }
 
       // System-Stats

@@ -3109,6 +3109,29 @@
                 <h3>🖥️ Server-Informationen</h3>
                 <p>Systemübersicht, Auslastung und Versionsinformationen des Servers.</p>
 
+                <!-- Verbindungs-Info Box -->
+                <div class="form-section" style="margin-bottom: 25px; background: #e8f5e9; border: 2px solid #4caf50; border-radius: 10px; padding: 18px 22px;">
+                    <h3 style="color: #2e7d32; margin-bottom: 12px;">🌐 Netzwerk-Verbindung</h3>
+                    <p style="margin-bottom: 14px; color: #555; font-size: 0.92em;">Geben Sie diese Adresse in der Tablet- oder Windows-App ein, um eine Verbindung herzustellen.</p>
+                    <div style="display: flex; flex-wrap: wrap; gap: 12px; align-items: stretch;">
+                        <div style="flex: 1; min-width: 220px; background: white; border-radius: 8px; padding: 14px 18px; border: 1px solid #c8e6c9;">
+                            <div style="font-size: 0.78em; font-weight: 700; color: #4caf50; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 6px;">📡 IP-Adresse (Lokales Netz)</div>
+                            <div id="sinfoLocalIp" style="font-size: 1.5em; font-weight: 700; color: #1a237e; font-family: monospace; letter-spacing: 0.04em;">wird geladen...</div>
+                            <div style="font-size: 0.82em; color: #777; margin-top: 4px;">Port: <strong>3001</strong></div>
+                        </div>
+                        <div style="flex: 1; min-width: 220px; background: white; border-radius: 8px; padding: 14px 18px; border: 1px solid #c8e6c9;">
+                            <div style="font-size: 0.78em; font-weight: 700; color: #4caf50; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 6px;">🔗 Vollständige URL</div>
+                            <div id="sinfoFrontendUrl" style="font-size: 1.1em; font-weight: 700; color: #1a237e; font-family: monospace; word-break: break-all;">wird geladen...</div>
+                            <button onclick="navigator.clipboard?.writeText(document.getElementById('sinfoFrontendUrl').textContent).then(()=>{this.textContent='✅ Kopiert!';setTimeout(()=>this.textContent='📋 Kopieren',1500)})" style="margin-top: 8px; padding: 4px 12px; border: 1px solid #4caf50; border-radius: 6px; background: none; color: #2e7d32; cursor: pointer; font-size: 0.85em;">📋 Kopieren</button>
+                        </div>
+                        <div style="flex: 1; min-width: 220px; background: white; border-radius: 8px; padding: 14px 18px; border: 1px solid #c8e6c9;">
+                            <div style="font-size: 0.78em; font-weight: 700; color: #4caf50; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 6px;">🏠 mDNS (lokales Netz)</div>
+                            <div style="font-size: 1.1em; font-weight: 700; color: #1a237e; font-family: monospace;">werkstatt-planer.local:3001</div>
+                            <div style="font-size: 0.82em; color: #777; margin-top: 4px;">Funktioniert ohne IP-Kenntnis</div>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- Server-Info Karten -->
                 <div class="form-section" style="margin-bottom: 25px;">
                     <h3>📊 Allgemein</h3>
