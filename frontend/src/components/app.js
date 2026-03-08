@@ -2401,7 +2401,7 @@ class App {
     }
   }
 
-  updateEditZeitschaetzung() {
+  async updateEditZeitschaetzung() {
     const arbeitText = document.getElementById('edit_arbeitEingabe').value.trim();
     const anzeige = document.getElementById('editZeitschaetzungAnzeige');
     const wertEl = document.getElementById('editZeitschaetzungWert');
@@ -2433,13 +2433,28 @@ class App {
         details.push(`⚠️ ${arbeit}: keine Standardzeit`);
       }
     });
+
+    // 🧠 Puffer-ML: KI-basierten Puffer abfragen wenn aktiviert
+    const pufferMLAktiv = document.getElementById('pufferMLEnabled')?.checked;
+    let mlPufferMinuten = 0;
+    if (pufferMLAktiv && gesamtMinuten > 0 && arbeitText.length > 2) {
+      try {
+        const empfehlung = await window.AIService.getPufferEmpfehlung(arbeitText);
+        if (empfehlung && empfehlung.puffer_minuten > 0) {
+          mlPufferMinuten = empfehlung.puffer_minuten;
+          const basis = empfehlung.basis === 'ML' ? '🧠 ML' : '📊 Standard';
+          details.push(`+Puffer (${basis}): +${mlPufferMinuten} min`);
+        }
+      } catch (e) { /* Puffer-Abfrage nicht kritisch */ }
+    }
     
     // Formatiere die Gesamtzeit
-    const gesamtStunden = Math.floor(gesamtMinuten / 60);
-    const gesamtRestMinuten = gesamtMinuten % 60;
+    const gesamtMitPuffer = gesamtMinuten + mlPufferMinuten;
+    const gesamtStunden = Math.floor(gesamtMitPuffer / 60);
+    const gesamtRestMinuten = gesamtMitPuffer % 60;
     let gesamtZeitStr = '';
     
-    if (gesamtMinuten === 0) {
+    if (gesamtMitPuffer === 0) {
       gesamtZeitStr = 'Keine Standardzeiten';
     } else if (gesamtStunden > 0 && gesamtRestMinuten > 0) {
       gesamtZeitStr = `${gesamtStunden} h ${gesamtRestMinuten} min`;
@@ -3982,7 +3997,7 @@ class App {
     await this.loadTermine();
   }
 
-  updateZeitschaetzung() {
+  async updateZeitschaetzung() {
     const arbeitEingabe = document.getElementById('arbeitEingabe');
     const zeitschaetzungAnzeige = document.getElementById('zeitschaetzungAnzeige');
     const zeitschaetzungWert = document.getElementById('zeitschaetzungWert');
@@ -4058,13 +4073,28 @@ class App {
         details.push(`⚠️ ${arbeit}: <em>keine Standardzeit hinterlegt</em>`);
       }
     });
+
+    // 🧠 Puffer-ML: KI-basierten Puffer abfragen wenn aktiviert
+    const pufferMLAktiv = document.getElementById('pufferMLEnabled')?.checked;
+    let mlPufferMinuten = 0;
+    if (pufferMLAktiv && gesamtMinuten > 0 && eingabe.length > 2) {
+      try {
+        const empfehlung = await window.AIService.getPufferEmpfehlung(eingabe);
+        if (empfehlung && empfehlung.puffer_minuten > 0) {
+          mlPufferMinuten = empfehlung.puffer_minuten;
+          const basis = empfehlung.basis === 'ML' ? '🧠 ML' : '📊 Standard';
+          details.push(`+ Puffer (${basis}, ${empfehlung.kategorie}): <strong>+${mlPufferMinuten} min</strong>`);
+        }
+      } catch (e) { /* Puffer-Abfrage nicht kritisch */ }
+    }
     
     // Formatiere die Gesamtzeit in Stunden und Minuten
-    const gesamtStunden = Math.floor(gesamtMinuten / 60);
-    const gesamtRestMinuten = gesamtMinuten % 60;
+    const gesamtMitPuffer = gesamtMinuten + mlPufferMinuten;
+    const gesamtStunden = Math.floor(gesamtMitPuffer / 60);
+    const gesamtRestMinuten = gesamtMitPuffer % 60;
     let gesamtZeitStr = '';
     
-    if (gesamtMinuten === 0) {
+    if (gesamtMitPuffer === 0) {
       gesamtZeitStr = '0 min';
     } else if (gesamtStunden === 0) {
       gesamtZeitStr = `${gesamtRestMinuten} min`;
@@ -4075,7 +4105,7 @@ class App {
     }
     
     // Zeige auch Dezimalstunden für bessere Übersicht
-    const dezimalStunden = (gesamtMinuten / 60).toFixed(2);
+    const dezimalStunden = (gesamtMitPuffer / 60).toFixed(2);
     gesamtZeitStr += ` (${dezimalStunden} h)`;
     
     // Aktualisiere die Anzeige
@@ -4084,11 +4114,11 @@ class App {
     zeitschaetzungDetails.innerHTML = details.join('<br>');
     
     // Färbe die Gesamtzeit je nach Dauer
-    if (gesamtMinuten === 0) {
+    if (gesamtMitPuffer === 0) {
       zeitschaetzungWert.style.color = '#999';
-    } else if (gesamtMinuten <= 60) {
+    } else if (gesamtMitPuffer <= 60) {
       zeitschaetzungWert.style.color = '#27ae60'; // Grün - kurz
-    } else if (gesamtMinuten <= 180) {
+    } else if (gesamtMitPuffer <= 180) {
       zeitschaetzungWert.style.color = '#4a90e2'; // Blau - mittel
     } else {
       zeitschaetzungWert.style.color = '#e67e22'; // Orange - lang
