@@ -30138,9 +30138,11 @@ class App {
         abwHtml = tageAbw.map(a => `<div class="kalender-abwesenheit-bar" style="padding:4px 8px;font-size:0.72em;">${a.grund === 'Urlaub' ? '🏖️' : a.grund === 'Krank' ? '🤒' : '📋'} ${a.person_name || ''}</div>`).join('');
       }
 
+      const istVergangen = datumStr < new Date().toISOString().split('T')[0] && !istHeute;
+
       return `
-        <div class="kalender-wochen-tag${istHeute ? ' ist-heute' : ''}">
-          <div class="kalender-wochen-tag-header${istHeute ? ' ist-heute' : ''}" data-datum="${datumStr}">
+        <div class="kalender-wochen-tag${istHeute ? ' ist-heute' : ''}${istVergangen ? ' ist-vergangen' : ''}">
+          <div class="kalender-wochen-tag-header${istHeute ? ' ist-heute' : ''}${istVergangen ? ' ist-vergangen' : ''}" data-datum="${datumStr}">
             <span class="wt-name">${wt[i]}</span>
             <span class="wt-datum">${tag.getDate()}.${tag.getMonth()+1}.</span>
             <span class="wt-count">${tageTermine.length} Termin${tageTermine.length !== 1 ? 'e' : ''}</span>
@@ -30354,8 +30356,10 @@ class App {
       }).join('');
       const mehrAnzahl = tageTermine.length > 3 ? `<div class="mz-mehr">+${tageTermine.length - 3} weitere</div>` : '';
 
+      const istVergangen = datumStr < new Date().toISOString().split('T')[0] && !istHeute;
+
       html += `
-        <div class="kalender-monat-zelle${istHeute ? ' ist-heute' : ''}${!istAktuellerMonat ? ' anderer-monat' : ''}" data-datum="${datumStr}">
+        <div class="kalender-monat-zelle${istHeute ? ' ist-heute' : ''}${!istAktuellerMonat ? ' anderer-monat' : ''}${istVergangen ? ' ist-vergangen' : ''}" data-datum="${datumStr}">
           <div class="mz-datum">
             <span class="mz-tag">${cursor.getDate()}</span>
             <button class="mz-neu-btn" data-datum="${datumStr}" title="Neuer Termin">+</button>

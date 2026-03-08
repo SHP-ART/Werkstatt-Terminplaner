@@ -14987,6 +14987,43 @@ body.intern-tablet-mode-active #intern {
     opacity: 0.5;
 }
 
+/* Vergangene Tage leicht ausgrauen */
+.kalender-monat-zelle.ist-vergangen {
+    background: #f5f5f5;
+    color: #aaa;
+}
+
+.kalender-monat-zelle.ist-vergangen .mz-datum {
+    color: #bbb;
+}
+
+.kalender-monat-zelle.ist-vergangen .mz-termin-mini {
+    opacity: 0.55;
+}
+
+.kalender-monat-zelle.ist-vergangen .mz-auslastung-bar {
+    filter: grayscale(60%);
+    opacity: 0.6;
+}
+
+.kalender-wochen-tag.ist-vergangen {
+    background: #f7f7f7;
+}
+
+.kalender-wochen-tag-header.ist-vergangen {
+    background: #8e9aaa;
+    opacity: 0.85;
+}
+
+.kalender-wochen-tag.ist-vergangen .kalender-woche-termin-block {
+    filter: grayscale(40%);
+    opacity: 0.7;
+}
+
+.kalender-wochen-tag.ist-vergangen .kalender-woche-liste-termin {
+    opacity: 0.6;
+}
+
 .kalender-monat-zelle .mz-datum {
     font-weight: 600;
     font-size: 0.85em;
