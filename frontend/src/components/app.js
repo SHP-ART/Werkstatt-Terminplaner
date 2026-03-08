@@ -29655,13 +29655,15 @@ class App {
       });
     });
 
-    // Sub-Tab-Wechsel tracken
+    // Sub-Tab-Wechsel: Ansicht laden und auf heute springen
     kalenderContainer.querySelectorAll('.kalender-sub-tabs .sub-tab-button').forEach(btn => {
       btn.addEventListener('click', () => {
         const subTab = btn.dataset.subtab;
         if (subTab) {
           this.kalenderState.activeSubTab = subTab;
+          this.kalenderState.datum = this.getToday();
           this.updateKalenderDatumDisplay();
+          this.kalenderLoadActiveSubTab(subTab);
         }
       });
     });
