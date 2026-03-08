@@ -2921,6 +2921,48 @@ tr:hover {
     cursor: pointer;
 }
 
+/* Schnell-Eingabe Bring-/Abholzeit in Termin-Details */
+.detail-zeit-input-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 2px;
+}
+
+.detail-zeit-input {
+    flex: 1;
+    padding: 5px 8px;
+    border: 1px solid #ced4da;
+    border-radius: 6px;
+    font-size: 0.95em;
+    background: white;
+    cursor: pointer;
+    color: #343a40;
+}
+
+.detail-zeit-input:focus {
+    outline: none;
+    border-color: var(--accent);
+    box-shadow: 0 0 0 2px rgba(210, 20, 44, 0.1);
+}
+
+.btn-detail-zeit-save {
+    background: #f0f0f0;
+    border: 1px solid #ced4da;
+    border-radius: 6px;
+    padding: 5px 8px;
+    cursor: pointer;
+    font-size: 1em;
+    line-height: 1;
+    transition: background 0.15s;
+    flex-shrink: 0;
+}
+
+.btn-detail-zeit-save:hover {
+    background: #e2e6ea;
+}
+
+
 .detail-select:focus {
     outline: none;
     border-color: var(--accent);

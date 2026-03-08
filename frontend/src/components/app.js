@@ -6883,7 +6883,10 @@ class App {
           </div>
           <div class="detail-item">
             <span class="detail-label">Bringzeit</span>
-            <span class="detail-value">${termin.bring_zeit || '-'}</span>
+            <div class="detail-zeit-input-row">
+              <input type="time" id="detailBringzeit" value="${termin.bring_zeit || ''}" class="detail-zeit-input" placeholder="--:--">
+              <button class="btn-detail-zeit-save" onclick="app.updateTerminZeiten(${termin.id})" title="Speichern">💾</button>
+            </div>
           </div>
           <div class="detail-item">
             <span class="detail-label">Fertig ca.</span>
@@ -6891,7 +6894,10 @@ class App {
           </div>
           <div class="detail-item">
             <span class="detail-label">Abholzeit</span>
-            <span class="detail-value">${termin.abholung_zeit || '-'}</span>
+            <div class="detail-zeit-input-row">
+              <input type="time" id="detailAbholzeit" value="${termin.abholung_zeit || ''}" class="detail-zeit-input" placeholder="--:--">
+              <button class="btn-detail-zeit-save" onclick="app.updateTerminZeiten(${termin.id})" title="Speichern">💾</button>
+            </div>
           </div>
           <div class="detail-item">
             <span class="detail-label">Kontakt</span>
@@ -6931,6 +6937,33 @@ class App {
     this.updateSchwebendButton(termin.ist_schwebend);
 
     document.getElementById('terminDetailsModal').style.display = 'block';
+  }
+
+  async updateTerminZeiten(terminId) {
+    const bringzeit = document.getElementById('detailBringzeit')?.value || null;
+    const abholzeit = document.getElementById('detailAbholzeit')?.value || null;
+    try {
+      await TermineService.update(terminId, {
+        bring_zeit: bringzeit || null,
+        abholung_zeit: abholzeit || null
+      });
+      // Termin im Cache aktualisieren
+      if (this.termineById[terminId]) {
+        this.termineById[terminId].bring_zeit = bringzeit;
+        this.termineById[terminId].abholung_zeit = abholzeit;
+      }
+      // Kurzes visuelles Feedback
+      document.querySelectorAll('.btn-detail-zeit-save').forEach(btn => {
+        const orig = btn.textContent;
+        btn.textContent = '✅';
+        btn.style.color = '#28a745';
+        setTimeout(() => { btn.textContent = orig; btn.style.color = ''; }, 1500);
+      });
+      await this.loadTermine();
+    } catch (err) {
+      console.error('Fehler beim Speichern der Zeiten:', err);
+      alert('Fehler beim Speichern der Zeiten.');
+    }
   }
 
   async updateTerminMitarbeiter(terminId) {
