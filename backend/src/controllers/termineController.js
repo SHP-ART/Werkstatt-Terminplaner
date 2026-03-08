@@ -2341,7 +2341,7 @@ class TermineController {
       let abDatum = req.query.ab_datum || new Date().toISOString().split('T')[0];
 
       const einstellungen = await EinstellungenModel.getWerkstatt();
-      const pufferzeit = einstellungen.pufferzeit_minuten || 15;
+      const pufferzeit = einstellungen.dynamischer_puffer_enabled ? (einstellungen.pufferzeit_minuten || 15) : 0;
       const benoetigt = geschaetzteZeit + pufferzeit;
       const tagStart = 8 * 60; // 08:00
       const tagEnde = 18 * 60; // 18:00

@@ -4821,7 +4821,8 @@ class App {
     }
 
     try {
-      // Prüfe auf Duplikate (gleicher Kunde am gleichen Tag)
+      // Prüfe auf Duplikate (gleicher Kunde am gleichen Tag) – nur wenn Duplikat-Erkennung aktiviert
+      if (document.getElementById('duplikatErkennungEnabled')?.checked !== false) {
       const duplikatCheck = await TermineService.checkDuplikate(
         termin.datum,
         resolvedKundeId,
@@ -4847,6 +4848,7 @@ class App {
           return;
         }
       }
+      } // Ende Duplikat-Erkennung Guard
 
       // Validiere Termin vor dem Erstellen
       const validation = await TermineService.validate({
@@ -31114,6 +31116,9 @@ class App {
       set('slotNachfuellungEnabled', settings.slot_nachfuellung_enabled);
       set('duplikatErkennungEnabled', settings.duplikat_erkennung_enabled);
       set('autoSlotEnabled', settings.auto_slot_enabled);
+      // Auto-Slot Button sichtbarkeit steuern
+      const slotBtn = document.getElementById('btnFreienSlotFinden');
+      if (slotBtn) slotBtn.style.display = (settings.auto_slot_enabled === 0 || settings.auto_slot_enabled === '0') ? 'none' : '';
     } catch (e) {
       console.warn('Automation-Einstellungen konnte nicht geladen werden:', e);
     }
@@ -31128,6 +31133,9 @@ class App {
     };
     try {
       await window.EinstellungenService.updateWerkstatt(settings);
+      // Auto-Slot Button sichtbarkeit direkt aktualisieren
+      const slotBtn = document.getElementById('btnFreienSlotFinden');
+      if (slotBtn) slotBtn.style.display = settings.auto_slot_enabled ? '' : 'none';
       this.showToast('Automatisierungs-Einstellungen gespeichert', 'success');
     } catch (err) {
       this.showToast('Fehler beim Speichern: ' + err.message, 'error');
@@ -31377,6 +31385,8 @@ class App {
   // A4 – SLOT-NACHFÜLLUNG nach Drag&Drop
   // =========================================================================
   async _pruefeSlotNachfuellung() {
+    // Guard: nur wenn Slot-Nachfüllung aktiviert
+    if (!document.getElementById('slotNachfuellungEnabled')?.checked) return;
     // Ermittle aktuelles Planungsdatum aus dem Drag&Drop-State
     const datumEl = document.getElementById('planungDatumInput') || document.getElementById('auslastungDatum');
     const datum = datumEl?.value || this.formatDateLocal(new Date());
