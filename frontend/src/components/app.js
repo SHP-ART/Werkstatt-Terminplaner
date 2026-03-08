@@ -547,6 +547,13 @@ class App {
         buildBtn.addEventListener('click', () => this._buildFrontend());
       }
 
+      // Shutdown-Button binden
+      const shutdownBtn = document.getElementById('triggerShutdownBtn');
+      if (shutdownBtn && !shutdownBtn.dataset.bound) {
+        shutdownBtn.dataset.bound = 'true';
+        shutdownBtn.addEventListener('click', () => this._triggerServerShutdown());
+      }
+
       // Update-Status prüfen
       window._checkUpdateStatus = () => this._checkUpdateStatus();
       this._checkUpdateStatus();
@@ -26019,6 +26026,27 @@ class App {
       }
     } finally {
       if (btn) { btn.disabled = false; btn.textContent = '🔨 Frontend neu bauen'; }
+    }
+  }
+
+  async _triggerServerShutdown() {
+    const btn = document.getElementById('triggerShutdownBtn');
+    const statusBox = document.getElementById('updateStatusInfo');
+    if (!confirm('⚠️ Server wirklich herunterfahren?\n\nDer Server wird NICHT automatisch neu starten!\nEin manueller Start am Server ist nötig.')) return;
+
+    if (btn) { btn.disabled = true; btn.textContent = '⏳ Herunterfahren...'; }
+    try {
+      await SystemService.shutdownServer();
+      if (statusBox) {
+        statusBox.style.cssText = 'display:block; background:#ffebee; border:1px solid #ef9a9a; color:#b71c1c; margin-top:12px; padding:10px 14px; border-radius:6px; font-size:0.9em;';
+        statusBox.textContent = '🔴 Server wird heruntergefahren – diese Seite ist in Kürze nicht mehr erreichbar.';
+      }
+    } catch (err) {
+      if (statusBox) {
+        statusBox.style.cssText = 'display:block; background:#ffebee; border:1px solid #ef9a9a; color:#b71c1c; margin-top:12px; padding:10px 14px; border-radius:6px; font-size:0.9em;';
+        statusBox.textContent = '❌ ' + err.message;
+      }
+      if (btn) { btn.disabled = false; btn.textContent = '🔴 Server herunterfahren'; }
     }
   }
 

@@ -1184,6 +1184,9 @@ class SystemService {
   static async restartService() {
     return ApiService.post('/system/restart', {});
   }
+  static async shutdownServer() {
+    return ApiService.post('/system/shutdown', {});
+  }
 }
 
 class ReportingService {

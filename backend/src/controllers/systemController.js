@@ -418,6 +418,26 @@ echo "=== UPDATE ABGESCHLOSSEN: $(date) ==="
   }
 
   /**
+   * POST /api/system/shutdown
+   * Fährt den Linux-Server herunter (systemctl poweroff).
+   */
+  static shutdownServer(req, res) {
+    if (process.platform !== 'linux') {
+      return res.status(400).json({ success: false, message: 'Nur auf Linux-Servern verfügbar.' });
+    }
+    try {
+      const { spawn } = require('child_process');
+      res.json({ success: true, message: 'Server wird heruntergefahren...' });
+      setTimeout(() => {
+        const child = spawn('bash', ['-c', 'systemctl poweroff'], { detached: true, stdio: 'ignore' });
+        child.unref();
+      }, 1000);
+    } catch (error) {
+      res.status(500).json({ success: false, message: error.message });
+    }
+  }
+
+  /**
    * POST /api/system/build-frontend
    * Baut das Vite-Frontend neu (npm run build).
    * Nutzt process.execPath → npm-Pfad ist immer korrekt, egal welcher User.

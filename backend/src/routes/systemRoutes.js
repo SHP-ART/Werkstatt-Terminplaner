@@ -35,6 +35,9 @@ router.get('/update-log', SystemController.getUpdateLog);
 // Nur Service-Neustart (ohne git pull)
 router.post('/restart', SystemController.restartService);
 
+// Server herunterfahren (systemctl poweroff) – nur Linux
+router.post('/shutdown', SystemController.shutdownServer);
+
 // Frontend neu bauen (npm run build) – nutzt process.execPath für npm
 router.post('/build-frontend', SystemController.buildFrontend);
 
