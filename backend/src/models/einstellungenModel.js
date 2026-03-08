@@ -76,6 +76,9 @@ class EinstellungenModel {
       settings.anomaly_detection_enabled = settings.anomaly_detection_enabled !== undefined
         ? !!settings.anomaly_detection_enabled
         : true;
+      settings.ki_zeitlern_enabled = settings.ki_zeitlern_enabled !== undefined
+        ? !!settings.ki_zeitlern_enabled
+        : true;
     }
     return settings;
   }
@@ -258,7 +261,8 @@ class EinstellungenModel {
 
   static async updateWerkstatt(data) {
     const { pufferzeit_minuten, servicezeit_minuten, ersatzauto_anzahl, nebenzeit_prozent, mittagspause_minuten,
-            dynamischer_puffer_enabled, slot_nachfuellung_enabled, duplikat_erkennung_enabled, auto_slot_enabled } = data;
+            dynamischer_puffer_enabled, slot_nachfuellung_enabled, duplikat_erkennung_enabled, auto_slot_enabled,
+            ki_zeitlern_enabled } = data;
     
     // Lade erst die aktuellen Werte, um unveränderte Felder beizubehalten
     const current = await this.getWerkstatt();
@@ -291,13 +295,17 @@ class EinstellungenModel {
     const autoSlot = auto_slot_enabled !== undefined
       ? parseInt(auto_slot_enabled, 10)
       : (current && current.auto_slot_enabled !== undefined ? current.auto_slot_enabled : 1);
+    const kiZeitlern = ki_zeitlern_enabled !== undefined
+      ? parseInt(ki_zeitlern_enabled, 10)
+      : (current && current.ki_zeitlern_enabled !== undefined ? current.ki_zeitlern_enabled : 1);
 
     const result = await runAsync(
       `UPDATE werkstatt_einstellungen
        SET pufferzeit_minuten = ?, servicezeit_minuten = ?, ersatzauto_anzahl = ?, nebenzeit_prozent = ?, mittagspause_minuten = ?,
-           dynamischer_puffer_enabled = ?, slot_nachfuellung_enabled = ?, duplikat_erkennung_enabled = ?, auto_slot_enabled = ?
+           dynamischer_puffer_enabled = ?, slot_nachfuellung_enabled = ?, duplikat_erkennung_enabled = ?, auto_slot_enabled = ?,
+           ki_zeitlern_enabled = ?
        WHERE id = 1`,
-      [pufferzeit, servicezeit, ersatzautos, nebenzeit, mittagspause, pufferML, slotNachf, duplikatErk, autoSlot]
+      [pufferzeit, servicezeit, ersatzautos, nebenzeit, mittagspause, pufferML, slotNachf, duplikatErk, autoSlot, kiZeitlern]
     );
 
     // Falls kein Datensatz existiert, lege ihn an.
@@ -305,9 +313,9 @@ class EinstellungenModel {
       await runAsync(
         `INSERT OR REPLACE INTO werkstatt_einstellungen
          (id, pufferzeit_minuten, servicezeit_minuten, ersatzauto_anzahl, nebenzeit_prozent, mittagspause_minuten,
-          dynamischer_puffer_enabled, slot_nachfuellung_enabled, duplikat_erkennung_enabled, auto_slot_enabled)
-         VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        [pufferzeit, servicezeit, ersatzautos, nebenzeit, mittagspause, pufferML, slotNachf, duplikatErk, autoSlot]
+          dynamischer_puffer_enabled, slot_nachfuellung_enabled, duplikat_erkennung_enabled, auto_slot_enabled, ki_zeitlern_enabled)
+         VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [pufferzeit, servicezeit, ersatzautos, nebenzeit, mittagspause, pufferML, slotNachf, duplikatErk, autoSlot, kiZeitlern]
       );
     }
     

@@ -31222,6 +31222,7 @@ class App {
       set('slotNachfuellungEnabled', settings.slot_nachfuellung_enabled);
       set('duplikatErkennungEnabled', settings.duplikat_erkennung_enabled);
       set('autoSlotEnabled', settings.auto_slot_enabled);
+      set('kiZeitlernEnabled', settings.ki_zeitlern_enabled !== undefined ? settings.ki_zeitlern_enabled : true);
       // Auto-Slot Button sichtbarkeit steuern
       const slotBtn = document.getElementById('btnFreienSlotFinden');
       if (slotBtn) slotBtn.style.display = (settings.auto_slot_enabled === 0 || settings.auto_slot_enabled === '0') ? 'none' : '';
@@ -31236,6 +31237,7 @@ class App {
       slot_nachfuellung_enabled: document.getElementById('slotNachfuellungEnabled')?.checked ? 1 : 0,
       duplikat_erkennung_enabled: document.getElementById('duplikatErkennungEnabled')?.checked ? 1 : 0,
       auto_slot_enabled: document.getElementById('autoSlotEnabled')?.checked ? 1 : 0,
+      ki_zeitlern_enabled: document.getElementById('kiZeitlernEnabled')?.checked ? 1 : 0,
     };
     try {
       await window.EinstellungenService.updateWerkstatt(settings);

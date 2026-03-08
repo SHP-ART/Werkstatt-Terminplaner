@@ -914,28 +914,34 @@ class TermineController {
       const gespeicherteZeit = updateData.tatsaechliche_zeit || tatsaechliche_zeit;
       if (neuerStatus === 'abgeschlossen' && gespeicherteZeit > 0 && termin.arbeit) {
         try {
-          const { kategorisiereArbeit } = require('../services/localAiService');
-          const { runAsync: dbRun, allAsync: dbAll } = require('../config/database');
-          const arbeiten = termin.arbeit.split(/[\r\n,]+/).map(a => a.trim()).filter(Boolean);
-          const zeitProArbeit = Math.round(gespeicherteZeit / Math.max(arbeiten.length, 1));
-          // Schätzzeitaufteilen proportional zur Standardzeit wenn bekannt
-          for (const arbeitItem of arbeiten) {
-            const kat = kategorisiereArbeit(arbeitItem);
-            await dbRun(
-              `INSERT INTO ki_zeitlern_daten (termin_id, arbeit, kategorie, geschaetzte_min, tatsaechliche_min, mitarbeiter_id, datum)
-               VALUES (?, ?, ?, ?, ?, ?, ?)`,
-              [
-                termin.id,
-                arbeitItem,
-                kat,
-                Math.round((termin.geschaetzte_zeit || gespeicherteZeit) / Math.max(arbeiten.length, 1)),
-                zeitProArbeit,
-                termin.mitarbeiter_id || null,
-                termin.datum
-              ]
-            );
+          const EinstellungenModel = require('../models/einstellungenModel');
+          const einst = await EinstellungenModel.getWerkstatt();
+          const kiZeitlernAktiv = einst ? (einst.ki_zeitlern_enabled === 0 ? false : true) : true;
+          if (kiZeitlernAktiv) {
+            const { kategorisiereArbeit } = require('../services/localAiService');
+            const { runAsync: dbRun } = require('../config/database');
+            const arbeiten = termin.arbeit.split(/[\r\n,]+/).map(a => a.trim()).filter(Boolean);
+            const zeitProArbeit = Math.round(gespeicherteZeit / Math.max(arbeiten.length, 1));
+            for (const arbeitItem of arbeiten) {
+              const kat = kategorisiereArbeit(arbeitItem);
+              await dbRun(
+                `INSERT INTO ki_zeitlern_daten (termin_id, arbeit, kategorie, geschaetzte_min, tatsaechliche_min, mitarbeiter_id, datum)
+                 VALUES (?, ?, ?, ?, ?, ?, ?)`,
+                [
+                  termin.id,
+                  arbeitItem,
+                  kat,
+                  Math.round((termin.geschaetzte_zeit || gespeicherteZeit) / Math.max(arbeiten.length, 1)),
+                  zeitProArbeit,
+                  termin.mitarbeiter_id || null,
+                  termin.datum
+                ]
+              );
+            }
+            console.log(`[KI-Lern] ${arbeiten.length} Datenpunkt(e) gespeichert für Termin ${termin.id}`);
+          } else {
+            console.log(`[KI-Lern] Deaktiviert, kein Lerndatenpunkt gespeichert für Termin ${termin.id}`);
           }
-          console.log(`[KI-Lern] ${arbeiten.length} Datenpunkt(e) gespeichert für Termin ${termin.id}`);
         } catch (lernErr) {
           console.warn('[KI-Lern] Fehler beim Speichern von Lerndaten:', lernErr.message);
         }
