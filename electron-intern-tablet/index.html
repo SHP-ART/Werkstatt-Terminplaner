@@ -1565,7 +1565,7 @@
               <span class=\"arbeit-zeit\">${zeitText}</span>
             </div>
             ${!arbeit.abgeschlossen && termin.status === 'in_arbeit' ? `
-            <button class=\"arbeit-btn\" onclick=\"handleBeendenEinzelarbeit(${termin.id}, '${arbeit.name.replace(/'/g, \"\\\\'\").replace(/\"/g, '&quot;')}', '${escapeHtml(termin.kunde_name || '')}')\">
+            <button class=\"arbeit-btn\" onclick=\"handleBeendenEinzelarbeit(${termin.id}, '${arbeit.name.replace(/'/g, "\\'").replace(/"/g, '&quot;')}', '${escapeHtml(termin.kunde_name || '')}')\">
               ✓ Fertig
             </button>
             ` : ''}
