@@ -987,6 +987,8 @@
       <div style="margin-bottom: 15px;">
         <label style="display: block; margin-bottom: 5px;">Backend-URL:</label>
         <input type="text" id="settingsBackendUrl" style="width: 100%; padding: 10px; border-radius: 8px; border: 1px solid var(--card-border); background: var(--primary); color: var(--text);">
+        <button type="button" id="testVerbindungBtn" onclick="testVerbindung()" style="margin-top: 8px; padding: 8px 16px; border-radius: 8px; border: none; background: #1565c0; color: white; cursor: pointer; font-size: 0.9em;">🔌 Verbindung testen</button>
+        <div id="verbindungsTestErgebnis" style="margin-top: 6px; font-size: 0.85em; display: none;"></div>
       </div>
 
       <div style="margin-bottom: 15px;">
@@ -1040,7 +1042,7 @@
   <script>
     // ========== KONFIGURATION ==========
     let CONFIG = {
-      backendUrl: 'http://localhost:3000',
+      backendUrl: 'http://localhost:3001',
       refreshInterval: 30,
       fullscreen: true,
       autostart: false,
@@ -1198,13 +1200,19 @@
 
     // ========== API SERVICE ==========
     const ApiService = {
+      _fetchWithTimeout(url, options = {}, timeoutMs = 10000) {
+        const controller = new AbortController();
+        const id = setTimeout(() => controller.abort(), timeoutMs);
+        return fetch(url, { ...options, signal: controller.signal })
+          .finally(() => clearTimeout(id));
+      },
       async get(endpoint) {
-        const response = await fetch(`${CONFIG.backendUrl}/api${endpoint}`);
+        const response = await this._fetchWithTimeout(`${CONFIG.backendUrl}/api${endpoint}`);
         if (!response.ok) throw new Error(`API Fehler: ${response.status}`);
         return response.json();
       },
       async put(endpoint, data) {
-        const response = await fetch(`${CONFIG.backendUrl}/api${endpoint}`, {
+        const response = await this._fetchWithTimeout(`${CONFIG.backendUrl}/api${endpoint}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(data)
@@ -1213,7 +1221,7 @@
         return response.json();
       },
       async post(endpoint, data) {
-        const response = await fetch(`${CONFIG.backendUrl}/api${endpoint}`, {
+        const response = await this._fetchWithTimeout(`${CONFIG.backendUrl}/api${endpoint}`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(data)
@@ -2238,6 +2246,38 @@
 
     // ========== EINSTELLUNGEN ==========
     let isElectron = false;
+
+    async function testVerbindung() {
+      const url = (document.getElementById('settingsBackendUrl').value.trim() || CONFIG.backendUrl);
+      const result = document.getElementById('verbindungsTestErgebnis');
+      const btn = document.getElementById('testVerbindungBtn');
+      result.style.display = 'block';
+      result.style.color = '#888';
+      result.textContent = '⏳ Verbinde…';
+      btn.disabled = true;
+      try {
+        const controller = new AbortController();
+        const id = setTimeout(() => controller.abort(), 8000);
+        const response = await fetch(`${url}/api/health`, { signal: controller.signal });
+        clearTimeout(id);
+        if (response.ok) {
+          result.style.color = '#2e7d32';
+          result.textContent = '✅ Verbindung erfolgreich!';
+        } else {
+          result.style.color = '#c62828';
+          result.textContent = `❌ Server antwortet mit Status ${response.status}`;
+        }
+      } catch (err) {
+        result.style.color = '#c62828';
+        if (err.name === 'AbortError') {
+          result.textContent = `⏱ Timeout – Server nicht erreichbar unter: ${url}`;
+        } else {
+          result.textContent = `❌ Verbindungsfehler: ${err.message}`;
+        }
+      } finally {
+        btn.disabled = false;
+      }
+    }
 
     async function openSettings() {
       document.getElementById('settingsBackendUrl').value = CONFIG.backendUrl;
