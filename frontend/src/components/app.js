@@ -27069,8 +27069,11 @@ class App {
           if (entry && typeof entry === 'object') {
             if (isLehrling) {
               if (entry.lehrling_id == personId) return true;
+              // Wenn type='lehrling' wird mitarbeiter_id als lehrling-Referenz gespeichert
+              if (entry.type === 'lehrling' && entry.mitarbeiter_id == personId) return true;
             } else {
-              if (entry.mitarbeiter_id == personId) return true;
+              // Einträge mit type='lehrling' NIEMALS einem Mitarbeiter zuordnen
+              if (entry.type !== 'lehrling' && entry.mitarbeiter_id == personId) return true;
             }
           }
         }
