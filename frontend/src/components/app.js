@@ -27129,29 +27129,8 @@ class App {
     const jetzt = new Date();
     const jetztZeit = `${String(jetzt.getHours()).padStart(2, '0')}:${String(jetzt.getMinutes()).padStart(2, '0')}`;
 
-    // Finde aktuellen Auftrag:
-    // 1. Explizit "in_arbeit" Status ODER
-    // 2. Termin der gerade laufen sollte (startzeit <= jetzt < endzeit)
-    let aktuellerAuftrag = personTermine.find(t => t.status === 'in_arbeit');
-
-    if (!aktuellerAuftrag) {
-      // Prüfe ob ein Termin gerade laufen sollte (basierend auf Zeit)
-      aktuellerAuftrag = personTermine.find(t => {
-        if (t.status === 'abgeschlossen' || t.status === 'storniert') return false;
-
-        const startzeit = t.startzeit || t.bring_zeit;
-        if (!startzeit) return false;
-
-        // Berechne Endzeit (MIT Nebenzeit/Aufgabenbewältigung)
-        const dauer = this.getEffektiveArbeitszeitMitFaktoren(t, person, isLehrling, kontext);
-        const [h, m] = startzeit.split(':').map(Number);
-        const endMinuten = h * 60 + m + dauer;
-        const endzeit = `${String(Math.floor(endMinuten / 60)).padStart(2, '0')}:${String(endMinuten % 60).padStart(2, '0')}`;
-
-        // Prüfe ob jetzt zwischen Start und Ende liegt
-        return startzeit <= jetztZeit && jetztZeit < endzeit;
-      });
-    }
+    // Zeige nur Termine die explizit auf 'in_arbeit' gesetzt wurden
+    const aktuellerAuftrag = personTermine.find(t => t.status === 'in_arbeit');
 
     // Finde nächsten Auftrag (noch nicht gestartet)
     const naechsterAuftrag = personTermine.find(t => {

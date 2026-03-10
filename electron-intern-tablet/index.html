@@ -1778,18 +1778,8 @@
       const jetzt = new Date();
       const jetztZeit = `${String(jetzt.getHours()).padStart(2, '0')}:${String(jetzt.getMinutes()).padStart(2, '0')}`;
 
-      // Finde aktuellen Auftrag
-      let aktuellerAuftrag = personTermine.find(t => t.status === 'in_arbeit');
-      if (!aktuellerAuftrag) {
-        aktuellerAuftrag = personTermine.find(t => {
-          if (t.status === 'abgeschlossen' || t.status === 'storniert') return false;
-          const startzeit = t.startzeit || t.bring_zeit;
-          if (!startzeit) return false;
-          // Verwende berechneEndzeit für korrekte Pausenberücksichtigung
-          const endzeit = berechneEndzeit(t, person, isLehrling, globaleNebenzeit);
-          return startzeit <= jetztZeit && jetztZeit < endzeit;
-        });
-      }
+      // Zeige nur Termine die explizit auf 'in_arbeit' gesetzt wurden
+      const aktuellerAuftrag = personTermine.find(t => t.status === 'in_arbeit');
 
       // Finde nächsten Auftrag (auch überfällige offene Termine berücksichtigen!)
       const naechsterAuftrag = personTermine.find(t => {
