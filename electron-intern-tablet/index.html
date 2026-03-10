@@ -956,6 +956,12 @@
     <div class="display-off-text">Display ist außerhalb der Betriebszeiten</div>
   </div>
 
+  <!-- Verbindungs-Banner (nur bei Fehler sichtbar) -->
+  <div id="offlineBanner" style="display:none; position:fixed; top:0; left:0; right:0; z-index:9999; background:#c62828; color:white; text-align:center; padding:6px 12px; font-size:0.9em; font-weight:bold;">
+    ⚠️ Verbindung unterbrochen – letzte Daten werden angezeigt
+    <span id="offlineLastUpdate" style="font-weight:normal; margin-left:12px;"></span>
+  </div>
+
   <!-- Header -->
   <div class="header">
     <div class="header-title">
@@ -2086,6 +2092,21 @@
     }
 
     // ========== DATEN LADEN ==========
+    let _letzterErfolgreicheLadestand = null; // Letzter bekannter guter HTML-Inhalt
+
+    function _zeigeOfflineBanner(sichtbar, zeitpunkt = null) {
+      const banner = document.getElementById('offlineBanner');
+      if (!banner) return;
+      banner.style.display = sichtbar ? 'block' : 'none';
+      if (zeitpunkt) {
+        const el = document.getElementById('offlineLastUpdate');
+        if (el) el.textContent = `(Stand: ${zeitpunkt})`;
+      }
+      // Header-Abstand wenn Banner sichtbar
+      const header = document.querySelector('.header');
+      if (header) header.style.marginTop = sichtbar ? '32px' : '';
+    }
+
     async function loadTeamUebersicht() {
       const teamGrid = document.getElementById('teamGrid');
 
@@ -2216,19 +2237,33 @@
 
         if (allKacheln.length > 0) {
           teamGrid.innerHTML = allKacheln.join('');
+          _letzterErfolgreicheLadestand = teamGrid.innerHTML;
         } else {
           teamGrid.innerHTML = '<div class="keine-daten">Keine aktiven Mitarbeiter oder Lehrlinge</div>';
+          _letzterErfolgreicheLadestand = teamGrid.innerHTML;
         }
+        // Verbindung OK → Banner ausblenden
+        _zeigeOfflineBanner(false);
 
       } catch (error) {
         console.error('Fehler beim Laden:', error);
-        teamGrid.innerHTML = `
-          <div class="error-message">
-            <p>⚠️ Fehler beim Laden der Daten</p>
-            <p style="font-size: 0.9em; margin-top: 10px;">${escapeHtml(error.message)}</p>
-            <p style="font-size: 0.8em; margin-top: 5px; color: var(--text-muted);">Backend: ${CONFIG.backendUrl}</p>
-          </div>
-        `;
+        if (_letzterErfolgreicheLadestand) {
+          // Letzte Daten behalten, nur Banner anzeigen
+          teamGrid.innerHTML = _letzterErfolgreicheLadestand;
+          const jetzt = new Date();
+          const zeitStr = `${String(jetzt.getHours()).padStart(2,'0')}:${String(jetzt.getMinutes()).padStart(2,'0')} Uhr`;
+          _zeigeOfflineBanner(true, zeitStr);
+        } else {
+          // Noch keine Daten vorhanden → Fehlermeldung zeigen
+          teamGrid.innerHTML = `
+            <div class="error-message">
+              <p>⚠️ Verbindung zum Server nicht möglich</p>
+              <p style="font-size: 0.9em; margin-top: 10px;">${escapeHtml(error.message)}</p>
+              <p style="font-size: 0.8em; margin-top: 5px; color: var(--text-muted);">Backend: ${CONFIG.backendUrl}</p>
+              <p style="font-size: 0.8em; margin-top: 5px;">Nächster Versuch in ${CONFIG.refreshInterval}s…</p>
+            </div>
+          `;
+        }
       }
     }
 
