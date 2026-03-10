@@ -41,7 +41,8 @@ const migrations = [
   require('./023_automatisierung'),   // Version 23 - Automatisierungs-Grundlagen
   require('./024_auto_slot_enabled'),  // Version 24 - Auto-Slot-Suche Einstellung
   require('./025_ki_zeitlern_daten'), // Version 25 - KI-Zeitlern-Datenbank
-  require('./026_ki_zeitlern_enabled') // Version 26 - KI-Zeitlern Toggle
+  require('./026_ki_zeitlern_enabled'), // Version 26 - KI-Zeitlern Toggle
+  require('./027_fix_tablet_einstellungen_schema') // Version 27 - Repariert altes tablet_einstellungen-Schema
 ];
 
 /**
