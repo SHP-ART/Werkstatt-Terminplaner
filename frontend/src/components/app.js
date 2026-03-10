@@ -10562,6 +10562,14 @@ class App {
         this.showToast(`✅ Termin abgeschlossen - Arbeitszeit: ${result.berechneteZeit} Min`, 'success');
       }
 
+      // Nachrücken: Folge-Termine der selben Person verschieben
+      if (status === 'in_arbeit' || status === 'abgeschlossen') {
+        const termin = this.termineById[terminId];
+        if (termin) {
+          this._nachrueckenFuerTermin(termin).catch(e => console.warn('Nachrücken fehlgeschlagen:', e));
+        }
+      }
+
       // Aktualisiere Dashboard, Auslastung und Heute-Ansicht
       this.loadDashboard();
       await this.loadHeuteTermine();
@@ -14000,6 +14008,14 @@ class App {
         this.updateTimelineBlockStatus(terminId, neuerStatus);
       }
       
+      // Nachrücken: Folge-Termine der selben Person verschieben
+      if (neuerStatus === 'in_arbeit' || neuerStatus === 'abgeschlossen') {
+        const termin = this.termineById[terminId];
+        if (termin) {
+          this._nachrueckenFuerTermin(termin).catch(e => console.warn('Nachrücken fehlgeschlagen:', e));
+        }
+      }
+
       // Dashboard und andere Views aktualisieren
       this.loadDashboard();
       await this.loadHeuteTermine();
@@ -14059,6 +14075,45 @@ class App {
     });
   }
   
+  // Nachrücken: Folge-Termine einer Person neu berechnen und nach vorne verschieben
+  async _nachrueckenFuerTermin(termin) {
+    if (!termin || !termin.datum) return;
+
+    let personId = null;
+    let personTyp = null;
+
+    // Person aus arbeitszeiten_details._gesamt_mitarbeiter_id ermitteln
+    if (termin.arbeitszeiten_details) {
+      try {
+        const details = typeof termin.arbeitszeiten_details === 'string'
+          ? JSON.parse(termin.arbeitszeiten_details)
+          : termin.arbeitszeiten_details;
+        if (details._gesamt_mitarbeiter_id && details._gesamt_mitarbeiter_id.id) {
+          personId = details._gesamt_mitarbeiter_id.id;
+          personTyp = details._gesamt_mitarbeiter_id.type || 'mitarbeiter';
+        }
+      } catch (e) { /* ignorieren */ }
+    }
+
+    // Fallback: direkte mitarbeiter_id-Spalte
+    if (!personId && termin.mitarbeiter_id) {
+      personId = termin.mitarbeiter_id;
+      personTyp = 'mitarbeiter';
+    }
+
+    if (!personId) return;
+
+    try {
+      await ApiService.post('/termine/berechne-zeiten-neu', {
+        personId,
+        personTyp,
+        datum: termin.datum
+      });
+    } catch (e) {
+      console.warn('Nachrücken-API Fehler:', e);
+    }
+  }
+
   // Timeline-Block visuell kürzen (bei Abschluss mit tatsächlicher Zeit)
   // Nur kürzen, nicht verlängern!
   updateTimelineBlockVisual(terminId, tatsaechlicheMinuten) {

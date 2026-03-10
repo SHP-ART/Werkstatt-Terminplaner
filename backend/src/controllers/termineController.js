@@ -2193,30 +2193,32 @@ class TermineController {
 
       // Lade alle Termine dieser Person an diesem Tag (Status: geplant oder in_arbeit)
       const alleTermine = await allAsync(`
-        SELECT id, startzeit, bring_zeit, geschaetzte_zeit, arbeitszeiten_details, status, verschoben_von_datum
+        SELECT id, startzeit, bring_zeit, geschaetzte_zeit, tatsaechliche_zeit, arbeitszeiten_details, status, verschoben_von_datum, mitarbeiter_id
         FROM termine
         WHERE datum = ? 
           AND status IN ('geplant', 'in_arbeit')
           AND geloescht_am IS NULL
-        ORDER BY erstellt_am ASC
+        ORDER BY COALESCE(startzeit, bring_zeit, '23:59') ASC
       `, [datum]);
 
-      // Filtere nur eigene Termine (über _gesamt_mitarbeiter_id in arbeitszeiten_details)
-      const eigeneTermine = alleTermine.filter(t => {
+      // Hilfsfunktion: prüft ob ein Termin dieser Person gehört
+      function terminGehoertZuPerson(t) {
+        // 1. Direkte mitarbeiter_id (nur für mitarbeiter-Typ)
+        if (personTyp === 'mitarbeiter' && t.mitarbeiter_id === parseInt(personId)) return true;
+
+        // 2. arbeitszeiten_details._gesamt_mitarbeiter_id
         if (!t.arbeitszeiten_details) return false;
         try {
           const details = JSON.parse(t.arbeitszeiten_details);
           const gesamt = details._gesamt_mitarbeiter_id;
-          if (!gesamt) return false;
-          
-          if (typeof gesamt === 'object' && gesamt.type === personTyp && gesamt.id === personId) {
+          if (gesamt && typeof gesamt === 'object' && gesamt.type === personTyp && gesamt.id == personId) {
             return true;
           }
-        } catch (e) {
-          // Parsing-Fehler ignorieren
-        }
+        } catch (e) { /* ignorieren */ }
         return false;
-      });
+      }
+
+      const eigeneTermine = alleTermine.filter(terminGehoertZuPerson);
 
       if (eigeneTermine.length === 0) {
         return res.json({ 
@@ -2227,13 +2229,48 @@ class TermineController {
         });
       }
 
+      // Bestimme Startpunkt: letzter abgeschlossener Termin dieser Person heute
+      // gibt den frühesten Zeitpunkt an, ab dem neue Termine beginnen können
+      const letzterAbgeschlossener = await allAsync(`
+        SELECT id, startzeit, bring_zeit, tatsaechliche_zeit, geschaetzte_zeit, mitarbeiter_id, arbeitszeiten_details
+        FROM termine
+        WHERE datum = ?
+          AND status = 'abgeschlossen'
+          AND geloescht_am IS NULL
+        ORDER BY COALESCE(startzeit, bring_zeit, '00:00') DESC
+        LIMIT 10
+      `, [datum]);
+
+      let startpunktNachrücken = null;
+      for (const t of letzterAbgeschlossener) {
+        if (!terminGehoertZuPerson(t)) continue;
+        // Ende = startzeit + tatsaechliche_zeit (oder geschaetzte_zeit falls keine tats. Zeit)
+        const startMin = t.startzeit || t.bring_zeit;
+        const dauerMin = t.tatsaechliche_zeit || t.geschaetzte_zeit || 30;
+        if (startMin) {
+          const endzeit = addMinutes(startMin, dauerMin);
+          if (!startpunktNachrücken || compareTime(endzeit, startpunktNachrücken) > 0) {
+            startpunktNachrücken = endzeit;
+          }
+        }
+        break; // nur den letzten nehmen
+      }
+
       // Berechne Arbeitsende (arbeitsstundenProTag * 60 Minuten ab 08:00)
       const arbeitsbeginn = '08:00';
       const arbeitsende = addMinutes(arbeitsbeginn, arbeitsstundenProTag * 60);
 
       const aktualisierteTermine = [];
       const verschobeneTermine = [];
-      let laufendeZeit = eigeneTermine[0].startzeit || eigeneTermine[0].bring_zeit || '08:00';
+      // Startpunkt: entweder nach dem letzten abgeschlossenen Termin oder Start des ersten geplanten
+      let laufendeZeit;
+      if (startpunktNachrücken) {
+        // Nachrücken: beginne direkt nach dem letzten abgeschlossenen Termin
+        laufendeZeit = startpunktNachrücken;
+      } else {
+        // Keine abgeschlossenen Termine: behalte ursprünglichen Startpunkt
+        laufendeZeit = eigeneTermine[0].startzeit || eigeneTermine[0].bring_zeit || '08:00';
+      }
 
       for (const termin of eigeneTermine) {
         // Berechne neue Endzeit mit berechneEndzeitFuerTermin
