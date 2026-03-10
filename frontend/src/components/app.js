@@ -11699,36 +11699,56 @@ class App {
         }
       }
     }
-    document.getElementById('kzSucheBuchstaben').value = parts.buchstaben;
-    document.getElementById('kzSucheNummer').value = parts.nummer;
-    
-    // Wenn Kunde vorhanden, auch Kundendaten füllen
-    if (kundeId) {
-      const kunde = (this.kundenCache || []).find(k => k.id === kundeId);
-      if (kunde) {
-        document.getElementById('kunde_id').value = kunde.id;
-        document.getElementById('terminNameSuche').value = kunde.name;
-        document.getElementById('neuer_kunde_telefon').value = kunde.telefon || '';
-        
-        if (kunde.fahrzeugtyp) {
-          document.getElementById('fahrzeugtyp').value = kunde.fahrzeugtyp;
-        }
-        
-        this.showGefundenerKunde(kunde.name, kunde.telefon);
-        
-        // Letzten KM-Stand suchen
-        const letzterKmStand = this.findLetztenKmStand(kunde.id, kunde.name, kennzeichen);
-        const kmStandInput = document.getElementById('kilometerstand');
-        if (letzterKmStand && kmStandInput) {
-          kmStandInput.value = '';
-          kmStandInput.placeholder = `Letzter KM-Stand: ${letzterKmStand.toLocaleString('de-DE')} km`;
-          kmStandInput.classList.add('has-previous-value');
-        }
-      }
-    }
-    
-    // Vorschläge ausblenden
+  }
+
+  // Kennzeichen-Vorschlag auswählen: Felder befüllen und Kunde übernehmen
+  async selectKennzeichenVorschlag(kennzeichen, kundeId) {
+    // Such-Felder mit dem Kennzeichen befüllen
+    const parts = this.parseKennzeichen(kennzeichen);
+    const bezirkEl = document.getElementById('kzSucheBezirk');
+    const buchstabenEl = document.getElementById('kzSucheBuchstaben');
+    const nummerEl = document.getElementById('kzSucheNummer');
+    if (bezirkEl) bezirkEl.value = parts.bezirk;
+    if (buchstabenEl) buchstabenEl.value = parts.buchstaben;
+    if (nummerEl) nummerEl.value = parts.nummer;
+
+    // Vorschläge sofort ausblenden
     this.hideVorschlaege('kennzeichen');
+
+    if (!kundeId) {
+      // Kein Kunde bekannt → nur Kennzeichen-Feld setzen
+      const kennzeichenEl = document.getElementById('kennzeichen');
+      if (kennzeichenEl) kennzeichenEl.value = kennzeichen;
+      return;
+    }
+
+    const kunde = (this.kundenCache || []).find(k => k.id == kundeId);
+    if (!kunde) return;
+
+    // Passendes Fahrzeug zu diesem Kennzeichen finden
+    let fahrzeug = null;
+    try {
+      const fahrzeuge = await KundenService.getFahrzeuge(kundeId);
+      fahrzeug = fahrzeuge.find(f =>
+        this.normalizeKennzeichen(f.kennzeichen) === this.normalizeKennzeichen(kennzeichen)
+      ) || fahrzeuge[0] || null;
+    } catch (e) {
+      // Fallback: Aus termineCache suchen
+      const tCached = (this.termineCache || []).find(t =>
+        t.kunde_id == kundeId &&
+        this.normalizeKennzeichen(t.kennzeichen || '') === this.normalizeKennzeichen(kennzeichen)
+      );
+      fahrzeug = tCached
+        ? { kennzeichen, fahrzeugtyp: tCached.fahrzeugtyp || '' }
+        : { kennzeichen, fahrzeugtyp: kunde.fahrzeugtyp || '' };
+    }
+
+    if (!fahrzeug) {
+      fahrzeug = { kennzeichen, fahrzeugtyp: kunde.fahrzeugtyp || '' };
+    }
+
+    this.applyKundeAuswahl(kunde, fahrzeug);
+    this.showToast(`🚗 ${kennzeichen} übernommen`, 'success');
   }
 
   // Tastatur-Navigation in Vorschlägen
