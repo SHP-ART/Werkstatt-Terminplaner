@@ -14062,10 +14062,12 @@ class App {
   // Timeline-Block visuell kürzen (bei Abschluss mit tatsächlicher Zeit)
   // Nur kürzen, nicht verlängern!
   updateTimelineBlockVisual(terminId, tatsaechlicheMinuten) {
+    // Status immer aktualisieren – auch für Multi-Arbeit-Blöcke (timeline-arbeit-{id}-*),
+    // die kein korrespondierendes timeline-termin-{id} Element besitzen.
+    this.updateTimelineBlockStatus(terminId, 'abgeschlossen');
+
     const block = document.getElementById(`timeline-termin-${terminId}`);
     if (block) {
-      // Status aktualisieren
-      this.updateTimelineBlockStatus(terminId, 'abgeschlossen');
       
       // Ursprüngliche Dauer aus data-Attribut holen
       const originalDauer = parseInt(block.dataset.dauer) || 0;
@@ -21218,8 +21220,8 @@ class App {
   createArbeitBlockElement(termin, arbeit, startHour, endHour, pauseStart, type = 'mitarbeiter') {
     const isSchwebend = termin.ist_schwebend === 1 || termin._istSchwebend;
     
-    // Startzeit parsen
-    let startzeit = termin.startzeit || '08:00';
+    // Startzeit parsen (normalizeZeit wandelt HHMM → HH:MM)
+    let startzeit = this.normalizeZeit(termin.startzeit || '08:00');
     const [startH, startM] = startzeit.split(':').map(Number);
     
     // Dauer dieser Arbeit
