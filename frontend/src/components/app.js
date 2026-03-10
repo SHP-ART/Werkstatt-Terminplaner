@@ -10899,18 +10899,33 @@ class App {
       return;
     }
     
-    vorschlaegeDiv.innerHTML = treffer.map((kunde, idx) => `
-      <div class="vorschlag-item" data-index="${idx}" data-kunde-id="${kunde.id}">
+    vorschlaegeDiv.innerHTML = treffer.map((kunde, idx) => {
+      // Fahrzeug: zuerst aus Kundenstamm, dann aus Termincache
+      let kz = kunde.kennzeichen || '';
+      let fzTyp = kunde.fahrzeugtyp || '';
+      if (!kz) {
+        const letzterTermin = (this.termineCache || [])
+          .filter(t => t.kunde_id == kunde.id && t.kennzeichen)
+          .sort((a, b) => (b.datum || '').localeCompare(a.datum || ''))[0];
+        if (letzterTermin) {
+          kz = letzterTermin.kennzeichen;
+          fzTyp = fzTyp || letzterTermin.fahrzeugtyp || '';
+        }
+      }
+      return `
+      <div class="vorschlag-item" data-index="${idx}" data-kunde-id="${kunde.id}"
+           onmousedown="event.preventDefault()"
+           onclick="app.selectKundeVorschlag(${kunde.id})">
         <div>
           <span class="vorschlag-name">${this.highlightMatch(kunde.name, eingabe)}</span>
           ${kunde.telefon ? `<span class="vorschlag-telefon"> · ${kunde.telefon}</span>` : ''}
         </div>
         <div class="vorschlag-details">
-          ${kunde.kennzeichen ? `<span class="vorschlag-kennzeichen">${kunde.kennzeichen}</span>` : ''}
-          ${kunde.fahrzeugtyp ? `<span class="vorschlag-fahrzeugtyp">🚗 ${kunde.fahrzeugtyp}</span>` : ''}
+          ${kz ? `<span class="vorschlag-kennzeichen">${kz}</span>` : ''}
+          ${fzTyp ? `<span class="vorschlag-fahrzeugtyp">🚗 ${fzTyp}</span>` : ''}
         </div>
-      </div>
-    `).join('');
+      </div>`;
+    }).join('');
     
     vorschlaegeDiv.classList.add('aktiv');
     this.aktuelleVorschlaegeIndex = -1;
@@ -29553,7 +29568,7 @@ class App {
       this.updateTabletDisplayStatusUI(data.manueller_display_status || 'auto');
     } catch (error) {
       console.error('Fehler beim Laden der Tablet-Einstellungen:', error);
-      this.showError('Fehler beim Laden der Tablet-Einstellungen');
+      this.showToast('Fehler beim Laden der Tablet-Einstellungen', 'error');
     }
   }
 
@@ -29572,10 +29587,10 @@ class App {
         display_ausschaltzeit: ausschaltzeit
       });
       
-      this.showSuccess('✅ Einschaltzeiten gespeichert');
+      this.showToast('✅ Einschaltzeiten gespeichert', 'success');
     } catch (error) {
       console.error('Fehler beim Speichern:', error);
-      this.showError('Fehler beim Speichern der Einschaltzeiten');
+      this.showToast('Fehler beim Speichern der Einschaltzeiten', 'error');
     }
   }
 
@@ -29593,10 +29608,10 @@ class App {
         'aus': 'Alle Displays ausgeschaltet'
       };
       
-      this.showSuccess(`✅ ${statusText[status]}`);
+      this.showToast(`✅ ${statusText[status]}`, 'success');
     } catch (error) {
       console.error('Fehler beim Setzen des Display-Status:', error);
-      this.showError('Fehler beim Setzen des Display-Status');
+      this.showToast('Fehler beim Setzen des Display-Status', 'error');
     }
   }
 
