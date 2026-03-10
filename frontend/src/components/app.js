@@ -28200,7 +28200,6 @@ class App {
       
       // Listen aktualisieren
       this.loadInterneTermineImSubTab();
-      this.loadInternTab();
       this.loadDashboard();
     } catch (error) {
       console.error('Fehler beim Aktualisieren:', error);
@@ -28226,7 +28225,6 @@ class App {
       
       // Listen aktualisieren
       this.loadInterneTermineImSubTab();
-      this.loadInternTab();
       this.loadDashboard();
     } catch (error) {
       console.error('Fehler beim Löschen:', error);
