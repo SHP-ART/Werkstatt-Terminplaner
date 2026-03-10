@@ -2246,7 +2246,12 @@
     let isElectron = false;
 
     async function testVerbindung() {
-      const url = (document.getElementById('settingsBackendUrl').value.trim() || CONFIG.backendUrl);
+      let url = (document.getElementById('settingsBackendUrl').value.trim() || CONFIG.backendUrl);
+      // http:// ergänzen falls Schema fehlt
+      if (url && !url.startsWith('http://') && !url.startsWith('https://')) {
+        url = 'http://' + url;
+        document.getElementById('settingsBackendUrl').value = url;
+      }
       const result = document.getElementById('verbindungsTestErgebnis');
       const btn = document.getElementById('testVerbindungBtn');
       result.style.display = 'block';
@@ -2309,8 +2314,13 @@
     }
 
     async function saveSettings() {
+      let backendUrl = document.getElementById('settingsBackendUrl').value.trim();
+      // http:// ergänzen falls Schema fehlt
+      if (backendUrl && !backendUrl.startsWith('http://') && !backendUrl.startsWith('https://')) {
+        backendUrl = 'http://' + backendUrl;
+      }
       const newConfig = {
-        backendUrl: document.getElementById('settingsBackendUrl').value.trim(),
+        backendUrl: backendUrl,
         refreshInterval: parseInt(document.getElementById('settingsRefreshInterval').value) || 30,
         fullscreen: document.getElementById('settingsFullscreen').checked,
         autostart: document.getElementById('settingsAutostart').checked,

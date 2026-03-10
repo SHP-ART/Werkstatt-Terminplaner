@@ -103,6 +103,18 @@ const packageJson = require('./package.json');
 const CURRENT_VERSION = packageJson.version;
 
 /**
+ * Normalisiert eine Backend-URL (ergänzt http:// falls kein Schema angegeben)
+ */
+function normalizeBackendUrl(url) {
+  if (!url) return url;
+  const trimmed = url.trim();
+  if (!trimmed.startsWith('http://') && !trimmed.startsWith('https://')) {
+    return 'http://' + trimmed;
+  }
+  return trimmed;
+}
+
+/**
  * Hilfsfunktion für HTTP-Requests (Node.js-kompatibel)
  */
 function httpRequest(url, options = {}) {
@@ -517,6 +529,13 @@ ipcMain.handle('get-config', () => {
 
 // Konfiguration speichern
 ipcMain.handle('save-config', (event, newConfig) => {
+  // URL normalisieren (http:// ergänzen falls fehlt)
+  if (newConfig.backendUrl) {
+    newConfig.backendUrl = normalizeBackendUrl(newConfig.backendUrl);
+  }
+
+  const urlChanged = newConfig.backendUrl && newConfig.backendUrl !== CONFIG.backendUrl;
+
   CONFIG = { ...CONFIG, ...newConfig };
   saveConfig(CONFIG);
 
@@ -526,6 +545,17 @@ ipcMain.handle('save-config', (event, newConfig) => {
   // Display-Timer neu starten wenn Zeiten geändert wurden
   if (newConfig.displayOffTime || newConfig.displayOnTime) {
     startDisplayTimer();
+  }
+
+  // Bei neuer Server-URL sofort Update-Check und Status-Meldung wiederholen
+  if (urlChanged) {
+    console.log('🔄 Backend-URL geändert, starte Update-Check neu...');
+    checkForUpdates().then(updateInfo => {
+      if (updateInfo && updateInfo.updateAvailable && mainWindow) {
+        mainWindow.webContents.send('update-available', updateInfo);
+      }
+    });
+    reportStatusToServer();
   }
 
   return CONFIG;
