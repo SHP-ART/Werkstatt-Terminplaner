@@ -475,10 +475,11 @@ class App {
   async loadServerInfoTab() {
     try {
       // Server-Info und System-Stats parallel laden
-      const [serverInfo, systemStats, healthResult] = await Promise.allSettled([
+      const [serverInfo, systemStats, healthResult, ollamaResult] = await Promise.allSettled([
         ApiService.get('/server-info'),
         ApiService.get('/system-stats'),
-        this._checkApiHealth()
+        this._checkApiHealth(),
+        AIService.getOllamaStatus()
       ]);
 
       // Server-Info
@@ -517,6 +518,22 @@ class App {
         this._setTextIfExists('sinfoDbStatus', h.dbOk ? '✅ Verbunden' : '❌ Getrennt');
         this._setTextIfExists('sinfoResponseTime', h.responseTime ? `${h.responseTime}ms` : '--');
         this._setTextIfExists('sinfoServerUrl', h.url || '--');
+      }
+
+      // Ollama-Status
+      const ollamaEl = document.getElementById('sinfoOllamaStatus');
+      if (ollamaEl) {
+        if (ollamaResult.status === 'fulfilled' && ollamaResult.value) {
+          const o = ollamaResult.value;
+          if (o.success) {
+            const model = o.konfiguriertes_modell || o.model || '';
+            ollamaEl.innerHTML = `<span style="color:#4caf50;font-size:1.1em">&#9679;</span> Läuft${model ? ` <span style="color:#777;font-size:0.88em">(${model})</span>` : ''}`;
+          } else {
+            ollamaEl.innerHTML = `<span style="color:#f44336;font-size:1.1em">&#9679;</span> Nicht erreichbar`;
+          }
+        } else {
+          ollamaEl.innerHTML = `<span style="color:#f44336;font-size:1.1em">&#9679;</span> Nicht erreichbar`;
+        }
       }
 
       // Refresh-Button binden
