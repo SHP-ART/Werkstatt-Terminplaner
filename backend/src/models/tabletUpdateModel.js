@@ -1,4 +1,4 @@
-const db = require('../config/database');
+const { getDb } = require('../config/database');
 const fs = require('fs');
 const path = require('path');
 
@@ -10,6 +10,7 @@ class TabletUpdateModel {
    * Initialisiert die Update-Tabellen
    */
   static async initialize() {
+    const db = getDb();
     return new Promise((resolve, reject) => {
       // Tabellen einzeln erstellen (db.exec nicht verfügbar in allen sqlite3-Versionen)
       db.serialize(() => {
@@ -58,6 +59,7 @@ class TabletUpdateModel {
    * Registriert eine neue Update-Version
    */
   static async registerUpdate(data) {
+    const db = getDb();
     return new Promise((resolve, reject) => {
       const sql = `
         INSERT INTO tablet_updates (version, file_path, release_notes)
@@ -75,6 +77,7 @@ class TabletUpdateModel {
    * Liefert die neueste Update-Version
    */
   static async getLatestVersion() {
+    const db = getDb();
     return new Promise((resolve, reject) => {
       const sql = `
         SELECT version, file_path, release_notes, published_at
@@ -126,6 +129,7 @@ class TabletUpdateModel {
    * Aktualisiert den Status eines Tablets
    */
   static async updateTabletStatus(data) {
+    const db = getDb();
     return new Promise((resolve, reject) => {
       const sql = `
         INSERT INTO tablet_status (hostname, ip, version, last_seen)
@@ -152,6 +156,7 @@ class TabletUpdateModel {
    * Liefert alle verbundenen Tablets (in den letzten 5 Minuten aktiv)
    */
   static async getConnectedTablets() {
+    const db = getDb();
     return new Promise((resolve, reject) => {
       const sql = `
         SELECT hostname, ip, version, last_seen
@@ -171,6 +176,7 @@ class TabletUpdateModel {
    * Liefert alle Tablets (auch inaktive)
    */
   static async getAllTablets() {
+    const db = getDb();
     return new Promise((resolve, reject) => {
       const sql = `
         SELECT hostname, ip, version, last_seen
