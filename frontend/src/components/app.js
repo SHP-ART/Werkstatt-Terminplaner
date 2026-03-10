@@ -10565,6 +10565,20 @@ class App {
       // Aktualisiere Dashboard, Auslastung und Heute-Ansicht
       this.loadDashboard();
       await this.loadHeuteTermine();
+
+      // Timeline-Block in Planung & Zuweisung sofort visuell aktualisieren
+      this.updateTimelineBlockStatus(terminId, status);
+
+      // Planung & Zuweisung neu laden wenn Tab aktiv (damit interne Ansicht + Zuordnung aktuell sind)
+      const planungTab = document.getElementById('auslastung-dragdrop');
+      if (planungTab && planungTab.classList.contains('active')) {
+        this.loadAuslastungDragDrop();
+      }
+      // Intern-Ansicht aktualisieren falls aktiv oder im Tablet-Modus
+      const internTab = document.getElementById('intern');
+      if (internTab && (internTab.classList.contains('active') || document.body.classList.contains('intern-tablet-mode-active'))) {
+        this.loadInternTeamUebersicht();
+      }
     } catch (error) {
       console.error('Fehler beim Aktualisieren des Status:', error);
       alert('Fehler beim Aktualisieren des Status: ' + (error.message || 'Unbekannter Fehler'));
