@@ -19325,8 +19325,26 @@ class App {
 
   timeToMinutes(timeString) {
     if (!timeString || typeof timeString !== 'string') return 0;
-    const [hours, minutes] = timeString.split(':').map(Number);
+    // Normalisiere HHMM (4-stellig ohne Doppelpunkt, z.B. "0501" → "05:01")
+    let t = timeString.trim();
+    if (/^\d{3,4}$/.test(t)) {
+      t = t.padStart(4, '0');
+      t = `${t.slice(0, 2)}:${t.slice(2)}`;
+    }
+    const [hours, minutes] = t.split(':').map(Number);
     return (hours * 60) + (minutes || 0);
+  }
+
+  // Normalisiert eine Zeitangabe auf das Format "HH:MM"
+  // z.B. "0501" → "05:01", "08:00" bleibt unverändert
+  normalizeZeit(zeitStr) {
+    if (!zeitStr || typeof zeitStr !== 'string') return zeitStr;
+    const t = zeitStr.trim();
+    if (/^\d{3,4}$/.test(t)) {
+      const padded = t.padStart(4, '0');
+      return `${padded.slice(0, 2)}:${padded.slice(2)}`;
+    }
+    return zeitStr;
   }
 
   // ==========================================
@@ -21616,15 +21634,14 @@ class App {
       }
     }
     
-    // Startzeit parsen
-    let startzeit = termin.startzeit || termin.bring_zeit || '08:00';
-    const [startH, startM] = startzeit.split(':').map(Number);
+    // Startzeit parsen (normalisiere HHMM → HH:MM)
+    let startzeit = this.normalizeZeit(termin.startzeit || termin.bring_zeit || '08:00');
     
     // Dauer in Minuten (reine Arbeitszeit ohne Pause)
     const dauer = this.getTerminGesamtdauer(termin);
     
     // Berechne Start- und Endminuten
-    const startMinutes = startH * 60 + startM;
+    const startMinutes = this.timeToMinutes(startzeit);
     const endMinutes = startMinutes + dauer;
     
     // Fall 1: Termin wurde durch aktive Pause unterbrochen
@@ -21722,18 +21739,21 @@ class App {
 
   // Hilfsmethode: Erstellt ein einzelnes Timeline-Termin-Element
   createTimelineTerminElement(termin, startHour, endHour, type, isSchwebend, startzeit, displayDauer, gesamtDauer, istFortsetzung) {
-    const [startH, startM] = startzeit.split(':').map(Number);
+    const startAbsMinutes = this.timeToMinutes(startzeit);
+    const startH = Math.floor(startAbsMinutes / 60);
+    const startM = startAbsMinutes % 60;
     
     // Position berechnen (100px pro Stunde)
     const pixelPerHour = 100;
     const pixelPerMinute = pixelPerHour / 60;
     
-    const startMinutesFromDayStart = (startH - startHour) * 60 + startM;
+    // Termine vor startHour werden am linken Rand angezeigt (geklammert)
+    const startMinutesFromDayStart = Math.max(0, (startH - startHour) * 60 + startM);
     const leftPx = startMinutesFromDayStart * pixelPerMinute;
     const widthPx = Math.max(displayDauer * pixelPerMinute, 40); // Mindestbreite 40px
     
-    // Außerhalb des sichtbaren Bereichs?
-    if (startH < startHour || startH > endHour) {
+    // Außerhalb des sichtbaren Bereichs? (nur rechts ausblenden)
+    if (startH >= endHour) {
       return null;
     }
 
@@ -27235,7 +27255,7 @@ class App {
         <div class="intern-person-zeit">
           <div class="intern-person-zeit-item">
             <div class="zeit-label">Beginn</div>
-            <div class="zeit-value">${aktuellerAuftrag.startzeit || aktuellerAuftrag.bring_zeit || '--:--'}</div>
+            <div class="zeit-value">${this.normalizeZeit(aktuellerAuftrag.startzeit || aktuellerAuftrag.bring_zeit) || '--:--'}</div>
           </div>
           <div class="intern-person-zeit-item">
             <div class="zeit-label">${aktuellerAuftrag.status === 'abgeschlossen' ? 'Fertig' : 'Fertig ca.'}</div>
@@ -27267,7 +27287,7 @@ class App {
             <div class="naechster-label">📋 Danach:</div>
             <div class="naechster-info">
               <span class="naechster-kunde">${this.escapeHtml(naechsterAuftrag.kunde_name || '-')} • ${this.escapeHtml(naechsterAuftrag.kennzeichen || '-')}</span>
-              <span class="naechster-zeit">${naechsterAuftrag.startzeit || naechsterAuftrag.bring_zeit || '--:--'}</span>
+              <span class="naechster-zeit">${this.normalizeZeit(naechsterAuftrag.startzeit || naechsterAuftrag.bring_zeit) || '--:--'}</span>
             </div>
           </div>
         ` : ''}
@@ -27374,9 +27394,9 @@ class App {
     const geschaetzteZeit = this.getEffektiveArbeitszeit(termin);
     
     const jetzt = this.getToday();
-    const [stunden, minuten] = startzeit.split(':').map(Number);
+    const startMin = this.timeToMinutes(startzeit);
     const startDate = new Date(jetzt);
-    startDate.setHours(stunden, minuten, 0, 0);
+    startDate.setHours(Math.floor(startMin / 60), startMin % 60, 0, 0);
     
     const verstricheneMinuten = (jetzt - startDate) / 1000 / 60;
     const restMinuten = geschaetzteZeit - verstricheneMinuten;
@@ -27482,8 +27502,7 @@ class App {
     // Hole effektive Arbeitszeit MIT Faktoren
     const dauer = this.getEffektiveArbeitszeitMitFaktoren(termin, person, isLehrling, kontext);
 
-    const [stunden, minuten] = startzeit.split(':').map(Number);
-    const startMinuten = stunden * 60 + minuten;
+    const startMinuten = this.timeToMinutes(startzeit);
     let gesamtMinuten = startMinuten + dauer;
 
     // Pausenberücksichtigung (6h-Regel beachten)
@@ -27532,9 +27551,9 @@ class App {
     const geschaetzteZeit = this.getEffektiveArbeitszeitMitFaktoren(termin, person, isLehrling, kontext);
 
     const jetzt = this.getToday();
-    const [stunden, minuten] = startzeit.split(':').map(Number);
+    const startMin = this.timeToMinutes(startzeit);
     const startDate = new Date(jetzt);
-    startDate.setHours(stunden, minuten, 0, 0);
+    startDate.setHours(Math.floor(startMin / 60), startMin % 60, 0, 0);
 
     const verstricheneMinuten = (jetzt - startDate) / 1000 / 60;
     const fortschritt = (verstricheneMinuten / geschaetzteZeit) * 100;
@@ -27552,9 +27571,9 @@ class App {
     const geschaetzteZeit = this.getEffektiveArbeitszeitMitFaktoren(termin, person, isLehrling, kontext);
 
     const jetzt = this.getToday();
-    const [stunden, minuten] = startzeit.split(':').map(Number);
+    const startMin = this.timeToMinutes(startzeit);
     const startDate = new Date(jetzt);
-    startDate.setHours(stunden, minuten, 0, 0);
+    startDate.setHours(Math.floor(startMin / 60), startMin % 60, 0, 0);
 
     const verstricheneMinuten = (jetzt - startDate) / 1000 / 60;
     const restMinuten = geschaetzteZeit - verstricheneMinuten;
