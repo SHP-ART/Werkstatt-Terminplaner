@@ -1487,8 +1487,15 @@
             if (key.startsWith('_')) continue;
             const entry = details[key];
             if (entry && typeof entry === 'object') {
-              if (isLehrling && entry.lehrling_id == personId) return true;
-              if (!isLehrling && entry.mitarbeiter_id == personId) return true;
+              if (isLehrling) {
+                // Lehrling direkt über lehrling_id
+                if (entry.lehrling_id == personId) return true;
+                // Lehrling-Einträge speichern die Lehrlings-ID auch in mitarbeiter_id (type='lehrling')
+                if (entry.type === 'lehrling' && entry.mitarbeiter_id == personId) return true;
+              } else {
+                // Für Mitarbeiter: Einträge mit type='lehrling' gehören NICHT zum Mitarbeiter
+                if (entry.type !== 'lehrling' && entry.mitarbeiter_id == personId) return true;
+              }
             }
           }
         } catch (e) {}
