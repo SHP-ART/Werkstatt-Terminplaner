@@ -5,7 +5,7 @@ const fs = require('fs');
 // ========== KONFIGURATION ==========
 // Standard-Konfiguration
 const DEFAULT_CONFIG = {
-  backendUrl: 'http://localhost:3000',
+  backendUrl: 'http://127.0.0.1:3001',
   fullscreen: true,
   kiosk: false,
   refreshInterval: 30,
@@ -146,7 +146,7 @@ function httpRequest(url, options = {}) {
  */
 async function checkForUpdates() {
   try {
-    const backendUrl = CONFIG.backendUrl || 'http://localhost:3000';
+    const backendUrl = CONFIG.backendUrl || 'http://localhost:3001';
     const updateCheckUrl = `${backendUrl}/api/tablet-update/check?version=${CURRENT_VERSION}`;
     
     console.log(`🔍 Prüfe auf Updates... (Aktuelle Version: ${CURRENT_VERSION})`);
@@ -172,7 +172,7 @@ async function checkForUpdates() {
  */
 async function downloadAndInstallUpdate() {
   try {
-    const backendUrl = CONFIG.backendUrl || 'http://localhost:3000';
+    const backendUrl = CONFIG.backendUrl || 'http://localhost:3001';
     const downloadUrl = `${backendUrl}/api/tablet-update/download`;
     
     console.log('⬇️ Lade Update herunter...');
@@ -213,7 +213,7 @@ async function downloadAndInstallUpdate() {
  */
 async function reportStatusToServer() {
   try {
-    const backendUrl = CONFIG.backendUrl || 'http://localhost:3000';
+    const backendUrl = CONFIG.backendUrl || 'http://localhost:3001';
     const statusUrl = `${backendUrl}/api/tablet-update/report-status`;
     
     const hostname = os.hostname();
@@ -292,8 +292,8 @@ function createWindow() {
   mainWindow = new BrowserWindow({
     width: width,
     height: height,
-    fullscreen: CONFIG.fullscreen,
-    kiosk: CONFIG.kiosk,
+    fullscreen: app.isPackaged ? CONFIG.fullscreen : false,
+    kiosk: app.isPackaged ? CONFIG.kiosk : false,
     autoHideMenuBar: true,
     frame: !CONFIG.kiosk, // Fensterrahmen nur wenn nicht Kiosk
     webPreferences: {
@@ -308,8 +308,8 @@ function createWindow() {
   // Lade die HTML-Datei
   mainWindow.loadFile('index.html');
 
-  // DevTools deaktiviert
-  // mainWindow.webContents.openDevTools();
+  // DevTools für lokales Testen aktiviert
+  if (!app.isPackaged) mainWindow.webContents.openDevTools();
 
   // Vollbild-Toggle mit F11
   mainWindow.webContents.on('before-input-event', (event, input) => {
@@ -336,6 +336,12 @@ function createWindow() {
 
 // ========== DISPLAY-TIMER ==========
 function startDisplayTimer() {
+  // Im Dev-Modus: Display-Timer deaktiviert (Display immer an)
+  if (!app.isPackaged) {
+    console.log('🛠️ Dev-Modus: Display-Timer deaktiviert');
+    return;
+  }
+
   // Bestehenden Timer aufräumen
   if (displayTimer) {
     clearInterval(displayTimer);
@@ -352,6 +358,33 @@ function startDisplayTimer() {
 
 function checkDisplaySchedule() {
   if (!mainWindow || !CONFIG.displayOffTime || !CONFIG.displayOnTime) {
+    return;
+  }
+
+  // Manueller Override hat Vorrang vor Zeitsteuerung
+  if (CONFIG.manuellerDisplayStatus === 'an') {
+    if (powerSaveBlockerId === null) {
+      try {
+        powerSaveBlockerId = powerSaveBlocker.start('prevent-display-sleep');
+        console.log('☀️ Display-Energiesparmodus blockiert (manuell AN)');
+      } catch (e) { /* ignorieren wenn bereits aktiv */ }
+    }
+    if (mainWindow && mainWindow.webContents) {
+      mainWindow.webContents.send('display-status', false);
+    }
+    return;
+  }
+  if (CONFIG.manuellerDisplayStatus === 'aus') {
+    if (powerSaveBlockerId !== null) {
+      try {
+        powerSaveBlocker.stop(powerSaveBlockerId);
+        powerSaveBlockerId = null;
+        console.log('🌙 Display-Energiesparmodus aktiviert (manuell AUS)');
+      } catch (e) { /* ignorieren */ }
+    }
+    if (mainWindow && mainWindow.webContents) {
+      mainWindow.webContents.send('display-status', true);
+    }
     return;
   }
 
@@ -517,6 +550,10 @@ ipcMain.handle('update-display-times', (event, times) => {
   if (times.displayOnTime) {
     CONFIG.displayOnTime = times.displayOnTime;
   }
+  // Manuellen Status speichern ('an', 'aus' oder 'auto'/null für Zeitsteuerung)
+  if (times.manuellerDisplayStatus !== undefined) {
+    CONFIG.manuellerDisplayStatus = times.manuellerDisplayStatus;
+  }
   
   // Optional: Auch in config.json speichern als Cache
   saveConfig(CONFIG);
@@ -530,6 +567,8 @@ ipcMain.handle('update-display-times', (event, times) => {
 // Manuelles Display-Steuern (sofort ein/aus schalten)
 ipcMain.handle('set-display-manual', (event, shouldBeOff) => {
   console.log(`🔧 Manuelles Display-Schalten: ${shouldBeOff ? 'AUS' : 'AN'}`);
+  // Manuellen Status merken, damit checkDisplaySchedule() ihn respektiert
+  CONFIG.manuellerDisplayStatus = shouldBeOff ? 'aus' : 'an';
   
   if (shouldBeOff) {
     // Display ausschalten

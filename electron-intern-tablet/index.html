@@ -1177,11 +1177,12 @@
           
           console.log('✅ Tablet-Einstellungen vom Server geladen:', einstellungen);
           
-          // Informiere Electron-Main-Process über neue Zeiten
+          // Informiere Electron-Main-Process über neue Zeiten und manuellen Status
           if (window.electronAPI && window.electronAPI.updateDisplayTimes) {
             window.electronAPI.updateDisplayTimes({
               displayOffTime: CONFIG.displayOffTime,
-              displayOnTime: CONFIG.displayOnTime
+              displayOnTime: CONFIG.displayOnTime,
+              manuellerDisplayStatus: einstellungen.manueller_display_status || 'auto'
             });
           }
         } else {
