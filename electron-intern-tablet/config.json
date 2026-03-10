@@ -1,9 +1,10 @@
 {
-  "backendUrl": "http://localhost:3001",
+  "backendUrl": "http://192.168.0.57:3001",
   "fullscreen": true,
   "kiosk": false,
   "refreshInterval": 30,
   "autostart": false,
   "displayOffTime": "18:10",
-  "displayOnTime": "07:30"
+  "displayOnTime": "07:30",
+  "manuellerDisplayStatus": "an"
 }
