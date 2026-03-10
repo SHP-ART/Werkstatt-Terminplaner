@@ -22,7 +22,14 @@ set BACKEND_URL=http://192.168.0.57:3001
 
 REM Prüfe Verbindung
 echo Pruefe Verbindung zu %SHARE_PATH%...
-net use %SHARE_PATH% /user:werkstatt Werkstatt2024! >nul 2>&1
+echo HINWEIS: SMB-Passwort wird aus Umgebungsvariable SMB_PASSWORD gelesen
+if "%SMB_PASSWORD%"=="" (
+    echo FEHLER: Umgebungsvariable SMB_PASSWORD nicht gesetzt!
+    echo Bitte setzen: set SMB_PASSWORD=DeinPasswort
+    pause
+    exit /b 1
+)
+net use %SHARE_PATH% /user:werkstatt %SMB_PASSWORD% >nul 2>&1
 
 REM Kopiere beide Versionen
 echo.

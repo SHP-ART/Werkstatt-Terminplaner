@@ -7,8 +7,8 @@
 **Auf dem Tablet:**
 
 1. Windows-Explorer öffnen
-2. In die Adressleiste eingeben: `\\100.124.168.108\Werkstatt-Upload`
-3. Benutzername: `werkstatt` / Passwort: `Werkstatt2024!`
+2. In die Adressleile eingeben: `\\100.124.168.108\Werkstatt-Upload`
+3. Login mit SMB-Zugangsdaten (siehe interne Dokumentation)
 4. Doppelklick auf: `Werkstatt-Intern-Setup-1.6.2-ia32.exe`
 5. Installation läuft automatisch durch
 6. App startet automatisch neu mit Version 1.6.2

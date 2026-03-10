@@ -17,6 +17,7 @@ testdaten/
 # Fernwartungs-Zugangsdaten (nur lokal, nie auf GitHub!)
 FERNWARTUNG.md
 SMB.md
+SMB-CREDENTIALS-LOCAL.md
 
 # Build artifacts (will be distributed via GitHub Releases)
 /backend/dist/
