@@ -325,6 +325,34 @@ class PauseController {
       res.status(500).json({ error: 'Fehler beim Laden der Pausen', details: error.message });
     }
   }
+
+  /**
+   * GET /api/pause/heute
+   * Gibt alle Pausen von heute zurück (aktive und abgeschlossene)
+   * Wird verwendet um zu prüfen ob eine Person heute schon eine Pause gemacht hat
+   */
+  static async getHeute(req, res) {
+    try {
+      const heute = new Date();
+      const datumStr = `${heute.getFullYear()}-${String(heute.getMonth() + 1).padStart(2, '0')}-${String(heute.getDate()).padStart(2, '0')}`;
+
+      const heutigePausen = await PauseController.dbAll(`
+        SELECT 
+          pt.id,
+          pt.mitarbeiter_id,
+          pt.lehrling_id,
+          pt.abgeschlossen,
+          pt.datum
+        FROM pause_tracking pt
+        WHERE pt.datum = ?
+      `, [datumStr]);
+
+      res.json(heutigePausen);
+    } catch (error) {
+      console.error('[Pause-Heute] Fehler:', error);
+      res.status(500).json({ error: 'Fehler beim Laden der heutigen Pausen', details: error.message });
+    }
+  }
 }
 
 /**

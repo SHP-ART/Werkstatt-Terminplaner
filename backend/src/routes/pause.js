@@ -24,4 +24,10 @@ router.post('/starten', PauseController.starten);
  */
 router.get('/aktive', PauseController.getAktive);
 
+/**
+ * GET /api/pause/heute
+ * Gibt alle Pausen von heute zurück (aktive und abgeschlossene)
+ */
+router.get('/heute', PauseController.getHeute);
+
 module.exports = router;

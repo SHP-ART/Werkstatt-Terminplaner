@@ -2125,6 +2125,13 @@
             <span class="btn-icon">⏸️</span> Pause (${verbleibendeMin} Min)
           </button>
         `;
+      } else if (person.pause_bereits_gemacht) {
+        // Pause heute bereits gemacht → deaktivierter Button mit Info
+        buttonsHtml += `
+          <button class="tablet-btn tablet-btn-pause" disabled title="Pause wurde heute bereits gemacht">
+            <span class="btn-icon">✅</span> Pause erledigt
+          </button>
+        `;
       } else if (imAnzeigeZeitraum && !inBerufsschule && !istAbwesend) {
         // Pause-Button aktiv (auch wenn automatische Pausenzeit läuft aber noch nicht bestätigt)
         const pauseIcon = imIdealemZeitfenster ? '🍽️' : '⚠️';
@@ -2190,13 +2197,14 @@
 
       try {
         const heute = formatDateLocal(new Date());
-        const [mitarbeiterRaw, lehrlingeRaw, termineRaw, einstellungen, aktivePausen, abwesenheiten] = await Promise.all([
+        const [mitarbeiterRaw, lehrlingeRaw, termineRaw, einstellungen, aktivePausen, abwesenheiten, heutigePausen] = await Promise.all([
           ApiService.get('/mitarbeiter'),
           ApiService.get('/lehrlinge'),
           ApiService.get(`/termine?datum=${heute}`),
           ApiService.get('/einstellungen/werkstatt'),
           ApiService.get('/pause/aktive'),
-          ApiService.get(`/abwesenheiten/datum/${heute}`)
+          ApiService.get(`/abwesenheiten/datum/${heute}`),
+          ApiService.get('/pause/heute')
         ]);
 
         // Normalisieren: /termine kann {termine, aktivePausen} oder reines Array zurückgeben
@@ -2220,11 +2228,25 @@
           };
         });
 
+        // Markiere Personen die heute schon eine abgeschlossene Pause gemacht haben
+        const heutePausenSet = new Set();
+        (heutigePausen || []).forEach(pause => {
+          if (pause.abgeschlossen === 1) {
+            const key = pause.mitarbeiter_id 
+              ? `mitarbeiter_${pause.mitarbeiter_id}` 
+              : `lehrling_${pause.lehrling_id}`;
+            heutePausenSet.add(key);
+          }
+        });
+
         aktiveMitarbeiter.forEach(m => {
           const pauseInfo = pausenMap[`mitarbeiter_${m.id}`];
           if (pauseInfo) {
             m.pause_tracking_aktiv = pauseInfo.pause_tracking_aktiv;
             m.pause_verbleibende_minuten = pauseInfo.pause_verbleibende_minuten;
+          }
+          if (heutePausenSet.has(`mitarbeiter_${m.id}`)) {
+            m.pause_bereits_gemacht = true;
           }
         });
 
@@ -2233,6 +2255,9 @@
           if (pauseInfo) {
             l.pause_tracking_aktiv = pauseInfo.pause_tracking_aktiv;
             l.pause_verbleibende_minuten = pauseInfo.pause_verbleibende_minuten;
+          }
+          if (heutePausenSet.has(`lehrling_${l.id}`)) {
+            l.pause_bereits_gemacht = true;
           }
         });
 
