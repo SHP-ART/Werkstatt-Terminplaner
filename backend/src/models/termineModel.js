@@ -374,6 +374,7 @@ class TermineModel {
       vin, fahrzeugtyp, muss_bearbeitet_werden, ist_schwebend, schwebend_prioritaet, interne_auftragsnummer,
       startzeit, endzeit_berechnet, fertigstellung_zeit, notizen
     } = data;
+    // Hinweis: 'notizen' wird auf die DB-Spalte 'umfang' gemappt (kein separates notizen-Feld)
     
     // Baue die SQL-Query dynamisch auf
     const updates = [];
@@ -505,8 +506,11 @@ class TermineModel {
       values.push(fertigstellung_zeit || null);
     }
     if (notizen !== undefined) {
-      updates.push('notizen = ?');
-      values.push(notizen || null);
+      // 'notizen' ist ein Frontend-Alias für die DB-Spalte 'umfang'
+      if (umfang === undefined) {
+        updates.push('umfang = ?');
+        values.push(notizen || null);
+      }
     }
     if (data.erweiterung_von_id !== undefined) {
       updates.push('erweiterung_von_id = ?');
