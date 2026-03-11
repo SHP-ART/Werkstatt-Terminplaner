@@ -418,70 +418,50 @@ function checkDisplaySchedule() {
     shouldBeOff = currentTime >= offTime && currentTime < onTime;
   }
 
-  // Display physisch ausschalten (Windows 10/11)
   if (shouldBeOff) {
-    // Display ausschalten: Blockiere NICHT den Bildschirm-Energiesparmodus
+    // --- DISPLAY AUS ---
+    // 1. PowerSaveBlocker stoppen (OS darf Display abschalten)
     if (powerSaveBlockerId !== null) {
       try {
         powerSaveBlocker.stop(powerSaveBlockerId);
         powerSaveBlockerId = null;
-        console.log('🌙 Display-Energiesparmodus AKTIVIERT (Display kann ausschalten)');
+        console.log('🌙 PowerSaveBlocker gestoppt (Display kann ausschalten)');
       } catch (e) {
         console.error('Fehler beim Stoppen des PowerSaveBlockers:', e);
       }
     }
-    
-    // Windows Display ausschalten via nircmd (funktioniert zuverlässiger)
+
     if (process.platform === 'win32') {
-      try {
-        const { exec } = require('child_process');
-        
-        // Methode 1: PowerShell mit korrigierter Syntax
-        const psCommand = `powershell -Command "Add-Type -TypeDefinition @'
-using System;
-using System.Runtime.InteropServices;
-public class Monitor {
-    [DllImport(\\"user32.dll\\")]
-    public static extern int SendMessage(int hWnd, int hMsg, int wParam, int lParam);
-    public static void Off() {
-        SendMessage(0xFFFF, 0x0112, 0xF170, 2);
-    }
-}
-'@; [Monitor]::Off()"`;
-        
-        exec(psCommand, { windowsHide: true, timeout: 2000 }, (error) => {
-          if (error) {
-            console.log('PowerShell-Methode fehlgeschlagen, versuche Alternative...');
-            
-            // Methode 2: Setze Windows-Energiesparplan auf minimale Zeit
-            exec('powercfg /change monitor-timeout-ac 1', { windowsHide: true });
-            
-            // Warte kurz und setze zurück
-            setTimeout(() => {
-              exec('powercfg /change monitor-timeout-ac 0', { windowsHide: true });
-            }, 2000);
-          } else {
-            console.log('🌙 Windows-Monitor erfolgreich ausgeschaltet');
-          }
-        });
-        
-      } catch (e) {
-        console.error('Fehler beim Ausschalten des Monitors:', e.message);
-      }
+      const { exec } = require('child_process');
+      // 2. Windows-Energiesparplan: Monitor-Timeout auf 1 Minute setzen →
+      //    OS schaltet Display nach kurzer Inaktivität physisch aus
+      exec('powercfg /change monitor-timeout-ac 1', { windowsHide: true });
+      exec('powercfg /change monitor-timeout-dc 1', { windowsHide: true });
+
+      // 3. Sofort-Ausschalten versuchen via PostMessage (async, keine Blockierung)
+      const psOff = `powershell -WindowStyle Hidden -Command "` +
+        `Add-Type -TypeDefinition 'using System;using System.Runtime.InteropServices;` +
+        `public class Mon{[DllImport(\\"user32.dll\\")]public static extern bool PostMessage(IntPtr h,uint m,IntPtr w,IntPtr l);}';` +
+        `[Mon]::PostMessage([IntPtr](-1),0x0112,[IntPtr]0xF170,[IntPtr]2)"`;
+      exec(psOff, { windowsHide: true, timeout: 5000 }, (error) => {
+        if (error) console.log('PostMessage fehlgeschlagen (Overlay übernimmt):', error.message);
+        else console.log('🌙 Monitor-Aus-Signal gesendet');
+      });
     }
   } else {
-    // Display einschalten: Blockiere den Bildschirm-Energiesparmodus
+    // --- DISPLAY AN ---
+    // 1. Windows-Energiesparplan: Monitor-Timeout auf Nie (0) setzen
+    if (process.platform === 'win32') {
+      const { exec } = require('child_process');
+      exec('powercfg /change monitor-timeout-ac 0', { windowsHide: true });
+      exec('powercfg /change monitor-timeout-dc 0', { windowsHide: true });
+    }
+
+    // 2. PowerSaveBlocker aktivieren (verhindert Standby durch OS/Chromium)
     if (powerSaveBlockerId === null) {
       try {
         powerSaveBlockerId = powerSaveBlocker.start('prevent-display-sleep');
-        console.log('☀️ Display-Energiesparmodus BLOCKIERT (Display bleibt an)');
-        
-        // Sicherstellen, dass Monitor auch wirklich an ist
-        if (process.platform === 'win32') {
-          const { exec } = require('child_process');
-          // Bewege Maus minimal, um Display zu aktivieren
-          exec('powershell -Command "$sig = @\\\"\\n[DllImport(\\\\"user32.dll\\\\")]public static extern void mouse_event(int dwFlags, int dx, int dy, int cButtons, int dwExtraInfo);\\n\\\"; Add-Type -MemberDefinition $sig -Name Mouse -Namespace Win32; [Win32.Mouse]::mouse_event(0x0001, 1, 1, 0, 0)"', { windowsHide: true });
-        }
+        console.log('☀️ PowerSaveBlocker aktiv (Display bleibt an)');
       } catch (e) {
         console.error('Fehler beim Starten des PowerSaveBlockers:', e);
       }
@@ -517,6 +497,17 @@ app.whenReady().then(() => {
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {
     app.quit();
+  }
+});
+
+// Beim Beenden: Windows-Energiesparplan auf vernünftigen Standardwert zurücksetzen
+app.on('before-quit', () => {
+  if (process.platform === 'win32') {
+    const { exec } = require('child_process');
+    // 10 Minuten als sinnvoller Standard nach App-Ende
+    exec('powercfg /change monitor-timeout-ac 10', { windowsHide: true });
+    exec('powercfg /change monitor-timeout-dc 5', { windowsHide: true });
+    console.log('🔧 Monitor-Timeout auf Standard zurückgesetzt');
   }
 });
 
