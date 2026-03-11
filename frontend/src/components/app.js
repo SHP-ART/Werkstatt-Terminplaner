@@ -933,6 +933,7 @@ class App {
   bindLazyEventListeners() {
     this.bindEventListenerOnce(document.getElementById('terminForm'), 'submit', (e) => this.handleTerminSubmit(e), 'TerminFormSubmit');
     this.bindEventListenerOnce(document.getElementById('internerTerminForm'), 'submit', (e) => this.handleInternerTerminSubmit(e), 'InternerTerminFormSubmit');
+    this.bindEventListenerOnce(document.getElementById('schnellerTerminForm'), 'submit', (e) => this.handleSchnellerTerminSubmit(e), 'SchnellerTerminFormSubmit');
     this.bindEventListenerOnce(document.getElementById('kundenForm'), 'submit', (e) => this.handleKundenSubmit(e), 'KundenFormSubmit');
     this.bindEventListenerOnce(document.getElementById('zeitAnpassungForm'), 'submit', (e) => this.handleZeitAnpassungSubmit(e), 'ZeitAnpassungFormSubmit');
     this.bindEventListenerOnce(document.getElementById('serverConfigForm'), 'submit', (e) => this.handleServerConfigSubmit(e), 'ServerConfigFormSubmit');
@@ -1591,6 +1592,10 @@ class App {
     const internDatum = document.getElementById('intern_datum');
     if (internDatum) {
       internDatum.value = today;
+    }
+    const schnellDatum = document.getElementById('schnell_datum');
+    if (schnellDatum && !schnellDatum.value) {
+      schnellDatum.value = today;
     }
   }
 
@@ -5104,6 +5109,91 @@ class App {
     } catch (error) {
       console.error('Fehler beim Erstellen des internen Termins:', error);
       alert('Fehler beim Erstellen des internen Termins: ' + (error.message || 'Unbekannter Fehler'));
+    }
+  }
+
+  // ========================================
+  // SCHNELLER TERMIN (ohne Kennzeichen)
+  // ========================================
+
+  async handleSchnellerTerminSubmit(e) {
+    e.preventDefault();
+
+    const arbeitText = document.getElementById('schnell_arbeit').value.trim();
+    if (!arbeitText) {
+      alert('Bitte mindestens eine Arbeit eingeben.');
+      return;
+    }
+
+    const datumValue = document.getElementById('schnell_datum').value;
+    if (!datumValue) {
+      alert('Bitte ein Datum wählen.');
+      return;
+    }
+
+    const kundenname = document.getElementById('schnell_kundenname').value.trim() || 'Laufkunde';
+    const telefon = document.getElementById('schnell_telefon').value.trim() || null;
+    const kennzeichen = document.getElementById('schnell_kennzeichen').value.trim().toUpperCase() || null;
+    const fahrzeugtyp = document.getElementById('schnell_fahrzeugtyp').value.trim() || null;
+    const zeitStunden = parseFloat(document.getElementById('schnell_zeit').value) || 1;
+    const geschaetzteZeit = Math.round(zeitStunden * 60);
+    const bringZeit = document.getElementById('schnell_bring_zeit').value || null;
+    const abholungZeit = document.getElementById('schnell_abholung_zeit').value || null;
+    const notizen = document.getElementById('schnell_notizen').value.trim() || '';
+
+    // Neuen Kunden anlegen oder bestehenden suchen
+    let kundeId = null;
+    try {
+      const existing = (this.kundenCache || []).find(
+        k => k.name && k.name.toLowerCase() === kundenname.toLowerCase()
+      );
+      if (existing) {
+        kundeId = existing.id;
+      } else if (kundenname !== 'Laufkunde') {
+        const created = await KundenService.create({ name: kundenname, telefon: telefon || null });
+        kundeId = created.id;
+        this.loadKunden();
+      }
+    } catch (err) {
+      console.warn('Kunde nicht angelegt/gefunden, fahre ohne Kunden-ID fort:', err);
+    }
+
+    const termin = {
+      kunde_id: kundeId || null,
+      kunde_name: kundeId ? null : kundenname,
+      kunde_telefon: telefon,
+      kennzeichen: kennzeichen,
+      fahrzeugtyp: fahrzeugtyp,
+      arbeit: arbeitText,
+      umfang: notizen,
+      geschaetzte_zeit: geschaetzteZeit,
+      datum: datumValue,
+      abholung_typ: 'bringen',
+      abholung_details: null,
+      abholung_zeit: abholungZeit,
+      bring_zeit: bringZeit,
+      kontakt_option: null,
+      kilometerstand: null,
+      ersatzauto: false
+    };
+
+    try {
+      await TermineService.create(termin);
+      alert('⚡ Schneller Termin erfolgreich erstellt!');
+
+      document.getElementById('schnellerTerminForm').reset();
+      // Heute als Standard-Datum wieder setzen
+      const heute = this.formatDateLocal(this.getToday());
+      const schnellDatum = document.getElementById('schnell_datum');
+      if (schnellDatum) schnellDatum.value = heute;
+
+      this.loadTermine();
+      this.loadTermineCache();
+      this.loadDashboard();
+      this.loadTermineZeiten();
+    } catch (error) {
+      console.error('Fehler beim Erstellen des schnellen Termins:', error);
+      alert('Fehler beim Erstellen: ' + (error.message || 'Unbekannter Fehler'));
     }
   }
 

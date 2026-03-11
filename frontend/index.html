@@ -429,6 +429,10 @@
                     <span class="tab-icon">🏠</span>
                     <span class="tab-label">Interner Termin</span>
                 </button>
+                <button class="sub-tab-button" data-subtab="schnellerTermin" onclick="window.switchSubTab('schnellerTermin')">
+                    <span class="tab-icon">⚡</span>
+                    <span class="tab-label">Schneller Termin</span>
+                </button>
                 <button class="sub-tab-button" data-subtab="wartendeAktionen" onclick="window.switchSubTab('wartendeAktionen')">
                     <span class="tab-icon">🕐</span>
                     <span class="tab-label">Wartende Aktionen</span>
@@ -1109,6 +1113,82 @@
                     <div id="interneTermineSubTabKeine" class="intern-keine-auftraege" style="display: none;">
                         <span>📭</span> Keine internen Termine vorhanden
                     </div>
+                </div>
+            </div>
+
+            <!-- Schneller Termin Tab (ohne Kennzeichen) -->
+            <div id="schnellerTermin" class="sub-tab-content">
+                <div class="form-section">
+                    <h3>⚡ Schneller Termin</h3>
+                    <p style="color: #666; margin-bottom: 20px;">Für Laufkunden oder Notfälle – ohne Pflicht-Kennzeichen, in Sekunden erfasst.</p>
+                    <form id="schnellerTerminForm">
+
+                        <div class="form-row">
+                            <div class="form-group" style="flex: 2;">
+                                <label>👤 Kundenname (optional):</label>
+                                <input type="text" id="schnell_kundenname" placeholder="z.B. Mustermann oder leer lassen" autocomplete="off">
+                            </div>
+                            <div class="form-group" style="flex: 1;">
+                                <label>📞 Telefon (optional):</label>
+                                <input type="tel" id="schnell_telefon" placeholder="Rufnummer">
+                            </div>
+                        </div>
+
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>📅 Datum: *</label>
+                                <input type="date" id="schnell_datum" required>
+                            </div>
+                            <div class="form-group">
+                                <label>⏱️ Geschätzte Zeit (Stunden):</label>
+                                <input type="number" id="schnell_zeit" min="0.25" step="0.25" placeholder="z.B. 1.5">
+                            </div>
+                        </div>
+
+                        <div class="form-group">
+                            <label>🔧 Arbeiten: *</label>
+                            <textarea id="schnell_arbeit" rows="4" required placeholder="z.B.&#10;Ölwechsel&#10;Reifenwechsel&#10;Inspektion"></textarea>
+                        </div>
+
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>🚗 Kennzeichen (optional):</label>
+                                <input type="text" id="schnell_kennzeichen" placeholder="z.B. OSL-KI 123 (kann leer bleiben)" style="text-transform: uppercase;">
+                            </div>
+                            <div class="form-group">
+                                <label>🚘 Fahrzeugtyp (optional):</label>
+                                <input type="text" id="schnell_fahrzeugtyp" placeholder="z.B. VW Golf">
+                            </div>
+                        </div>
+
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>Bringzeit (optional):</label>
+                                <input type="text" id="schnell_bring_zeit" placeholder="HH:MM" maxlength="5"
+                                    oninput="this.value = this.value.replace(/[^0-9:]/g, ''); if(this.value.length === 2 && !this.value.includes(':')) this.value += ':';"
+                                    style="text-align: center;">
+                            </div>
+                            <div class="form-group">
+                                <label>Abholzeit (optional):</label>
+                                <input type="text" id="schnell_abholung_zeit" placeholder="HH:MM" maxlength="5"
+                                    oninput="this.value = this.value.replace(/[^0-9:]/g, ''); if(this.value.length === 2 && !this.value.includes(':')) this.value += ':';"
+                                    style="text-align: center;">
+                            </div>
+                        </div>
+
+                        <div class="form-group">
+                            <label>📝 Notizen (optional):</label>
+                            <textarea id="schnell_notizen" rows="2" placeholder="Zusätzliche Hinweise..."></textarea>
+                        </div>
+
+                        <button type="submit" class="btn-sparkle">
+                            <svg class="sparkle-icon" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                                <path d="M12 0L14.59 9.41L24 12L14.59 14.59L12 24L9.41 14.59L0 12L9.41 9.41L12 0Z"/>
+                            </svg>
+                            <span class="btn-text">⚡ Schnellen Termin erstellen</span>
+                            <div class="dots-border"></div>
+                        </button>
+                    </form>
                 </div>
             </div>
 
