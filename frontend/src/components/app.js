@@ -32032,8 +32032,10 @@ window.switchSubTab = function(tabName) {
   // Spezifische Aktionen je nach Tab
   if (tabName === 'neuerTermin' && window.app) {
     // Kalender initialisieren/neu rendern falls nötig
+    // Abholungs-Felder sofort korrekt ein-/ausblenden (basierend auf gewähltem Radio-Button)
     setTimeout(() => {
       window.app.setupAuslastungKalender();
+      window.app.toggleAbholungDetails();
     }, 50);
   }
   
