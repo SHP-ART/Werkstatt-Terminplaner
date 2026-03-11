@@ -19300,7 +19300,7 @@ class App {
       const abwesendStyle = istAbwesend ? 'abwesend' : false;
       const nameDisplay = istAbwesend ? `${ma.name} 🏥` : ma.name;
       
-      html += this.renderZeitleisteRow(nameDisplay, 'Mitarbeiter', istAbwesend ? [] : arbeiten, START_HOUR, END_HOUR, TOTAL_HOURS, jetztMarkerHtml, abwesendStyle, mittagspauseStart, mittagspauseDauer);
+      html += this.renderZeitleisteRow(nameDisplay, 'Mitarbeiter', istAbwesend ? [] : arbeiten, START_HOUR, END_HOUR, TOTAL_HOURS, jetztMarkerHtml, abwesendStyle, mittagspauseStart, ma.pausenzeit_minuten || mittagspauseDauer);
     }
 
     // Lehrling-Zeilen
@@ -19324,7 +19324,7 @@ class App {
         rowStyle = 'berufsschule';
       }
       
-      html += this.renderZeitleisteRow(lehrling.name + berufsschulBadge + abwesendBadge, 'Lehrling', istAbwesend ? [] : arbeiten, START_HOUR, END_HOUR, TOTAL_HOURS, jetztMarkerHtml, rowStyle, mittagspauseStart, mittagspauseDauer);
+      html += this.renderZeitleisteRow(lehrling.name + berufsschulBadge + abwesendBadge, 'Lehrling', istAbwesend ? [] : arbeiten, START_HOUR, END_HOUR, TOTAL_HOURS, jetztMarkerHtml, rowStyle, mittagspauseStart, lehrling.pausenzeit_minuten || mittagspauseDauer);
     }
 
     // Nicht zugeordnete Arbeiten - ohne Zeiteinordnung, hintereinander
@@ -20123,7 +20123,7 @@ class App {
             this.addAktivePauseToTrack(track, pauseInfo, startHour);
           } else {
             // Nur geplante Pause anzeigen wenn keine aktive Pause läuft
-            this.addMittagspauseToTrack(track, ma.mittagspause_start, startHour, false); // false = geplant
+            this.addMittagspauseToTrack(track, ma.mittagspause_start, startHour, false, ma.pausenzeit_minuten || 30); // false = geplant
           }
           
           // Drop-Events nur für nicht-abwesende registrieren
@@ -20206,7 +20206,7 @@ class App {
             this.addAktivePauseToTrack(track, pauseInfo, startHour);
           } else {
             // Nur geplante Pause anzeigen wenn keine aktive Pause läuft
-            this.addMittagspauseToTrack(track, lehrling.mittagspause_start, startHour, false); // false = geplant
+            this.addMittagspauseToTrack(track, lehrling.mittagspause_start, startHour, false, lehrling.pausenzeit_minuten || 30); // false = geplant
           }
           
           this.setupTimelineDropZone(track, startHour, 'lehrling');
@@ -20569,11 +20569,11 @@ class App {
     }
   }
 
-  addMittagspauseToTrack(track, pauseStart, startHour, istAktiv = false) {
+  addMittagspauseToTrack(track, pauseStart, startHour, istAktiv = false, pauseDauerMinuten = 30) {
     if (!pauseStart) return;
     
     const [pauseH, pauseM] = pauseStart.split(':').map(Number);
-    const pauseDauer = 30; // 30 Minuten Pause
+    const pauseDauer = pauseDauerMinuten || 30; // Individuelle Pausendauer der Person
     
     const pixelPerHour = 100;
     const pixelPerMinute = pixelPerHour / 60;
