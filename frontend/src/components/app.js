@@ -13802,8 +13802,6 @@ class App {
       </div>
     `;
     
-    // Position berechnen (nahe am Element)
-    const rect = element.getBoundingClientRect();
     document.body.appendChild(dialog);
     
     // Event-Listener für Buttons hinzufügen (Arrow-Function behält this-Kontext)
@@ -13867,19 +13865,10 @@ class App {
       });
     });
     
-    // Dialog positionieren
+    // Dialog zentriert im Viewport positionieren
     const dialogRect = dialog.getBoundingClientRect();
-    let left = rect.left + rect.width / 2 - dialogRect.width / 2;
-    let top = rect.bottom + 10;
-    
-    // Bildschirmgrenzen prüfen
-    if (left < 10) left = 10;
-    if (left + dialogRect.width > window.innerWidth - 10) {
-      left = window.innerWidth - dialogRect.width - 10;
-    }
-    if (top + dialogRect.height > window.innerHeight - 10) {
-      top = rect.top - dialogRect.height - 10;
-    }
+    const left = Math.max(10, (window.innerWidth - dialogRect.width) / 2);
+    const top = Math.max(10, (window.innerHeight - dialogRect.height) / 2);
     
     dialog.style.left = `${left}px`;
     dialog.style.top = `${top}px`;

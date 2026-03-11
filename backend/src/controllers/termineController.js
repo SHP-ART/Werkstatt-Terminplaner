@@ -2273,49 +2273,71 @@ class TermineController {
       }
 
       for (const termin of eigeneTermine) {
+        // Für in_arbeit-Termine: tatsächliche Startzeit aus DB verwenden, nicht überschreiben
+        const istInArbeit = termin.status === 'in_arbeit';
+        const verwendeteStartzeit = istInArbeit
+          ? (termin.startzeit || termin.bring_zeit || laufendeZeit)
+          : laufendeZeit;
+
         // Berechne neue Endzeit mit berechneEndzeitFuerTermin
         const { startzeit: neueStartzeit, endzeit: neueEndzeit } = await berechneEndzeitFuerTermin(
-          { ...termin, startzeit: laufendeZeit, bring_zeit: laufendeZeit },
+          { ...termin, startzeit: verwendeteStartzeit, bring_zeit: verwendeteStartzeit },
           termin.arbeitszeiten_details
         );
 
         // Prüfe ob Endzeit über Arbeitsende hinausgeht
         if (neueEndzeit && compareTime(neueEndzeit, arbeitsende) > 0) {
-          // Overflow: Verschiebe auf nächsten Arbeitstag
-          const naechsterTag = TermineModel.naechsterArbeitstag(datum);
-          
-          await runAsync(`
-            UPDATE termine 
-            SET datum = ?, 
-                startzeit = ?, 
-                bring_zeit = ?,
-                endzeit_berechnet = ?,
-                verschoben_von_datum = ?
-            WHERE id = ?
-          `, [naechsterTag, arbeitsbeginn, arbeitsbeginn, neueEndzeit, datum, termin.id]);
+          // Overflow: Verschiebe auf nächsten Arbeitstag (nur für geplante Termine)
+          if (!istInArbeit) {
+            const naechsterTag = TermineModel.naechsterArbeitstag(datum);
+            
+            await runAsync(`
+              UPDATE termine 
+              SET datum = ?, 
+                  startzeit = ?, 
+                  bring_zeit = ?,
+                  endzeit_berechnet = ?,
+                  verschoben_von_datum = ?
+              WHERE id = ?
+            `, [naechsterTag, arbeitsbeginn, arbeitsbeginn, neueEndzeit, datum, termin.id]);
 
-          verschobeneTermine.push({
-            id: termin.id,
-            altesDatum: datum,
-            neuesDatum: naechsterTag,
-            grund: 'Overflow'
-          });
+            verschobeneTermine.push({
+              id: termin.id,
+              altesDatum: datum,
+              neuesDatum: naechsterTag,
+              grund: 'Overflow'
+            });
 
-          // Laufende Zeit für nächsten Tag zurücksetzen
-          laufendeZeit = addMinutes(arbeitsbeginn, 0);
+            // Laufende Zeit für nächsten Tag zurücksetzen
+            laufendeZeit = addMinutes(arbeitsbeginn, 0);
+          } else {
+            // in_arbeit Termin kann nicht verschoben werden – nur Endzeit aktualisieren
+            await runAsync(`
+              UPDATE termine SET endzeit_berechnet = ? WHERE id = ?
+            `, [neueEndzeit, termin.id]);
+            aktualisierteTermine.push({ id: termin.id, neueStartzeit: verwendeteStartzeit, neueEndzeit });
+            laufendeZeit = neueEndzeit;
+          }
         } else {
-          // Aktualisiere Termin mit neuen Zeiten
-          await runAsync(`
-            UPDATE termine 
-            SET startzeit = ?, 
-                bring_zeit = ?,
-                endzeit_berechnet = ?
-            WHERE id = ?
-          `, [laufendeZeit, laufendeZeit, neueEndzeit, termin.id]);
+          if (istInArbeit) {
+            // in_arbeit: nur Endzeit aktualisieren, Startzeit bleibt wie gespeichert
+            await runAsync(`
+              UPDATE termine SET endzeit_berechnet = ? WHERE id = ?
+            `, [neueEndzeit, termin.id]);
+          } else {
+            // Geplanter Termin: Startzeit und Endzeit aktualisieren
+            await runAsync(`
+              UPDATE termine 
+              SET startzeit = ?, 
+                  bring_zeit = ?,
+                  endzeit_berechnet = ?
+              WHERE id = ?
+            `, [laufendeZeit, laufendeZeit, neueEndzeit, termin.id]);
+          }
 
           aktualisierteTermine.push({
             id: termin.id,
-            neueStartzeit: laufendeZeit,
+            neueStartzeit: verwendeteStartzeit,
             neueEndzeit: neueEndzeit
           });
 

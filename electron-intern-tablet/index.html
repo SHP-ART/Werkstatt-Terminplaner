@@ -1656,8 +1656,12 @@
       try {
         const heute = formatDateLocal(new Date());
         
-        // 1. Status auf in_arbeit setzen
-        await ApiService.put(`/termine/${terminId}`, { status: 'in_arbeit' });
+        // Aktuelle Uhrzeit als tatsächliche Startzeit
+        const jetzt = new Date();
+        const aktuelleZeit = `${String(jetzt.getHours()).padStart(2, '0')}:${String(jetzt.getMinutes()).padStart(2, '0')}`;
+        
+        // 1. Status auf in_arbeit setzen + tatsächliche Startzeit speichern
+        await ApiService.put(`/termine/${terminId}`, { status: 'in_arbeit', startzeit: aktuelleZeit });
         
         // 2. Termine neu berechnen
         await ApiService.post('/termine/berechne-zeiten-neu', {
