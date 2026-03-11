@@ -282,6 +282,13 @@
       color: var(--highlight);
     }
 
+    .auftrag-interne-nr {
+      font-size: 0.9em;
+      font-weight: 500;
+      color: var(--text-muted);
+      margin-left: 4px;
+    }
+
     .auftrag-kunde {
       font-size: 0.95em;
       margin-top: 3px;
@@ -1953,10 +1960,13 @@
         const arbeiten = getArbeitenFromTermin(aktuellerAuftrag);
         const hatMehrereArbeiten = arbeiten.length > 1;
 
+        const interneNrAktuell = aktuellerAuftrag.interne_auftragsnummer && aktuellerAuftrag.interne_auftragsnummer.trim()
+          ? escapeHtml(aktuellerAuftrag.interne_auftragsnummer.trim()) : null;
+
         bodyContent = `
           <div class="auftrag-info ${istVerschoben ? 'termin-verschoben' : ''} ${istVerspaetet ? 'termin-verspaetet' : ''}">
             <div class="auftrag-label">🔧 Aktueller Auftrag ${badges}</div>
-            <div class="auftrag-nr">${escapeHtml(aktuellerAuftrag.termin_nr) || '-'}</div>
+            <div class="auftrag-nr">${escapeHtml(aktuellerAuftrag.termin_nr) || '-'}${interneNrAktuell ? ` <span class="auftrag-interne-nr">· ${interneNrAktuell}</span>` : ''}</div>
             <div class="auftrag-kunde">${escapeHtml(aktuellerAuftrag.kunde_name) || '-'}</div>
             <div class="auftrag-kennzeichen">${escapeHtml(aktuellerAuftrag.kennzeichen) || '-'}</div>
             ${!hatMehrereArbeiten ? `<div class="auftrag-arbeit">${escapeHtml(aktuellerAuftrag.arbeit) || '-'}</div>` : ''}
@@ -1994,7 +2004,7 @@
             <div class="naechster-auftrag">
               <div class="naechster-label">📋 Danach:</div>
               <div class="naechster-info">
-                <span>${escapeHtml(naechsterAuftrag.kunde_name) || '-'} • ${escapeHtml(naechsterAuftrag.kennzeichen) || '-'}</span>
+                <span>${escapeHtml(naechsterAuftrag.termin_nr) || ''}${naechsterAuftrag.interne_auftragsnummer && naechsterAuftrag.interne_auftragsnummer.trim() ? ` · ${escapeHtml(naechsterAuftrag.interne_auftragsnummer.trim())}` : ''} – ${escapeHtml(naechsterAuftrag.kunde_name) || '-'} • ${escapeHtml(naechsterAuftrag.kennzeichen) || '-'}</span>
                 <span>${naechsterAuftrag.startzeit || naechsterAuftrag.bring_zeit || '--:--'}</span>
               </div>
             </div>
@@ -2002,9 +2012,8 @@
         `;
       } else if (naechsterAuftrag) {
         // Interne Auftragsnummer priorisieren, wenn verfügbar
-        const anzeigeNr = (naechsterAuftrag.interne_auftragsnummer && naechsterAuftrag.interne_auftragsnummer.trim())
-          ? `📋 ${escapeHtml(naechsterAuftrag.interne_auftragsnummer)}`
-          : escapeHtml(naechsterAuftrag.termin_nr) || '-';
+        const interneNrNaechster = naechsterAuftrag.interne_auftragsnummer && naechsterAuftrag.interne_auftragsnummer.trim()
+          ? escapeHtml(naechsterAuftrag.interne_auftragsnummer.trim()) : null;
         
         bodyContent = `
           <div class="leer-zustand">
@@ -2015,7 +2024,7 @@
           <div class="naechster-auftrag">
             <div class="naechster-label">⏰ Nächster Auftrag:</div>
             <div class="auftrag-info" style="border-left-color: var(--success);">
-              <div class="auftrag-nr">${anzeigeNr}</div>
+              <div class="auftrag-nr">${escapeHtml(naechsterAuftrag.termin_nr) || '-'}${interneNrNaechster ? ` <span class="auftrag-interne-nr">· ${interneNrNaechster}</span>` : ''}</div>
               <div class="auftrag-kunde">${escapeHtml(naechsterAuftrag.kunde_name) || '-'}</div>
               <div class="auftrag-kennzeichen">${escapeHtml(naechsterAuftrag.kennzeichen) || '-'}</div>
               ${renderArbeitenKompakt(naechsterAuftrag) || `<div class="auftrag-arbeit">${escapeHtml(naechsterAuftrag.arbeit) || '-'}</div>`}

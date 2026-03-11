@@ -1,6 +1,6 @@
 {
   "name": "werkstatt-intern-tablet",
-  "version": "1.6.9",
+  "version": "1.7.0",
   "description": "Werkstatt Team-Übersicht für Tablet (Vollbild)",
   "main": "main.js",
   "scripts": {
