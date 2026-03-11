@@ -5133,7 +5133,7 @@ class App {
 
     const kundenname = document.getElementById('schnell_kundenname').value.trim() || 'Laufkunde';
     const telefon = document.getElementById('schnell_telefon').value.trim() || null;
-    const kennzeichen = document.getElementById('schnell_kennzeichen').value.trim().toUpperCase() || null;
+    const kennzeichen = document.getElementById('schnell_kennzeichen').value.trim().toUpperCase() || '';
     const fahrzeugtyp = document.getElementById('schnell_fahrzeugtyp').value.trim() || null;
     const zeitStunden = parseFloat(document.getElementById('schnell_zeit').value) || 1;
     const geschaetzteZeit = Math.round(zeitStunden * 60);
