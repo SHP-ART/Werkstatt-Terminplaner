@@ -20589,14 +20589,14 @@ class App {
     pauseBlock.style.width = `${widthPx}px`;
     
     if (!istAktiv) {
-      // Geplante Pause - gestrichelt und transparent
-      pauseBlock.style.opacity = '0.5';
-      pauseBlock.style.border = '2px dashed #ccc';
-      pauseBlock.style.background = 'repeating-linear-gradient(45deg, #f0f0f0, #f0f0f0 10px, #e0e0e0 10px, #e0e0e0 20px)';
+      // Geplante Pause - deutlich sichtbar (rötlich-gestreift wie in der Zeitleiste)
+      pauseBlock.style.background = 'repeating-linear-gradient(-45deg, rgba(239,83,80,0.15), rgba(239,83,80,0.15) 6px, rgba(239,83,80,0.25) 6px, rgba(239,83,80,0.25) 12px)';
+      pauseBlock.style.border = '2px dashed #ef5350';
+      pauseBlock.style.borderRadius = '4px';
       pauseBlock.style.cursor = 'not-allowed';
       pauseBlock.style.pointerEvents = 'none'; // Termine können über Pause hinweg platziert werden
       pauseBlock.title = `Geplante Mittagspause ${pauseStart} - ${pauseDauer} min\n⚠️ Pause kann nicht verschoben werden\n✓ Termine können hier platziert werden`;
-      pauseBlock.innerHTML = '<span style="opacity:0.6">🍽️</span>';
+      pauseBlock.innerHTML = '<span style="font-size:1.1em">🍽️</span>';
     } else {
       pauseBlock.style.cursor = 'not-allowed';
       pauseBlock.style.pointerEvents = 'none'; // Termine können über Pause hinweg platziert werden
