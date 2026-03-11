@@ -1,6 +1,6 @@
 {
   "name": "werkstatt-intern-tablet",
-  "version": "1.6.8",
+  "version": "1.6.9",
   "description": "Werkstatt Team-Übersicht für Tablet (Vollbild)",
   "main": "main.js",
   "scripts": {
@@ -33,6 +33,7 @@
     "nsis": {
       "oneClick": true,
       "allowToChangeInstallationDirectory": false,
+      "runAfterFinish": true,
       "artifactName": "Werkstatt-Intern-Setup-${version}-${arch}.exe"
     },
     "files": [
