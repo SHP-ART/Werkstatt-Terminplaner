@@ -19591,16 +19591,14 @@ class App {
         // BUG 8 FIX: Endzeit basierend auf individueller Arbeitszeit berechnen
         endMinutes = startMinutes + anzeigeZeit;
         
-        // Kollisionsvermeidung: Wenn dieser Block mit einem vorherigen Block des gleichen Termins überlappt,
-        // verschiebe ihn ans Ende des vorherigen Blocks
+        // Kollisionsvermeidung: Arbeiten desselben Termins nahtlos aneinanderreihen
+        // (Abstandspausen / Lücken UND Überlappungen zwischen den Arbeiten automatisch entfernen)
         const terminId = arbeit.terminId;
         if (terminEndzeiten.has(terminId)) {
           const vorherEnde = terminEndzeiten.get(terminId);
-          if (startMinutes < vorherEnde) {
-            // Überlappung! Verschiebe ans Ende des vorherigen Blocks
-            startMinutes = vorherEnde;
-            endMinutes = startMinutes + anzeigeZeit;
-          }
+          // Immer direkt nach vorheriger Arbeit des gleichen Termins starten (keine Lücken)
+          startMinutes = vorherEnde;
+          endMinutes = startMinutes + anzeigeZeit;
         }
         
         // NEU: Prüfe auch auf Überlappung mit ALLEN vorherigen Blöcken (andere Termine)
@@ -19650,9 +19648,12 @@ class App {
             bloeckeHtml += renderBlock(arbeit, teil2Start, teil2End, true);
             currentEndMinutes = teil2End;
             globalLastEnd = Math.max(globalLastEnd, teil2End);
+            // Tatsächliches Ende nach Pause merken (für lückenlose Anreihung der nächsten Arbeit)
+            terminEndzeiten.set(arbeit.terminId, Math.max(terminEndzeiten.get(arbeit.terminId) || 0, teil2End));
           } else {
             currentEndMinutes = pauseEndMinuten;
             globalLastEnd = Math.max(globalLastEnd, pauseEndMinuten);
+            terminEndzeiten.set(arbeit.terminId, Math.max(terminEndzeiten.get(arbeit.terminId) || 0, pauseEndMinuten));
           }
           continue; // Springe zum nächsten Termin
         }
@@ -19663,6 +19664,7 @@ class App {
           bloeckeHtml += renderBlock(arbeit, startMinutes, endMinutes, false);
           currentEndMinutes = pauseEndMinuten; // Nächster Block beginnt NACH der Pause
           globalLastEnd = Math.max(globalLastEnd, pauseEndMinuten);
+          terminEndzeiten.set(arbeit.terminId, Math.max(terminEndzeiten.get(arbeit.terminId) || 0, pauseEndMinuten));
           continue;
         }
       }
@@ -20347,6 +20349,9 @@ class App {
           const restzeit = terminGesamtzeit - gesamtArbeitZeit;
           const zeitProArbeitOhneZeit = arbeitenOhneZeit > 0 ? Math.round(restzeit / arbeitenOhneZeit) : 30;
           
+          // Sequentielle Startzeit für Arbeiten (Abstandspausen zwischen Arbeiten automatisch entfernen)
+          let laufendeArbeitsStartzeit = (details && details._startzeit) || termin.startzeit || termin.bring_zeit || '08:00';
+
           // Mehrere Arbeiten - jede als separater Block
           arbeiten.forEach((arbeit, index) => {
             const arbeitZuordnung = this.getArbeitZuordnung(arbeit, details, termin);
@@ -20363,15 +20368,24 @@ class App {
             
             // Erstelle virtuellen Termin für diese Arbeit
             const arbeitDauer = (parseInt(arbeit.zeit) > 0) ? arbeit.zeit : zeitProArbeitOhneZeit;
+            // Effektive Startzeit: gespeicherte individuelle Zeit, sonst sequentiell berechnet
+            const effektiveArbeitStartzeit = arbeit.startzeit || laufendeArbeitsStartzeit;
             const arbeitTermin = {
               ...termin,
               _arbeitName: arbeit.name,
               _arbeitIndex: index,
               _istArbeitBlock: true,
               _arbeitDauer: arbeitDauer,
-              startzeit: arbeit.startzeit || (details && details._startzeit) || termin.startzeit || termin.bring_zeit || '08:00'
+              startzeit: effektiveArbeitStartzeit
             };
             
+            // Sequentielle Startzeit für nächste Arbeit berechnen (Abstandspausen entfernen)
+            const nebenzeitFuerLaufend = this._planungNebenzeitProzent || 0;
+            const dauerFuerLaufend = nebenzeitFuerLaufend > 0 ? Math.round(arbeitDauer * (1 + nebenzeitFuerLaufend / 100)) : arbeitDauer;
+            const [lH, lM] = effektiveArbeitStartzeit.split(':').map(Number);
+            const endMinFuerLaufend = lH * 60 + lM + dauerFuerLaufend;
+            laufendeArbeitsStartzeit = `${Math.floor(endMinFuerLaufend / 60).toString().padStart(2, '0')}:${(endMinFuerLaufend % 60).toString().padStart(2, '0')}`;
+
             // Prüfe ob diese Arbeit zugeordnet ist
             if (arbeitZuordnung.type === 'lehrling' && arbeitZuordnung.id && lehrlingeMap[arbeitZuordnung.id]) {
               const pauseStart = lehrlingePauseMap[arbeitZuordnung.id];
