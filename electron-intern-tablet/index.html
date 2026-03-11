@@ -1991,7 +1991,7 @@
       
       // 1. Toggle-Button: Starten/Fertig - IMMER ANZEIGEN
       const kannStarten = terminMitButtons && !inPause && !inBerufsschule && !istAbwesend && 
-                         (terminMitButtons.status === 'geplant' || terminMitButtons.status === 'offen');
+                         (terminMitButtons.status === 'geplant' || terminMitButtons.status === 'offen' || terminMitButtons.status === 'wartend');
       // Fertig-Button nur zeigen wenn KEINE mehreren Arbeiten oder ALLE Arbeiten abgeschlossen
       const alleArbeitenAbgeschlossen = terminArbeiten.length > 0 && terminArbeiten.every(a => a.abgeschlossen);
       const kannBeenden = terminMitButtons && !inPause && !inBerufsschule && !istAbwesend && 

@@ -508,6 +508,14 @@ class TermineModel {
       updates.push('notizen = ?');
       values.push(notizen || null);
     }
+    if (data.erweiterung_von_id !== undefined) {
+      updates.push('erweiterung_von_id = ?');
+      values.push(data.erweiterung_von_id || null);
+    }
+    if (data.ist_erweiterung !== undefined) {
+      updates.push('ist_erweiterung = ?');
+      values.push(data.ist_erweiterung ? 1 : 0);
+    }
 
     if (updates.length === 0) {
       console.log('[DEBUG] TermineModel.update - Keine Felder zum Aktualisieren');

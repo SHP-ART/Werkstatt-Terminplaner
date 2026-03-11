@@ -13772,6 +13772,18 @@ class App {
             <span class="detail-label">📅</span>
             <span class="detail-value">Abholung: <strong>${abholzeitText}</strong> (${abholDatumText})</span>
           </div>
+          <div class="detail-divider"></div>
+          <div class="detail-row" style="align-items: center; gap: 6px; flex-wrap: wrap;">
+            <span class="detail-label">🕐</span>
+            <span style="font-size: 0.85em; color: #555;">Startzeit:</span>
+            <input type="time" id="schnellStatusStartzeit" value="${startzeit}"
+              style="border: 1px solid #ccc; border-radius: 6px; padding: 3px 7px; font-size: 0.9em; width: 90px;">
+            <button data-action="startzeit-setzen" class="btn-schnell-startzeit"
+              style="padding: 3px 10px; font-size: 0.82em; border-radius: 6px; border: none; background: #2563eb; color: #fff; cursor: pointer; white-space: nowrap;">
+              ✓ Übernehmen
+            </button>
+            <span id="schnellStartzeitHinweis" style="font-size: 0.78em; color: #16a34a; display: none;">✅ Geändert – Speichern nicht vergessen!</span>
+          </div>
         </div>
         
         ${statusAktionen}
@@ -13779,6 +13791,9 @@ class App {
         <div class="schnell-status-footer">
           <button class="btn-schnell-link" data-action="erweitern" title="Auftrag erweitern">
             ➕ Erweitern
+          </button>
+          <button class="btn-schnell-link" data-action="verknuepfen" title="Termin mit einem anderen Termin als Erweiterung verknüpfen">
+            🔗 Verknüpfen
           </button>
           <button class="btn-schnell-link" data-action="erweitert" title="Mehr bearbeiten">
             ✏️ Mehr...
@@ -13793,12 +13808,39 @@ class App {
     
     // Event-Listener für Buttons hinzufügen (Arrow-Function behält this-Kontext)
     dialog.querySelectorAll('[data-action]').forEach(btn => {
-      btn.addEventListener('click', (e) => {
+      btn.addEventListener('click', async (e) => {
         e.stopPropagation();
         const action = btn.dataset.action;
         
         if (action === 'close') {
           this.closeSchnellStatusDialog();
+        } else if (action === 'startzeit-setzen') {
+          const neueStartzeit = document.getElementById('schnellStatusStartzeit')?.value;
+          if (!neueStartzeit) return;
+          // Mitarbeiter-Zuweisung aus Termin-Daten lesen
+          let type = 'mitarbeiter';
+          let mitarbeiterId = termin.mitarbeiter_id || null;
+          let lehrlingId = null;
+          try {
+            const details = termin.arbeitszeiten_details
+              ? (typeof termin.arbeitszeiten_details === 'string'
+                  ? JSON.parse(termin.arbeitszeiten_details)
+                  : termin.arbeitszeiten_details)
+              : {};
+            const zuweisung = details._gesamt_mitarbeiter_id;
+            if (zuweisung) {
+              type = zuweisung.type || 'mitarbeiter';
+              if (type === 'lehrling') {
+                lehrlingId = zuweisung.id;
+                mitarbeiterId = null;
+              } else {
+                mitarbeiterId = zuweisung.id;
+              }
+            }
+          } catch (e) { /* ignorieren */ }
+          await this.moveTerminToMitarbeiterWithTime(terminId, mitarbeiterId, lehrlingId, type, neueStartzeit);
+          const hinweis = document.getElementById('schnellStartzeitHinweis');
+          if (hinweis) hinweis.style.display = 'inline';
         } else if (action === 'abgeschlossen') {
           const zeit = parseInt(btn.dataset.zeit) || null;
           this.setzeSchnellStatus(terminId, 'abgeschlossen', zeit);
@@ -13812,6 +13854,9 @@ class App {
           // Auftrag erweitern - Modal öffnen
           this.closeSchnellStatusDialog();
           this.openErweiterungModalForTermin(terminId);
+        } else if (action === 'verknuepfen') {
+          this.closeSchnellStatusDialog();
+          this.showVerknuepfenDialog(terminId);
         } else if (action === 'erweitert') {
           // Erweitertes Bearbeitungs-Popup öffnen
           this.closeSchnellStatusDialog();
@@ -13865,7 +13910,154 @@ class App {
     }
     document.removeEventListener('click', this.handleSchnellStatusOutsideClick);
   }
-  
+
+  // Verknüpfen-Dialog: Termin mit einem anderen als Erweiterung verknüpfen
+  showVerknuepfenDialog(terminId) {
+    const existing = document.getElementById('verknuepfenDialog');
+    if (existing) existing.remove();
+
+    const termin = this.termineById[terminId];
+    const terminNr = termin?.termin_nr || `#${terminId}`;
+
+    const dialog = document.createElement('div');
+    dialog.id = 'verknuepfenDialog';
+    dialog.className = 'schnell-bearbeitung-dialog';
+    dialog.innerHTML = `
+      <div class="schnell-bearbeitung-overlay"></div>
+      <div class="schnell-bearbeitung-content" style="max-width: 420px;">
+        <div class="schnell-bearbeitung-header">
+          <h3>🔗 Termin verknüpfen</h3>
+          <button class="schnell-bearbeitung-close" data-action="close">×</button>
+        </div>
+        <div class="schnell-bearbeitung-info">
+          <span>📋 <strong>${terminNr}</strong> als Erweiterung eines anderen Termins festlegen</span>
+        </div>
+        <div class="schnell-bearbeitung-form">
+          <div class="form-group">
+            <label>🔍 Haupt-Termin-Nr. eingeben (z.B. T-2026-045):</label>
+            <input type="text" id="verknuepfenTerminNr" placeholder="T-2026-..." autocomplete="off"
+              style="text-transform: uppercase;">
+            <small style="color: #666; display:block; margin-top:4px;">
+              Dieser Termin wird als Erweiterung des eingegebenen Termins markiert.
+            </small>
+          </div>
+          <div id="verknuepfenFundAnzeige" style="display:none; padding:8px 12px; background:#e8f5e9; border-radius:6px; border-left:3px solid #4caf50; font-size:0.9em;"></div>
+          <div id="verknuepfenFehler" style="display:none; padding:8px 12px; background:#ffebee; border-radius:6px; border-left:3px solid #f44336; font-size:0.9em; color:#c62828;"></div>
+        </div>
+        <div class="schnell-bearbeitung-footer">
+          <button class="btn-schnell-cancel" data-action="close">Abbrechen</button>
+          <button class="btn-schnell-save" data-action="suchen">🔍 Suchen</button>
+          <button class="btn-schnell-save" data-action="verknuepfen" style="display:none; background:#7c3aed;">🔗 Verknüpfen</button>
+          <button class="btn-schnell-save" data-action="trennen" style="display:none; background:#dc2626;">✂️ Trennen</button>
+        </div>
+      </div>
+    `;
+
+    document.body.appendChild(dialog);
+
+    // Aktuell verknüpft? Zeige "Trennen"-Button
+    if (termin?.erweiterung_von_id) {
+      const trennBtn = dialog.querySelector('[data-action="trennen"]');
+      if (trennBtn) trennBtn.style.display = '';
+    }
+
+    let gefundenerElternId = null;
+
+    dialog.querySelectorAll('[data-action]').forEach(btn => {
+      btn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        const action = btn.dataset.action;
+
+        if (action === 'close') {
+          dialog.classList.remove('active');
+          setTimeout(() => dialog.remove(), 200);
+
+        } else if (action === 'suchen') {
+          const eingabe = document.getElementById('verknuepfenTerminNr')?.value?.trim().toUpperCase();
+          const fehlerEl = document.getElementById('verknuepfenFehler');
+          const fundEl = document.getElementById('verknuepfenFundAnzeige');
+          const verknuepfenBtn = dialog.querySelector('[data-action="verknuepfen"]');
+          fehlerEl.style.display = 'none';
+          fundEl.style.display = 'none';
+          gefundenerElternId = null;
+          verknuepfenBtn.style.display = 'none';
+
+          if (!eingabe) { fehlerEl.textContent = 'Bitte Termin-Nr. eingeben.'; fehlerEl.style.display = ''; return; }
+
+          try {
+            // Suche in Cache zuerst
+            const treffer = Object.values(this.termineById).find(t =>
+              t.termin_nr && t.termin_nr.toUpperCase() === eingabe && t.id !== terminId
+            );
+            if (treffer) {
+              gefundenerElternId = treffer.id;
+              fundEl.innerHTML = `✅ Gefunden: <strong>${treffer.termin_nr}</strong> — ${treffer.kunde_name || '?'} • ${treffer.kennzeichen || '—'} • ${treffer.datum || ''}`;
+              fundEl.style.display = '';
+              verknuepfenBtn.style.display = '';
+            } else {
+              fehlerEl.textContent = `Termin "${eingabe}" nicht im heutigen Cache gefunden. Bitte Datum laden.`;
+              fehlerEl.style.display = '';
+            }
+          } catch (err) {
+            fehlerEl.textContent = 'Fehler bei der Suche: ' + err.message;
+            fehlerEl.style.display = '';
+          }
+
+        } else if (action === 'verknuepfen' && gefundenerElternId) {
+          try {
+            await TermineService.update(terminId, {
+              erweiterung_von_id: gefundenerElternId,
+              ist_erweiterung: 1
+            });
+            if (this.termineById[terminId]) {
+              this.termineById[terminId].erweiterung_von_id = gefundenerElternId;
+              this.termineById[terminId].ist_erweiterung = 1;
+            }
+            this.showToast('✅ Termin erfolgreich verknüpft', 'success');
+            dialog.classList.remove('active');
+            setTimeout(() => dialog.remove(), 200);
+            this.loadAuslastungDragDrop?.();
+          } catch (err) {
+            document.getElementById('verknuepfenFehler').textContent = 'Fehler: ' + err.message;
+            document.getElementById('verknuepfenFehler').style.display = '';
+          }
+
+        } else if (action === 'trennen') {
+          try {
+            await TermineService.update(terminId, {
+              erweiterung_von_id: null,
+              ist_erweiterung: 0
+            });
+            if (this.termineById[terminId]) {
+              this.termineById[terminId].erweiterung_von_id = null;
+              this.termineById[terminId].ist_erweiterung = 0;
+            }
+            this.showToast('✅ Verknüpfung aufgehoben', 'success');
+            dialog.classList.remove('active');
+            setTimeout(() => dialog.remove(), 200);
+            this.loadAuslastungDragDrop?.();
+          } catch (err) {
+            document.getElementById('verknuepfenFehler').textContent = 'Fehler: ' + err.message;
+            document.getElementById('verknuepfenFehler').style.display = '';
+          }
+        }
+      });
+    });
+
+    dialog.querySelector('.schnell-bearbeitung-overlay').addEventListener('click', () => {
+      dialog.classList.remove('active');
+      setTimeout(() => dialog.remove(), 200);
+    });
+
+    // Enter-Taste im Suchfeld = Suchen
+    document.getElementById('verknuepfenTerminNr')?.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') dialog.querySelector('[data-action="suchen"]').click();
+    });
+
+    setTimeout(() => dialog.classList.add('active'), 10);
+    setTimeout(() => document.getElementById('verknuepfenTerminNr')?.focus(), 100);
+  }
+
   // Schnell-Bearbeitungs-Dialog (erweitertes Popup)
   showSchnellBearbeitungDialog(termin) {
     // Alten Dialog entfernen falls vorhanden
