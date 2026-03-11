@@ -202,16 +202,22 @@ async function downloadAndInstallUpdate() {
     console.log('✅ Update heruntergeladen:', updatePath);
     console.log('🚀 Starte Installation...');
     
-    // Installer starten
-    const { exec } = require('child_process');
-    exec(`"${updatePath}" /S`, (error) => {
-      if (error) {
-        console.error('❌ Installation fehlgeschlagen:', error);
-      } else {
-        console.log('✅ Installation gestartet - App wird beendet');
-        app.quit();
-      }
+    // App zuerst beenden, dann Installer starten
+    // Kleines Batch-Skript: wartet kurz und startet dann den Installer
+    const batchPath = path.join(tempDir, 'werkstatt-update-launcher.bat');
+    const batchContent = `@echo off\r\nping 127.0.0.1 -n 3 -w 1000 > nul\r\n"${updatePath}" /S\r\n`;
+    fs.writeFileSync(batchPath, batchContent);
+    
+    const { spawn } = require('child_process');
+    const child = spawn('cmd.exe', ['/c', batchPath], {
+      detached: true,
+      stdio: 'ignore',
+      windowsHide: true
     });
+    child.unref();
+    
+    console.log('✅ Update-Launcher gestartet - App wird jetzt beendet');
+    setTimeout(() => app.quit(), 500);
     
     return true;
   } catch (error) {
