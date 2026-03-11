@@ -2015,10 +2015,12 @@
           </button>
         `;
       } else if (hatMehrereArbeiten && terminMitButtons.status === 'in_arbeit') {
-        // Bei mehreren Arbeiten in Arbeit: Kein globaler Fertig-Button (nur einzelne Arbeiten-Buttons)
+        // Bei mehreren Arbeiten in Arbeit: Globaler Fertig-Button erlaubt kompletten Abschluss
+        // (Einzelarbeits-Buttons oben im Termin-Body bleiben erhalten für granulare Erfassung)
         buttonsHtml += `
-          <button class="tablet-btn tablet-btn-confirm" disabled style="opacity: 0.5;">
-            <span class="btn-icon">⚙️</span> In Arbeit
+          <button class="tablet-btn tablet-btn-complete"
+                  onclick="handleBeenden(${terminMitButtons.id}, '${escapeHtml(terminMitButtons.kunde_name)}')"> 
+            <span class="btn-icon">✓</span> Fertig
           </button>
         `;
       } else {
