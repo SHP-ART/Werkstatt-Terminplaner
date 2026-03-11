@@ -777,6 +777,47 @@
       box-shadow: 0 2px 4px rgba(25, 118, 210, 0.3);
     }
 
+    /* Kompakte Arbeiten-Liste (Bullet-Points) */
+    .arbeiten-kompakt {
+      list-style: none;
+      margin: 8px 0 2px 0;
+      padding: 0;
+    }
+    .arbeiten-kompakt-item {
+      display: flex;
+      align-items: baseline;
+      gap: 6px;
+      font-size: 0.82em;
+      padding: 2px 0;
+      color: var(--text-muted);
+      line-height: 1.4;
+    }
+    .arbeiten-kompakt-item.abgeschlossen {
+      opacity: 0.55;
+      text-decoration: line-through;
+    }
+    .arbeiten-kompakt-icon {
+      flex-shrink: 0;
+      font-size: 0.9em;
+    }
+    .arbeiten-kompakt-name {
+      flex: 1;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      font-weight: 500;
+      color: var(--text-primary);
+    }
+    .arbeiten-kompakt-item.abgeschlossen .arbeiten-kompakt-name {
+      color: var(--text-muted);
+    }
+    .arbeiten-kompakt-zeit {
+      flex-shrink: 0;
+      font-size: 0.85em;
+      color: var(--text-muted);
+      font-variant-numeric: tabular-nums;
+    }
+
     /* Verschobene Termine */
     .termin-verschoben {
       border: 2px solid var(--warning);
@@ -1553,6 +1594,25 @@
     }
 
     /**
+     * Rendert Arbeiten als kompakte Bullet-Liste (ohne Buttons, für Vorschau)
+     */
+    function renderArbeitenKompakt(termin) {
+      const arbeiten = getArbeitenFromTermin(termin);
+      if (arbeiten.length === 0) return '';
+      let html = '<ul class="arbeiten-kompakt">';
+      arbeiten.forEach(arbeit => {
+        const checked = arbeit.abgeschlossen ? 'abgeschlossen' : '';
+        const icon = arbeit.abgeschlossen ? '\u2705' : '\u2022';
+        const zeitText = arbeit.abgeschlossen
+          ? formatMinutesToHours(arbeit.tatsaechliche_zeit || arbeit.zeit)
+          : formatMinutesToHours(arbeit.zeit);
+        html += `<li class="arbeiten-kompakt-item ${checked}"><span class="arbeiten-kompakt-icon">${icon}</span><span class="arbeiten-kompakt-name">${escapeHtml(arbeit.name)}</span><span class="arbeiten-kompakt-zeit">${zeitText}</span></li>`;
+      });
+      html += '</ul>';
+      return html;
+    }
+
+    /**
      * Rendert einzelne Arbeiten mit Buttons
      */
     function renderArbeitenListe(termin, personId, personTyp) {
@@ -1896,6 +1956,7 @@
             <div class="auftrag-kunde">${escapeHtml(aktuellerAuftrag.kunde_name) || '-'}</div>
             <div class="auftrag-kennzeichen">${escapeHtml(aktuellerAuftrag.kennzeichen) || '-'}</div>
             ${!hatMehrereArbeiten ? `<div class="auftrag-arbeit">${escapeHtml(aktuellerAuftrag.arbeit) || '-'}</div>` : ''}
+            ${hatMehrereArbeiten ? renderArbeitenKompakt(aktuellerAuftrag) : ''}
           </div>
 
           ${hatMehrereArbeiten ? renderArbeitenListe(aktuellerAuftrag, personId, typ) : ''}
@@ -1953,7 +2014,7 @@
               <div class="auftrag-nr">${anzeigeNr}</div>
               <div class="auftrag-kunde">${escapeHtml(naechsterAuftrag.kunde_name) || '-'}</div>
               <div class="auftrag-kennzeichen">${escapeHtml(naechsterAuftrag.kennzeichen) || '-'}</div>
-              <div class="auftrag-arbeit">${escapeHtml(naechsterAuftrag.arbeit) || '-'}</div>
+              ${renderArbeitenKompakt(naechsterAuftrag) || `<div class="auftrag-arbeit">${escapeHtml(naechsterAuftrag.arbeit) || '-'}</div>`}
             </div>
             <div class="zeit-info" style="margin-top: 10px;">
               <div class="zeit-item">
