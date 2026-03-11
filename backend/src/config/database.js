@@ -65,7 +65,33 @@ function getDataDirectory() {
     }
   }
 
-  // 4. Standard: Arbeitsverzeichnis (für Entwicklungsmodus)
+  // 4. Linux-Produktionspfad: /var/lib/werkstatt-terminplaner (Standard bei systemd-Installation)
+  // Schutz: Wenn eine bestehende Produktionsdatenbank gefunden wird, IMMER diesen Pfad nutzen
+  // (verhindert versehentliches Erstellen einer leeren Datenbank beim manuellen Neustart)
+  const linuxProdPath = '/var/lib/werkstatt-terminplaner';
+  const linuxProdDb = path.join(linuxProdPath, 'database', 'werkstatt.db');
+  if (process.platform === 'linux' && fs.existsSync(linuxProdDb)) {
+    console.log('⚠️  Kein DATA_DIR gesetzt – Linux-Produktion erkannt, verwende:', linuxProdPath);
+    console.log('💡 Tipp: Setze DATA_DIR=' + linuxProdPath + ' in der systemd-Unit oder .env');
+    return linuxProdPath;
+  }
+
+  // 5. Standard: Arbeitsverzeichnis (für Entwicklungsmodus)
+  // SICHERHEITSCHECK: Wenn wir auf Linux sind und kein DATA_DIR gesetzt ist und kein Prod-Pfad
+  // existiert, warnen wir laut – könnte ein versehentlicher manueller Start sein
+  if (process.platform === 'linux' && process.env.NODE_ENV === 'production') {
+    console.error('');
+    console.error('❌ KRITISCHER FEHLER: Server läuft im Produktionsmodus (NODE_ENV=production)');
+    console.error('   aber weder DATA_DIR noch die Standarddatenbank wurden gefunden!');
+    console.error('   Pfad geprüft: ' + linuxProdDb);
+    console.error('   Um eine leere Datenbank zu verhindern, wird der Server NICHT gestartet.');
+    console.error('');
+    console.error('   Lösung: systemctl restart werkstatt-terminplaner');
+    console.error('   ODER:   DATA_DIR=/var/lib/werkstatt-terminplaner node src/server.js');
+    console.error('');
+    process.exit(1);
+  }
+
   console.log('Entwicklungsmodus - verwende Arbeitsverzeichnis:', process.cwd());
   return process.cwd();
 }
