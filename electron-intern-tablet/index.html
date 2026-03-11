@@ -2101,9 +2101,11 @@
       const jetztMinuten = jetzt.getHours() * 60 + jetzt.getMinutes();
       const [pauseH, pauseM] = (person.mittagspause_start || '12:00').split(':').map(Number);
       const pausenStartMinuten = pauseH * 60 + pauseM;
+      const pausenEndeMinuten = pausenStartMinuten + (person.pausenzeit_minuten || 30);
       const zeitfensterMin = pausenStartMinuten - 60; // 1h vor Pausenzeit
+      const zeitfensterMax = pausenEndeMinuten + 60; // 1h nach Pausenende
       const imIdealemZeitfenster = jetztMinuten >= zeitfensterMin && jetztMinuten <= pausenStartMinuten;
-      const imAnzeigeZeitraum = jetztMinuten >= zeitfensterMin;
+      const imAnzeigeZeitraum = jetztMinuten >= zeitfensterMin && jetztMinuten <= zeitfensterMax;
       const heuteDatum = formatDateLocal(new Date()); // Datum vorher berechnen
       
       if (person.pause_tracking_aktiv) {
@@ -2114,8 +2116,8 @@
             <span class="btn-icon">⏸️</span> Pause (${verbleibendeMin} Min)
           </button>
         `;
-      } else if (imAnzeigeZeitraum && !inPause && !inBerufsschule && !istAbwesend) {
-        // Pause-Button aktiv
+      } else if (imAnzeigeZeitraum && !inBerufsschule && !istAbwesend) {
+        // Pause-Button aktiv (auch wenn automatische Pausenzeit läuft aber noch nicht bestätigt)
         const pauseIcon = imIdealemZeitfenster ? '🍽️' : '⚠️';
         const pauseText = imIdealemZeitfenster ? 'Pause' : 'Pause (spät)';
         buttonsHtml += `
