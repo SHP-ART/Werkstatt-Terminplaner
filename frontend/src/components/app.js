@@ -5067,6 +5067,7 @@ class App {
       umfang: document.getElementById('intern_notizen').value.trim(),
       geschaetzte_zeit: geschaetzteZeit,
       datum: document.getElementById('intern_datum').value,
+      startzeit: document.getElementById('intern_zeit_von').value || null,
       abholung_typ: 'warten',
       abholung_details: 'Interner Termin',
       abholung_zeit: document.getElementById('intern_zeit_von').value || null,
@@ -21726,7 +21727,15 @@ class App {
     }
     
     // Startzeit parsen (normalisiere HHMM → HH:MM)
-    let startzeit = this.normalizeZeit(termin.startzeit || termin.bring_zeit || '08:00');
+    // Für interne Termine: abholung_zeit = "Zeit von" (Startzeit), bring_zeit = "Zeit bis" (Endzeit)
+    // Daher: startzeit > abholung_zeit > bring_zeit als Fallback verwenden
+    const istInterner = termin.abholung_details === 'Interner Termin' || termin.kunde_name === 'Intern';
+    let startzeit = this.normalizeZeit(
+      termin.startzeit || 
+      (istInterner ? termin.abholung_zeit : null) || 
+      termin.bring_zeit || 
+      '08:00'
+    );
     
     // Dauer in Minuten (reine Arbeitszeit ohne Pause)
     const dauer = this.getTerminGesamtdauer(termin);
@@ -28184,6 +28193,7 @@ class App {
       umfang: document.getElementById('internEdit_notizen').value.trim(),
       geschaetzte_zeit: geschaetzteZeit,
       datum: document.getElementById('internEdit_datum').value,
+      startzeit: document.getElementById('internEdit_zeit_von').value || null,
       abholung_zeit: document.getElementById('internEdit_zeit_von').value || null,
       bring_zeit: document.getElementById('internEdit_zeit_bis').value || null,
       mitarbeiter_id: mitarbeiterIdValue,
