@@ -32628,19 +32628,6 @@ App.prototype.checkKapazitaetVorZuweisung = async function(person, datum, termin
  * @param {String} startzeit - Startzeit (HH:MM)
  */
 App.prototype.showVerschiebeWarnung = async function(person, termin, kapazitaetWarnung, datum, mitarbeiterId, lehrlingId, targetType, startzeit) {
-  // Finde nächsten verfügbaren Tag (robust gegen API-Fehler + Timeout 2.5s damit Dialog sofort erscheint)
-  let naechsterTag = null;
-  try {
-    const timeoutPromise = new Promise(resolve => setTimeout(() => resolve(null), 2500));
-    naechsterTag = await Promise.race([
-      this.findeNaechstenVerfuegbarenTag(person, datum, termin?.geschaetzte_zeit || 30, 14),
-      timeoutPromise
-    ]);
-    if (!naechsterTag) console.warn('[showVerschiebeWarnung] findeNaechstenVerfuegbarenTag: null oder Timeout (2.5s)');
-  } catch (e) {
-    console.warn('[showVerschiebeWarnung] findeNaechstenVerfuegbarenTag fehlgeschlagen:', e);
-  }
-
   // Aufteilen-Berechnung: wie viel passt heute noch?
   const terminDauer = kapazitaetWarnung.neueAuslastung - kapazitaetWarnung.aktuelleAuslastung;
   const verfuegbarHeute = Math.max(0, kapazitaetWarnung.maxKapazitaet - kapazitaetWarnung.aktuelleAuslastung);
@@ -32654,7 +32641,7 @@ App.prototype.showVerschiebeWarnung = async function(person, termin, kapazitaetW
   }
   const morgenDatum = naechsterWerktag.toISOString().split('T')[0];
   const kannAufteilen = teil1Zeit > 0 && teil2Zeit > 0;
-  
+
   const modal = document.createElement('div');
   modal.className = 'modal-overlay';
   modal.style.cssText = `
@@ -32669,13 +32656,6 @@ App.prototype.showVerschiebeWarnung = async function(person, termin, kapazitaetW
     justify-content: center;
     z-index: 10000;
   `;
-  
-  const naechsterTagHtml = naechsterTag 
-    ? `<button class="btn btn-success" id="verschiebeOptionVerschieben" style="flex: 1;">
-        📅 Auf ${this.formatDatum(naechsterTag.datum)} verschieben<br>
-        <small style="opacity: 0.8;">✓ ${(naechsterTag.verfuegbareMinuten / 60).toFixed(1)}h verfügbar</small>
-      </button>`
-    : '<p style="color: #d32f2f; margin: 10px 0;"><strong>⚠️ Kein freier Tag in den nächsten 14 Tagen gefunden!</strong></p>';
 
   const aufteilenHtml = kannAufteilen
     ? `<button class="btn btn-info" id="verschiebeOptionAufteilen" style="width: 100%; background: #1565c0; color: white; border: none; padding: 10px; border-radius: 6px; cursor: pointer;">
@@ -32683,13 +32663,13 @@ App.prototype.showVerschiebeWarnung = async function(person, termin, kapazitaetW
         <small style="opacity: 0.85;">(Rest geht als "Nicht zugeordnet" auf morgen)</small>
       </button>`
     : '';
-  
+
   modal.innerHTML = `
     <div style="background: white; padding: 25px; border-radius: 12px; max-width: 550px; box-shadow: 0 4px 20px rgba(0,0,0,0.3);">
       <h3 style="margin-top: 0; color: #d32f2f; display: flex; align-items: center; gap: 8px;">
         ⚠️ Überlastungswarnung
       </h3>
-      
+
       <div style="background: #fff3e0; padding: 15px; border-radius: 8px; margin: 15px 0; border-left: 4px solid #ff9800;">
         <p style="margin: 0 0 10px 0;"><strong>${person.name}</strong> am ${this.formatDatum(datum)}:</p>
         <p style="margin: 5px 0; font-size: 0.95em;">
@@ -32705,16 +32685,20 @@ App.prototype.showVerschiebeWarnung = async function(person, termin, kapazitaetW
           ⚡ <strong>Überlauf: ${(kapazitaetWarnung.ueberlauf / 60).toFixed(1)}h</strong>
         </p>
       </div>
-      
+
       <p style="margin: 15px 0 20px 0; font-size: 0.95em; color: #555;">
         <strong>Kunde:</strong> ${termin.kunde_name || 'Unbekannt'}<br>
         <strong>Fahrzeug:</strong> ${termin.kennzeichen || '-'} ${termin.fahrzeug || ''}
       </p>
-      
+
       <div style="display: flex; gap: 10px; flex-direction: column;">
         ${aufteilenHtml}
         <div style="display: flex; gap: 10px;">
-          ${naechsterTagHtml}
+          <div id="verschiebeTagContainer" style="flex: 1;">
+            <button disabled style="width: 100%; opacity: 0.6; cursor: not-allowed; background: #e8f5e9; border: 1px solid #a5d6a7; padding: 10px; border-radius: 6px; font-size: 0.9em;">
+              ⏳ Suche nächsten freien Tag...
+            </button>
+          </div>
           <button class="btn btn-warning" id="verschiebeOptionTrotzdem" style="flex: 1;">
             ⚠️ Trotzdem zuweisen<br>
             <small style="opacity: 0.8;">(Überlastung ignorieren)</small>
@@ -32726,33 +32710,73 @@ App.prototype.showVerschiebeWarnung = async function(person, termin, kapazitaetW
       </div>
     </div>
   `;
-  
+
   document.body.appendChild(modal);
-  
-  // Event Listener
+
+  // Event Listener – Promise steuert Lebenszeit des Dialogs
   return new Promise((resolve) => {
     const cleanup = () => {
-      document.body.removeChild(modal);
+      if (document.body.contains(modal)) document.body.removeChild(modal);
     };
-    
+
+    // Nächsten verfügbaren Tag asynchron im Hintergrund laden → Dialog erscheint sofort
+    this.findeNaechstenVerfuegbarenTag(person, datum, termin?.geschaetzte_zeit || 30, 14)
+      .then(naechsterTag => {
+        const container = document.getElementById('verschiebeTagContainer');
+        if (!container || !document.body.contains(modal)) return; // Dialog bereits geschlossen
+        if (naechsterTag) {
+          container.innerHTML = `<button class="btn btn-success" id="verschiebeOptionVerschieben" style="width: 100%;">
+            📅 Auf ${this.formatDatum(naechsterTag.datum)} verschieben<br>
+            <small style="opacity: 0.8;">✓ ${(naechsterTag.verfuegbareMinuten / 60).toFixed(1)}h verfügbar</small>
+          </button>`;
+          document.getElementById('verschiebeOptionVerschieben')?.addEventListener('click', async () => {
+            cleanup();
+            try {
+              await TermineService.update(termin.id, {
+                datum_termin: naechsterTag.datum,
+                mitarbeiter_id: targetType === 'mitarbeiter' ? mitarbeiterId : null,
+                lehrling_id: targetType === 'lehrling' ? lehrlingId : null,
+                startzeit: startzeit
+              });
+              this.showToast(`📅 Termin auf ${this.formatDatum(naechsterTag.datum)} verschoben!`, 'success');
+              this.loadAuslastungDragDrop();
+            } catch (err) {
+              this.showToast('❌ Fehler beim Verschieben: ' + (err.message || 'Unbekannt'), 'error');
+            }
+            resolve('verschoben');
+          });
+        } else {
+          container.innerHTML = `<p style="color: #d32f2f; margin: 10px 0; flex: 1; font-size: 0.9em;"><strong>⚠️ Kein freier Tag in 14 Tagen!</strong></p>`;
+        }
+      })
+      .catch(e => {
+        console.warn('[showVerschiebeWarnung] findeNaechstenVerfuegbarenTag fehlgeschlagen:', e);
+        const container = document.getElementById('verschiebeTagContainer');
+        if (container && document.body.contains(modal)) {
+          container.innerHTML = `<p style="color: #999; margin: 0; flex: 1; font-size: 0.85em;">⚠️ Verfügbarkeit nicht prüfbar</p>`;
+        }
+      });
+
     document.getElementById('verschiebeOptionAbbrechen')?.addEventListener('click', () => {
       cleanup();
       resolve('abbrechen');
     });
-    
+
     document.getElementById('verschiebeOptionTrotzdem')?.addEventListener('click', async () => {
       cleanup();
-      await this.moveTerminToMitarbeiterWithTime(termin.id, mitarbeiterId, lehrlingId, targetType, startzeit);
-      this.showToast('⚠️ Termin trotz Überlastung zugewiesen!', 'warning');
+      try {
+        await this.moveTerminToMitarbeiterWithTime(termin.id, mitarbeiterId, lehrlingId, targetType, startzeit);
+        this.showToast('⚠️ Termin trotz Überlastung zugewiesen!', 'warning');
+      } catch (err) {
+        this.showToast('❌ Fehler beim Zuweisen: ' + (err.message || 'Unbekannt'), 'error');
+      }
       resolve('trotzdem');
     });
 
     document.getElementById('verschiebeOptionAufteilen')?.addEventListener('click', async () => {
       cleanup();
       try {
-        // Termin aufteilen: Teil 1 bleibt heute, Teil 2 geht auf morgen (nicht zugeordnet)
         await TermineService.splitTermin(termin.id, teil1Zeit, morgenDatum, teil2Zeit);
-        // Teil 1 direkt in DB zuweisen (da splitTermin einen WS-Broadcast auslöst und lokale Änderungen überschreiben würde)
         await TermineService.update(termin.id, {
           mitarbeiter_id: targetType === 'mitarbeiter' ? parseInt(mitarbeiterId) : null,
           lehrling_id: targetType === 'lehrling' ? parseInt(lehrlingId) : null,
@@ -32766,23 +32790,7 @@ App.prototype.showVerschiebeWarnung = async function(person, termin, kapazitaetW
       }
       resolve('aufteilen');
     });
-    
-    document.getElementById('verschiebeOptionVerschieben')?.addEventListener('click', async () => {
-      cleanup();
-      if (naechsterTag) {
-        // Verschiebe Termin auf nächsten verfügbaren Tag
-        await TermineService.update(termin.id, { 
-          datum_termin: naechsterTag.datum,
-          mitarbeiter_id: targetType === 'mitarbeiter' ? mitarbeiterId : null,
-          lehrling_id: targetType === 'lehrling' ? lehrlingId : null,
-          startzeit: startzeit
-        });
-        this.showToast(`📅 Termin auf ${this.formatDatum(naechsterTag.datum)} verschoben!`, 'success');
-        this.loadAuslastungDragDrop();
-        resolve('verschoben');
-      }
-    });
-    
+
     // Schließen bei Klick außerhalb
     modal.addEventListener('click', (e) => {
       if (e.target === modal) {
