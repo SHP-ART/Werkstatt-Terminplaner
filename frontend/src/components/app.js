@@ -22740,9 +22740,11 @@ class App {
             const person = targetType === 'mitarbeiter' 
               ? await MitarbeiterService.getById(mitarbeiterId)
               : await LehrlingeService.getById(lehrlingId);
+            console.log('[DROP] person geladen:', person?.name || 'null');
             
             const selectedDatum = document.getElementById('auslastungDragDropDatum').value;
             const terminDaten = await TermineService.getById(terminId);
+            console.log('[DROP] terminDaten geladen:', terminDaten?.id || 'null');
             
             if (!terminDaten) {
               this.showToast('❌ Termin nicht gefunden (ID: ' + terminId + ')', 'error');
@@ -22756,8 +22758,10 @@ class App {
               targetType,
               parseInt(mitarbeiterId || lehrlingId)
             );
+            console.log('[DROP] kapazitaetWarnung:', kapazitaetWarnung?.ueberlastet, '| aktuelle:', kapazitaetWarnung?.aktuelleAuslastung, '| max:', kapazitaetWarnung?.maxKapazitaet);
             
             if (kapazitaetWarnung.ueberlastet) {
+              console.log('[DROP] Überlastet → showVerschiebeWarnung wird aufgerufen...');
               // Zeige Warnung mit Optionen
               await this.showVerschiebeWarnung(
                 person,
@@ -22770,6 +22774,7 @@ class App {
                 newStartzeit
               );
             } else {
+              console.log('[DROP] Nicht überlastet → direkt zuweisen');
               // Keine Überlastung - direkt zuweisen
               await this.moveTerminToMitarbeiterWithTime(terminId, mitarbeiterId, lehrlingId, targetType, newStartzeit);
             }
@@ -32623,10 +32628,15 @@ App.prototype.checkKapazitaetVorZuweisung = async function(person, datum, termin
  * @param {String} startzeit - Startzeit (HH:MM)
  */
 App.prototype.showVerschiebeWarnung = async function(person, termin, kapazitaetWarnung, datum, mitarbeiterId, lehrlingId, targetType, startzeit) {
-  // Finde nächsten verfügbaren Tag (robust gegen API-Fehler)
+  // Finde nächsten verfügbaren Tag (robust gegen API-Fehler + Timeout 2.5s damit Dialog sofort erscheint)
   let naechsterTag = null;
   try {
-    naechsterTag = await this.findeNaechstenVerfuegbarenTag(person, datum, termin?.geschaetzte_zeit || 30, 14);
+    const timeoutPromise = new Promise(resolve => setTimeout(() => resolve(null), 2500));
+    naechsterTag = await Promise.race([
+      this.findeNaechstenVerfuegbarenTag(person, datum, termin?.geschaetzte_zeit || 30, 14),
+      timeoutPromise
+    ]);
+    if (!naechsterTag) console.warn('[showVerschiebeWarnung] findeNaechstenVerfuegbarenTag: null oder Timeout (2.5s)');
   } catch (e) {
     console.warn('[showVerschiebeWarnung] findeNaechstenVerfuegbarenTag fehlgeschlagen:', e);
   }
