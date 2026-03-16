@@ -488,7 +488,10 @@ function berechneAuslastungErgebnis(params) {
       geplant_minuten: ma.geplant_minuten || 0,
       in_arbeit_minuten: ma.in_arbeit_minuten || 0,
       abgeschlossen_minuten: ma.abgeschlossen_minuten || 0,
-      termin_anzahl: terminAnzahl
+      termin_anzahl: terminAnzahl,
+      nacharbeit_anzahl: ma.nacharbeit_anzahl || 0,
+      nacharbeit_minuten: ma.nacharbeit_minuten || 0,
+      nacharbeit_start_zeiten: ma.nacharbeit_start_zeiten || []
     };
   });
 
@@ -862,6 +865,27 @@ class TermineController {
         // Nur überschreiben wenn tatsächlich berechnet wurde
         if (startzeit) updateData.startzeit = startzeit;
         if (endzeit) updateData.endzeit_berechnet = endzeit;
+      }
+
+      // ============================================================
+      // NACHARBEIT-ERKENNUNG: Wenn Datum auf HEUTE verschoben wird
+      // (von einem anderen Datum), wird der Termin als Nacharbeit
+      // markiert und die aktuelle Uhrzeit als Startzeit gespeichert.
+      // ============================================================
+      const neuesDatumFuerNacharbeit = updateData.datum;
+      const heuteStr = new Date().toISOString().split('T')[0];
+      const alterDatumWandertAufHeute =
+        neuesDatumFuerNacharbeit === heuteStr &&
+        termin.datum &&
+        termin.datum !== heuteStr &&
+        !termin.nacharbeit_start_zeit; // nur einmalig setzen
+
+      if (alterDatumWandertAufHeute) {
+        const jetzt2 = new Date();
+        const zeitStr = String(jetzt2.getHours()).padStart(2, '0') + ':' + String(jetzt2.getMinutes()).padStart(2, '0');
+        updateData.muss_bearbeitet_werden = 1;
+        updateData.nacharbeit_start_zeit = zeitStr;
+        console.log(`[Nacharbeit] Termin ${termin.id} (${termin.termin_nr}): Neu auf heute zugeordnet → Nacharbeit ab ${zeitStr}`);
       }
 
       const newDatum = updateData.datum || termin.datum;
@@ -1977,6 +2001,73 @@ class TermineController {
       });
     } catch (err) {
       console.error('Fehler bei Erweiterungserstellung:', err);
+      res.status(500).json({ error: err.message });
+    }
+  }
+
+  // =====================================================
+  // FOLGEARBEIT-ENDPOINT (Heute bis Feierabend, morgen Rest)
+  // =====================================================
+
+  /**
+   * Erstellt automatisch Folgearbeit für morgen.
+   * Der heutige Termin wird auf Feierabend-Zeit begrenzt;
+   * die verbleibende Zeit wird als neuer Termin am nächsten Arbeitstag angelegt.
+   * POST /termine/:id/folgearbeit
+   * Body: { feierabend: "17:00" }
+   */
+  static async folgearbeitErstellen(req, res) {
+    try {
+      const { id } = req.params;
+      const { feierabend = '17:00' } = req.body;
+
+      if (!/^\d{2}:\d{2}$/.test(feierabend)) {
+        return res.status(400).json({ error: 'Ungültige Feierabend-Zeit (Format HH:MM erwartet)' });
+      }
+
+      const termin = await TermineModel.getById(id);
+      if (!termin) {
+        return res.status(404).json({ error: 'Termin nicht gefunden' });
+      }
+
+      const startzeit = termin.bring_zeit || '08:00';
+      const heuteMinuten = TermineModel.zeitDifferenzMinuten(startzeit, feierabend);
+
+      if (heuteMinuten <= 0) {
+        return res.status(400).json({ error: 'Feierabend-Zeit liegt vor oder auf der Bring-Zeit des Termins' });
+      }
+
+      if (heuteMinuten >= termin.geschaetzte_zeit) {
+        return res.status(400).json({
+          error: `Termin kann bis ${feierabend} Uhr vollständig abgeschlossen werden – keine Folgearbeit nötig.`
+        });
+      }
+
+      const restMinuten = termin.geschaetzte_zeit - heuteMinuten;
+      const heuteDatum = termin.datum || new Date().toISOString().split('T')[0];
+      const morgen = TermineModel.naechsterArbeitstag(heuteDatum);
+
+      const result = await TermineModel.splitTermin(id, {
+        teil1_zeit: heuteMinuten,
+        teil2_datum: morgen,
+        teil2_zeit: restMinuten
+      });
+
+      invalidateAuslastungCache(heuteDatum);
+      invalidateAuslastungCache(morgen);
+      invalidateTermineCache();
+      broadcastEvent('termin.updated', { id, datum: heuteDatum });
+      broadcastEvent('termin.created', { id: result.teil2?.id || null, datum: morgen });
+
+      res.json({
+        message: 'Folgearbeit erfolgreich erstellt',
+        heute_minuten: heuteMinuten,
+        rest_minuten: restMinuten,
+        folge_datum: morgen,
+        ...result
+      });
+    } catch (err) {
+      console.error('Fehler bei Folgearbeit-Erstellung:', err);
       res.status(500).json({ error: err.message });
     }
   }

@@ -353,6 +353,10 @@ class TermineService {
     return ApiService.get(`/termine/${id}/split-termine`);
   }
 
+  static async folgearbeitErstellen(terminId, feierabend = '17:00') {
+    return ApiService.post(`/termine/${terminId}/folgearbeit`, { feierabend });
+  }
+
   // =====================================================
   // AUFTRAGSERWEITERUNG FUNKTIONEN
   // =====================================================

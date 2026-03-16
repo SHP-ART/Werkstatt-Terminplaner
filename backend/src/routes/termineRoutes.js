@@ -15,6 +15,7 @@ router.get('/schwebend', TermineController.getSchwebend);
 router.post('/:id/schwebend', TermineController.setSchwebend);
 router.post('/:id/split', TermineController.splitTermin);
 router.get('/:id/split-termine', TermineController.getSplitTermine);
+router.post('/:id/folgearbeit', TermineController.folgearbeitErstellen);
 
 // Auftragserweiterung Routes
 router.get('/erweiterung/verfuegbare-mitarbeiter', TermineController.findeVerfuegbareMitarbeiter);

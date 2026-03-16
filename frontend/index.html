@@ -4231,6 +4231,10 @@
                 <span class="icon">➕</span>
                 <span>Auftrag erweitern</span>
             </button>
+            <button class="zeitleiste-kontextmenu-item" onclick="app.zeitleisteFolgearbeitErstellen()">
+                <span class="icon">🌙</span>
+                <span>Bis Feierabend / Folgearbeit morgen</span>
+            </button>
             <button class="zeitleiste-kontextmenu-item" onclick="app.zeitleisteKontextDetails()">
                 <span class="icon">📋</span>
                 <span>Termin-Details</span>
@@ -4307,6 +4311,31 @@
                         Abbrechen
                     </button>
                 </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Folgearbeit Modal -->
+    <div id="folgearbeitModal" class="modal">
+        <div class="modal-content" style="max-width: 480px;">
+            <span class="close" id="closeFolgearbeitModal" onclick="app.closeFolgearbeitModal()">&times;</span>
+            <h3>🌙 Bis Feierabend / Folgearbeit morgen</h3>
+            <p style="color: #666; margin-bottom: 16px;">
+                Der Termin wird auf die heutige Feierabend-Zeit begrenzt. Die verbleibende Zeit wird am nächsten Arbeitstag als Folgearbeit weitergeführt.
+            </p>
+            <div id="folgearbeitTerminInfo" style="background: #e3f2fd; padding: 12px; border-radius: 8px; margin-bottom: 16px;"></div>
+            <div class="form-group">
+                <label for="folgearbeitFeierabend"><strong>Feierabend-Zeit:</strong></label>
+                <input type="time" id="folgearbeitFeierabend" value="17:00"
+                       style="padding: 8px; font-size: 1rem; margin-top: 4px;"
+                       oninput="app.updateFolgearbeitVorschau()">
+            </div>
+            <div id="folgearbeitVorschau" style="margin-top: 14px; display: none;"></div>
+            <div style="display: flex; gap: 10px; margin-top: 20px;">
+                <button id="btnFolgearbeitBestaetigen" class="btn btn-primary" onclick="app.folgearbeitBestaetigen()">
+                    ✅ Folgearbeit erstellen
+                </button>
+                <button class="btn btn-secondary" onclick="app.closeFolgearbeitModal()">Abbrechen</button>
             </div>
         </div>
     </div>

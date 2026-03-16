@@ -6445,6 +6445,17 @@ mark.highlight {
     opacity: 0.85;
 }
 
+/* Nacharbeit-Termine – orange, gestrichelte Umrandung */
+.zeitleiste-block.nacharbeit-block {
+    background: linear-gradient(135deg, #e65100 0%, #bf360c 100%) !important;
+    border: 2px dashed rgba(255,255,255,0.6);
+}
+
+.zeitleiste-nacharbeit-badge {
+    font-size: 10px;
+    margin-right: 3px;
+}
+
 /* Erweiterungs-Termine - dunkles Blau */
 .zeitleiste-block.erweiterung-block {
     background: linear-gradient(135deg, #1565c0 0%, #0d47a1 100%) !important;

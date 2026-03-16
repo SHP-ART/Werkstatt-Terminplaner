@@ -8856,6 +8856,106 @@ class App {
   }
 
   /**
+   * Öffnet den Dialog "Bis Feierabend – Folgearbeit morgen"
+   */
+  async zeitleisteFolgearbeitErstellen() {
+    this.closeZeitleisteKontextmenu();
+    if (!this.zeitleisteKontextTerminId) return;
+
+    let termin = this.termineById[this.zeitleisteKontextTerminId];
+    if (!termin) {
+      try {
+        termin = await TermineService.getById(this.zeitleisteKontextTerminId);
+        if (!termin) {
+          this.showToast('❌ Termin nicht gefunden', 'error');
+          return;
+        }
+        this.termineById[termin.id] = termin;
+      } catch (e) {
+        this.showToast('❌ Termin konnte nicht geladen werden', 'error');
+        return;
+      }
+    }
+
+    this.folgearbeitTermin = termin;
+
+    const bringZeit = termin.bring_zeit || '08:00';
+    const std = Math.round(termin.geschaetzte_zeit / 60 * 10) / 10;
+    document.getElementById('folgearbeitTerminInfo').innerHTML = `
+      <strong>${termin.termin_nr || '#' + termin.id}</strong> – ${termin.kunde_name || 'Unbekannt'}<br>
+      <small>${termin.arbeit || ''}</small><br>
+      <small>Bring-Zeit: <strong>${bringZeit}</strong> &nbsp;|&nbsp; Geschätzte Gesamtzeit: <strong>${std} Std. (${termin.geschaetzte_zeit} Min.)</strong></small>
+    `;
+
+    document.getElementById('folgearbeitVorschau').style.display = 'none';
+    document.getElementById('folgearbeitModal').style.display = 'block';
+    this.updateFolgearbeitVorschau();
+  }
+
+  updateFolgearbeitVorschau() {
+    if (!this.folgearbeitTermin) return;
+    const feierabend = document.getElementById('folgearbeitFeierabend')?.value || '17:00';
+    const bringZeit = this.folgearbeitTermin.bring_zeit || '08:00';
+    const [bh, bm] = bringZeit.split(':').map(Number);
+    const [fh, fm] = feierabend.split(':').map(Number);
+    const heuteMinuten = (fh * 60 + fm) - (bh * 60 + bm);
+    const restMinuten = this.folgearbeitTermin.geschaetzte_zeit - heuteMinuten;
+    const vorschau = document.getElementById('folgearbeitVorschau');
+    if (!vorschau) return;
+
+    if (heuteMinuten <= 0) {
+      vorschau.innerHTML = `<div style="padding:10px;background:#fff3e0;border-radius:6px;border-left:4px solid #ff9800;">⚠️ Feierabend-Zeit liegt vor der Bring-Zeit des Termins.</div>`;
+      vorschau.style.display = 'block';
+      return;
+    }
+    if (restMinuten <= 0) {
+      vorschau.innerHTML = `<div style="padding:10px;background:#e3f2fd;border-radius:6px;border-left:4px solid #2196f3;">ℹ️ Der Termin kann bis ${feierabend} Uhr vollständig abgeschlossen werden – keine Folgearbeit nötig.</div>`;
+      vorschau.style.display = 'block';
+      return;
+    }
+    const heuteStd = Math.round(heuteMinuten / 60 * 10) / 10;
+    const restStd = Math.round(restMinuten / 60 * 10) / 10;
+    vorschau.innerHTML = `
+      <div style="padding:12px;background:#e8f5e9;border-radius:8px;border-left:4px solid #4caf50;">
+        <strong>📊 Vorschau:</strong>
+        <ul style="margin:8px 0;padding-left:20px;">
+          <li>Heute (${bringZeit} – ${feierabend} Uhr): <strong>${heuteMinuten} Min. (${heuteStd} Std.)</strong></li>
+          <li>Morgen – Folgearbeit: <strong>${restMinuten} Min. (${restStd} Std.)</strong></li>
+        </ul>
+      </div>
+    `;
+    vorschau.style.display = 'block';
+  }
+
+  closeFolgearbeitModal() {
+    const modal = document.getElementById('folgearbeitModal');
+    if (modal) modal.style.display = 'none';
+    this.folgearbeitTermin = null;
+  }
+
+  async folgearbeitBestaetigen() {
+    if (!this.folgearbeitTermin) return;
+    const feierabend = document.getElementById('folgearbeitFeierabend')?.value || '17:00';
+    const btn = document.getElementById('btnFolgearbeitBestaetigen');
+    if (btn) { btn.disabled = true; btn.textContent = '⏳ Wird erstellt…'; }
+    try {
+      const result = await TermineService.folgearbeitErstellen(this.folgearbeitTermin.id, feierabend);
+      this.closeFolgearbeitModal();
+      this.showToast(
+        `✅ Folgearbeit erstellt: ${result.heute_minuten} Min. heute, ${result.rest_minuten} Min. am ${result.folge_datum}`,
+        'success'
+      );
+      if (typeof this.loadZeitleiste === 'function') this.loadZeitleiste();
+      if (typeof this.loadAuslastung === 'function') this.loadAuslastung();
+      if (typeof this.loadTermine === 'function') this.loadTermine();
+    } catch (err) {
+      this.showToast('❌ Fehler: ' + (err.message || 'Unbekannter Fehler'), 'error');
+    } finally {
+      if (btn) { btn.disabled = false; btn.textContent = '✅ Folgearbeit erstellen'; }
+    }
+  }
+
+  /**
    * Wird aufgerufen wenn der Erweiterungstyp geändert wird
    */
   updateErweiterungTyp() {
@@ -9668,13 +9768,14 @@ class App {
             
             return `
               <div style="${cardStyle}">
-                <h4 style="margin: 0 0 10px 0;">${ma.mitarbeiter_name}${abwesendBadge}${pauseBadge}${nurServiceBadge}</h4>
+                <h4 style="margin: 0 0 10px 0;">${ma.mitarbeiter_name}${abwesendBadge}${pauseBadge}${nurServiceBadge}${(ma.nacharbeit_anzahl || 0) > 0 ? `<span style="background: #e65100; color: white; padding: 2px 8px; border-radius: 12px; font-size: 0.8em; margin-left: 10px;">🔧 Nacharbeit (${ma.nacharbeit_anzahl})</span>` : ''}</h4>
                 <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin-bottom: 10px;">
                   <div><strong>Verfügbar:</strong> ${verfuegbarText}</div>
                   <div><strong>Belegt:</strong> ${this.formatMinutesToHours(ma.belegt_minuten)}</div>
                   <div><strong>Auslastung:</strong> <span style="color: ${prozentColor}; font-weight: bold;">${istAbwesend ? '-' : ma.auslastung_prozent + '%'}</span></div>
                 </div>
                 ${detailsRow}
+                ${(ma.nacharbeit_anzahl || 0) > 0 ? `<div style="font-size: 0.85em; color: #e65100; margin-bottom: 6px;">🔧 Nacharbeit-Zeit: ${this.formatMinutesToHours(ma.nacharbeit_minuten || 0)}</div>` : ''}
                 <div style="margin-top: 10px; height: 20px; background: #e0e0e0; border-radius: 4px; overflow: hidden; position: relative;">
                   <div style="height: 100%; width: ${istAbwesend ? 0 : Math.min(ma.auslastung_prozent, 100)}%; background: ${prozentColor}; transition: width 0.3s;"></div>
                 </div>
@@ -19061,8 +19162,25 @@ class App {
               erweiterungVonId: termin.erweiterung_von_id || null,
               zuordnungsTyp: arbeitZuordnungsTyp,
               mitarbeiterId: arbeitMitarbeiterId,
-              lehrlingId: arbeitLehrlingId
+              lehrlingId: arbeitLehrlingId,
+              istNacharbeit: termin.muss_bearbeitet_werden === 1 || termin.muss_bearbeitet_werden === '1',
+              nacharbeitStartZeit: termin.nacharbeit_start_zeit || null
             };
+
+            // Nacharbeit: bei der ersten Arbeit Startzeit + Dauer überschreiben
+            if (i === 0 && terminEntry.istNacharbeit && terminEntry.nacharbeitStartZeit) {
+              terminEntry.startzeit = terminEntry.nacharbeitStartZeit;
+              if (termin.status === 'abgeschlossen' && termin.tatsaechliche_zeit) {
+                terminEntry.anzeigeZeitMinuten = Math.round(
+                  termin.tatsaechliche_zeit * (zeitMinuten / (termin.geschaetzte_zeit || zeitMinuten))
+                );
+              } else {
+                const jetztNa2 = new Date();
+                const [naH2, naM2] = terminEntry.nacharbeitStartZeit.split(':').map(Number);
+                const elapsed2 = jetztNa2.getHours() * 60 + jetztNa2.getMinutes() - (naH2 * 60 + naM2);
+                terminEntry.anzeigeZeitMinuten = Math.max(elapsed2, zeitMinuten);
+              }
+            }
             
             arbeitEntries.push(terminEntry);
             
@@ -19224,8 +19342,24 @@ class App {
             erweiterungVonId: termin.erweiterung_von_id || null,
             zuordnungsTyp: terminZuordnungsTyp,
             mitarbeiterId: terminMitarbeiterId,
-            lehrlingId: terminLehrlingId
+            lehrlingId: terminLehrlingId,
+            istNacharbeit: termin.muss_bearbeitet_werden === 1 || termin.muss_bearbeitet_werden === '1',
+            nacharbeitStartZeit: termin.nacharbeit_start_zeit || null
           };
+
+          // Nacharbeit: Startzeit und angezeigte Dauer überschreiben
+          if (terminEntry.istNacharbeit && terminEntry.nacharbeitStartZeit) {
+            terminEntry.startzeit = terminEntry.nacharbeitStartZeit;
+            if (termin.status === 'abgeschlossen' && termin.tatsaechliche_zeit) {
+              terminEntry.anzeigeZeitMinuten = termin.tatsaechliche_zeit;
+            } else {
+              // Noch laufend: Balken bis "jetzt" (nur für heute sinnvoll)
+              const jetztNa = new Date();
+              const [naH, naM] = terminEntry.nacharbeitStartZeit.split(':').map(Number);
+              const elapsed = jetztNa.getHours() * 60 + jetztNa.getMinutes() - (naH * 60 + naM);
+              terminEntry.anzeigeZeitMinuten = Math.max(elapsed, termin.geschaetzte_zeit || 60);
+            }
+          }
 
           // Zuordnung zu Mitarbeiter oder Lehrling
           if (terminEntry.zuordnungsTyp === 'lehrling' && terminEntry.lehrlingId) {
@@ -19550,12 +19684,21 @@ class App {
       const blockHaupt = arbeit.kennzeichen || (arbeit.istIntern ? '🔧 ' + arbeit.kunde : arbeit.kunde);
       const blockArbeit = `<span class="zeitleiste-block-arbeit">${this.escapeHtml(arbeitKurzText)}</span>`;
 
+      // Nacharbeit-Badge und Style
+      const nacharbeitClass = arbeit.istNacharbeit ? 'nacharbeit-block' : '';
+      const nacharbeitBadge = arbeit.istNacharbeit
+        ? `<span class="zeitleiste-nacharbeit-badge" title="Nacharbeit ab ${arbeit.nacharbeitStartZeit || '?'}">🔧</span>`
+        : '';
+      const nacharbeitTitleText = arbeit.istNacharbeit
+        ? `&#10;🔧 NACHARBEIT (ab ${arbeit.nacharbeitStartZeit || '?'})`
+        : '';
+
       return `
-        <div class="zeitleiste-block ${statusClass} ${internClass} ${schwebendClass} ${erweiterungClass}" 
+        <div class="zeitleiste-block ${statusClass} ${internClass} ${schwebendClass} ${erweiterungClass} ${nacharbeitClass}" 
              style="left: ${leftPercent}%; width: ${Math.max(widthPercent, 3)}%;"
              onclick="app.openZeitleisteKontextmenu(event, ${arbeit.terminId}, '${this.escapeHtml(arbeit.kunde)}', '${this.escapeHtml(arbeit.arbeit)}', '${arbeit.terminNr}', '${auftragsnrEscaped}')"
-             title="${arbeit.kunde}${arbeit.kennzeichen ? ' - ' + arbeit.kennzeichen : ''}&#10;🔧 ${arbeitenTooltip}${fortsetzungText}&#10;${startZeitText} - ${endZeitText} (${dauerText})${abholzeitTooltip}${auftragsnrText}${schwebendTitleText}${erweiterungTitleText}${erweiterungBadgeTitleText}">
-          ${schwebendBadge}<span class="zeitleiste-block-haupt">${this.escapeHtml(blockHaupt)}</span>${blockArbeit}
+             title="${arbeit.kunde}${arbeit.kennzeichen ? ' - ' + arbeit.kennzeichen : ''}&#10;🔧 ${arbeitenTooltip}${fortsetzungText}&#10;${startZeitText} - ${endZeitText} (${dauerText})${abholzeitTooltip}${auftragsnrText}${schwebendTitleText}${erweiterungTitleText}${erweiterungBadgeTitleText}${nacharbeitTitleText}">
+          ${nacharbeitBadge}${schwebendBadge}<span class="zeitleiste-block-haupt">${this.escapeHtml(blockHaupt)}</span>${blockArbeit}
           <span class="zeitleiste-block-zeit">${startZeitText} - ${endZeitText}</span>
           ${erweiterungBadge}${istErweiterungIcon}
         </div>

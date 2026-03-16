@@ -371,8 +371,9 @@ class TermineModel {
       mitarbeiter_id, dringlichkeit, kennzeichen, umfang, datum, abholung_typ,
       abholung_details, abholung_zeit, abholung_datum, bring_zeit, kontakt_option,
       kilometerstand, ersatzauto, ersatzauto_tage, ersatzauto_bis_datum, ersatzauto_bis_zeit,
-      vin, fahrzeugtyp, muss_bearbeitet_werden, ist_schwebend, schwebend_prioritaet, interne_auftragsnummer,
-      startzeit, endzeit_berechnet, fertigstellung_zeit, notizen
+      vin, fahrzeugtyp, muss_bearbeitet_werden, nacharbeit_start_zeit, ist_schwebend,
+      schwebend_prioritaet, interne_auftragsnummer, startzeit, endzeit_berechnet,
+      fertigstellung_zeit, notizen
     } = data;
     // Hinweis: 'notizen' wird auf die DB-Spalte 'umfang' gemappt (kein separates notizen-Feld)
     
@@ -486,6 +487,10 @@ class TermineModel {
     if (muss_bearbeitet_werden !== undefined) {
       updates.push('muss_bearbeitet_werden = ?');
       values.push(muss_bearbeitet_werden ? 1 : 0);
+    }
+    if (nacharbeit_start_zeit !== undefined) {
+      updates.push('nacharbeit_start_zeit = ?');
+      values.push(nacharbeit_start_zeit || null);
     }
     if (ist_schwebend !== undefined) {
       updates.push('ist_schwebend = ?');
@@ -695,13 +700,16 @@ class TermineModel {
         geplant_minuten: 0,
         in_arbeit_minuten: 0,
         abgeschlossen_minuten: 0,
-        termin_anzahl: 0
+        termin_anzahl: 0,
+        nacharbeit_anzahl: 0,
+        nacharbeit_minuten: 0
       };
     });
     
     // Lade alle Termine für dieses Datum
     const termineQuery = `
-      SELECT id, mitarbeiter_id, geschaetzte_zeit, tatsaechliche_zeit, status, arbeitszeiten_details
+      SELECT id, mitarbeiter_id, geschaetzte_zeit, tatsaechliche_zeit, status,
+             arbeitszeiten_details, muss_bearbeitet_werden, nacharbeit_start_zeit
       FROM termine
       WHERE datum = ? AND geloescht_am IS NULL AND COALESCE(ist_schwebend, 0) = 0
     `;
@@ -819,6 +827,29 @@ class TermineModel {
           auslastungMap[mid].termin_anzahl += 1;
         }
       });
+
+      // Nacharbeit-Tracking: Wenn muss_bearbeitet_werden = 1, Nacharbeit-Zeit erfassen
+      if (termin.muss_bearbeitet_werden === 1 && mitarbeiterMitZeit.size > 0) {
+        // Nacharbeit-Zeit = tatsaechliche_zeit (abgeschlossen) oder geschaetzte_zeit (in Bearbeitung)
+        const nacharbeitZeit = termin.tatsaechliche_zeit || termin.geschaetzte_zeit || 0;
+        mitarbeiterMitZeit.forEach(mid => {
+          if (auslastungMap[mid]) {
+            auslastungMap[mid].nacharbeit_anzahl += 1;
+            auslastungMap[mid].nacharbeit_minuten += nacharbeitZeit;
+            // Nacharbeit-Startzeit merken (für die Auslastungs-Anzeige)
+            if (termin.nacharbeit_start_zeit && !auslastungMap[mid].nacharbeit_start_zeiten) {
+              auslastungMap[mid].nacharbeit_start_zeiten = [];
+            }
+            if (termin.nacharbeit_start_zeit) {
+              auslastungMap[mid].nacharbeit_start_zeiten.push({
+                termin_id: termin.id,
+                start_zeit: termin.nacharbeit_start_zeit,
+                status: status
+              });
+            }
+          }
+        });
+      }
     });
     
     // Konvertiere Map zu Array
