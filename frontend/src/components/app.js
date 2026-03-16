@@ -20042,15 +20042,45 @@ class App {
       const schwebendeTermine = alleTermine.filter(t => 
         t.ist_schwebend === 1 || t.ist_schwebend === '1' || t.ist_schwebend === true
       );
+
+      // Zusätzlich: nicht-zugeordnete Termine vom gewählten Datum auch im Pool anzeigen
+      // (Termine die für heute erstellt wurden, aber noch keinen Mitarbeiter haben)
+      const nichtZugeordneteVomDatum = alleTermine.filter(t => {
+        if (t.ist_schwebend) return false; // Schwebende bereits oben erfasst
+        if (t.datum !== datum) return false;
+        if (t.status === 'abgeschlossen' || t.status === 'storniert') return false;
+        if (t.geloescht_am) return false;
+        // Prüfe ob kein Mitarbeiter zugeordnet ist (weder direkt noch über arbeitszeiten_details)
+        if (t.mitarbeiter_id) return false;
+        if (t.lehrling_id) return false;
+        if (t.arbeitszeiten_details) {
+          try {
+            const details = typeof t.arbeitszeiten_details === 'string'
+              ? JSON.parse(t.arbeitszeiten_details)
+              : t.arbeitszeiten_details;
+            if (details._gesamt_mitarbeiter_id) return false;
+          } catch (e) { /* ignorieren */ }
+        }
+        return true;
+      });
       
       console.log('[DEBUG] Termine für Datum:', termine.length);
       console.log('[DEBUG] Schwebende Termine:', schwebendeTermine.length);
+      console.log('[DEBUG] Nicht zugeordnete Termine vom Datum:', nichtZugeordneteVomDatum.length);
       
       // Schwebende Termine markieren und zu den Terminen hinzufügen (ohne Duplikate)
       schwebendeTermine.forEach(st => {
         st._istSchwebend = true; // Markierung für UI
         if (!termine.find(t => t.id === st.id)) {
           termine.push(st);
+        }
+      });
+
+      // Nicht-zugeordnete Termine vom Datum auch als ziehbar markieren
+      nichtZugeordneteVomDatum.forEach(t => {
+        t._nichtZugeordnet = true; // Markierung für UI
+        if (!termine.find(x => x.id === t.id)) {
+          termine.push(t);
         }
       });
 
@@ -20655,8 +20685,8 @@ class App {
       // Drop-Zone für "Nicht zugeordnet"
       this.setupDropZone(sourceContainer);
 
-      // 8. Schwebende Termine separat im eigenen Panel rendern
-      this.renderSchwebendeTermine(schwebendeTermine, schwebendeContainer);
+      // 8. Schwebende Termine + nicht-zugeordnete Tages-Termine separat im eigenen Panel rendern
+      this.renderSchwebendeTermine([...schwebendeTermine, ...nichtZugeordneteVomDatum], schwebendeContainer);
 
       // 9. Überfällige Termine laden und rendern
       this.loadUeberfaelligeTermine();
