@@ -32831,9 +32831,13 @@ App.prototype.showVerschiebeWarnung = async function(person, termin, kapazitaetW
     document.getElementById('verschiebeOptionAufteilen')?.addEventListener('click', async () => {
       cleanup();
       try {
-        await TermineService.splitTermin(termin.id, teil1Zeit, morgenDatum, teil2Zeit);
+        const splitResult = await TermineService.splitTermin(termin.id, teil1Zeit, morgenDatum, teil2Zeit);
         await this._assignTerminDirectToPersonInDB(termin.id, targetType, mitarbeiterId, lehrlingId, startzeit);
-        this.showToast(`✂️ Termin aufgeteilt: ${teil1Zeit} Min. heute für ${person.name}, ${teil2Zeit} Min. am ${this.formatDatum(morgenDatum)} → Nicht zugeordnet`, 'success');
+        // Teil 2 (morgen) ebenfalls der gleichen Person zuweisen
+        if (splitResult?.teil2?.id) {
+          await this._assignTerminDirectToPersonInDB(splitResult.teil2.id, targetType, mitarbeiterId, lehrlingId, '08:00');
+        }
+        this.showToast(`✂️ Termin aufgeteilt: ${teil1Zeit} Min. heute für ${person.name}, ${teil2Zeit} Min. am ${this.formatDatum(morgenDatum)} → ${person.name}`, 'success');
         this.loadAuslastungDragDrop();
       } catch (error) {
         console.error('Fehler beim Aufteilen:', error);
