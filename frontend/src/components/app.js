@@ -22657,6 +22657,7 @@ class App {
 
     element.addEventListener('drop', async (e) => {
       e.preventDefault();
+      e.stopPropagation(); // Verhindert Bubbling zu übergeordneten Drop-Zonen
       element.classList.remove('drag-over');
       // Zeit-Indikator und Positionslinie entfernen
       this.removeDragTimeIndicator();
@@ -22671,6 +22672,9 @@ class App {
       }
       
       const terminId = e.dataTransfer.getData('text/plain');
+      // Doppel-Drop Guard: selber Termin nicht zweimal innerhalb 1s verarbeiten
+      if (this._dropGuard && this._dropGuard.terminId === terminId && Date.now() - this._dropGuard.ts < 1000) return;
+      this._dropGuard = { terminId, ts: Date.now() };
       const arbeitName = e.dataTransfer.getData('application/x-arbeit-name');
       const arbeitIndex = e.dataTransfer.getData('application/x-arbeit-index');
       const istArbeitBlock = e.dataTransfer.getData('application/x-ist-arbeit-block') === 'true';
@@ -32617,6 +32621,55 @@ App.prototype.checkKapazitaetVorZuweisung = async function(person, datum, termin
 };
 
 /**
+ * Weist einen Termin direkt in der DB einer Person zu (mit korrekten arbeitszeiten_details).
+ * Wird von showVerschiebeWarnung-Buttons genutzt (sofortige DB-Speicherung ohne lokalen Puffer).
+ */
+App.prototype._assignTerminDirectToPersonInDB = async function(terminId, targetType, mitarbeiterId, lehrlingId, startzeit) {
+  const aktuellerTermin = await TermineService.getById(terminId);
+  let details = {};
+  try {
+    details = aktuellerTermin.arbeitszeiten_details
+      ? (typeof aktuellerTermin.arbeitszeiten_details === 'string'
+          ? JSON.parse(aktuellerTermin.arbeitszeiten_details)
+          : aktuellerTermin.arbeitszeiten_details)
+      : {};
+  } catch (e) {}
+
+  const updateData = { startzeit };
+
+  if (targetType === 'lehrling' && lehrlingId) {
+    updateData.mitarbeiter_id = null;
+    updateData.lehrling_id = parseInt(lehrlingId);
+    details._gesamt_mitarbeiter_id = { type: 'lehrling', id: parseInt(lehrlingId) };
+    details._startzeit = startzeit;
+    // Alle vorhandenen Arbeiten dem Lehrling zuordnen
+    for (const key in details) {
+      if (!key.startsWith('_') && typeof details[key] === 'object') {
+        details[key].type = 'lehrling';
+        details[key].lehrling_id = parseInt(lehrlingId);
+        delete details[key].mitarbeiter_id;
+        details[key].startzeit = startzeit;
+      }
+    }
+  } else if (targetType === 'mitarbeiter' && mitarbeiterId) {
+    updateData.mitarbeiter_id = parseInt(mitarbeiterId);
+    details._gesamt_mitarbeiter_id = { type: 'mitarbeiter', id: parseInt(mitarbeiterId) };
+    details._startzeit = startzeit;
+    for (const key in details) {
+      if (!key.startsWith('_') && typeof details[key] === 'object') {
+        details[key].type = 'mitarbeiter';
+        details[key].mitarbeiter_id = parseInt(mitarbeiterId);
+        delete details[key].lehrling_id;
+        details[key].startzeit = startzeit;
+      }
+    }
+  }
+
+  updateData.arbeitszeiten_details = JSON.stringify(details);
+  await TermineService.update(terminId, updateData);
+};
+
+/**
  * Zeigt eine modale Warnung mit Optionen bei Überlastung
  * @param {Object} person - Mitarbeiter oder Lehrling
  * @param {Object} termin - Termin-Objekt
@@ -32766,8 +32819,9 @@ App.prototype.showVerschiebeWarnung = async function(person, termin, kapazitaetW
     document.getElementById('verschiebeOptionTrotzdem')?.addEventListener('click', async () => {
       cleanup();
       try {
-        await this.moveTerminToMitarbeiterWithTime(termin.id, mitarbeiterId, lehrlingId, targetType, startzeit);
+        await this._assignTerminDirectToPersonInDB(termin.id, targetType, mitarbeiterId, lehrlingId, startzeit);
         this.showToast('⚠️ Termin trotz Überlastung zugewiesen!', 'warning');
+        this.loadAuslastungDragDrop();
       } catch (err) {
         this.showToast('❌ Fehler beim Zuweisen: ' + (err.message || 'Unbekannt'), 'error');
       }
@@ -32778,11 +32832,7 @@ App.prototype.showVerschiebeWarnung = async function(person, termin, kapazitaetW
       cleanup();
       try {
         await TermineService.splitTermin(termin.id, teil1Zeit, morgenDatum, teil2Zeit);
-        await TermineService.update(termin.id, {
-          mitarbeiter_id: targetType === 'mitarbeiter' ? parseInt(mitarbeiterId) : null,
-          lehrling_id: targetType === 'lehrling' ? parseInt(lehrlingId) : null,
-          startzeit: startzeit,
-        });
+        await this._assignTerminDirectToPersonInDB(termin.id, targetType, mitarbeiterId, lehrlingId, startzeit);
         this.showToast(`✂️ Termin aufgeteilt: ${teil1Zeit} Min. heute für ${person.name}, ${teil2Zeit} Min. am ${this.formatDatum(morgenDatum)} → Nicht zugeordnet`, 'success');
         this.loadAuslastungDragDrop();
       } catch (error) {
