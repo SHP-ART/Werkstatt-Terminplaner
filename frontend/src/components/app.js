@@ -22734,37 +22734,48 @@ class App {
           // Einzelnen Arbeitsblock verschieben
           await this.moveArbeitBlockToMitarbeiter(terminId, arbeitName, parseInt(arbeitIndex), mitarbeiterId, lehrlingId, targetType, newStartzeit);
         } else {
-          // Vor dem Verschieben: Kapazitäts-Prüfung durchführen
-          const person = targetType === 'mitarbeiter' 
-            ? await MitarbeiterService.getById(mitarbeiterId)
-            : await LehrlingeService.getById(lehrlingId);
-          
-          const selectedDatum = document.getElementById('auslastungDragDropDatum').value;
-          const terminDaten = await TermineService.getById(terminId);
-          
-          const kapazitaetWarnung = await this.checkKapazitaetVorZuweisung(
-            person, 
-            selectedDatum, 
-            dauer, 
-            targetType,
-            parseInt(mitarbeiterId || lehrlingId)
-          );
-          
-          if (kapazitaetWarnung.ueberlastet) {
-            // Zeige Warnung mit Optionen
-            await this.showVerschiebeWarnung(
-              person,
-              terminDaten,
-              kapazitaetWarnung,
-              selectedDatum,
-              mitarbeiterId,
-              lehrlingId,
+          try {
+            console.log('[DROP] terminId:', terminId, '| mitarbeiterId:', mitarbeiterId, '| lehrlingId:', lehrlingId, '| dauer:', dauer);
+            // Vor dem Verschieben: Kapazitäts-Prüfung durchführen
+            const person = targetType === 'mitarbeiter' 
+              ? await MitarbeiterService.getById(mitarbeiterId)
+              : await LehrlingeService.getById(lehrlingId);
+            
+            const selectedDatum = document.getElementById('auslastungDragDropDatum').value;
+            const terminDaten = await TermineService.getById(terminId);
+            
+            if (!terminDaten) {
+              this.showToast('❌ Termin nicht gefunden (ID: ' + terminId + ')', 'error');
+              return;
+            }
+            
+            const kapazitaetWarnung = await this.checkKapazitaetVorZuweisung(
+              person, 
+              selectedDatum, 
+              dauer, 
               targetType,
-              newStartzeit
+              parseInt(mitarbeiterId || lehrlingId)
             );
-          } else {
-            // Keine Überlastung - direkt zuweisen
-            await this.moveTerminToMitarbeiterWithTime(terminId, mitarbeiterId, lehrlingId, targetType, newStartzeit);
+            
+            if (kapazitaetWarnung.ueberlastet) {
+              // Zeige Warnung mit Optionen
+              await this.showVerschiebeWarnung(
+                person,
+                terminDaten,
+                kapazitaetWarnung,
+                selectedDatum,
+                mitarbeiterId,
+                lehrlingId,
+                targetType,
+                newStartzeit
+              );
+            } else {
+              // Keine Überlastung - direkt zuweisen
+              await this.moveTerminToMitarbeiterWithTime(terminId, mitarbeiterId, lehrlingId, targetType, newStartzeit);
+            }
+          } catch (error) {
+            console.error('[DROP] Fehler beim Zuweisen:', error);
+            this.showToast('❌ Fehler beim Zuweisen: ' + (error.message || 'Unbekannter Fehler'), 'error');
           }
         }
       }
@@ -32612,8 +32623,13 @@ App.prototype.checkKapazitaetVorZuweisung = async function(person, datum, termin
  * @param {String} startzeit - Startzeit (HH:MM)
  */
 App.prototype.showVerschiebeWarnung = async function(person, termin, kapazitaetWarnung, datum, mitarbeiterId, lehrlingId, targetType, startzeit) {
-  // Finde nächsten verfügbaren Tag
-  const naechsterTag = await this.findeNaechstenVerfuegbarenTag(person, datum, termin.geschaetzte_zeit || 30, 14);
+  // Finde nächsten verfügbaren Tag (robust gegen API-Fehler)
+  let naechsterTag = null;
+  try {
+    naechsterTag = await this.findeNaechstenVerfuegbarenTag(person, datum, termin?.geschaetzte_zeit || 30, 14);
+  } catch (e) {
+    console.warn('[showVerschiebeWarnung] findeNaechstenVerfuegbarenTag fehlgeschlagen:', e);
+  }
 
   // Aufteilen-Berechnung: wie viel passt heute noch?
   const terminDauer = kapazitaetWarnung.neueAuslastung - kapazitaetWarnung.aktuelleAuslastung;
@@ -32726,9 +32742,14 @@ App.prototype.showVerschiebeWarnung = async function(person, termin, kapazitaetW
       try {
         // Termin aufteilen: Teil 1 bleibt heute, Teil 2 geht auf morgen (nicht zugeordnet)
         await TermineService.splitTermin(termin.id, teil1Zeit, morgenDatum, teil2Zeit);
-        // Teil 1 dem Mitarbeiter zuweisen
-        await this.moveTerminToMitarbeiterWithTime(termin.id, mitarbeiterId, lehrlingId, targetType, startzeit);
+        // Teil 1 direkt in DB zuweisen (da splitTermin einen WS-Broadcast auslöst und lokale Änderungen überschreiben würde)
+        await TermineService.update(termin.id, {
+          mitarbeiter_id: targetType === 'mitarbeiter' ? parseInt(mitarbeiterId) : null,
+          lehrling_id: targetType === 'lehrling' ? parseInt(lehrlingId) : null,
+          startzeit: startzeit,
+        });
         this.showToast(`✂️ Termin aufgeteilt: ${teil1Zeit} Min. heute für ${person.name}, ${teil2Zeit} Min. am ${this.formatDatum(morgenDatum)} → Nicht zugeordnet`, 'success');
+        this.loadAuslastungDragDrop();
       } catch (error) {
         console.error('Fehler beim Aufteilen:', error);
         this.showToast('❌ Fehler beim Aufteilen: ' + (error.message || 'Unbekannter Fehler'), 'error');
