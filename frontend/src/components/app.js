@@ -22688,12 +22688,10 @@ class App {
       let newMinute = Math.round((totalMinutes % 60) / raster) * raster;
       let snappedMinutes = newHour * 60 + newMinute;
       
-      // Hole Dauer des gezogenen Termins/Arbeit
+      // Hole Dauer: primär aus dataTransfer (zuverlässiger als DOM-Suche)
+      const dauerFromTransfer = parseInt(e.dataTransfer.getData('application/x-dauer')) || 0;
       const draggingEl = document.querySelector('.dragging');
-      let dauer = 30;
-      if (draggingEl && draggingEl.dataset.dauer) {
-        dauer = parseInt(draggingEl.dataset.dauer);
-      }
+      let dauer = dauerFromTransfer || (draggingEl && draggingEl.dataset.dauer ? parseInt(draggingEl.dataset.dauer) : 30) || 30;
       
       // Prüfe nur auf Mittagspausen-Kollision und verschiebe automatisch nach der Pause
       const excludeArbeitIdx = istArbeitBlock ? parseInt(arbeitIndex) : null;
@@ -23498,11 +23496,24 @@ class App {
       }
     }
     
+    // Ziel-Track früh bestimmen (Parameter, nicht DOM-Suche nach terminEl)
+    let newTrack = null;
+    if (type === 'lehrling' && lehrlingId) {
+      newTrack = document.querySelector(`.timeline-track[data-lehrling-id="${lehrlingId}"]`);
+    } else if (mitarbeiterId) {
+      newTrack = document.querySelector(`.timeline-track[data-mitarbeiter-id="${mitarbeiterId}"]`);
+    }
+
     // Wenn kein Timeline-Element existiert, aber eine Mini-Card oder Schwebende-Bar -> Termin kommt von außerhalb
     if (!terminEl && (miniCard || schwebendeBar)) {
-      // Lade Termin-Daten und erstelle Timeline-Element
+      // Ziel-Track prüfen
+      if (!newTrack) {
+        this.showToast('❌ Mitarbeiter-Track nicht gefunden – bitte Seite neu laden', 'error');
+        return;
+      }
+      // Lade Termin-Daten (Cache-first, dann API)
       try {
-        const termin = await TermineService.getById(terminId);
+        const termin = this.termineById[terminId] || await TermineService.getById(terminId);
         const dauer = this.getTerminGesamtdauer(termin);
         const isSchwebend = termin.ist_schwebend === 1 || termin._istSchwebend;
         const statusClass = termin.status ? ` status-${termin.status.toLowerCase().replace(' ', '-')}` : '';
@@ -23615,20 +23626,21 @@ class App {
           this.removeDragTimeIndicator();
         });
         
-        // Mini-Card aus "Nicht zugeordnet" entfernen (falls vorhanden)
+        // Mini-Card aus "Nicht zugeordnet" entfernen und terminEl sofort in Track hängen
+        newTrack.appendChild(terminEl);
         if (miniCard) {
           miniCard.remove();
         }
         
       } catch (error) {
         console.error('Fehler beim Erstellen des Timeline-Elements:', error);
+        this.showToast('❌ Fehler beim Platzieren des Termins: ' + (error.message || 'Unbekannt'), 'error');
         return;
       }
     }
     
     if (!terminEl) {
-      // Weder Timeline-Element noch Mini-Card gefunden - Neuladung als Fallback
-      this.loadAuslastungDragDrop();
+      this.showToast('❌ Termin konnte nicht zugeordnet werden – bitte Seite neu laden', 'error');
       return;
     }
     
@@ -23642,16 +23654,6 @@ class App {
     const dauer = parseInt(terminEl.dataset.dauer) || 30;
     const startMinutes = startH * 60 + startM;
     const endMinutes = startMinutes + dauer;
-    
-    // Bestimme Ziel-Track und dessen Mittagspause
-    let newTrack = null;
-    let pauseStart = null;
-    
-    if (type === 'lehrling' && lehrlingId) {
-      newTrack = document.querySelector(`.timeline-track[data-lehrling-id="${lehrlingId}"]`);
-    } else if (mitarbeiterId) {
-      newTrack = document.querySelector(`.timeline-track[data-mitarbeiter-id="${mitarbeiterId}"]`);
-    }
     
     const targetTrack = newTrack || terminEl.closest('.timeline-track');
     
