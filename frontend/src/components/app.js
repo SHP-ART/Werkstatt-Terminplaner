@@ -21473,7 +21473,10 @@ class App {
       <div class="bar-details">${termin.kunde_name || 'Unbekannt'}</div>
       <div class="bar-zeit">⏱️ ${dauerText}</div>
       ${zeitenInfo ? `<div class="bar-zeiten">${zeitenInfo}</div>` : ''}
-      <button class="btn-einplanen" onclick="event.stopPropagation(); app.einplanenSchwebenderTermin(${termin.id})" title="In aktuellen Tag einplanen">📅 Einplanen</button>
+      ${termin._nichtZugeordnet
+        ? `<button class="btn-einplanen" onclick="event.stopPropagation(); app.showTerminDetails(${termin.id})" title="Termin-Details anzeigen – Mitarbeiter über Ziehen zuweisen">👤 Mitarbeiter zuweisen</button>`
+        : `<button class="btn-einplanen" onclick="event.stopPropagation(); app.einplanenSchwebenderTermin(${termin.id})" title="In aktuellen Tag einplanen">📅 Einplanen</button>`
+      }
     `;
     
     // Drag Events
@@ -21662,14 +21665,24 @@ class App {
     console.log('inNichtZugeordnet:', inNichtZugeordnet);
     
     try {
+      // Aktuellen Termin laden um zu prüfen ob er wirklich schwebend ist
+      const aktuellerTermin = await TermineService.getById(terminId);
+      const istWirklichSchwebend = aktuellerTermin && (aktuellerTermin.ist_schwebend === 1 || aktuellerTermin.ist_schwebend === true);
+
       const updateData = {
         datum: datum,
         ist_schwebend: 0,  // Termin ist nicht mehr schwebend - festes Datum
-        mitarbeiter_id: null,  // IMMER Mitarbeiter entfernen = "Nicht zugeordnet"
-        arbeitszeiten_details: null  // IMMER Arbeitszeiten-Details entfernen (enthält Lehrling-Zuordnung)
+        mitarbeiter_id: null  // IMMER Mitarbeiter entfernen = "Nicht zugeordnet"
       };
+
+      // Arbeitszeiten-Details nur bei wirklich schwebenden Terminen zurücksetzen
+      // (sie enthalten evtl. Lehrling-Zuordnung die entfernt werden soll).
+      // Nicht-zugeordnete Tages-Termine (nichtZugeordnet) behalten ihre Details!
+      if (istWirklichSchwebend) {
+        updateData.arbeitszeiten_details = null;
+      }
       
-      console.log('Schwebend-Einplanen updateData:', updateData);
+      console.log('Schwebend-Einplanen updateData:', updateData, '| istWirklichSchwebend:', istWirklichSchwebend);
       console.log('Sende API-Request an:', `/termine/${terminId}`);
       
       const result = await TermineService.update(terminId, updateData);
