@@ -32643,7 +32643,7 @@ App.prototype.showVerschiebeWarnung = async function(person, termin, kapazitaetW
   const kannAufteilen = teil1Zeit > 0 && teil2Zeit > 0;
 
   const modal = document.createElement('div');
-  modal.className = 'modal-overlay';
+  modal.className = 'modal-overlay active';
   modal.style.cssText = `
     position: fixed;
     top: 0;
@@ -32655,6 +32655,7 @@ App.prototype.showVerschiebeWarnung = async function(person, termin, kapazitaetW
     align-items: center;
     justify-content: center;
     z-index: 10000;
+    opacity: 1;
   `;
 
   const aufteilenHtml = kannAufteilen
