@@ -27709,15 +27709,28 @@ class App {
     // Zeige nur Termine die explizit auf 'in_arbeit' gesetzt wurden
     const aktuellerAuftrag = personTermine.find(t => t.status === 'in_arbeit');
 
-    // Finde nächsten Auftrag (noch nicht gestartet)
-    const naechsterAuftrag = personTermine.find(t => {
+    // Finde nächsten Auftrag (noch nicht gestartet).
+    // Für geplante Termine mit vergangener Startzeit gilt: Die dynamisch vorgerückte
+    // Startzeit (nächste halbe Stunde) wird für die Anzeige verwendet.
+    const naechsterAuftragRoh = personTermine.find(t => {
       if (t === aktuellerAuftrag) return false;
       if (t.status === 'abgeschlossen' || t.status === 'storniert') return false;
-
-      const startzeit = t.startzeit || t.bring_zeit;
-      // Nächster Auftrag: entweder keine Startzeit oder Startzeit in der Zukunft
-      return !startzeit || startzeit > jetztZeit;
+      // Aufnehmen wenn: keine Startzeit, Startzeit in der Zukunft, ODER Startzeit
+      // in der Vergangenheit (→ wird dynamisch vorgerückt)
+      return true;
     });
+    // Erstelle eine View-Kopie mit der effektiv angezeigten Startzeit (ohne DB zu ändern)
+    const naechsterAuftrag = naechsterAuftragRoh
+      ? { ...naechsterAuftragRoh, startzeit: this.getEffektiveDynamischStartzeit(naechsterAuftragRoh) }
+      : null;
+
+    // Erkenne ob Startzeit dynamisch vorgerückt wurde (zur visuellen Kennzeichnung)
+    const naechsterAuftragOriginalStart = naechsterAuftragRoh
+      ? (naechsterAuftragRoh.startzeit || naechsterAuftragRoh.bring_zeit)
+      : null;
+    const naechsterIstVerzoegert = naechsterAuftrag
+      && naechsterAuftragOriginalStart
+      && naechsterAuftrag.startzeit !== naechsterAuftragOriginalStart;
 
     // Prüfe ob Lehrling in Berufsschule ist
     let inBerufsschule = false;
@@ -27869,6 +27882,7 @@ class App {
       `;
     } else if (naechsterAuftrag) {
       // Kein aktueller Auftrag, aber nächster geplant
+      const naechsterFertigCa = this.berechneEndzeitMitFaktoren(naechsterAuftrag, person, isLehrling, kontext);
       bodyContent = `
         <div class="intern-person-leer">
           <div class="leer-icon">☕</div>
@@ -27876,7 +27890,7 @@ class App {
         </div>
         
         <div class="intern-person-naechster">
-          <div class="naechster-label">⏰ Nächster Auftrag:</div>
+          <div class="naechster-label">⏰ Nächster Auftrag:${naechsterIstVerzoegert ? ' <span style="color:#fd7e14;font-size:0.8em;">⚠ nachrückt</span>' : ''}</div>
           <div class="intern-person-auftrag" style="border-left-color: #28a745;">
             <div class="auftrag-nr">${naechsterAuftrag.termin_nr || '-'}</div>
             <div class="auftrag-kunde">${this.escapeHtml(naechsterAuftrag.kunde_name || '-')}</div>
@@ -27885,12 +27899,12 @@ class App {
           </div>
           <div class="intern-person-zeit" style="margin-top: 10px;">
             <div class="intern-person-zeit-item">
-              <div class="zeit-label">Start</div>
+              <div class="zeit-label">Start${naechsterIstVerzoegert ? ' ca.' : ''}</div>
               <div class="zeit-value">${naechsterAuftrag.startzeit || naechsterAuftrag.bring_zeit || '--:--'}</div>
             </div>
             <div class="intern-person-zeit-item">
-              <div class="zeit-label">Dauer</div>
-              <div class="zeit-value">${this.formatMinutesToHours(this.getEffektiveArbeitszeitMitFaktoren(naechsterAuftrag, person, isLehrling, kontext))}</div>
+              <div class="zeit-label">Fertig ca.</div>
+              <div class="zeit-value">${naechsterFertigCa}</div>
             </div>
             <div class="intern-person-zeit-item">
               <div class="zeit-label">Wartezeit</div>
@@ -28293,6 +28307,42 @@ class App {
 
     // Prüfe ob aktuelle Zeit innerhalb des Pausenfensters liegt
     return jetztZeit >= pauseStart && jetztZeit < pauseEnde;
+  }
+
+  /**
+   * Gibt für einen 'geplant'-Termin die dynamisch aufgerundete Startzeit zurück.
+   * Liegt die gespeicherte Startzeit in der Vergangenheit (oder fehlt), wird die
+   * aktuelle Uhrzeit auf die nächste volle halbe Stunde aufgerundet.
+   * Liegt die gespeicherte Startzeit noch in der Zukunft, wird sie unverändert zurückgegeben.
+   * Für 'in_arbeit'/'abgeschlossen'-Termine wird immer die gespeicherte Zeit zurückgegeben.
+   *
+   * @param {Object} termin
+   * @returns {string} Uhrzeit im Format "HH:MM"
+   */
+  getEffektiveDynamischStartzeit(termin) {
+    const gespeichert = termin.startzeit || termin.bring_zeit;
+
+    // Nur für noch nicht gestartete Termine dynamisch vorrücken
+    if (termin.status === 'in_arbeit' || termin.status === 'abgeschlossen') {
+      return gespeichert;
+    }
+
+    const now = new Date();
+    const jetztMin = now.getHours() * 60 + now.getMinutes();
+
+    // Wenn gespeicherte Zeit noch in der Zukunft liegt → unverändert verwenden
+    if (gespeichert) {
+      const gespeichertMin = this.timeToMinutes(gespeichert);
+      if (gespeichertMin > jetztMin) {
+        return gespeichert;
+      }
+    }
+
+    // Startzeit liegt in der Vergangenheit (oder fehlt) → nächste halbe Stunde
+    const naechsteHalbeStunde = Math.ceil(jetztMin / 30) * 30;
+    const h = Math.floor(naechsteHalbeStunde / 60);
+    const m = naechsteHalbeStunde % 60;
+    return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
   }
 
   /**
