@@ -20738,8 +20738,12 @@ class App {
             console.log('[DEBUG] - mitarbeiterMap Keys:', Object.keys(mitarbeiterMap).join(', ') || '(leer)', '→ gesuchter Key', mitarbeiterId, ':', !!mitarbeiterMap[mitarbeiterId]);
             console.log('[DEBUG] - lehrlingeMap  Keys:', Object.keys(lehrlingeMap).join(', ') || '(leer)', '→ gesuchter Key', lehrlingId, ':', !!lehrlingeMap[lehrlingId]);
             // Nicht zugeordnet - als normaler Termin anzeigen
-            const card = this.createTerminMiniCard(termin);
-            sourceContainer.appendChild(card);
+            // ABER: Wenn der Termin bereits im linken Panel angezeigt wird (_nichtZugeordnet),
+            // nicht zusätzlich in der Timeline-Dropzone unten rendern → sonst doppelte Anzeige
+            if (!termin._nichtZugeordnet) {
+              const card = this.createTerminMiniCard(termin);
+              sourceContainer.appendChild(card);
+            }
           }
       });
       
