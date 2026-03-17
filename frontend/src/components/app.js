@@ -28117,41 +28117,60 @@ class App {
   }
 
   /**
-   * Berechnet den Fortschritt basierend auf der verstrichenen Zeit MIT Faktoren
+   * Berechnet den Fortschritt basierend auf der verstrichenen Zeit MIT Faktoren.
+   * Verwendet die berechnete Endzeit (inkl. Pause) als Basis, damit Fortschritt
+   * und "Fertig ca."-Anzeige konsistent bleiben.
    */
   berechneAuftragFortschrittMitFaktoren(termin, person, isLehrling, kontext = {}) {
     if (!termin.startzeit && !termin.bring_zeit) return 0;
 
     const startzeit = termin.startzeit || termin.bring_zeit;
-    const geschaetzteZeit = this.getEffektiveArbeitszeitMitFaktoren(termin, person, isLehrling, kontext);
-
     const jetzt = this.getToday();
     const startMin = this.timeToMinutes(startzeit);
     const startDate = new Date(jetzt);
     startDate.setHours(Math.floor(startMin / 60), startMin % 60, 0, 0);
 
     const verstricheneMinuten = (jetzt - startDate) / 1000 / 60;
-    const fortschritt = (verstricheneMinuten / geschaetzteZeit) * 100;
+
+    // Gesamtdauer inkl. Pause über berechneEndzeitMitFaktoren ermitteln
+    const endzeitStr = this.berechneEndzeitMitFaktoren(termin, person, isLehrling, kontext);
+    if (!endzeitStr || endzeitStr === '--:--') {
+      // Fallback: Netto-Arbeitszeit ohne Pause
+      const geschaetzteZeit = this.getEffektiveArbeitszeitMitFaktoren(termin, person, isLehrling, kontext);
+      return Math.round(Math.max(0, (verstricheneMinuten / geschaetzteZeit) * 100));
+    }
+
+    const endzeitMin = this.timeToMinutes(endzeitStr);
+    const endzeitDate = new Date(jetzt);
+    endzeitDate.setHours(Math.floor(endzeitMin / 60), endzeitMin % 60, 0, 0);
+    const gesamtDauerMinuten = (endzeitDate - startDate) / 1000 / 60;
+
+    if (gesamtDauerMinuten <= 0) return 100;
+    const fortschritt = (verstricheneMinuten / gesamtDauerMinuten) * 100;
 
     return Math.round(Math.max(0, fortschritt));
   }
 
   /**
-   * Berechnet die verbleibende Zeit MIT Faktoren
+   * Berechnet die verbleibende Zeit MIT Faktoren.
+   * Basiert auf der berechneten Endzeit (inkl. Pause), damit "Rest" und
+   * "Fertig ca." konsistent sind.
    */
   berechneRestzeitMitFaktoren(termin, person, isLehrling, kontext = {}) {
     const startzeit = termin.startzeit || termin.bring_zeit;
     if (!startzeit) return '--:--';
 
-    const geschaetzteZeit = this.getEffektiveArbeitszeitMitFaktoren(termin, person, isLehrling, kontext);
-
     const jetzt = this.getToday();
-    const startMin = this.timeToMinutes(startzeit);
-    const startDate = new Date(jetzt);
-    startDate.setHours(Math.floor(startMin / 60), startMin % 60, 0, 0);
 
-    const verstricheneMinuten = (jetzt - startDate) / 1000 / 60;
-    const restMinuten = geschaetzteZeit - verstricheneMinuten;
+    // Endzeit inkl. Pause via berechneEndzeitMitFaktoren ermitteln
+    const endzeitStr = this.berechneEndzeitMitFaktoren(termin, person, isLehrling, kontext);
+    if (!endzeitStr || endzeitStr === '--:--') return '--:--';
+
+    const endzeitMin = this.timeToMinutes(endzeitStr);
+    const endzeitDate = new Date(jetzt);
+    endzeitDate.setHours(Math.floor(endzeitMin / 60), endzeitMin % 60, 0, 0);
+
+    const restMinuten = (endzeitDate - jetzt) / 1000 / 60;
 
     if (restMinuten <= 0) {
       const ueberzogen = Math.abs(Math.round(restMinuten));
