@@ -20737,10 +20737,9 @@ class App {
             console.log('[DEBUG] - Grund: zuordnungsTyp=', zuordnungsTyp, '| mitarbeiterId=', mitarbeiterId, '| lehrlingId=', lehrlingId);
             console.log('[DEBUG] - mitarbeiterMap Keys:', Object.keys(mitarbeiterMap).join(', ') || '(leer)', '→ gesuchter Key', mitarbeiterId, ':', !!mitarbeiterMap[mitarbeiterId]);
             console.log('[DEBUG] - lehrlingeMap  Keys:', Object.keys(lehrlingeMap).join(', ') || '(leer)', '→ gesuchter Key', lehrlingId, ':', !!lehrlingeMap[lehrlingId]);
-            // Nicht zugeordnet - als normaler Termin anzeigen
-            // ABER: Wenn der Termin bereits im linken Panel angezeigt wird (_nichtZugeordnet),
-            // nicht zusätzlich in der Timeline-Dropzone unten rendern → sonst doppelte Anzeige
-            if (!termin._nichtZugeordnet) {
+            // Nicht zugeordnet - als Mini-Card in der Timeline-Dropzone anzeigen
+            // (Schwebende Termine erscheinen im linken Panel, nicht-zugeordnete hier)
+            if (!termin._istSchwebend) {
               const card = this.createTerminMiniCard(termin);
               sourceContainer.appendChild(card);
             }
@@ -20750,8 +20749,9 @@ class App {
       // Drop-Zone für "Nicht zugeordnet"
       this.setupDropZone(sourceContainer);
 
-      // 8. Schwebende Termine + nicht-zugeordnete Tages-Termine separat im eigenen Panel rendern
-      this.renderSchwebendeTermine([...schwebendeTermine, ...nichtZugeordneteVomDatum], schwebendeContainer);
+      // 8. Schwebende Termine im linken Panel rendern (NUR echte schwebende)
+      // Nicht-zugeordnete Termine ohne ist_schwebend erscheinen in der Timeline-Dropzone unten
+      this.renderSchwebendeTermine(schwebendeTermine, schwebendeContainer);
 
       // 9. Überfällige Termine laden und rendern
       this.loadUeberfaelligeTermine();
