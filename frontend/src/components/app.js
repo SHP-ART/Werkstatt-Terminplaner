@@ -10738,11 +10738,31 @@ class App {
 
   async updateTerminStatus(terminId, status) {
     try {
-      const result = await TermineService.update(terminId, { status: status });
+      // Für "in_arbeit": Wenn Termin früher gestartet als geplant → tatsächliche Startzeit speichern
+      const updatePayload = { status };
+      if (status === 'in_arbeit') {
+        const termin = this.termineById[terminId];
+        if (termin) {
+          const jetzt = new Date();
+          const jetztZeit = String(jetzt.getHours()).padStart(2, '0') + ':' + String(jetzt.getMinutes()).padStart(2, '0');
+          const geplanteStartzeit = termin.startzeit || termin.bring_zeit;
+          if (geplanteStartzeit && jetztZeit < geplanteStartzeit) {
+            updatePayload.startzeit = jetztZeit;
+            updatePayload.bring_zeit = jetztZeit;
+            console.log(`[Vorrücken] Termin ${terminId}: früher gestartet als geplant (${geplanteStartzeit} → ${jetztZeit})`);
+          }
+        }
+      }
+
+      const result = await TermineService.update(terminId, updatePayload);
 
       // Aktualisiere den Termin im Cache
       if (this.termineById[terminId]) {
         this.termineById[terminId].status = status;
+        if (updatePayload.startzeit) {
+          this.termineById[terminId].startzeit = updatePayload.startzeit;
+          this.termineById[terminId].bring_zeit = updatePayload.bring_zeit;
+        }
         // Feature 10: Aktualisiere auch die berechnete Zeit im Cache
         if (result && result.berechneteZeit) {
           this.termineById[terminId].tatsaechliche_zeit = result.berechneteZeit;
@@ -14363,6 +14383,21 @@ class App {
       if (neuerStatus === 'abgeschlossen' && tatsaechlicheMinuten !== null) {
         updateData.tatsaechliche_zeit = tatsaechlicheMinuten;
       }
+
+      // Bei "in_arbeit": Wenn früher gestartet als geplant → tatsächliche Startzeit speichern
+      if (neuerStatus === 'in_arbeit') {
+        const termin = this.termineById[terminId];
+        if (termin) {
+          const jetzt = new Date();
+          const jetztZeit = String(jetzt.getHours()).padStart(2, '0') + ':' + String(jetzt.getMinutes()).padStart(2, '0');
+          const geplanteStartzeit = termin.startzeit || termin.bring_zeit;
+          if (geplanteStartzeit && jetztZeit < geplanteStartzeit) {
+            updateData.startzeit = jetztZeit;
+            updateData.bring_zeit = jetztZeit;
+            console.log(`[Vorrücken] Termin ${terminId}: früher gestartet (${geplanteStartzeit} → ${jetztZeit})`);
+          }
+        }
+      }
       
       await TermineService.update(terminId, updateData);
       
@@ -14371,6 +14406,10 @@ class App {
         this.termineById[terminId].status = neuerStatus;
         if (tatsaechlicheMinuten !== null) {
           this.termineById[terminId].tatsaechliche_zeit = tatsaechlicheMinuten;
+        }
+        if (updateData.startzeit) {
+          this.termineById[terminId].startzeit = updateData.startzeit;
+          this.termineById[terminId].bring_zeit = updateData.bring_zeit;
         }
       }
       

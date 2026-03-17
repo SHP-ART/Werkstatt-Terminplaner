@@ -2561,6 +2561,11 @@ class TermineController {
         // Bestehende Termine des Tages laden
         const termineDesTages = await TermineModel.getByDatum(datumStr);
 
+        // Echte Auslastung pro Mitarbeiter für diesen Tag (inkl. arbeitszeiten_details)
+        const auslastungProMA = await TermineModel.getAuslastungProMitarbeiter(datumStr);
+        const auslastungMAMap = {};
+        (auslastungProMA || []).forEach(a => { auslastungMAMap[a.mitarbeiter_id] = a; });
+
         const KIPlanungController = require('./kiPlanungController');
         let slotGefunden = false;
 
@@ -2569,13 +2574,31 @@ class TermineController {
             if (slots.length >= 5) break;
 
             // Blöcke für diesen Mitarbeiter ermitteln
-            const maTermine = (termineDesTages || []).filter(t =>
-              (t.mitarbeiter_id === ma.id) && t.startzeit && t.geschaetzte_zeit
-            );
+            // Prüfe direktes mitarbeiter_id ODER Zuordnung via arbeitszeiten_details
+            const maTermine = (termineDesTages || []).filter(t => {
+              const startzeit = t.startzeit || t.bring_zeit;
+              if (!startzeit) return false;
+              if (t.mitarbeiter_id === ma.id) return true;
+              if (t.arbeitszeiten_details) {
+                try {
+                  const det = typeof t.arbeitszeiten_details === 'string'
+                    ? JSON.parse(t.arbeitszeiten_details)
+                    : t.arbeitszeiten_details;
+                  if (det._gesamt_mitarbeiter_id?.type === 'mitarbeiter' && det._gesamt_mitarbeiter_id.id === ma.id) return true;
+                  for (const [key, val] of Object.entries(det)) {
+                    if (key.startsWith('_')) continue;
+                    if (typeof val === 'object' && val.mitarbeiter_id === ma.id) return true;
+                  }
+                } catch (e) { /* ignorieren */ }
+              }
+              return false;
+            });
             const blocks = maTermine.map(t => {
-              const [h, m] = (t.startzeit || '08:00').split(':').map(Number);
+              const startzeit = t.startzeit || t.bring_zeit || '08:00';
+              const [h, m] = startzeit.split(':').map(Number);
               const start = h * 60 + m;
-              return { start, end: start + (t.geschaetzte_zeit || 60) };
+              const dauer = t.tatsaechliche_zeit || t.geschaetzte_zeit || 60;
+              return { start, end: start + dauer };
             });
 
             // Freien Slot finden
@@ -2584,9 +2607,13 @@ class TermineController {
             );
 
             if (slotStart !== null) {
-              const auslastungMinuten = maTermine.reduce((s, t) => s + (t.geschaetzte_zeit || 0), 0);
+              // Echte Auslastung aus getAuslastungProMitarbeiter verwenden
+              const maAuslastung = auslastungMAMap[ma.id];
+              const belegtMinuten = maAuslastung ? (maAuslastung.belegt_minuten || 0) : 0;
               const verfuegbarMinuten = (ma.arbeitsstunden_pro_tag || 8) * 60;
-              const auslastungProzent = Math.round((auslastungMinuten / verfuegbarMinuten) * 100);
+              const auslastungProzent = verfuegbarMinuten > 0
+                ? Math.round((belegtMinuten / verfuegbarMinuten) * 100)
+                : 0;
 
               const h = Math.floor(slotStart / 60);
               const m = slotStart % 60;
