@@ -5732,6 +5732,36 @@ mark.highlight {
     white-space: nowrap;
 }
 
+.nicht-zugeordnet-item.nz-uebertrag {
+    border-left: 3px solid #9c27b0;
+    background: #f3e5f5;
+}
+
+.nicht-zugeordnet-item.nz-uebertrag:hover {
+    background: #e1bee7;
+}
+
+.nicht-zugeordnet-item .uebertrag-indicator {
+    background: #9c27b0;
+    color: white;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 0.75em;
+    margin-left: 8px;
+    white-space: nowrap;
+}
+
+.nz-vortag-header {
+    font-size: 0.82em;
+    font-weight: 600;
+    color: #7b1fa2;
+    background: #f3e5f5;
+    border: 1px solid #ce93d8;
+    border-radius: 6px;
+    padding: 5px 10px;
+    margin: 10px 0 4px 0;
+}
+
 .nz-info {
     display: flex;
     gap: 15px;

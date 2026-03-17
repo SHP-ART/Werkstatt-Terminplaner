@@ -9897,71 +9897,86 @@ class App {
       // Hole alle Termine für den Tag
       const allTermine = await TermineService.getAll();
       const termineAmTag = allTermine.filter(t => t.datum === datum);
-      
-      // Finde Termine ohne Mitarbeiter-Zuordnung
-      const nichtZugeordnet = termineAmTag.filter(termin => {
+
+      // Vortag berechnen (YYYY-MM-DD)
+      const vortagDate = new Date(datum + 'T00:00:00');
+      vortagDate.setDate(vortagDate.getDate() - 1);
+      const vortagDatum = vortagDate.toISOString().slice(0, 10);
+      const vortagLabel = vortagDate.toLocaleDateString('de-DE', { weekday: 'short', day: '2-digit', month: '2-digit' });
+      const termineAmVortag = allTermine.filter(t => t.datum === vortagDatum);
+
+      const filterNichtZugeordnet = (liste) => liste.filter(termin => {
+        // Abgeschlossene Termine nicht mehr anzeigen
+        if (termin.status === 'abgeschlossen') return false;
         // Schwebende Termine gelten immer als "nicht zugeordnet" (konsistent mit Zeitleiste)
         const istSchwebend = termin.ist_schwebend === 1 || termin.ist_schwebend === true;
         if (istSchwebend) return true;
-        
         // Prüfe ob mitarbeiter_id gesetzt ist
         if (termin.mitarbeiter_id) return false;
-        
         // Prüfe auch arbeitszeiten_details auf Zuordnungen
         if (termin.arbeitszeiten_details) {
           try {
             const details = JSON.parse(termin.arbeitszeiten_details);
             if (details._gesamt_mitarbeiter_id) return false;
-            // Prüfe auch einzelne Arbeiten
             for (const key in details) {
               if (!key.startsWith('_') && typeof details[key] === 'object' && details[key].mitarbeiter_id) {
                 return false;
               }
             }
-          } catch (e) {
-            // Ignoriere Parse-Fehler
-          }
+          } catch (e) { /* Ignoriere Parse-Fehler */ }
         }
-        
         return true;
       });
 
+      const nichtZugeordnet = filterNichtZugeordnet(termineAmTag);
+      const nichtZugeordnetVortag = filterNichtZugeordnet(termineAmVortag);
+
+      const renderNzItem = (termin, istUebertrag) => {
+        const zeit = termin.tatsaechliche_zeit || termin.geschaetzte_zeit || 0;
+        const kundenName = termin.kunde_name || 'Unbekannt';
+        const istSchwebend = termin.ist_schwebend === 1 || termin.ist_schwebend === true;
+        const bringZeitText = termin.bring_zeit ? `🚗↓ ${termin.bring_zeit}` : '';
+        const abholZeitText = termin.abholung_zeit ? `🚗↑ ${termin.abholung_zeit}` : '';
+        const zeitenInfo = [bringZeitText, abholZeitText].filter(t => t).join(' • ') || '--:--';
+        return `
+          <div class="nicht-zugeordnet-item${istSchwebend ? ' schwebend' : ''}${istUebertrag ? ' nz-uebertrag' : ''}" data-termin-id="${termin.id}" style="cursor: pointer;" title="${istUebertrag ? 'Übertrag vom Vortag – Klicken zum Bearbeiten' : 'Klicken zum Bearbeiten'}">
+            <div class="nz-info">
+              <span class="nz-zeit">${zeitenInfo}</span>
+              <span class="nz-kunde">${this.escapeHtml(kundenName)}</span>
+              <span class="nz-kennzeichen">${this.escapeHtml(termin.kennzeichen || '-')}</span>
+            </div>
+            <div class="nz-arbeit">${this.escapeHtml(termin.arbeit || '-')}${istSchwebend ? '<span class="schwebend-indicator">⏸️ Schwebend</span>' : ''}${istUebertrag ? `<span class="uebertrag-indicator">📅 ${vortagLabel}</span>` : ''}</div>
+            <div class="nz-dauer">⏱️ ${this.formatMinutesToHours(zeit)}</div>
+          </div>
+        `;
+      };
+
       // Zeige nicht zugeordnete Termine
-      if (nichtZugeordnet.length > 0) {
+      if (nichtZugeordnet.length > 0 || nichtZugeordnetVortag.length > 0) {
         section.style.display = 'block';
         
         let html = `<div class="nicht-zugeordnet-liste">`;
         let gesamtNichtZugeordnetMinuten = 0;
         
         nichtZugeordnet.forEach(termin => {
-          const zeit = termin.tatsaechliche_zeit || termin.geschaetzte_zeit || 0;
-          gesamtNichtZugeordnetMinuten += zeit;
-          
-          const kundenName = termin.kunde_name || 'Unbekannt';
-          const istSchwebend = termin.ist_schwebend === 1 || termin.ist_schwebend === true;
-          
-          // Bring/Abholzeit für Anzeige
-          const bringZeitText = termin.bring_zeit ? `🚗↓ ${termin.bring_zeit}` : '';
-          const abholZeitText = termin.abholung_zeit ? `🚗↑ ${termin.abholung_zeit}` : '';
-          const zeitenInfo = [bringZeitText, abholZeitText].filter(t => t).join(' • ') || '--:--';
-          
-          html += `
-            <div class="nicht-zugeordnet-item${istSchwebend ? ' schwebend' : ''}" data-termin-id="${termin.id}" style="cursor: pointer;" title="Klicken zum Bearbeiten">
-              <div class="nz-info">
-                <span class="nz-zeit">${zeitenInfo}</span>
-                <span class="nz-kunde">${this.escapeHtml(kundenName)}</span>
-                <span class="nz-kennzeichen">${this.escapeHtml(termin.kennzeichen || '-')}</span>
-              </div>
-              <div class="nz-arbeit">${this.escapeHtml(termin.arbeit || '-')}${istSchwebend ? '<span class="schwebend-indicator">⏸️ Schwebend</span>' : ''}</div>
-              <div class="nz-dauer">⏱️ ${this.formatMinutesToHours(zeit)}</div>
-            </div>
-          `;
+          gesamtNichtZugeordnetMinuten += (termin.tatsaechliche_zeit || termin.geschaetzte_zeit || 0);
+          html += renderNzItem(termin, false);
         });
-        
+
+        // Vortags-Überträge anhängen (nur geplante / in_arbeit)
+        if (nichtZugeordnetVortag.length > 0) {
+          html += `<div class="nz-vortag-header">📅 Übertrag vom ${vortagLabel} – nicht zugeordnet</div>`;
+          nichtZugeordnetVortag.forEach(termin => {
+            gesamtNichtZugeordnetMinuten += (termin.tatsaechliche_zeit || termin.geschaetzte_zeit || 0);
+            html += renderNzItem(termin, true);
+          });
+        }
+
+        const alleTermine = [...nichtZugeordnet, ...nichtZugeordnetVortag];
         html += `</div>`;
         html += `<div class="nz-gesamt">
           <strong>Gesamt nicht zugeordnet:</strong> ${this.formatMinutesToHours(gesamtNichtZugeordnetMinuten)} 
-          (${nichtZugeordnet.length} ${nichtZugeordnet.length === 1 ? 'Termin' : 'Termine'})
+          (${alleTermine.length} ${alleTermine.length === 1 ? 'Termin' : 'Termine'})
         </div>`;
         
         container.innerHTML = html;
@@ -9970,8 +9985,7 @@ class App {
         container.querySelectorAll('.nicht-zugeordnet-item[data-termin-id]').forEach(item => {
           item.addEventListener('click', async () => {
             const terminId = parseInt(item.dataset.terminId, 10);
-            // Speichere Termin im Cache, damit showTerminDetails ihn findet
-            const termin = nichtZugeordnet.find(t => t.id === terminId);
+            const termin = alleTermine.find(t => t.id === terminId);
             if (termin) {
               this.termineById[terminId] = termin;
               await this.showTerminDetails(terminId);
