@@ -28003,16 +28003,9 @@ class App {
    * Priorität: arbeitszeiten_details > geschaetzte_zeit > 60 Min (Fallback)
    */
   getEffektiveArbeitszeit(termin) {
-    // 1. Für abgeschlossene Termine: tatsaechliche_zeit
-    if (termin.status === 'abgeschlossen' && termin.tatsaechliche_zeit) {
-      return termin.tatsaechliche_zeit;
-    }
-    
-    // 2. arbeitszeiten_details (manuell eingegebene Arbeitszeiten)
-    // Wichtig: Wenn die Summe der Details KLEINER als die geschaetzte_zeit ist,
-    // sind die Details wahrscheinlich nur Teileinträge → nutze das MAXIMUM beider Werte.
-    // So verhindert man, dass unvollständige Detail-Einträge die Gesamtschätzung
-    // fälschlicherweise nach unten korrigieren.
+    // 1. arbeitszeiten_details (manuell eingegebene Einzelarbeiten) - höchste Priorität
+    // Wichtig: Details können die Gesamtzeit erhöhen, aber nie unter tatsaechliche_zeit
+    // oder geschaetzte_zeit senken (Schutz vor unvollständigen Teileinträgen).
     if (termin.arbeitszeiten_details) {
       try {
         const details = typeof termin.arbeitszeiten_details === 'string' 
@@ -28030,15 +28023,21 @@ class App {
         }
         
         if (summeMinuten > 0) {
-          // Verwende das Maximum: Details können die Schätzung erhöhen, aber nie verringern
-          return Math.max(summeMinuten, termin.geschaetzte_zeit || 0);
+          // Verwende das Maximum aller verfügbaren Zeitangaben
+          return Math.max(summeMinuten, termin.tatsaechliche_zeit || 0, termin.geschaetzte_zeit || 0);
         }
       } catch (e) {
         // JSON-Parse-Fehler ignorieren
       }
     }
     
-    // 3. geschaetzte_zeit (Fallback aus Arbeitskatalog)
+    // 2. tatsaechliche_zeit (gesetzt vom System oder Benutzer, unabhängig vom Status)
+    //    Beispiel: Ein "geplant"-Termin hat tatsaechliche_zeit=420 (7h) aber geschaetzte_zeit=30
+    if (termin.tatsaechliche_zeit) {
+      return termin.tatsaechliche_zeit;
+    }
+
+    // 3. geschaetzte_zeit (initiale Schätzung aus dem Arbeitskatalog)
     if (termin.geschaetzte_zeit) {
       return termin.geschaetzte_zeit;
     }

@@ -1338,10 +1338,7 @@
 
     // ========== ZEIT-BERECHNUNGEN ==========
     function getEffektiveArbeitszeit(termin) {
-      if (termin.status === 'abgeschlossen' && termin.tatsaechliche_zeit) {
-        return termin.tatsaechliche_zeit;
-      }
-
+      // 1. arbeitszeiten_details - höchste Priorität
       if (termin.arbeitszeiten_details) {
         try {
           const details = typeof termin.arbeitszeiten_details === 'string'
@@ -1354,12 +1351,15 @@
             if (typeof value === 'number') summe += value;
             else if (typeof value === 'object' && value.zeit) summe += value.zeit;
           }
-          // Details können die Schätzung erhöhen, aber nie verringern
-          // (Schutz vor unvollständigen Teileinträgen)
-          if (summe > 0) return Math.max(summe, termin.geschaetzte_zeit || 0);
+          // Maximum aller verfügbaren Zeitangaben (Details nie kleiner als tatsaechliche/geschaetzte)
+          if (summe > 0) return Math.max(summe, termin.tatsaechliche_zeit || 0, termin.geschaetzte_zeit || 0);
         } catch (e) {}
       }
 
+      // 2. tatsaechliche_zeit unabhängig vom Status (z.B. geplant mit 7h)
+      if (termin.tatsaechliche_zeit) return termin.tatsaechliche_zeit;
+
+      // 3. geschaetzte_zeit als Fallback
       return termin.geschaetzte_zeit || 60;
     }
 
