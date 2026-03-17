@@ -28008,7 +28008,11 @@ class App {
       return termin.tatsaechliche_zeit;
     }
     
-    // 2. arbeitszeiten_details (manuell eingegebene Arbeitszeiten) - PRIORITÄT
+    // 2. arbeitszeiten_details (manuell eingegebene Arbeitszeiten)
+    // Wichtig: Wenn die Summe der Details KLEINER als die geschaetzte_zeit ist,
+    // sind die Details wahrscheinlich nur Teileinträge → nutze das MAXIMUM beider Werte.
+    // So verhindert man, dass unvollständige Detail-Einträge die Gesamtschätzung
+    // fälschlicherweise nach unten korrigieren.
     if (termin.arbeitszeiten_details) {
       try {
         const details = typeof termin.arbeitszeiten_details === 'string' 
@@ -28026,7 +28030,8 @@ class App {
         }
         
         if (summeMinuten > 0) {
-          return summeMinuten;
+          // Verwende das Maximum: Details können die Schätzung erhöhen, aber nie verringern
+          return Math.max(summeMinuten, termin.geschaetzte_zeit || 0);
         }
       } catch (e) {
         // JSON-Parse-Fehler ignorieren

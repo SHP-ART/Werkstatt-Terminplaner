@@ -1354,7 +1354,9 @@
             if (typeof value === 'number') summe += value;
             else if (typeof value === 'object' && value.zeit) summe += value.zeit;
           }
-          if (summe > 0) return summe;
+          // Details können die Schätzung erhöhen, aber nie verringern
+          // (Schutz vor unvollständigen Teileinträgen)
+          if (summe > 0) return Math.max(summe, termin.geschaetzte_zeit || 0);
         } catch (e) {}
       }
 
@@ -1490,13 +1492,17 @@
       const startzeit = termin.startzeit || termin.bring_zeit;
       if (!startzeit) return '--:--';
 
-      const dauer = getEffektiveArbeitszeitMitFaktoren(termin, person, isLehrling, globaleNebenzeit);
-      const [h, m] = startzeit.split(':').map(Number);
-      const startDate = new Date();
-      startDate.setHours(h, m, 0, 0);
+      // Basiere Restzeit auf der berechneten Endzeit (inkl. Pause)
+      // damit "Rest" und "Fertig ca." konsistent sind
+      const endzeitStr = berechneEndzeit(termin, person, isLehrling, globaleNebenzeit);
+      if (!endzeitStr || endzeitStr === '--:--') return '--:--';
 
-      const verstricheneMinuten = (new Date() - startDate) / 1000 / 60;
-      const restMinuten = dauer - verstricheneMinuten;
+      const jetzt = new Date();
+      const [eh, em] = endzeitStr.split(':').map(Number);
+      const endzeitDate = new Date(jetzt);
+      endzeitDate.setHours(eh, em, 0, 0);
+
+      const restMinuten = (endzeitDate - jetzt) / 1000 / 60;
 
       if (restMinuten <= 0) {
         return `+${formatMinutesToHours(Math.abs(Math.round(restMinuten)))}`;
@@ -1508,13 +1514,26 @@
       const startzeit = termin.startzeit || termin.bring_zeit;
       if (!startzeit) return 0;
 
-      const dauer = getEffektiveArbeitszeitMitFaktoren(termin, person, isLehrling, globaleNebenzeit);
-      const [h, m] = startzeit.split(':').map(Number);
-      const startDate = new Date();
-      startDate.setHours(h, m, 0, 0);
+      const jetzt = new Date();
+      const [sh, sm] = startzeit.split(':').map(Number);
+      const startDate = new Date(jetzt);
+      startDate.setHours(sh, sm, 0, 0);
 
-      const verstricheneMinuten = (new Date() - startDate) / 1000 / 60;
-      return Math.round(Math.max(0, (verstricheneMinuten / dauer) * 100));
+      const verstricheneMinuten = (jetzt - startDate) / 1000 / 60;
+
+      // Gesamtdauer inkl. Pause via berechneEndzeit
+      const endzeitStr = berechneEndzeit(termin, person, isLehrling, globaleNebenzeit);
+      if (!endzeitStr || endzeitStr === '--:--') {
+        const dauer = getEffektiveArbeitszeitMitFaktoren(termin, person, isLehrling, globaleNebenzeit);
+        return Math.round(Math.max(0, (verstricheneMinuten / dauer) * 100));
+      }
+      const [eh, em] = endzeitStr.split(':').map(Number);
+      const endzeitDate = new Date(jetzt);
+      endzeitDate.setHours(eh, em, 0, 0);
+
+      const gesamtDauerMinuten = (endzeitDate - startDate) / 1000 / 60;
+      if (gesamtDauerMinuten <= 0) return 100;
+      return Math.round(Math.max(0, (verstricheneMinuten / gesamtDauerMinuten) * 100));
     }
 
     // ========== TERMIN-ZUORDNUNG PRÜFEN ==========
