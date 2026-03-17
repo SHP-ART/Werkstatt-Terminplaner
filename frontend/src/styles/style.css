@@ -8599,6 +8599,35 @@ mark.highlight {
     color: #0d47a1;
 }
 
+/* Übertrag-Termin: noch nicht zugeordnet, aber Abholung steht an */
+.schwebender-termin-bar.bar-uebertrag {
+    border-left: 4px solid #7b1fa2;
+    background: linear-gradient(135deg, #f3e5f5 0%, #e1bee7 100%) !important;
+    border-color: #7b1fa2 !important;
+}
+
+.schwebender-termin-bar.bar-uebertrag .bar-header {
+    color: #4a148c !important;
+}
+
+.bar-uebertrag-badge {
+    background: #7b1fa2;
+    color: white;
+    font-size: 0.68em;
+    padding: 1px 5px;
+    border-radius: 4px;
+    margin-left: 4px;
+    vertical-align: middle;
+    white-space: nowrap;
+}
+
+.bar-abholung-deadline {
+    font-size: 0.72em;
+    color: #6a1b9a;
+    font-weight: 600;
+    margin-top: 2px;
+}
+
 .schwebender-termin-bar.dringlichkeit-niedrig {
     background: linear-gradient(135deg, #e8f5e9 0%, #c8e6c9 100%);
     border-color: #388e3c;

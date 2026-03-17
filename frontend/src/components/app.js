@@ -20096,11 +20096,18 @@ class App {
         t.ist_schwebend === 1 || t.ist_schwebend === '1' || t.ist_schwebend === true
       );
 
-      // Zusätzlich: nicht-zugeordnete Termine vom gewählten Datum auch im Pool anzeigen
-      // (Termine die für heute erstellt wurden, aber noch keinen Mitarbeiter haben)
+      // Nicht-zugeordnete Termine im Pool anzeigen:
+      // - Termine vom gewählten Tag OHNE Mitarbeiter-Zuweisung
+      // - Termine von früheren Tagen, die noch offen sind UND deren Abholdatum >= gewählter Tag
+      //   (Fahrzeug muss bis zur Abholung fertig sein → in der Planung sichtbar halten)
       const nichtZugeordneteVomDatum = alleTermine.filter(t => {
         if (t.ist_schwebend) return false; // Schwebende bereits oben erfasst
-        if (t.datum !== datum) return false;
+        // Termin darf nicht in der Zukunft liegen (noch nicht fällig)
+        if (t.datum > datum) return false;
+        // Termin vom Vortag/früheren Tag: nur wenn Abholdatum >= gewählter Tag
+        if (t.datum < datum) {
+          if (!t.abholung_datum || t.abholung_datum < datum) return false;
+        }
         if (t.status === 'abgeschlossen' || t.status === 'storniert') return false;
         if (t.geloescht_am) return false;
         // Prüfe ob kein Mitarbeiter zugeordnet ist (weder direkt noch über arbeitszeiten_details)
@@ -20129,9 +20136,10 @@ class App {
         }
       });
 
-      // Nicht-zugeordnete Termine vom Datum auch als ziehbar markieren
+      // Nicht-zugeordnete Termine auch als ziehbar markieren
       nichtZugeordneteVomDatum.forEach(t => {
         t._nichtZugeordnet = true; // Markierung für UI
+        if (t.datum < datum) t._istUebertrag = true; // Übertrag aus früherem Tag
         if (!termine.find(x => x.id === t.id)) {
           termine.push(t);
         }
@@ -21487,10 +21495,14 @@ class App {
       ? `${Math.floor(dauer/60)}h ${dauer%60 > 0 ? (dauer%60) + 'min' : ''}`.trim()
       : `${dauer} min`;
     
-    const abholInfo = termin.abhol_datum 
-      ? `Abholung: ${this.formatDatum(termin.abhol_datum)}` 
-      : 'Keine Abholzeit';
+    const abholInfo = termin.abholung_datum 
+      ? `Abholung: ${this.formatDatum(termin.abholung_datum)}` 
+      : (termin.abhol_datum ? `Abholung: ${this.formatDatum(termin.abhol_datum)}` : 'Keine Abholzeit');
     
+    // Übertrag-Kennzeichnung
+    const istUebertrag = !!termin._istUebertrag;
+    if (istUebertrag) bar.classList.add('bar-uebertrag');
+
     // Bring/Abholzeit für Anzeige
     const bringZeitText = termin.bring_zeit ? `🚗↓ ${termin.bring_zeit}` : '';
     const abholZeitText = termin.abholung_zeit ? `🚗↑ ${termin.abholung_zeit}` : '';
@@ -21503,6 +21515,7 @@ class App {
       termin.bring_zeit ? `🚗↓ Bringzeit: ${termin.bring_zeit}` : '',
       termin.abholung_zeit ? `🚗↑ Abholzeit: ${termin.abholung_zeit}` : '',
       `📅 ${abholInfo}`,
+      istUebertrag ? `⚠️ Geplant für: ${this.formatDatum(termin.datum)} – noch nicht zugeordnet!` : '',
       `📋 ${this.getTerminArbeitenText(termin)}`
     ].filter(t => t).join('\n');
     
@@ -21519,13 +21532,19 @@ class App {
       'niedrig': '<span class="prioritaet-badge prioritaet-badge-niedrig" title="Niedrige Priorität">🟢</span>'
     };
     const prioritaetBadge = prioritaetBadges[prioritaet] || prioritaetBadges['mittel'];
+
+    // Übertrag-Badge
+    const uebertragBadge = istUebertrag
+      ? `<span class="bar-uebertrag-badge" title="Übertrag – geplant für ${this.formatDatum(termin.datum)}, Abholung ${this.formatDatum(termin.abholung_datum)}">📅 ${this.formatDatum(termin.datum)}</span>`
+      : '';
     
     // Inhalt des Balkens
     bar.innerHTML = `
-      <div class="bar-header">${prioritaetBadge} ${termin.termin_nr || 'Neu'} • ${termin.kennzeichen || ''}</div>
+      <div class="bar-header">${prioritaetBadge} ${termin.termin_nr || 'Neu'} • ${termin.kennzeichen || ''} ${uebertragBadge}</div>
       <div class="bar-details">${termin.kunde_name || 'Unbekannt'}</div>
       <div class="bar-zeit">⏱️ ${dauerText}</div>
       ${zeitenInfo ? `<div class="bar-zeiten">${zeitenInfo}</div>` : ''}
+      ${istUebertrag ? `<div class="bar-abholung-deadline">🏁 Abholung: ${this.formatDatum(termin.abholung_datum)}</div>` : ''}
       ${termin._nichtZugeordnet
         ? `<button class="btn-einplanen" onclick="event.stopPropagation(); app.showTerminDetails(${termin.id})" title="Termin-Details anzeigen – Mitarbeiter über Ziehen zuweisen">👤 Mitarbeiter zuweisen</button>`
         : `<button class="btn-einplanen" onclick="event.stopPropagation(); app.einplanenSchwebenderTermin(${termin.id})" title="In aktuellen Tag einplanen">📅 Einplanen</button>`
