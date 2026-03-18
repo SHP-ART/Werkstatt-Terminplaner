@@ -13824,6 +13824,8 @@ class App {
     
     const currentStatus = termin.status || 'geplant';
     const terminId = termin.id;
+    const heuteDatumStr = new Date().toISOString().slice(0, 10);
+    const zeigeWeiterfuehren = termin.datum && termin.datum < heuteDatumStr && termin.datum !== '9999-12-31' && !['abgeschlossen', 'storniert'].includes(currentStatus);
     
     // Aktuelle Uhrzeit
     const jetzt = new Date();
@@ -13977,6 +13979,12 @@ class App {
             ✏️ Mehr...
           </button>
         </div>
+        ${zeigeWeiterfuehren ? `
+        <div style="padding: 8px 12px 4px;">
+          <button class="btn-schnell-link" data-action="weiterfuehren" style="width:100%;text-align:center;background:#fff3e0;color:#e65100;border:1px solid #ffcc80;border-radius:6px;padding:7px;font-weight:600;">
+            📅 Am nächsten Arbeitstag weiterführen
+          </button>
+        </div>` : ''}
       </div>
     `;
     
@@ -14037,6 +14045,10 @@ class App {
           // Erweitertes Bearbeitungs-Popup öffnen
           this.closeSchnellStatusDialog();
           this.showSchnellBearbeitungDialog(termin);
+        } else if (action === 'weiterfuehren') {
+          this.closeSchnellStatusDialog();
+          this.currentDetailTerminId = terminId;
+          await this.weiterfuehrenTermin();
         } else {
           this.setzeSchnellStatus(terminId, action);
         }
