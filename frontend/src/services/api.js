@@ -341,11 +341,12 @@ class TermineService {
   }
 
   // Termin-Split-Funktionen (Termin aufteilen auf mehrere Tage)
-  static async splitTermin(id, teil1Zeit, teil2Datum, teil2Zeit) {
+  static async splitTermin(id, teil1Zeit, teil2Datum, teil2Zeit, zuordnung = {}) {
     return ApiService.post(`/termine/${id}/split`, {
       teil1_zeit: teil1Zeit,
       teil2_datum: teil2Datum,
-      teil2_zeit: teil2Zeit
+      teil2_zeit: teil2Zeit,
+      ...zuordnung
     });
   }
 

@@ -1129,25 +1129,84 @@ class TermineModel {
 
   // Termin aufteilen (Split)
   static async splitTermin(id, splitDaten) {
-    // splitDaten: { 
-    //   teil1_zeit: 60 (Minuten für ersten Tag), 
-    //   teil2_datum: '2025-01-02' (Datum für Rest),
-    //   teil2_zeit: 120 (Restzeit in Minuten)
+    // splitDaten: {
+    //   teil1_zeit, teil2_datum, teil2_zeit,
+    //   (optional) mitarbeiter_typ, mitarbeiter_id, lehrling_id, startzeit_teil1, datum_teil1
     // }
-    const { teil1_zeit, teil2_datum, teil2_zeit } = splitDaten;
-    
+    const {
+      teil1_zeit, teil2_datum, teil2_zeit,
+      mitarbeiter_typ, mitarbeiter_id, lehrling_id,
+      startzeit_teil1, datum_teil1
+    } = splitDaten;
+
     // Erst den Original-Termin laden
     const termin = await this.getById(id);
     if (!termin) throw new Error('Termin nicht gefunden');
 
-    // Original-Termin auf Teil 1 aktualisieren
-    await runAsync(
-      `UPDATE termine SET geschaetzte_zeit = ?, split_teil = 1 WHERE id = ?`,
-      [teil1_zeit, id]
-    );
+    // Helper: arbeitszeiten_details mit Mitarbeiter-/Lehrlings-Zuordnung befüllen
+    const mitZuordnung = (detailsStr, mtyp, mid, lid, startzeit) => {
+      let details = {};
+      try { details = detailsStr ? (typeof detailsStr === 'string' ? JSON.parse(detailsStr) : detailsStr) : {}; } catch (e) {}
+      if (!mtyp || (!mid && !lid)) return JSON.stringify(details);
+      if (mtyp === 'lehrling' && lid) {
+        details._gesamt_mitarbeiter_id = { type: 'lehrling', id: parseInt(lid) };
+        details._startzeit = startzeit;
+        for (const k in details) {
+          if (!k.startsWith('_') && typeof details[k] === 'object') {
+            details[k].type = 'lehrling'; details[k].lehrling_id = parseInt(lid);
+            delete details[k].mitarbeiter_id; details[k].startzeit = startzeit;
+          }
+        }
+      } else if (mtyp === 'mitarbeiter' && mid) {
+        details._gesamt_mitarbeiter_id = { type: 'mitarbeiter', id: parseInt(mid) };
+        details._startzeit = startzeit;
+        for (const k in details) {
+          if (!k.startsWith('_') && typeof details[k] === 'object') {
+            details[k].type = 'mitarbeiter'; details[k].mitarbeiter_id = parseInt(mid);
+            delete details[k].lehrling_id; details[k].startzeit = startzeit;
+          }
+        }
+      }
+      return JSON.stringify(details);
+    };
+
+    // Teil 1: Original-Termin aktualisieren (inkl. optionaler Zuordnung und Datum)
+    const t1Updates = ['geschaetzte_zeit = ?', 'split_teil = 1'];
+    const t1Params = [teil1_zeit];
+
+    if (datum_teil1) { t1Updates.push('datum = ?'); t1Params.push(datum_teil1); }
+    if (startzeit_teil1) { t1Updates.push('startzeit = ?'); t1Params.push(startzeit_teil1); }
+
+    if (mitarbeiter_typ === 'mitarbeiter' && mitarbeiter_id) {
+      t1Updates.push('mitarbeiter_id = ?');
+      t1Params.push(parseInt(mitarbeiter_id));
+      t1Updates.push('lehrling_id = NULL');
+      t1Updates.push('arbeitszeiten_details = ?');
+      t1Params.push(mitZuordnung(termin.arbeitszeiten_details, 'mitarbeiter', mitarbeiter_id, null, startzeit_teil1 || '08:00'));
+    } else if (mitarbeiter_typ === 'lehrling' && lehrling_id) {
+      t1Updates.push('lehrling_id = ?');
+      t1Params.push(parseInt(lehrling_id));
+      t1Updates.push('mitarbeiter_id = NULL');
+      t1Updates.push('arbeitszeiten_details = ?');
+      t1Params.push(mitZuordnung(termin.arbeitszeiten_details, 'lehrling', null, lehrling_id, startzeit_teil1 || '08:00'));
+    }
+
+    t1Params.push(id);
+    await runAsync(`UPDATE termine SET ${t1Updates.join(', ')} WHERE id = ?`, t1Params);
 
     // Generiere neue Termin-Nummer für Teil 2
     const terminNr = await this.generateTerminNr();
+
+    // Teil 2: Mitarbeiter-Details und ID vorbereiten
+    const teil2Details = (mitarbeiter_typ && (mitarbeiter_id || lehrling_id))
+      ? mitZuordnung(termin.arbeitszeiten_details, mitarbeiter_typ, mitarbeiter_id, lehrling_id, '08:00')
+      : termin.arbeitszeiten_details;
+    const teil2MitarbeiterId = (mitarbeiter_typ === 'mitarbeiter' && mitarbeiter_id)
+      ? parseInt(mitarbeiter_id)
+      : (mitarbeiter_typ ? null : termin.mitarbeiter_id);
+    const teil2LehrlingId = (mitarbeiter_typ === 'lehrling' && lehrling_id)
+      ? parseInt(lehrling_id)
+      : null;
 
     // Neuen Termin für Teil 2 erstellen
     const teil2Termin = {
@@ -1168,8 +1227,9 @@ class TermineModel {
       kontakt_option: termin.kontakt_option,
       kilometerstand: termin.kilometerstand,
       ersatzauto: termin.ersatzauto,
-      mitarbeiter_id: termin.mitarbeiter_id,
-      arbeitszeiten_details: termin.arbeitszeiten_details,
+      mitarbeiter_id: teil2MitarbeiterId,
+      lehrling_id: teil2LehrlingId,
+      arbeitszeiten_details: teil2Details,
       dringlichkeit: termin.dringlichkeit,
       vin: termin.vin,
       fahrzeugtyp: termin.fahrzeugtyp,
@@ -1181,9 +1241,9 @@ class TermineModel {
       `INSERT INTO termine 
        (termin_nr, kunde_id, kunde_name, kunde_telefon, kennzeichen, arbeit, umfang, 
         geschaetzte_zeit, datum, status, abholung_typ, abholung_details, abholung_zeit,
-        bring_zeit, kontakt_option, kilometerstand, ersatzauto, mitarbeiter_id,
+        bring_zeit, kontakt_option, kilometerstand, ersatzauto, mitarbeiter_id, lehrling_id,
         arbeitszeiten_details, dringlichkeit, vin, fahrzeugtyp, parent_termin_id, split_teil)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         teil2Termin.termin_nr, teil2Termin.kunde_id, teil2Termin.kunde_name,
         teil2Termin.kunde_telefon, teil2Termin.kennzeichen, teil2Termin.arbeit,
@@ -1191,11 +1251,12 @@ class TermineModel {
         teil2Termin.status, teil2Termin.abholung_typ, teil2Termin.abholung_details,
         teil2Termin.abholung_zeit, teil2Termin.bring_zeit, teil2Termin.kontakt_option,
         teil2Termin.kilometerstand, teil2Termin.ersatzauto, teil2Termin.mitarbeiter_id,
-        teil2Termin.arbeitszeiten_details, teil2Termin.dringlichkeit, teil2Termin.vin,
-        teil2Termin.fahrzeugtyp, teil2Termin.parent_termin_id, teil2Termin.split_teil
+        teil2Termin.lehrling_id, teil2Termin.arbeitszeiten_details,
+        teil2Termin.dringlichkeit, teil2Termin.vin, teil2Termin.fahrzeugtyp,
+        teil2Termin.parent_termin_id, teil2Termin.split_teil
       ]
     );
-    
+
     return {
       teil1: { id: id, zeit: teil1_zeit },
       teil2: { id: result.lastID, termin_nr: terminNr, datum: teil2_datum, zeit: teil2_zeit }

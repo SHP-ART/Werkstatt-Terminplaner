@@ -33274,13 +33274,14 @@ App.prototype.showVerschiebeWarnung = async function(person, termin, kapazitaetW
       if (kannAufteilen) {
         // Direkt aufteilen
         try {
-          const splitResult = await TermineService.splitTermin(termin.id, teil1Zeit, morgenDatum, teil2Zeit);
-          // Teil 1: auf heutiges Datum setzen (datum = gewähltes Ziel-Datum im DragDrop)
-          await this._assignTerminDirectToPersonInDB(termin.id, targetType, mitarbeiterId, lehrlingId, startzeit, datum);
-          // Teil 2 (morgen) ebenfalls der gleichen Person zuweisen
-          if (splitResult?.teil2?.id) {
-            await this._assignTerminDirectToPersonInDB(splitResult.teil2.id, targetType, mitarbeiterId, lehrlingId, '08:00');
-          }
+          // Alles in einem einzigen Backend-Call: Split + Mitarbeiter-Zuordnung atomar
+          await TermineService.splitTermin(termin.id, teil1Zeit, morgenDatum, teil2Zeit, {
+            mitarbeiter_typ: targetType,
+            mitarbeiter_id: targetType === 'mitarbeiter' ? mitarbeiterId : null,
+            lehrling_id: targetType === 'lehrling' ? lehrlingId : null,
+            startzeit_teil1: startzeit,
+            datum_teil1: datum
+          });
           this.showToast(`✂️ Termin aufgeteilt: ${teil1Zeit} Min. heute für ${person.name}, ${teil2Zeit} Min. am ${this.formatDatum(morgenDatum)} → ${person.name}`, 'success');
           this.loadAuslastungDragDrop();
         } catch (error) {

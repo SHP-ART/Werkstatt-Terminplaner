@@ -1812,7 +1812,7 @@ class TermineController {
   static async splitTermin(req, res) {
     try {
       const { id } = req.params;
-      const { teil1_zeit, teil2_datum, teil2_zeit } = req.body;
+      const { teil1_zeit, teil2_datum, teil2_zeit, mitarbeiter_typ, mitarbeiter_id, lehrling_id, startzeit_teil1, datum_teil1 } = req.body;
 
       // Validierung
       if (!teil1_zeit || teil1_zeit <= 0) {
@@ -1832,7 +1832,7 @@ class TermineController {
         return res.status(404).json({ error: 'Termin nicht gefunden' });
       }
 
-      const result = await TermineModel.splitTermin(id, { teil1_zeit, teil2_datum, teil2_zeit });
+      const result = await TermineModel.splitTermin(id, { teil1_zeit, teil2_datum, teil2_zeit, mitarbeiter_typ, mitarbeiter_id, lehrling_id, startzeit_teil1, datum_teil1 });
       // Cache für beide Tage invalidierten
       invalidateAuslastungCache(termin.datum);
       invalidateAuslastungCache(teil2_datum);
