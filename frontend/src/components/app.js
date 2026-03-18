@@ -22411,6 +22411,38 @@ class App {
           return Math.round(d);
         }
 
+        // Wenn Termin in Arbeit: prüfe ob Live-Dauer (aktuelle Zeit − Startzeit) > geplante Dauer
+        // Falls ja: Live-Dauer anzeigen (Termin läuft länger als geplant)
+        if (termin.status === 'in_arbeit') {
+          const startzeit = details._startzeit || termin.startzeit || termin.bring_zeit;
+          if (startzeit && /^\d{1,2}:\d{2}/.test(startzeit)) {
+            const [sh, sm] = startzeit.split(':').map(Number);
+            const jetzt = new Date();
+            const jetztMin = jetzt.getHours() * 60 + jetzt.getMinutes();
+            const startMin = sh * 60 + sm;
+            const liveMin = jetztMin - startMin;
+            if (liveMin > 0) {
+              // Geplante Dauer aus Einzel-Arbeiten oder geschaetzte_zeit berechnen
+              let geplanteDauer = 0;
+              for (const [key, value] of Object.entries(details)) {
+                if (key.startsWith('_')) continue;
+                if (typeof value === 'number' && value > 0) geplanteDauer += value;
+                else if (typeof value === 'object' && parseInt(value.zeit) > 0) geplanteDauer += parseInt(value.zeit);
+              }
+              if (!geplanteDauer) geplanteDauer = parseInt(termin.geschaetzte_zeit) || 30;
+              if (liveMin > geplanteDauer) {
+                let d = liveMin;
+                if (nebenzeitProzent > 0) d = d * (1 + nebenzeitProzent / 100);
+                if (zugeordneterLehrling && zugeordneterLehrling.aufgabenbewaeltigung_prozent &&
+                    zugeordneterLehrling.aufgabenbewaeltigung_prozent !== 100) {
+                  d = d * (zugeordneterLehrling.aufgabenbewaeltigung_prozent / 100);
+                }
+                return Math.round(d);
+              }
+            }
+          }
+        }
+
         let summe = 0;
         for (const [key, value] of Object.entries(details)) {
           // Ignoriere Meta-Felder
