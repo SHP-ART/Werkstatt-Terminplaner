@@ -7383,7 +7383,10 @@ class App {
       this.showToast(`📅 Termin auf ${neuesDatumLabel} weitergeführt`, 'success');
       delete this.termineById[terminId];
       await Promise.all([this.loadTermine(), this.loadAuslastung()]);
-      if (document.getElementById('auslastung-dragdrop')?.classList.contains('active')) {
+      // DragDrop-Ansicht auf neues Datum setzen und neu laden
+      const dragDropDatum = document.getElementById('auslastungDragDropDatum');
+      if (dragDropDatum && document.getElementById('auslastung-dragdrop')?.classList.contains('active')) {
+        dragDropDatum.value = neuesDatum;
         this.loadAuslastungDragDrop();
       }
     } catch (error) {
