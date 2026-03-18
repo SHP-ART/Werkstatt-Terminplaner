@@ -6949,6 +6949,9 @@ class App {
       }
     }
 
+    const heuteDatum = new Date().toISOString().slice(0, 10);
+    const zeigeWeiterfuehrenBtn = termin.datum < heuteDatum && termin.datum !== '9999-12-31' && !['abgeschlossen', 'storniert'].includes(termin.status);
+
     body.innerHTML = `
       <!-- Header-Bereich mit Termin-Nr und Status -->
       <div class="detail-header">
@@ -7086,6 +7089,14 @@ class App {
           ⏱️ Zeiten für einzelne Arbeiten festlegen
         </button>
       </div>
+
+      ${zeigeWeiterfuehrenBtn ? `
+      <!-- Weiterführen am nächsten Arbeitstag -->
+      <div class="detail-section detail-section-action">
+        <button class="btn btn-primary detail-action-btn" style="width: 100%; background: #ff9800; border-color: #e65100;" onclick="app.weiterfuehrenTermin()">
+          📅 Am nächsten Arbeitstag weiterführen
+        </button>
+      </div>` : ''}
     `;
 
     // Schwebend-Button aktualisieren
@@ -7348,6 +7359,38 @@ class App {
   // ============================================
   // TERMIN-SPLIT & SCHWEBEND FUNKTIONEN
   // ============================================
+
+  // Termin auf nächsten Arbeitstag verschieben
+  async weiterfuehrenTermin() {
+    if (!this.currentDetailTerminId) return;
+
+    const termin = this.termineById[this.currentDetailTerminId];
+    if (!termin) return;
+
+    // Nächsten Werktag ab aktuellem Datum ermitteln
+    const d = new Date(termin.datum + 'T00:00:00');
+    d.setDate(d.getDate() + 1);
+    while (d.getDay() === 0 || d.getDay() === 6) d.setDate(d.getDate() + 1);
+    const neuesDatum = d.toISOString().slice(0, 10);
+    const neuesDatumLabel = d.toLocaleDateString('de-DE', { weekday: 'long', day: '2-digit', month: '2-digit', year: 'numeric' });
+
+    if (!confirm(`Termin auf ${neuesDatumLabel} weiterführen?\n\nDer Termin bleibt dem gleichen Mitarbeiter zugeordnet und erscheint in der Planung für diesen Tag.`)) return;
+
+    try {
+      const terminId = this.currentDetailTerminId;
+      this.closeTerminDetails();
+      await TermineService.weiterfuehren(terminId, neuesDatum);
+      this.showToast(`📅 Termin auf ${neuesDatumLabel} weitergeführt`, 'success');
+      delete this.termineById[terminId];
+      await Promise.all([this.loadTermine(), this.loadAuslastung()]);
+      if (document.getElementById('auslastung-dragdrop')?.classList.contains('active')) {
+        this.loadAuslastungDragDrop();
+      }
+    } catch (error) {
+      console.error('Fehler beim Weiterführen:', error);
+      this.showToast('Fehler beim Weiterführen: ' + (error.message || 'Unbekannter Fehler'), 'error');
+    }
+  }
 
   // Termin als schwebend markieren/aufheben
   async toggleTerminSchwebend() {

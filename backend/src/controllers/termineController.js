@@ -1862,6 +1862,52 @@ class TermineController {
     }
   }
 
+  // Termin auf nächsten Arbeitstag weiterführen
+  // Verschiebt den Termin auf das angegebene Datum, behält Mitarbeiter-Zuweisung,
+  // setzt Status auf "geplant" und löscht die tatsaechliche_zeit (neu starten)
+  static async weiterfuehren(req, res) {
+    try {
+      const { id } = req.params;
+      const { neues_datum } = req.body;
+
+      if (!neues_datum) {
+        return res.status(400).json({ error: 'neues_datum muss angegeben werden' });
+      }
+
+      const termin = await TermineModel.getById(id);
+      if (!termin) {
+        return res.status(404).json({ error: 'Termin nicht gefunden' });
+      }
+
+      if (!['geplant', 'in_arbeit'].includes(termin.status)) {
+        return res.status(400).json({ error: 'Nur geplante oder in Arbeit befindliche Termine können weitergeführt werden' });
+      }
+
+      const altesDatum = termin.datum;
+
+      await TermineModel.update(id, {
+        datum: neues_datum,
+        status: 'geplant',
+        startzeit: null,
+        tatsaechliche_zeit: null
+      });
+
+      invalidateAuslastungCache(altesDatum);
+      invalidateAuslastungCache(neues_datum);
+      invalidateTermineCache();
+      broadcastEvent('termin.updated', { id, datum: altesDatum });
+      broadcastEvent('termin.updated', { id, datum: neues_datum });
+
+      const aktualisierter = await TermineModel.getById(id);
+      res.json({
+        message: `Termin auf ${neues_datum} verschoben`,
+        termin: aktualisierter
+      });
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  }
+
   // =====================================================
   // AUFTRAGSERWEITERUNG ENDPOINTS
   // =====================================================

@@ -357,6 +357,10 @@ class TermineService {
     return ApiService.post(`/termine/${terminId}/folgearbeit`, { feierabend });
   }
 
+  static async weiterfuehren(id, neuesDatum) {
+    return ApiService.post(`/termine/${id}/weiterfuehren`, { neues_datum: neuesDatum });
+  }
+
   // =====================================================
   // AUFTRAGSERWEITERUNG FUNKTIONEN
   // =====================================================
