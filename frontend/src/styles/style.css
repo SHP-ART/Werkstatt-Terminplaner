@@ -9471,6 +9471,24 @@ mark.highlight {
     border-left: 4px solid #0a3d91;
 }
 
+/* Abgeschlossene Einzel-Arbeiten: grün + abgedimmt */
+.timeline-termin.arbeit-abgeschlossen {
+    opacity: 0.65;
+    background: linear-gradient(135deg, #43a047 0%, #2e7d32 100%) !important;
+}
+.timeline-termin.arbeit-abgeschlossen .termin-info.arbeit-name {
+    text-decoration: line-through;
+    text-decoration-color: rgba(255,255,255,0.7);
+}
+.arbeit-done-badge {
+    display: inline-block;
+    background: rgba(255,255,255,0.3);
+    border-radius: 3px;
+    padding: 0 3px;
+    font-size: 0.9em;
+    font-weight: bold;
+}
+
 /* Erweiterungs-Badge in Timeline (für Termine mit Erweiterungen) */
 .timeline-erweiterung-badge {
     display: inline-flex;

@@ -20760,7 +20760,10 @@ class App {
             }
             
             // Erstelle virtuellen Termin für diese Arbeit
-            const arbeitDauer = (parseInt(arbeit.zeit) > 0) ? arbeit.zeit : zeitProArbeitOhneZeit;
+            // Abgeschlossene Arbeiten: tatsaechliche_zeit verwenden damit Folge-Blöcke nachrücken
+            const arbeitDauer = arbeit.abgeschlossen && parseInt(arbeit.tatsaechliche_zeit) > 0
+              ? parseInt(arbeit.tatsaechliche_zeit)
+              : ((parseInt(arbeit.zeit) > 0) ? parseInt(arbeit.zeit) : zeitProArbeitOhneZeit);
             // Effektive Startzeit: gespeicherte individuelle Zeit, sonst sequentiell berechnet
             const effektiveArbeitStartzeit = arbeit.startzeit || laufendeArbeitsStartzeit;
             const arbeitTermin = {
@@ -22028,13 +22031,16 @@ class App {
   // Erstellt ein Timeline-Element für einen Arbeitsblock
   createArbeitBlockElement(termin, arbeit, startHour, endHour, pauseStart, type = 'mitarbeiter') {
     const isSchwebend = termin.ist_schwebend === 1 || termin._istSchwebend;
+    const istAbgeschlossen = arbeit.abgeschlossen === true;
     
     // Startzeit parsen (normalizeZeit wandelt HHMM → HH:MM)
     let startzeit = this.normalizeZeit(termin.startzeit || '08:00');
     const [startH, startM] = startzeit.split(':').map(Number);
     
-    // Dauer dieser Arbeit
-    const dauer = arbeit.zeit || 30;
+    // Dauer: abgeschlossene Arbeiten mit tatsaechliche_zeit (für korrekte Blockbreite)
+    const dauer = istAbgeschlossen && parseInt(arbeit.tatsaechliche_zeit) > 0
+      ? parseInt(arbeit.tatsaechliche_zeit)
+      : (parseInt(arbeit.zeit) || 30);
     
     // Nebenzeit-Aufschlag
     const nebenzeitProzent = this._planungNebenzeitProzent || 0;
@@ -22113,7 +22119,7 @@ class App {
       // Erstelle Teil 1
       const div = document.createElement('div');
       const statusClass = termin.status ? ` status-${termin.status.toLowerCase().replace(' ', '-')}` : '';
-      div.className = 'timeline-termin arbeit-block' + statusClass + (isSchwebend ? ' schwebend' : '');
+      div.className = 'timeline-termin arbeit-block' + statusClass + (isSchwebend ? ' schwebend' : '') + (istAbgeschlossen ? ' arbeit-abgeschlossen' : '');
       div.id = `timeline-arbeit-${termin.id}-${termin._arbeitIndex}`;
       div.dataset.terminId = termin.id;
       div.dataset.arbeitName = arbeit.name;
@@ -22129,11 +22135,11 @@ class App {
       div.style.borderLeft = `4px solid ${colors[colorIndex]}`;
       
       div.innerHTML = `
-        <div class="termin-title">${termin.termin_nr || 'Neu'}</div>
+        <div class="termin-title">${termin.termin_nr || 'Neu'}${istAbgeschlossen ? ' <span class="arbeit-done-badge">✓</span>' : ''}</div>
         <div class="termin-info arbeit-name">${arbeit.name}</div>
         <div class="termin-info">${teil1DauerText}</div>
       `;
-      div.title = `${termin.termin_nr}\n${termin.kunde_name}\n\n📋 Arbeit: ${arbeit.name}\n⏱️ Dauer: ${teil1DauerText}\n🕐 Start: ${startzeit}`;
+      div.title = `${termin.termin_nr}\n${termin.kunde_name}\n\n📋 Arbeit: ${arbeit.name}\n⏱️ Dauer: ${teil1DauerText}\n🕐 Start: ${startzeit}${istAbgeschlossen ? '\n✅ Abgeschlossen' : ''}`;
       
       this.addDragEventsToArbeitBlock(div, termin, arbeit, startzeit, dauerMitNebenzeit);
       
@@ -22150,7 +22156,7 @@ class App {
 
     const div = document.createElement('div');
     const statusClass = termin.status ? ` status-${termin.status.toLowerCase().replace(' ', '-')}` : '';
-    div.className = 'timeline-termin arbeit-block' + statusClass + (isSchwebend ? ' schwebend' : '');
+    div.className = 'timeline-termin arbeit-block' + statusClass + (isSchwebend ? ' schwebend' : '') + (istAbgeschlossen ? ' arbeit-abgeschlossen' : '');
     div.id = `timeline-arbeit-${termin.id}-${termin._arbeitIndex}`;
     div.dataset.terminId = termin.id;
     div.dataset.arbeitName = arbeit.name;
@@ -22167,11 +22173,11 @@ class App {
     div.style.borderLeft = `4px solid ${colors[colorIndex]}`;
     
     div.innerHTML = `
-      <div class="termin-title">${termin.termin_nr || 'Neu'}</div>
+      <div class="termin-title">${termin.termin_nr || 'Neu'}${istAbgeschlossen ? ' <span class="arbeit-done-badge">✓</span>' : ''}</div>
       <div class="termin-info arbeit-name">${arbeit.name}</div>
       <div class="termin-info">${dauerText}</div>
     `;
-    div.title = `${termin.termin_nr}\n${termin.kunde_name}\n\n📋 Arbeit: ${arbeit.name}\n⏱️ Dauer: ${dauerText}\n🕐 Start: ${startzeit}`;
+    div.title = `${termin.termin_nr}\n${termin.kunde_name}\n\n📋 Arbeit: ${arbeit.name}\n⏱️ Dauer: ${dauerText}\n🕐 Start: ${startzeit}${istAbgeschlossen ? '\n✅ Abgeschlossen' : ''}`;
     
     this.addDragEventsToArbeitBlock(div, termin, arbeit, startzeit, dauerMitNebenzeit);
     
