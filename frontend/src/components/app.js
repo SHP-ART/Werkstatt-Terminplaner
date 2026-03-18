@@ -22631,6 +22631,7 @@ class App {
       div.title = `${termin.termin_nr} (Fortsetzung nach Pause)\n${termin.kunde_name}\n${termin.arbeit}${abholzeitInfo}${erweiterungInfo}`;
     } else {
       div.innerHTML = `
+        <button class="timeline-termin-remove-btn" title="Zuweisung entfernen" data-remove-termin-id="${termin.id}">×</button>
         <div class="termin-title">${termin.termin_nr || 'Neu'} - ${termin.kennzeichen || ''}${istErweiterungBadgeHtml}${erweiterungBadgeHtml}</div>
         <div class="termin-info">${termin.kunde_name || ''} • ${dauerText}</div>
       `;
@@ -22661,12 +22662,25 @@ class App {
       }
     }
 
+    // Click-Handler für "×"-Button (Zuweisung entfernen)
+    if (!istFortsetzung) {
+      const removeBtn = div.querySelector('.timeline-termin-remove-btn');
+      if (removeBtn) {
+        removeBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          e.preventDefault();
+          this.removeTerminZuweisung(termin.id);
+        });
+      }
+    }
+
     // Klick: Normaler Klick = Schnell-Menü, Shift+Klick = Details
     // Gilt für ALLE Termine (auch Fortsetzungen und Erweiterungen)
     div.addEventListener('click', (e) => {
       // Ignoriere wenn auf Badge geklickt wurde (hat eigenen Handler)
       if (e.target.classList.contains('timeline-erweiterung-badge') || 
-          e.target.classList.contains('timeline-ist-erweiterung')) {
+          e.target.classList.contains('timeline-ist-erweiterung') ||
+          e.target.classList.contains('timeline-termin-remove-btn')) {
         return;
       }
       
