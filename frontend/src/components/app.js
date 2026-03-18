@@ -19502,6 +19502,9 @@ class App {
           let gesamtAnzeigeZeitMinuten = 0;
           let fruehesteStartzeit = terminStartzeit;
           let arbeitenMitZeiten = [];
+          // Merke ob mindestens eine Arbeit eine explizite zeit hat
+          // (false = Gesamtzeit-Modus, alle Einzelzeiten auf 0 gelassen)
+          let hatExpliziteEinzelzeiten = false;
           
           // Bestimme Mitarbeiter/Lehrling Zuordnung für den gesamten Termin (wird im Loop ggf. aktualisiert)
           let terminZuordnungsTyp = defaultZuordnungsTyp;
@@ -19511,7 +19514,12 @@ class App {
           for (let i = 0; i < arbeitenListe.length; i++) {
             const arbeit = arbeitenListe[i];
             const arbeitDetails = typeof details[arbeit] === 'object' ? details[arbeit] : { zeit: details[arbeit] || 0 };
-            let zeitMinuten = arbeitDetails.zeit || (termin.geschaetzte_zeit / arbeitenListe.length) || 60;
+            // Explizite zeit: Zahl in details ODER .zeit > 0 im Objekt
+            const expliziteZeit = (typeof details[arbeit] === 'number' && details[arbeit] > 0)
+              ? details[arbeit]
+              : (arbeitDetails.zeit > 0 ? arbeitDetails.zeit : 0);
+            if (expliziteZeit > 0) hatExpliziteEinzelzeiten = true;
+            let zeitMinuten = expliziteZeit || (termin.geschaetzte_zeit / arbeitenListe.length) || 60;
             
             // Nebenzeit-Aufschlag hinzufügen (z.B. 20% = zeitMinuten * 1.2)
             if (nebenzeitProzent > 0) {
@@ -19575,9 +19583,20 @@ class App {
           const erweiterungen = termine.filter(t => t.erweiterung_von_id === termin.id && !t.ist_geloescht);
           const erweiterungAnzahl = erweiterungen.length;
 
-          // Feature 10: Bei abgeschlossenen Terminen tatsächliche Zeit direkt als Anzeigedauer verwenden.
-          // Der gespeicherte tatsaechliche_zeit-Wert ist korrekt (= endzeit_berechnet - startzeit),
-          // während der stückweise-proportionale Ansatz durch veraltete geschaetzte_zeit falsche Totals erzeugt.
+          // Gesamtzeit-Modus: Keine Einzelzeiten gespeichert → _dauer_override oder tatsaechliche_zeit nutzen.
+          // Passiert wenn der Nutzer im Arbeitszeiten-Modal alle Einzelzeiten auf 0 lässt
+          // und nur die Gesamtzeit eingibt. In diesem Fall ist gesamtZeitMinuten = geschaetzte_zeit/n × n
+          // was komplett falsch sein kann.
+          if (!hatExpliziteEinzelzeiten) {
+            const duerOverride = parseInt(details._dauer_override) || 0;
+            const verwendeteGesamt = duerOverride > 0
+              ? duerOverride
+              : (termin.tatsaechliche_zeit > 0 ? termin.tatsaechliche_zeit : (termin.geschaetzte_zeit || gesamtZeitMinuten));
+            gesamtZeitMinuten = verwendeteGesamt;
+            gesamtAnzeigeZeitMinuten = verwendeteGesamt;
+          }
+
+          // Abgeschlossene Termine: tatsächliche Zeit hat höchste Priorität
           if (termin.status === 'abgeschlossen' && termin.tatsaechliche_zeit && termin.tatsaechliche_zeit > 0) {
             gesamtAnzeigeZeitMinuten = termin.tatsaechliche_zeit;
           }
