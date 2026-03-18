@@ -865,6 +865,11 @@ class TermineController {
         // Nur überschreiben wenn tatsächlich berechnet wurde
         if (startzeit) updateData.startzeit = startzeit;
         if (endzeit) updateData.endzeit_berechnet = endzeit;
+      } else if (updateData.startzeit !== undefined || updateData.bring_zeit !== undefined || updateData.geschaetzte_zeit !== undefined) {
+        // Auch bei Änderung von startzeit/bring_zeit/geschaetzte_zeit Endzeit neu berechnen
+        const terminMitUpdate = { ...termin, ...updateData };
+        const { endzeit } = await berechneEndzeitFuerTermin(terminMitUpdate, termin.arbeitszeiten_details);
+        if (endzeit) updateData.endzeit_berechnet = endzeit;
       }
 
       // ============================================================
