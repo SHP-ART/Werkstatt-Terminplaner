@@ -2065,10 +2065,14 @@ class TermineController {
   static async folgearbeitErstellen(req, res) {
     try {
       const { id } = req.params;
-      const { feierabend = '17:00' } = req.body;
+      const { feierabend = '17:00', startzeit: neueStartzeit, verschiebe_ueberlappende = false } = req.body;
 
       if (!/^\d{2}:\d{2}$/.test(feierabend)) {
         return res.status(400).json({ error: 'Ungültige Feierabend-Zeit (Format HH:MM erwartet)' });
+      }
+
+      if (neueStartzeit && !/^\d{2}:\d{2}$/.test(neueStartzeit)) {
+        return res.status(400).json({ error: 'Ungültige Startzeit (Format HH:MM erwartet)' });
       }
 
       const termin = await TermineModel.getById(id);
@@ -2076,17 +2080,23 @@ class TermineController {
         return res.status(404).json({ error: 'Termin nicht gefunden' });
       }
 
-      const startzeit = termin.bring_zeit || '08:00';
-      const heuteMinuten = TermineModel.zeitDifferenzMinuten(startzeit, feierabend);
+      // Startzeit: aus Body (neue Startzeit) oder bring_zeit des Termins
+      const terminStart = neueStartzeit || termin.bring_zeit || '08:00';
+      const heuteMinuten = TermineModel.zeitDifferenzMinuten(terminStart, feierabend);
 
       if (heuteMinuten <= 0) {
-        return res.status(400).json({ error: 'Feierabend-Zeit liegt vor oder auf der Bring-Zeit des Termins' });
+        return res.status(400).json({ error: 'Feierabend-Zeit liegt vor oder auf der Start-Zeit des Termins' });
       }
 
       if (heuteMinuten >= termin.geschaetzte_zeit) {
         return res.status(400).json({
           error: `Termin kann bis ${feierabend} Uhr vollständig abgeschlossen werden – keine Folgearbeit nötig.`
         });
+      }
+
+      // Falls neue Startzeit angegeben: bring_zeit und startzeit des Termins aktualisieren
+      if (neueStartzeit) {
+        await TermineModel.update(id, { bring_zeit: neueStartzeit, startzeit: neueStartzeit });
       }
 
       const restMinuten = termin.geschaetzte_zeit - heuteMinuten;
@@ -2099,6 +2109,22 @@ class TermineController {
         teil2_zeit: restMinuten
       });
 
+      // Teil-2-Termin auf morgen früh 08:00 setzen
+      if (result.teil2?.id) {
+        await TermineModel.update(result.teil2.id, { bring_zeit: '08:00', startzeit: null });
+      }
+
+      // Überlappende Termine des gleichen Mitarbeiters/Lehrlings verschieben
+      let verschobene = [];
+      if (verschiebe_ueberlappende) {
+        verschobene = await TermineController._verschiebeUeberlappende(
+          parseInt(id), termin, terminStart, feierabend, heuteDatum
+        );
+        for (const v of verschobene) {
+          broadcastEvent('termin.updated', { id: v.id, datum: heuteDatum });
+        }
+      }
+
       invalidateAuslastungCache(heuteDatum);
       invalidateAuslastungCache(morgen);
       invalidateTermineCache();
@@ -2110,12 +2136,106 @@ class TermineController {
         heute_minuten: heuteMinuten,
         rest_minuten: restMinuten,
         folge_datum: morgen,
+        verschobene_termine: verschobene,
         ...result
       });
     } catch (err) {
       console.error('Fehler bei Folgearbeit-Erstellung:', err);
       res.status(500).json({ error: err.message });
     }
+  }
+
+  /**
+   * Interne Hilfsmethode: Verschiebt Termine desselben Mitarbeiters/Lehrlings,
+   * die im Zeitraum [startZeit, endZeit] überlappen, auf endZeit (nach hinten).
+   */
+  static async _verschiebeUeberlappende(aktuelleId, termin, startZeit, endZeit, datum) {
+    // Mitarbeiter oder Lehrling des Termins ermitteln
+    let mitarbeiterId = termin.mitarbeiter_id ? parseInt(termin.mitarbeiter_id) : null;
+    let lehrlingId = null;
+    let zuweisungsTyp = mitarbeiterId ? 'mitarbeiter' : null;
+
+    if (termin.arbeitszeiten_details) {
+      try {
+        const details = typeof termin.arbeitszeiten_details === 'string'
+          ? JSON.parse(termin.arbeitszeiten_details)
+          : termin.arbeitszeiten_details;
+        const zuweisung = details._gesamt_mitarbeiter_id;
+        if (zuweisung) {
+          if (zuweisung.type === 'lehrling') {
+            lehrlingId = parseInt(zuweisung.id);
+            mitarbeiterId = null;
+            zuweisungsTyp = 'lehrling';
+          } else {
+            mitarbeiterId = parseInt(zuweisung.id);
+            zuweisungsTyp = 'mitarbeiter';
+          }
+        }
+      } catch (e) { /* Details nicht parsebar */ }
+    }
+
+    if (!mitarbeiterId && !lehrlingId) return [];
+
+    const [sh, sm] = startZeit.split(':').map(Number);
+    const [eh, em] = endZeit.split(':').map(Number);
+    const startMin = sh * 60 + sm;
+    const endMin = eh * 60 + em;
+
+    // Alle aktiven Termine des gleichen Tags laden
+    const termineAmTag = await TermineModel.getByDatum(datum);
+    const verschobene = [];
+
+    for (const t of termineAmTag) {
+      if (t.id === aktuelleId) continue;
+      if (['abgeschlossen', 'storniert'].includes(t.status)) continue;
+
+      // Prüfen ob dieser Termin dem gleichen Mitarbeiter/Lehrling gehört
+      let tMitarbeiterId = t.mitarbeiter_id ? parseInt(t.mitarbeiter_id) : null;
+      let tLehrlingId = null;
+
+      if (t.arbeitszeiten_details) {
+        try {
+          const d = typeof t.arbeitszeiten_details === 'string'
+            ? JSON.parse(t.arbeitszeiten_details)
+            : t.arbeitszeiten_details;
+          const z = d?._gesamt_mitarbeiter_id;
+          if (z) {
+            if (z.type === 'lehrling') {
+              tLehrlingId = parseInt(z.id);
+              tMitarbeiterId = null;
+            } else {
+              tMitarbeiterId = parseInt(z.id);
+            }
+          }
+        } catch (e) { /* ignorieren */ }
+      }
+
+      const gehörtZuPerson =
+        (zuweisungsTyp === 'mitarbeiter' && tMitarbeiterId === mitarbeiterId) ||
+        (zuweisungsTyp === 'lehrling' && tLehrlingId === lehrlingId);
+
+      if (!gehörtZuPerson) continue;
+
+      // Überlappung prüfen
+      const tStart = t.startzeit || t.bring_zeit || '08:00';
+      const tDauer = parseInt(t.geschaetzte_zeit) || 60;
+      const [tsh, tsm] = tStart.split(':').map(Number);
+      const tStartMin = tsh * 60 + tsm;
+      const tEndMin = tStartMin + tDauer;
+
+      // Überschneidet wenn: tStart < endZeit UND tEnd > startZeit
+      if (tStartMin < endMin && tEndMin > startMin) {
+        await TermineModel.update(t.id, { startzeit: endZeit, bring_zeit: endZeit });
+        verschobene.push({
+          id: t.id,
+          termin_nr: t.termin_nr,
+          alte_startzeit: tStart,
+          neue_startzeit: endZeit
+        });
+      }
+    }
+
+    return verschobene;
   }
 
   /**

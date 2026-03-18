@@ -7395,13 +7395,116 @@ class App {
     }
   }
 
+  /**
+   * Öffnet einen Dialog: Termin heute ab einer Startzeit einplanen und morgen fortführen.
+   * Optionale Verschiebung überlappender Termine nach hinten.
+   */
+  showEinplanenDialog(terminId, termin) {
+    const existingDialog = document.getElementById('einplanenDialog');
+    if (existingDialog) existingDialog.remove();
+
+    const now = new Date();
+    const defaultStart = `${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
+    const gesamtMin = termin.geschaetzte_zeit || 60;
+    const gesamtText = gesamtMin >= 60
+      ? `${Math.floor(gesamtMin/60)}h ${gesamtMin%60 > 0 ? gesamtMin%60+'min' : ''}`.trim()
+      : `${gesamtMin} min`;
+
+    const overlay = document.createElement('div');
+    overlay.id = 'einplanenDialog';
+    overlay.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.55);display:flex;align-items:center;justify-content:center;z-index:11000;';
+    overlay.innerHTML = `
+      <div style="background:#fff;border-radius:14px;padding:24px;max-width:420px;width:100%;box-shadow:0 8px 32px rgba(0,0,0,0.25);">
+        <h3 style="margin:0 0 6px 0;font-size:1.1rem;">⚡ Heute einplanen + morgen fortführen</h3>
+        <p style="margin:0 0 16px 0;font-size:0.9rem;color:#555;">
+          <strong>${termin.termin_nr}</strong> – ${termin.kunde_name || ''}<br>
+          Gesamtzeit: <strong>${gesamtText}</strong>
+        </p>
+        <div style="display:flex;flex-direction:column;gap:12px;">
+          <label style="font-size:0.9rem;font-weight:600;">Startzeit heute:
+            <input type="time" id="einplanenStart" value="${defaultStart}"
+              style="display:block;margin-top:4px;padding:6px 10px;border:1px solid #ccc;border-radius:7px;font-size:1rem;width:100%;">
+          </label>
+          <label style="font-size:0.9rem;font-weight:600;">Feierabend (heute bis):
+            <input type="time" id="einplanenFeierabend" value="17:00"
+              style="display:block;margin-top:4px;padding:6px 10px;border:1px solid #ccc;border-radius:7px;font-size:1rem;width:100%;">
+          </label>
+          <div id="einplanenVorschau" style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:10px;font-size:0.88rem;"></div>
+          <label style="display:flex;align-items:center;gap:8px;font-size:0.88rem;cursor:pointer;">
+            <input type="checkbox" id="einplanenVerschieben" style="width:16px;height:16px;">
+            Überlappende Termine nach hinten verschieben
+          </label>
+        </div>
+        <div style="display:flex;gap:10px;margin-top:18px;">
+          <button id="einplanenBestaetigen" style="flex:1;background:#2e7d32;color:#fff;border:none;padding:10px;border-radius:8px;font-size:0.95rem;font-weight:600;cursor:pointer;">✅ Einplanen</button>
+          <button id="einplanenAbbrechen" style="flex:1;background:#f3f4f6;color:#333;border:1px solid #ddd;padding:10px;border-radius:8px;font-size:0.95rem;cursor:pointer;">❌ Abbrechen</button>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(overlay);
+
+    const updateVorschau = () => {
+      const start = document.getElementById('einplanenStart')?.value || defaultStart;
+      const feier = document.getElementById('einplanenFeierabend')?.value || '17:00';
+      const [sh,sm] = start.split(':').map(Number);
+      const [fh,fm] = feier.split(':').map(Number);
+      const heuteMin = Math.max(0, (fh*60+fm) - (sh*60+sm));
+      const restMin = Math.max(0, gesamtMin - heuteMin);
+      const prev = document.getElementById('einplanenVorschau');
+      if (!prev) return;
+      if (heuteMin <= 0) {
+        prev.innerHTML = '<span style="color:#d32f2f;">⚠️ Feierabend liegt vor oder auf der Startzeit.</span>';
+        return;
+      }
+      const morgenStr = (() => { const d=new Date(); d.setDate(d.getDate()+1); while(d.getDay()===0||d.getDay()===6) d.setDate(d.getDate()+1); return d.toLocaleDateString('de-DE',{weekday:'short',day:'2-digit',month:'2-digit'}); })();
+      if (restMin <= 0) {
+        prev.innerHTML = `<span style="color:#2e7d32;">✅ Termin passt vollständig bis ${feier} Uhr (${heuteMin} Min.).</span>`;
+      } else {
+        prev.innerHTML = `<strong>Heute:</strong> ${heuteMin} Min. (${start}–${feier})<br><strong>Morgen (${morgenStr}):</strong> ${restMin} Min. ab 08:00`;
+      }
+    };
+    updateVorschau();
+    document.getElementById('einplanenStart').addEventListener('input', updateVorschau);
+    document.getElementById('einplanenFeierabend').addEventListener('input', updateVorschau);
+
+    document.getElementById('einplanenAbbrechen').addEventListener('click', () => overlay.remove());
+    overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
+
+    document.getElementById('einplanenBestaetigen').addEventListener('click', async () => {
+      const startzeit = document.getElementById('einplanenStart')?.value || defaultStart;
+      const feierabend = document.getElementById('einplanenFeierabend')?.value || '17:00';
+      const verschieben = document.getElementById('einplanenVerschieben')?.checked || false;
+      const [sh,sm] = startzeit.split(':').map(Number);
+      const [fh,fm] = feierabend.split(':').map(Number);
+      const heuteMin = (fh*60+fm) - (sh*60+sm);
+      if (heuteMin <= 0) {
+        this.showToast('⚠️ Feierabend liegt vor der Startzeit!', 'error');
+        return;
+      }
+      overlay.remove();
+      try {
+        const result = await TermineService.folgearbeitErstellen(terminId, feierabend, startzeit, verschieben);
+        const morgenLabel = (() => { const d=new Date(); d.setDate(d.getDate()+1); while(d.getDay()===0||d.getDay()===6) d.setDate(d.getDate()+1); return d.toLocaleDateString('de-DE',{weekday:'long',day:'2-digit',month:'2-digit'}); })();
+        let msg = `✅ Heute ${result.heute_minuten} Min. ab ${startzeit}, morgen (${morgenLabel}) ${result.rest_minuten} Min.`;
+        if (result.verschobene_termine?.length > 0) {
+          msg += ` | ${result.verschobene_termine.length} Termin(e) verschoben`;
+        }
+        this.showToast(msg, 'success');
+        await Promise.all([this.loadTermine(), this.loadAuslastung()]);
+        if (document.getElementById('auslastung-dragdrop')?.classList.contains('active')) {
+          this.loadAuslastungDragDrop();
+        }
+      } catch (err) {
+        this.showToast('❌ Fehler: ' + (err.message || 'Unbekannter Fehler'), 'error');
+      }
+    });
+  }
+
   // Termin als schwebend markieren/aufheben
   async toggleTerminSchwebend() {
     if (!this.currentDetailTerminId) return;
     
     const termin = this.termineById[this.currentDetailTerminId];
-    if (!termin) return;
-
     const neuerStatus = !termin.ist_schwebend;
     
     // Wenn Termin eingeplant wird (von schwebend auf fest), Datum abfragen
@@ -13988,6 +14091,12 @@ class App {
             📅 Am nächsten Arbeitstag weiterführen
           </button>
         </div>` : ''}
+        ${!['abgeschlossen', 'storniert'].includes(currentStatus) ? `
+        <div style="padding: 4px 12px 8px;">
+          <button class="btn-schnell-link" data-action="einplanen" style="width:100%;text-align:center;background:#e8f5e9;color:#2e7d32;border:1px solid #a5d6a7;border-radius:6px;padding:7px;font-weight:600;">
+            ⚡ Heute einplanen + morgen fortführen
+          </button>
+        </div>` : ''}
       </div>
     `;
     
@@ -14052,6 +14161,9 @@ class App {
           this.closeSchnellStatusDialog();
           this.currentDetailTerminId = terminId;
           await this.weiterfuehrenTermin();
+        } else if (action === 'einplanen') {
+          this.closeSchnellStatusDialog();
+          this.showEinplanenDialog(terminId, termin);
         } else {
           this.setzeSchnellStatus(terminId, action);
         }
@@ -22915,6 +23027,8 @@ class App {
               console.log('[DROP] Nicht überlastet → direkt zuweisen');
               // Keine Überlastung - direkt zuweisen
               await this.moveTerminToMitarbeiterWithTime(terminId, mitarbeiterId, lehrlingId, targetType, newStartzeit);
+              // Feierabend-Check: läuft der Termin über 17:00 hinaus?
+              await this._checkFeierabendUeberlauf(terminId, terminDaten, newStartzeit, selectedDatum);
             }
           } catch (error) {
             console.error('[DROP] Fehler beim Zuweisen:', error);
@@ -32891,7 +33005,14 @@ App.prototype.showVerschiebeWarnung = async function(person, termin, kapazitaetW
   // Aufteilen-Berechnung: wie viel passt heute noch?
   const terminDauer = kapazitaetWarnung.neueAuslastung - kapazitaetWarnung.aktuelleAuslastung;
   const verfuegbarHeute = Math.max(0, kapazitaetWarnung.maxKapazitaet - kapazitaetWarnung.aktuelleAuslastung);
-  const teil1Zeit = verfuegbarHeute;
+  // Feierabend-basierte Berechnung: wie viel passt von startzeit bis 17:00?
+  const feierabendDefault = '17:00';
+  const [fh, fm] = feierabendDefault.split(':').map(Number);
+  const feierabendMin = fh * 60 + fm;
+  const [sh2, sm2] = startzeit.split(':').map(Number);
+  const bisFeierabendMin = Math.max(0, feierabendMin - (sh2 * 60 + sm2));
+  // Aufteilen: nimm das Minimum aus verfügbarer Kapazität und Zeit bis Feierabend
+  const teil1Zeit = bisFeierabendMin > 0 ? Math.min(bisFeierabendMin, terminDauer) : verfuegbarHeute;
   const teil2Zeit = terminDauer - teil1Zeit;
   // Nächsten Werktag berechnen (Sa/So überspringen)
   const naechsterWerktag = new Date(datum);
@@ -32921,9 +33042,12 @@ App.prototype.showVerschiebeWarnung = async function(person, termin, kapazitaetW
   const aufteilenHtml = kannAufteilen
     ? `<button class="btn btn-info" id="verschiebeOptionAufteilen" style="width: 100%; background: #1565c0; color: white; border: none; padding: 10px; border-radius: 6px; cursor: pointer;">
         ✂️ Aufteilen: ${teil1Zeit} Min. heute + ${teil2Zeit} Min. am ${this.formatDatum(morgenDatum)}<br>
-        <small style="opacity: 0.85;">(Rest geht als "Nicht zugeordnet" auf morgen)</small>
+        <small style="opacity: 0.85;">Heute ${startzeit}–${feierabendDefault} Uhr, Rest morgen ab 08:00</small>
       </button>`
-    : '';
+    : `<button class="btn btn-info" id="verschiebeOptionAufteilen" style="width: 100%; background: #1565c0; color: white; border: none; padding: 10px; border-radius: 6px; cursor: pointer;">
+        ✂️ Heute einplanen + morgen fortführen
+        <br><small style="opacity: 0.85;">Startzeit anpassen und Feierabend wählen</small>
+      </button>`;
 
   modal.innerHTML = `
     <div style="background: white; padding: 25px; border-radius: 12px; max-width: 550px; box-shadow: 0 4px 20px rgba(0,0,0,0.3);">
@@ -33037,18 +33161,24 @@ App.prototype.showVerschiebeWarnung = async function(person, termin, kapazitaetW
 
     document.getElementById('verschiebeOptionAufteilen')?.addEventListener('click', async () => {
       cleanup();
-      try {
-        const splitResult = await TermineService.splitTermin(termin.id, teil1Zeit, morgenDatum, teil2Zeit);
-        await this._assignTerminDirectToPersonInDB(termin.id, targetType, mitarbeiterId, lehrlingId, startzeit);
-        // Teil 2 (morgen) ebenfalls der gleichen Person zuweisen
-        if (splitResult?.teil2?.id) {
-          await this._assignTerminDirectToPersonInDB(splitResult.teil2.id, targetType, mitarbeiterId, lehrlingId, '08:00');
+      if (kannAufteilen) {
+        // Direkt aufteilen
+        try {
+          const splitResult = await TermineService.splitTermin(termin.id, teil1Zeit, morgenDatum, teil2Zeit);
+          await this._assignTerminDirectToPersonInDB(termin.id, targetType, mitarbeiterId, lehrlingId, startzeit);
+          // Teil 2 (morgen) ebenfalls der gleichen Person zuweisen
+          if (splitResult?.teil2?.id) {
+            await this._assignTerminDirectToPersonInDB(splitResult.teil2.id, targetType, mitarbeiterId, lehrlingId, '08:00');
+          }
+          this.showToast(`✂️ Termin aufgeteilt: ${teil1Zeit} Min. heute für ${person.name}, ${teil2Zeit} Min. am ${this.formatDatum(morgenDatum)} → ${person.name}`, 'success');
+          this.loadAuslastungDragDrop();
+        } catch (error) {
+          console.error('Fehler beim Aufteilen:', error);
+          this.showToast('❌ Fehler beim Aufteilen: ' + (error.message || 'Unbekannter Fehler'), 'error');
         }
-        this.showToast(`✂️ Termin aufgeteilt: ${teil1Zeit} Min. heute für ${person.name}, ${teil2Zeit} Min. am ${this.formatDatum(morgenDatum)} → ${person.name}`, 'success');
-        this.loadAuslastungDragDrop();
-      } catch (error) {
-        console.error('Fehler beim Aufteilen:', error);
-        this.showToast('❌ Fehler beim Aufteilen: ' + (error.message || 'Unbekannter Fehler'), 'error');
+      } else {
+        // Einplanen-Dialog öffnen (benutzerdefinierte Zeiten)
+        this.showEinplanenDialog(termin.id, termin);
       }
       resolve('aufteilen');
     });
@@ -33060,6 +33190,60 @@ App.prototype.showVerschiebeWarnung = async function(person, termin, kapazitaetW
         resolve('abbrechen');
       }
     });
+  });
+};
+
+// ===============================
+// Tablet-Steuerung
+// ===============================
+
+/**
+ * Prüft nach einem Drop ob der Termin über den Feierabend (17:00) hinausläuft.
+ * Wenn ja, fragt der Nutzer ob er ihn aufteilen möchte.
+ */
+App.prototype._checkFeierabendUeberlauf = async function(terminId, terminDaten, startzeit, datum) {
+  const feierabend = '17:00';
+  const [fh, fm] = feierabend.split(':').map(Number);
+  const feierabendMin = fh * 60 + fm;
+  const [sh, sm] = startzeit.split(':').map(Number);
+  const startMin = sh * 60 + sm;
+  const dauer = parseInt(terminDaten?.geschaetzte_zeit) || 0;
+  if (dauer <= 0) return;
+  const endeMin = startMin + dauer;
+  if (endeMin <= feierabendMin) return; // Passt, kein Problem
+
+  const ueberMin = endeMin - feierabendMin;
+  const heuteMin = dauer - ueberMin;
+  if (heuteMin <= 0) return; // Startet nach Feierabend - anderes Problem
+
+  // Kurze Toast-Meldung + Angebot zum Aufteilen
+  const endzeit = `${String(Math.floor(endeMin/60)).padStart(2,'0')}:${String(endeMin%60).padStart(2,'0')}`;
+  const toast = document.createElement('div');
+  toast.style.cssText = 'position:fixed;bottom:80px;left:50%;transform:translateX(-50%);background:#1a237e;color:#fff;border-radius:12px;padding:14px 20px;z-index:10000;max-width:420px;width:90%;display:flex;flex-direction:column;gap:8px;box-shadow:0 4px 20px rgba(0,0,0,0.3);';
+  toast.innerHTML = `
+    <div style="font-weight:600;">⏰ Termin endet um ${endzeit} Uhr (über Feierabend ${feierabend})</div>
+    <div style="font-size:0.88rem;opacity:0.9;">Heute: ${heuteMin} Min. &nbsp;|&nbsp; Rest morgen: ${ueberMin} Min.</div>
+    <div style="display:flex;gap:8px;margin-top:4px;">
+      <button id="feierabendAufteilen" style="flex:1;background:#e8f5e9;color:#1b5e20;border:none;border-radius:7px;padding:8px;font-weight:600;cursor:pointer;">✂️ Aufteilen</button>
+      <button id="feierabendIgnorieren" style="flex:1;background:rgba(255,255,255,0.15);color:#fff;border:1px solid rgba(255,255,255,0.3);border-radius:7px;padding:8px;cursor:pointer;">Ignorieren</button>
+    </div>
+  `;
+  document.body.appendChild(toast);
+  const removeToast = () => { if (document.body.contains(toast)) document.body.removeChild(toast); };
+  setTimeout(removeToast, 12000);
+
+  document.getElementById('feierabendIgnorieren')?.addEventListener('click', removeToast);
+  document.getElementById('feierabendAufteilen')?.addEventListener('click', async () => {
+    removeToast();
+    // Direkt aufteilen via folgearbeit-Endpoint
+    try {
+      const result = await TermineService.folgearbeitErstellen(terminId, feierabend, startzeit, false);
+      const morgenLabel = (() => { const d = new Date(datum+'T12:00:00'); d.setDate(d.getDate()+1); while(d.getDay()===0||d.getDay()===6) d.setDate(d.getDate()+1); return d.toLocaleDateString('de-DE',{weekday:'short',day:'2-digit',month:'2-digit'}); })();
+      this.showToast(`✅ Aufgeteilt: ${result.heute_minuten} Min. heute, ${result.rest_minuten} Min. am ${morgenLabel}`, 'success');
+      this.loadAuslastungDragDrop();
+    } catch (err) {
+      this.showToast('❌ ' + (err.message || 'Fehler beim Aufteilen'), 'error');
+    }
   });
 };
 
