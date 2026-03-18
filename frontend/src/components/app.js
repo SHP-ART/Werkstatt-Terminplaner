@@ -16607,6 +16607,14 @@ class App {
             : 0;
           teileStatus = arbeitszeitenDetails[arbeit].teile_status || '';
           startzeit = arbeitszeitenDetails[arbeit].startzeit || '';
+          // Ungültige Startzeiten normalisieren (z.B. "09:60" → "10:00")
+          if (startzeit && startzeit.includes(':')) {
+            const [_szH, _szM] = startzeit.split(':').map(Number);
+            if (!isNaN(_szH) && !isNaN(_szM) && (_szM < 0 || _szM > 59)) {
+              const _total = _szH * 60 + _szM;
+              startzeit = `${String(Math.floor(_total / 60)).padStart(2, '0')}:${String(_total % 60).padStart(2, '0')}`;
+            }
+          }
           if (arbeitszeitenDetails[arbeit].type === 'lehrling') {
             mitarbeiterId = `l_${arbeitszeitenDetails[arbeit].mitarbeiter_id || arbeitszeitenDetails[arbeit].lehrling_id}`;
           } else if (arbeitszeitenDetails[arbeit].mitarbeiter_id) {
@@ -17317,9 +17325,16 @@ class App {
       const teileSelect = document.getElementById(`modal_teile_${index}`);
       const teileStatus = teileSelect ? teileSelect.value : '';
       
-      // Startzeit auslesen
+      // Startzeit auslesen und normalisieren (z.B. "09:60" → "10:00")
       const startzeitInput = document.getElementById(`modal_startzeit_${index}`);
-      const startzeit = startzeitInput ? startzeitInput.value.trim() : '';
+      let startzeit = startzeitInput ? startzeitInput.value.trim() : '';
+      if (startzeit && startzeit.includes(':')) {
+        const [szH, szM] = startzeit.split(':').map(Number);
+        if (!isNaN(szH) && !isNaN(szM) && (szM < 0 || szM > 59)) {
+          const totalMin = szH * 60 + szM;
+          startzeit = `${String(Math.floor(totalMin / 60)).padStart(2, '0')}:${String(totalMin % 60).padStart(2, '0')}`;
+        }
+      }
 
       // Prüfe welche Daten vorhanden sind
       const hatTeileStatus = !!teileStatus;
@@ -19294,14 +19309,27 @@ class App {
             }
           }
           
-          // Getrennt anzeigen wenn: unterschiedliche Mitarbeiter ODER mehr als eine verschiedene Startzeit
-          mussGetrenntAnzeigen = mitarbeiterSet.size > 1 || startzeitenSet.size > 1;
+          // Getrennt anzeigen NUR wenn ECHTE verschiedene Mitarbeiter/Lehrlinge zugeordnet sind.
+          // 'default' (= keine explizite Zuweisung) erbt den Kontext-Mitarbeiter und zählt nicht als "anders".
+          // Unterschiedliche Startzeiten alleine lösen KEINE getrennte Ansicht aus – sequenzielle
+          // Arbeiten desselben Mitarbeiters haben immer verschiedene Startzeiten.
+          const realMitarbeiterKeys = [...mitarbeiterSet].filter(k => k !== 'default');
+          mussGetrenntAnzeigen = new Set(realMitarbeiterKeys).size > 1;
         }
         
         if (mussGetrenntAnzeigen) {
           // === GETRENNTE ANSICHT: Separate Einträge für jede Arbeit ===
           let laufendeStartzeit = terminStartzeit;
           const arbeitEntries = [];
+
+          // Berechne Gesamtzeit aus den einzelnen Arbeitseinträgen als korrekten Nenner
+          // (termin.geschaetzte_zeit kann veraltet sein wenn nachträglich Arbeiten hinzugefügt wurden)
+          let gesamtZeitAusDetails = 0;
+          for (const _a of arbeitenListe) {
+            const _ad = typeof details[_a] === 'object' ? details[_a] : { zeit: typeof details[_a] === 'number' ? details[_a] : 0 };
+            gesamtZeitAusDetails += _ad.zeit || (termin.geschaetzte_zeit / arbeitenListe.length) || 0;
+          }
+          const gesamtZeitFuerAnteil = gesamtZeitAusDetails > 0 ? gesamtZeitAusDetails : (termin.geschaetzte_zeit || 60);
           
           for (let i = 0; i < arbeitenListe.length; i++) {
             const arbeit = arbeitenListe[i];
@@ -19335,7 +19363,9 @@ class App {
             let anzeigeZeitMinuten = zeitMinuten;
             if (termin.status === 'abgeschlossen' && termin.tatsaechliche_zeit && termin.tatsaechliche_zeit > 0) {
               if (arbeitenListe.length > 1) {
-                const anteil = zeitMinuten / (termin.geschaetzte_zeit || zeitMinuten * arbeitenListe.length);
+                // Korrekte Anteilsberechnung: Summe aus arbeitszeiten_details als Nenner verwenden,
+                // nicht das ggf. veraltete termin.geschaetzte_zeit
+                const anteil = zeitMinuten / gesamtZeitFuerAnteil;
                 anzeigeZeitMinuten = Math.round(termin.tatsaechliche_zeit * anteil);
               } else {
                 anzeigeZeitMinuten = termin.tatsaechliche_zeit;
@@ -19509,18 +19539,8 @@ class App {
             }
             
             gesamtZeitMinuten += zeitMinuten;
-            
-            // Feature 10: Bei abgeschlossenen Terminen die ANGEZEIGTE Zeit auf tatsächliche Zeit kürzen
-            let anzeigeZeitMinuten = zeitMinuten;
-            if (termin.status === 'abgeschlossen' && termin.tatsaechliche_zeit && termin.tatsaechliche_zeit > 0) {
-              if (arbeitenListe.length > 1) {
-                const anteil = zeitMinuten / (termin.geschaetzte_zeit || zeitMinuten * arbeitenListe.length);
-                anzeigeZeitMinuten = Math.round(termin.tatsaechliche_zeit * anteil);
-              } else {
-                anzeigeZeitMinuten = termin.tatsaechliche_zeit;
-              }
-            }
-            gesamtAnzeigeZeitMinuten += anzeigeZeitMinuten;
+            // Anzeigezeit (wird nach dem Loop für abgeschlossene Termine korrigiert)
+            gesamtAnzeigeZeitMinuten += zeitMinuten;
             
             // Startzeit für diese Arbeit bestimmen (für Anzeige im Tooltip)
             let arbeitStartzeit = arbeitDetails.startzeit || null;
@@ -19554,6 +19574,13 @@ class App {
           // Zähle Erweiterungen zu diesem Termin
           const erweiterungen = termine.filter(t => t.erweiterung_von_id === termin.id && !t.ist_geloescht);
           const erweiterungAnzahl = erweiterungen.length;
+
+          // Feature 10: Bei abgeschlossenen Terminen tatsächliche Zeit direkt als Anzeigedauer verwenden.
+          // Der gespeicherte tatsaechliche_zeit-Wert ist korrekt (= endzeit_berechnet - startzeit),
+          // während der stückweise-proportionale Ansatz durch veraltete geschaetzte_zeit falsche Totals erzeugt.
+          if (termin.status === 'abgeschlossen' && termin.tatsaechliche_zeit && termin.tatsaechliche_zeit > 0) {
+            gesamtAnzeigeZeitMinuten = termin.tatsaechliche_zeit;
+          }
           
           // Bestimme die endzeit_berechnet
           let endzeitFuerAnzeige = null;
