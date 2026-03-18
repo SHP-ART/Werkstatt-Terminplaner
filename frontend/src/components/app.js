@@ -33050,7 +33050,7 @@ App.prototype.checkKapazitaetVorZuweisung = async function(person, datum, termin
  * Weist einen Termin direkt in der DB einer Person zu (mit korrekten arbeitszeiten_details).
  * Wird von showVerschiebeWarnung-Buttons genutzt (sofortige DB-Speicherung ohne lokalen Puffer).
  */
-App.prototype._assignTerminDirectToPersonInDB = async function(terminId, targetType, mitarbeiterId, lehrlingId, startzeit) {
+App.prototype._assignTerminDirectToPersonInDB = async function(terminId, targetType, mitarbeiterId, lehrlingId, startzeit, datumOverride) {
   const aktuellerTermin = await TermineService.getById(terminId);
   let details = {};
   try {
@@ -33062,6 +33062,7 @@ App.prototype._assignTerminDirectToPersonInDB = async function(terminId, targetT
   } catch (e) {}
 
   const updateData = { startzeit };
+  if (datumOverride) updateData.datum = datumOverride;
 
   if (targetType === 'lehrling' && lehrlingId) {
     updateData.mitarbeiter_id = null;
@@ -33119,13 +33120,13 @@ App.prototype.showVerschiebeWarnung = async function(person, termin, kapazitaetW
   // Aufteilen: nimm das Minimum aus verfügbarer Kapazität und Zeit bis Feierabend
   const teil1Zeit = bisFeierabendMin > 0 ? Math.min(bisFeierabendMin, terminDauer) : verfuegbarHeute;
   const teil2Zeit = terminDauer - teil1Zeit;
-  // Nächsten Werktag berechnen (Sa/So überspringen)
-  const naechsterWerktag = new Date(datum);
-  naechsterWerktag.setDate(naechsterWerktag.getDate() + 1);
+  // Nächsten Werktag berechnen (Sa/So überspringen) – lokal, kein UTC-Drift
+  const [_dy, _dm, _dd] = datum.split('-').map(Number);
+  const naechsterWerktag = new Date(_dy, _dm - 1, _dd + 1);
   while (naechsterWerktag.getDay() === 0 || naechsterWerktag.getDay() === 6) {
     naechsterWerktag.setDate(naechsterWerktag.getDate() + 1);
   }
-  const morgenDatum = naechsterWerktag.toISOString().split('T')[0];
+  const morgenDatum = `${naechsterWerktag.getFullYear()}-${String(naechsterWerktag.getMonth()+1).padStart(2,'0')}-${String(naechsterWerktag.getDate()).padStart(2,'0')}`;
   const kannAufteilen = teil1Zeit > 0 && teil2Zeit > 0;
 
   const modal = document.createElement('div');
@@ -33270,7 +33271,8 @@ App.prototype.showVerschiebeWarnung = async function(person, termin, kapazitaetW
         // Direkt aufteilen
         try {
           const splitResult = await TermineService.splitTermin(termin.id, teil1Zeit, morgenDatum, teil2Zeit);
-          await this._assignTerminDirectToPersonInDB(termin.id, targetType, mitarbeiterId, lehrlingId, startzeit);
+          // Teil 1: auf heutiges Datum setzen (datum = gewähltes Ziel-Datum im DragDrop)
+          await this._assignTerminDirectToPersonInDB(termin.id, targetType, mitarbeiterId, lehrlingId, startzeit, datum);
           // Teil 2 (morgen) ebenfalls der gleichen Person zuweisen
           if (splitResult?.teil2?.id) {
             await this._assignTerminDirectToPersonInDB(splitResult.teil2.id, targetType, mitarbeiterId, lehrlingId, '08:00');
