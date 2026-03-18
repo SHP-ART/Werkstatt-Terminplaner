@@ -8093,8 +8093,10 @@ class App {
           const [endeH, endeM] = endzeit.split(':').map(Number);
           endeMin = endeH * 60 + endeM;
         } else {
-          // Fallback: aus geschätzter Zeit berechnen
-          const dauer = t.geschaetzte_zeit || 60;
+          // Fallback: aus tatsächlicher (abgeschlossen) oder geschätzter Zeit berechnen
+          const dauer = (['abgeschlossen', 'in_arbeit'].includes(t.status) && t.tatsaechliche_zeit > 0)
+            ? t.tatsaechliche_zeit
+            : (t.geschaetzte_zeit || 60);
           const dauerMitNebenzeit = nebenzeitProzent > 0 
             ? Math.round(dauer * (1 + nebenzeitProzent / 100))
             : dauer;
@@ -20763,7 +20765,9 @@ class App {
           const zeitProArbeitOhneZeit = arbeitenOhneZeit > 0 ? Math.round(restzeit / arbeitenOhneZeit) : 30;
           
           // Sequentielle Startzeit für Arbeiten (Abstandspausen zwischen Arbeiten automatisch entfernen)
-          let laufendeArbeitsStartzeit = (details && details._startzeit) || termin.startzeit || termin.bring_zeit || '08:00';
+          // Priorität: DB-Feld startzeit (gesetzt beim Einplanen) > _startzeit aus Details > bring_zeit
+          // details._startzeit kann fehlerhaft sein (z.B. auf Startzeit einer einzelnen Arbeit gesetzt)
+          let laufendeArbeitsStartzeit = termin.startzeit || (details && details._startzeit) || termin.bring_zeit || '08:00';
 
           // Mehrere Arbeiten - jede als separater Block
           arbeiten.forEach((arbeit, index) => {
