@@ -10054,6 +10054,13 @@ class App {
       const vortagLabel = vortagDate.toLocaleDateString('de-DE', { weekday: 'short', day: '2-digit', month: '2-digit' });
       const termineAmVortag = allTermine.filter(t => t.datum === vortagDatum);
 
+      // Folgetag berechnen
+      const folgetagDate = new Date(datum + 'T00:00:00');
+      folgetagDate.setDate(folgetagDate.getDate() + 1);
+      const folgetagDatum = folgetagDate.toISOString().slice(0, 10);
+      const folgetagLabel = folgetagDate.toLocaleDateString('de-DE', { weekday: 'short', day: '2-digit', month: '2-digit' });
+      const termineAmFolgetag = allTermine.filter(t => t.datum === folgetagDatum);
+
       const filterNichtZugeordnet = (liste) => liste.filter(termin => {
         // Abgeschlossene Termine nicht mehr anzeigen
         if (termin.status === 'abgeschlossen') return false;
@@ -10079,6 +10086,7 @@ class App {
 
       const nichtZugeordnet = filterNichtZugeordnet(termineAmTag);
       const nichtZugeordnetVortag = filterNichtZugeordnet(termineAmVortag);
+      const nichtZugeordnetFolgetag = filterNichtZugeordnet(termineAmFolgetag);
 
       const renderNzItem = (termin, istUebertrag) => {
         const zeit = termin.tatsaechliche_zeit || termin.geschaetzte_zeit || 0;
@@ -10101,7 +10109,7 @@ class App {
       };
 
       // Zeige nicht zugeordnete Termine
-      if (nichtZugeordnet.length > 0 || nichtZugeordnetVortag.length > 0) {
+      if (nichtZugeordnet.length > 0 || nichtZugeordnetVortag.length > 0 || nichtZugeordnetFolgetag.length > 0) {
         section.style.display = 'block';
         
         let html = `<div class="nicht-zugeordnet-liste">`;
@@ -10121,7 +10129,16 @@ class App {
           });
         }
 
-        const alleTermine = [...nichtZugeordnet, ...nichtZugeordnetVortag];
+        // Folgetag-Termine anhängen (morgen, noch nicht zugeordnet)
+        if (nichtZugeordnetFolgetag.length > 0) {
+          html += `<div class="nz-vortag-header" style="color:#1565c0;">📅 Morgen (${folgetagLabel}) – noch nicht zugeordnet</div>`;
+          nichtZugeordnetFolgetag.forEach(termin => {
+            gesamtNichtZugeordnetMinuten += (termin.tatsaechliche_zeit || termin.geschaetzte_zeit || 0);
+            html += renderNzItem(termin, false);
+          });
+        }
+
+        const alleTermine = [...nichtZugeordnet, ...nichtZugeordnetVortag, ...nichtZugeordnetFolgetag];
         html += `</div>`;
         html += `<div class="nz-gesamt">
           <strong>Gesamt nicht zugeordnet:</strong> ${this.formatMinutesToHours(gesamtNichtZugeordnetMinuten)} 
@@ -20270,10 +20287,15 @@ class App {
       // - Termine vom gewählten Tag OHNE Mitarbeiter-Zuweisung
       // - Termine von früheren Tagen, die noch offen sind UND deren Abholdatum >= gewählter Tag
       //   (Fahrzeug muss bis zur Abholung fertig sein → in der Planung sichtbar halten)
+      // Nächsten Tag berechnen für Vorabanzeige (YYYY-MM-DD)
+      const naechsterTagDate = new Date(datum + 'T00:00:00');
+      naechsterTagDate.setDate(naechsterTagDate.getDate() + 1);
+      const naechsterTagStr = naechsterTagDate.toISOString().slice(0, 10);
+
       const nichtZugeordneteVomDatum = alleTermine.filter(t => {
         if (t.ist_schwebend) return false; // Schwebende bereits oben erfasst
-        // Termin darf nicht in der Zukunft liegen (noch nicht fällig)
-        if (t.datum > datum) return false;
+        // Nur bis einschließlich morgen anzeigen (nicht übermorgen und weiter)
+        if (t.datum > naechsterTagStr) return false;
         // Termin vom Vortag/früheren Tag: nur wenn Abholdatum >= gewählter Tag
         if (t.datum < datum) {
           if (!t.abholung_datum || t.abholung_datum < datum) return false;
@@ -20310,6 +20332,7 @@ class App {
       nichtZugeordneteVomDatum.forEach(t => {
         t._nichtZugeordnet = true; // Markierung für UI
         if (t.datum < datum) t._istUebertrag = true; // Übertrag aus früherem Tag
+        if (t.datum > datum) t._istVorschau = true; // Termin von morgen (Vorabplanung)
         if (!termine.find(x => x.id === t.id)) {
           termine.push(t);
         }
@@ -21714,10 +21737,13 @@ class App {
     const uebertragBadge = istUebertrag
       ? `<span class="bar-uebertrag-badge" title="Übertrag – geplant für ${this.formatDatum(termin.datum)}, Abholung ${this.formatDatum(termin.abholung_datum)}">📅 ${this.formatDatum(termin.datum)}</span>`
       : '';
+    const vorschauBadge = termin._istVorschau
+      ? `<span class="bar-uebertrag-badge" style="background:#1565c0;" title="Termin von morgen – wird bei Zuweisung auf heute verschoben">📅 ${this.formatDatum(termin.datum)}</span>`
+      : '';
     
     // Inhalt des Balkens
     bar.innerHTML = `
-      <div class="bar-header">${prioritaetBadge} ${termin.termin_nr || 'Neu'} • ${termin.kennzeichen || ''} ${uebertragBadge}</div>
+      <div class="bar-header">${prioritaetBadge} ${termin.termin_nr || 'Neu'} • ${termin.kennzeichen || ''} ${uebertragBadge}${vorschauBadge}</div>
       <div class="bar-details">${termin.kunde_name || 'Unbekannt'}</div>
       <div class="bar-zeit">⏱️ ${dauerText}</div>
       ${zeitenInfo ? `<div class="bar-zeiten">${zeitenInfo}</div>` : ''}
