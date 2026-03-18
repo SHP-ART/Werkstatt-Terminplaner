@@ -6950,7 +6950,7 @@ class App {
     }
 
     const heuteDatum = new Date().toISOString().slice(0, 10);
-    const zeigeWeiterfuehrenBtn = termin.datum < heuteDatum && termin.datum !== '9999-12-31' && !['abgeschlossen', 'storniert'].includes(termin.status);
+    const zeigeWeiterfuehrenBtn = termin.datum <= heuteDatum && termin.datum !== '9999-12-31' && !['abgeschlossen', 'storniert'].includes(termin.status);
 
     body.innerHTML = `
       <!-- Header-Bereich mit Termin-Nr und Status -->

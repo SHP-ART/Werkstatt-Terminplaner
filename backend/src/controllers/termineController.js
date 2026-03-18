@@ -1885,11 +1885,31 @@ class TermineController {
 
       const altesDatum = termin.datum;
 
+      // arbeitszeiten_details: _startzeit und Einzel-Startzeiten auf 08:00 zurücksetzen
+      let updatedDetails = undefined;
+      if (termin.arbeitszeiten_details) {
+        try {
+          const details = typeof termin.arbeitszeiten_details === 'string'
+            ? JSON.parse(termin.arbeitszeiten_details)
+            : { ...termin.arbeitszeiten_details };
+          details._startzeit = '08:00';
+          // Einzel-Startzeiten der Arbeiten entfernen
+          for (const key of Object.keys(details)) {
+            if (!key.startsWith('_') && details[key] && details[key].startzeit) {
+              delete details[key].startzeit;
+            }
+          }
+          updatedDetails = JSON.stringify(details);
+        } catch (e) { /* ignorieren */ }
+      }
+
       await TermineModel.update(id, {
         datum: neues_datum,
         status: 'geplant',
         startzeit: null,
-        tatsaechliche_zeit: null
+        bring_zeit: '08:00',
+        tatsaechliche_zeit: null,
+        ...(updatedDetails !== undefined ? { arbeitszeiten_details: updatedDetails } : {})
       });
 
       invalidateAuslastungCache(altesDatum);
