@@ -9862,6 +9862,8 @@ mark.highlight {
     padding: 16px 20px;
     min-width: 280px;
     max-width: 350px;
+    max-height: calc(100vh - 40px);
+    overflow-y: auto;
     position: relative;
 }
 
