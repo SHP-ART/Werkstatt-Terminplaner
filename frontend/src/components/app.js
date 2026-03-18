@@ -10047,18 +10047,15 @@ class App {
       const allTermine = await TermineService.getAll();
       const termineAmTag = allTermine.filter(t => t.datum === datum);
 
-      // Vortag berechnen (YYYY-MM-DD)
-      const vortagDate = new Date(datum + 'T00:00:00');
-      vortagDate.setDate(vortagDate.getDate() - 1);
-      const vortagDatum = vortagDate.toISOString().slice(0, 10);
+      // Vor-/Folgetag berechnen (lokal, kein UTC-Drift)
+      const [vy, vm, vd] = datum.split('-').map(Number);
+      const vortagDate = new Date(vy, vm - 1, vd - 1);
+      const folgetagDate = new Date(vy, vm - 1, vd + 1);
+      const vortagDatum = `${vortagDate.getFullYear()}-${String(vortagDate.getMonth()+1).padStart(2,'0')}-${String(vortagDate.getDate()).padStart(2,'0')}`;
+      const folgetagDatum = `${folgetagDate.getFullYear()}-${String(folgetagDate.getMonth()+1).padStart(2,'0')}-${String(folgetagDate.getDate()).padStart(2,'0')}`;
       const vortagLabel = vortagDate.toLocaleDateString('de-DE', { weekday: 'short', day: '2-digit', month: '2-digit' });
-      const termineAmVortag = allTermine.filter(t => t.datum === vortagDatum);
-
-      // Folgetag berechnen
-      const folgetagDate = new Date(datum + 'T00:00:00');
-      folgetagDate.setDate(folgetagDate.getDate() + 1);
-      const folgetagDatum = folgetagDate.toISOString().slice(0, 10);
       const folgetagLabel = folgetagDate.toLocaleDateString('de-DE', { weekday: 'short', day: '2-digit', month: '2-digit' });
+      const termineAmVortag = allTermine.filter(t => t.datum === vortagDatum);
       const termineAmFolgetag = allTermine.filter(t => t.datum === folgetagDatum);
 
       const filterNichtZugeordnet = (liste) => liste.filter(termin => {
@@ -20287,10 +20284,10 @@ class App {
       // - Termine vom gewählten Tag OHNE Mitarbeiter-Zuweisung
       // - Termine von früheren Tagen, die noch offen sind UND deren Abholdatum >= gewählter Tag
       //   (Fahrzeug muss bis zur Abholung fertig sein → in der Planung sichtbar halten)
-      // Nächsten Tag berechnen für Vorabanzeige (YYYY-MM-DD)
-      const naechsterTagDate = new Date(datum + 'T00:00:00');
-      naechsterTagDate.setDate(naechsterTagDate.getDate() + 1);
-      const naechsterTagStr = naechsterTagDate.toISOString().slice(0, 10);
+      // Nächsten Tag berechnen für Vorabanzeige (YYYY-MM-DD) - lokal, kein UTC-Drift
+      const [dy, dm, dd] = datum.split('-').map(Number);
+      const naechsterTagDate = new Date(dy, dm - 1, dd + 1);
+      const naechsterTagStr = `${naechsterTagDate.getFullYear()}-${String(naechsterTagDate.getMonth()+1).padStart(2,'0')}-${String(naechsterTagDate.getDate()).padStart(2,'0')}`;
 
       const nichtZugeordneteVomDatum = alleTermine.filter(t => {
         if (t.ist_schwebend) return false; // Schwebende bereits oben erfasst
