@@ -20760,8 +20760,8 @@ class App {
             }
             
             // Erstelle virtuellen Termin für diese Arbeit
-            // Abgeschlossene Arbeiten: tatsaechliche_zeit verwenden damit Folge-Blöcke nachrücken
-            const arbeitDauer = arbeit.abgeschlossen && parseInt(arbeit.tatsaechliche_zeit) > 0
+            // tatsaechliche_zeit verwenden wenn vorhanden (länger/kürzer als geplant)
+            const arbeitDauer = parseInt(arbeit.tatsaechliche_zeit) > 0
               ? parseInt(arbeit.tatsaechliche_zeit)
               : ((parseInt(arbeit.zeit) > 0) ? parseInt(arbeit.zeit) : zeitProArbeitOhneZeit);
             // Effektive Startzeit: gespeicherte individuelle Zeit, sonst sequentiell berechnet
@@ -22037,8 +22037,8 @@ class App {
     let startzeit = this.normalizeZeit(termin.startzeit || '08:00');
     const [startH, startM] = startzeit.split(':').map(Number);
     
-    // Dauer: abgeschlossene Arbeiten mit tatsaechliche_zeit (für korrekte Blockbreite)
-    const dauer = istAbgeschlossen && parseInt(arbeit.tatsaechliche_zeit) > 0
+    // Dauer: tatsaechliche_zeit immer verwenden wenn vorhanden (kürzer oder länger als geplant)
+    const dauer = parseInt(arbeit.tatsaechliche_zeit) > 0
       ? parseInt(arbeit.tatsaechliche_zeit)
       : (parseInt(arbeit.zeit) || 30);
     
@@ -22398,6 +22398,19 @@ class App {
         // Finde zugeordneten Lehrling für Aufgabenbewältigung
         zugeordneterLehrling = findZugeordnetenLehrling(details);
 
+        // Wenn Termin läuft/abgeschlossen und tatsaechliche_zeit gesetzt: diese verwenden
+        // (Termin hat länger/kürzer gedauert als geplant)
+        const tatsaechlich = parseInt(termin.tatsaechliche_zeit) || 0;
+        if (tatsaechlich > 0 && ['in_arbeit', 'abgeschlossen'].includes(termin.status)) {
+          let d = tatsaechlich;
+          if (nebenzeitProzent > 0) d = d * (1 + nebenzeitProzent / 100);
+          if (zugeordneterLehrling && zugeordneterLehrling.aufgabenbewaeltigung_prozent &&
+              zugeordneterLehrling.aufgabenbewaeltigung_prozent !== 100) {
+            d = d * (zugeordneterLehrling.aufgabenbewaeltigung_prozent / 100);
+          }
+          return Math.round(d);
+        }
+
         let summe = 0;
         for (const [key, value] of Object.entries(details)) {
           // Ignoriere Meta-Felder
@@ -22405,7 +22418,8 @@ class App {
           if (typeof value === 'number' && value > 0) {
             summe += value;
           } else if (typeof value === 'object' && value.zeit > 0) {
-            summe += value.zeit;
+            // Einzel-Arbeit: tatsaechliche_zeit bevorzugen wenn vorhanden
+            summe += parseInt(value.tatsaechliche_zeit) > 0 ? parseInt(value.tatsaechliche_zeit) : parseInt(value.zeit);
           }
         }
         if (summe > 0) {
