@@ -14545,6 +14545,19 @@ class App {
         } else {
           updateData.geschaetzte_zeit = dauer;
         }
+        // _dauer_override in arbeitszeiten_details speichern, damit getTerminGesamtdauer
+        // den explizit gesetzten Wert gegenüber dem Einzel-Arbeiten-Summe bevorzugt.
+        try {
+          const existingDet = termin?.arbeitszeiten_details
+            ? (typeof termin.arbeitszeiten_details === 'string'
+                ? JSON.parse(termin.arbeitszeiten_details)
+                : { ...termin.arbeitszeiten_details })
+            : {};
+          existingDet._dauer_override = dauer;
+          updateData.arbeitszeiten_details = JSON.stringify(existingDet);
+        } catch (e) {
+          updateData.arbeitszeiten_details = JSON.stringify({ _dauer_override: dauer });
+        }
       }
       if (notizen !== undefined) updateData.notizen = notizen;
       if (interneAuftragsnummer !== undefined) updateData.interne_auftragsnummer = interneAuftragsnummer;
@@ -22494,6 +22507,17 @@ class App {
               }
             }
           }
+        }
+
+        // _dauer_override: explizit gesetzter Gesamtwert (z.B. via Schnell-Bearbeitung)
+        // Hat höhere Priorität als Summe der Einzel-Arbeiten
+        if (details._dauer_override && parseInt(details._dauer_override) > 0) {
+          let d = parseInt(details._dauer_override);
+          if (zugeordneterLehrling && zugeordneterLehrling.aufgabenbewaeltigung_prozent &&
+              zugeordneterLehrling.aufgabenbewaeltigung_prozent !== 100) {
+            d = d * (zugeordneterLehrling.aufgabenbewaeltigung_prozent / 100);
+          }
+          return Math.round(d);
         }
 
         let summe = 0;

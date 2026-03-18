@@ -186,6 +186,12 @@ async function berechneEndzeitFuerTermin(termin, arbeitszeitenDetails) {
         gesamtMinuten = gesamtMinuten * (1 + nebenzeitProzent / 100);
       }
     }
+
+    // _dauer_override: explizit gesetzte Gesamtdauer überschreibt Einzel-Arbeiten-Summe
+    // (gesetzt z.B. via Schnell-Bearbeitungs-Dialog)
+    if (details && details._dauer_override && parseInt(details._dauer_override) > 0) {
+      gesamtMinuten = parseInt(details._dauer_override);
+    }
     
     // Startzeit bestimmen
     const startzeit = fruehesteStartzeit || termin.startzeit || termin.bring_zeit;
