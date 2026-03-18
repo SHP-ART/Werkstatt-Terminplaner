@@ -20943,6 +20943,10 @@ class App {
           }
       });
       
+      // Überlappungen in jeder Person-Timeline auflösen (cross-Termin Kollisionsvermeidung)
+      Object.values(mitarbeiterMap).forEach(track => this.resolveTimelineOverlaps(track));
+      Object.values(lehrlingeMap).forEach(track => this.resolveTimelineOverlaps(track));
+
       // Drop-Zone für "Nicht zugeordnet"
       this.setupDropZone(sourceContainer);
 
@@ -21001,6 +21005,28 @@ class App {
     } catch (error) {
       console.error('Fehler beim Laden der Drag & Drop Auslastung:', error);
       alert('Fehler beim Laden der Daten: ' + (error.message || 'Unbekannter Fehler'));
+    }
+  }
+
+  resolveTimelineOverlaps(track) {
+    // Alle sichtbaren Termin-Blöcke (keine Pausen) aus der Timeline holen
+    const blocks = Array.from(track.querySelectorAll('.timeline-termin, .timeline-arbeit-block'))
+      .filter(b => !b.dataset.pause && !b.dataset.locked && b.style.left !== '' && b.style.left !== 'auto');
+
+    if (blocks.length < 2) return;
+
+    // Nach Startposition (left) sortieren
+    blocks.sort((a, b) => parseFloat(a.style.left) - parseFloat(b.style.left));
+
+    let lastEndPx = 0;
+    for (const block of blocks) {
+      let leftPx = parseFloat(block.style.left);
+      const widthPx = parseFloat(block.style.width) || 0;
+      if (leftPx < lastEndPx) {
+        leftPx = lastEndPx;
+        block.style.left = `${leftPx}px`;
+      }
+      lastEndPx = leftPx + widthPx;
     }
   }
 
