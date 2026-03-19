@@ -17510,6 +17510,7 @@ class App {
     try {
       await TermineService.update(this.currentTerminId, {
         tatsaechliche_zeit: gesamtzeitMinuten,
+        geschaetzte_zeit: gesamtzeitMinuten,
         arbeitszeiten_details: JSON.stringify(arbeitszeitenDetails),
         status: status,
         mitarbeiter_id: terminMitarbeiterId,
