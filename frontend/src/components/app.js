@@ -21157,6 +21157,10 @@ class App {
       // "Jetzt"-Linie hinzufügen
       this.addTimelineNowLine(startHour, endHour);
 
+      // Live-Balken für laufende Termine (in_arbeit): Breite jede Minute aktualisieren
+      if (this.inArbeitBarInterval) clearInterval(this.inArbeitBarInterval);
+      this.inArbeitBarInterval = setInterval(() => this.updateInArbeitBars(), 60000);
+
     } catch (error) {
       console.error('Fehler beim Laden der Drag & Drop Auslastung:', error);
       alert('Fehler beim Laden der Daten: ' + (error.message || 'Unbekannter Fehler'));
@@ -24741,6 +24745,66 @@ class App {
     
     // Neu laden um Originalzustand wiederherzustellen
     this.loadAuslastungDragDrop();
+  }
+
+  // Aktualisiert Balkenbreiten für alle laufenden (in_arbeit) Termine in der DragDrop-Timeline.
+  // Wird jede Minute aufgerufen damit der Balken "mitwächst" wenn der Termin länger dauert als geplant.
+  updateInArbeitBars() {
+    const container = document.getElementById('auslastungDragDropContainer');
+    if (!container) return;
+
+    const pixelPerMinute = 100 / 60;
+    const nebenzeitProzent = this._planungNebenzeitProzent || 0;
+
+    // Einzelne / zusammengefasste Termine (createTimelineTerminWithPause → .timeline-termin)
+    container.querySelectorAll('.timeline-termin:not(.fortsetzung):not(.arbeit-block)').forEach(el => {
+      const terminId = parseInt(el.dataset.terminId);
+      const termin = this.termineById[terminId];
+      if (!termin || termin.status !== 'in_arbeit') return;
+
+      const neueDauer = this.getTerminGesamtdauer(termin);
+      const neueBreite = Math.max(neueDauer * pixelPerMinute, 40);
+      if (parseFloat(el.style.width) !== neueBreite) {
+        el.style.width = `${neueBreite}px`;
+        el.dataset.dauer = neueDauer;
+      }
+    });
+
+    // Mehrteilige Arbeitsblöcke (createArbeitBlockElement → .arbeit-block)
+    container.querySelectorAll('.timeline-termin.arbeit-block:not(.fortsetzung)').forEach(el => {
+      const terminId = parseInt(el.dataset.terminId);
+      const termin = this.termineById[terminId];
+      if (!termin || termin.status !== 'in_arbeit') return;
+
+      const liveDauerGesamt = this.getTerminGesamtdauer(termin);
+      const originalDauer = parseInt(el.dataset.originalDauer) || 0;
+      if (!originalDauer) return;
+
+      // Geplante Gesamtzeit aller Arbeiten für die Proportionsberechnung
+      let geplantGesamt = 0;
+      if (termin.arbeitszeiten_details) {
+        try {
+          const details = typeof termin.arbeitszeiten_details === 'string'
+            ? JSON.parse(termin.arbeitszeiten_details)
+            : termin.arbeitszeiten_details;
+          for (const [key, value] of Object.entries(details)) {
+            if (key.startsWith('_')) continue;
+            if (typeof value === 'number' && value > 0) geplantGesamt += value;
+            else if (typeof value === 'object' && parseInt(value.zeit) > 0) geplantGesamt += parseInt(value.zeit);
+          }
+        } catch(e) {}
+      }
+      if (!geplantGesamt) geplantGesamt = parseInt(termin.geschaetzte_zeit) || 60;
+
+      const liveDauerProArbeit = Math.max(1, Math.round(liveDauerGesamt * (originalDauer / geplantGesamt)));
+      const dauerMitNebenzeit = nebenzeitProzent > 0
+        ? Math.round(liveDauerProArbeit * (1 + nebenzeitProzent / 100))
+        : liveDauerProArbeit;
+      const neueBreite = Math.max(dauerMitNebenzeit * pixelPerMinute, 40);
+      if (parseFloat(el.style.width) !== neueBreite) {
+        el.style.width = `${neueBreite}px`;
+      }
+    });
   }
 
   addTimelineNowLine(startHour, endHour) {
