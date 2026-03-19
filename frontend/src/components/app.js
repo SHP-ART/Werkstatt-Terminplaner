@@ -17264,6 +17264,7 @@ class App {
       alert('Kein Termin ausgewählt');
       return;
     }
+    console.log(`[ARBEITSZEITEN-SAVE] Start für Termin ${this.currentTerminId}`);
 
     const liste = document.getElementById('modalArbeitszeitenListe');
     const inputs = liste.querySelectorAll('input[type="number"]');
@@ -17515,6 +17516,7 @@ class App {
         muss_bearbeitet_werden: mussBearbeitetWerden,
         interne_auftragsnummer: interneAuftragsnummer
       });
+      console.log(`[ARBEITSZEITEN-SAVE] Termin ${this.currentTerminId} gespeichert: status=${status}, tatsaechliche_zeit=${gesamtzeitMinuten}min, mitarbeiter_id=${terminMitarbeiterId}`);
 
       // Speichere Phasen wenn mehrtägig aktiviert ist
       const mehrtaegigCheckbox = document.getElementById('modalMehrtaegigCheckbox');
@@ -24234,6 +24236,10 @@ class App {
     if (this.planungAenderungen.size === 0) {
       this.showToast('Keine Änderungen zum Speichern', 'info');
       return;
+    }
+    console.log(`[PLANUNG-SAVE] Speichere ${this.planungAenderungen.size} Änderung(en)`);
+    for (const [id, a] of this.planungAenderungen) {
+      console.log(`[PLANUNG-SAVE]  Termin ${id}: mitarbeiter_id=${a.mitarbeiter_id}, lehrling_id=${a.lehrling_id}, type=${a.type}, startzeit=${a.startzeit}, datum=${a.datum || '–'}, warSchwebend=${a.warSchwebend || false}`);
     }
     
     // === Überlappungs-Prüfung vor dem Speichern ===
@@ -33131,9 +33137,11 @@ App.prototype.checkKapazitaetVorZuweisung = async function(person, datum, termin
     const prozent = maxKapazitaet > 0 ? Math.round((neueAuslastung / maxKapazitaet) * 100) : 0;
     // Toleranzpuffer: Kleine Überschreitungen (<= 15 Min) nicht als Überlastung werten
     const TOLERANZ_MINUTEN = 15;
+    const ueberlastet = neueAuslastung > maxKapazitaet + TOLERANZ_MINUTEN && maxKapazitaet > 0;
+    console.log(`[KAPAZITAET] ${person?.name || personId} (${targetType}) am ${datum}: aktuell=${aktuelleAuslastung}min + neu=${terminDauer}min = ${neueAuslastung}min / max=${maxKapazitaet}min (${prozent}%) | Toleranz=${TOLERANZ_MINUTEN}min | überlastet=${ueberlastet}`);
     
     return {
-      ueberlastet: neueAuslastung > maxKapazitaet + TOLERANZ_MINUTEN && maxKapazitaet > 0,
+      ueberlastet,
       maxKapazitaet,
       aktuelleAuslastung,
       neueAuslastung,
@@ -33158,6 +33166,7 @@ App.prototype.checkKapazitaetVorZuweisung = async function(person, datum, termin
  * Wird von showVerschiebeWarnung-Buttons genutzt (sofortige DB-Speicherung ohne lokalen Puffer).
  */
 App.prototype._assignTerminDirectToPersonInDB = async function(terminId, targetType, mitarbeiterId, lehrlingId, startzeit, datumOverride) {
+  console.log(`[ASSIGN] Termin ${terminId} → ${targetType} ${mitarbeiterId || lehrlingId} | startzeit=${startzeit} | datum=${datumOverride || '(unveraendert)'}`);
   const aktuellerTermin = await TermineService.getById(terminId);
   let details = {};
   try {
@@ -33204,7 +33213,9 @@ App.prototype._assignTerminDirectToPersonInDB = async function(terminId, targetT
   }
 
   updateData.arbeitszeiten_details = JSON.stringify(details);
+  console.log(`[ASSIGN] updateData für Termin ${terminId}:`, { mitarbeiter_id: updateData.mitarbeiter_id, lehrling_id: updateData.lehrling_id, startzeit: updateData.startzeit, datum: updateData.datum, ist_schwebend: updateData.ist_schwebend });
   await TermineService.update(terminId, updateData);
+  console.log(`[ASSIGN] Termin ${terminId} erfolgreich gespeichert`);
 };
 
 /**
