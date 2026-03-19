@@ -33136,9 +33136,11 @@ App.prototype.checkKapazitaetVorZuweisung = async function(person, datum, termin
     // 3. Neue Auslastung berechnen
     const neueAuslastung = aktuelleAuslastung + terminDauer;
     const prozent = maxKapazitaet > 0 ? Math.round((neueAuslastung / maxKapazitaet) * 100) : 0;
+    // Toleranzpuffer: Kleine Überschreitungen (<= 15 Min) nicht als Überlastung werten
+    const TOLERANZ_MINUTEN = 15;
     
     return {
-      ueberlastet: neueAuslastung > maxKapazitaet && maxKapazitaet > 0,
+      ueberlastet: neueAuslastung > maxKapazitaet + TOLERANZ_MINUTEN && maxKapazitaet > 0,
       maxKapazitaet,
       aktuelleAuslastung,
       neueAuslastung,
@@ -33175,6 +33177,10 @@ App.prototype._assignTerminDirectToPersonInDB = async function(terminId, targetT
 
   const updateData = { startzeit };
   if (datumOverride) updateData.datum = datumOverride;
+  // Schwebend-Status aufheben wenn eine Person zugeordnet wird
+  if (mitarbeiterId || lehrlingId) {
+    updateData.ist_schwebend = 0;
+  }
 
   if (targetType === 'lehrling' && lehrlingId) {
     updateData.mitarbeiter_id = null;
