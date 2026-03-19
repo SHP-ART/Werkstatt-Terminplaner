@@ -14004,6 +14004,7 @@ class App {
       statusAktionen = `
         <div class="schnell-status-frage">
           <p>⏱️ Läuft seit: <strong>${verstricheneText}</strong> (aktuell ${aktuelleZeit})</p>
+          <p>🏁 Fertigstellung ca.: <strong>${(() => { const endMin = startMinuten + dauer; return String(Math.floor(endMin/60)%24).padStart(2,'0') + ':' + String(endMin%60).padStart(2,'0'); })()}</strong> (${dauer >= 60 ? Math.floor(dauer/60) + 'h ' + (dauer%60 > 0 ? dauer%60 + 'min' : '') : dauer + ' min'} geplant)</p>
         </div>
         <div class="schnell-status-zeit-eingabe">
           <label>🏁 Tatsächliche Arbeitszeit:</label>
@@ -14069,6 +14070,10 @@ class App {
           <div class="detail-row">
             <span class="detail-label">⏱️</span>
             <span class="detail-value">Geplant: <strong>${dauerText}</strong> ab ${startzeit}</span>
+          </div>
+          <div class="detail-row">
+            <span class="detail-label">🏁</span>
+            <span class="detail-value">Fertigstellung ca.: <strong>${(() => { const endMin = startMinuten + dauer; return String(Math.floor(endMin/60)%24).padStart(2,'0') + ':' + String(endMin%60).padStart(2,'0'); })()}</strong></span>
           </div>
           <div class="detail-row">
             <span class="detail-label">📅</span>
