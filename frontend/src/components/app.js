@@ -7050,6 +7050,11 @@ class App {
             <span class="detail-label">Fertig ca.</span>
             <span class="detail-value detail-value-highlight">${endzeitFormatiert}</span>
           </div>
+          ${termin.fertigstellung_zeit ? `
+          <div class="detail-item">
+            <span class="detail-label">✅ Fertiggestellt um</span>
+            <span class="detail-value detail-value-highlight" style="color: var(--success, #4caf50); font-weight: bold;">${(() => { const d = new Date(termin.fertigstellung_zeit); return String(d.getHours()).padStart(2,'0') + ':' + String(d.getMinutes()).padStart(2,'0'); })()}</span>
+          </div>` : ''}
           <div class="detail-item">
             <span class="detail-label">Abholzeit</span>
             <div class="detail-zeit-input-row">
@@ -22616,7 +22621,20 @@ class App {
 
         // Wenn Termin läuft/abgeschlossen und tatsaechliche_zeit gesetzt: diese verwenden
         // (Termin hat länger/kürzer gedauert als geplant)
-        const tatsaechlich = parseInt(termin.tatsaechliche_zeit) || 0;
+        let tatsaechlich = parseInt(termin.tatsaechliche_zeit) || 0;
+
+        // Fallback für abgeschlossene Termine ohne tatsaechliche_zeit: fertigstellung_zeit − startzeit
+        if (!tatsaechlich && termin.status === 'abgeschlossen' && termin.fertigstellung_zeit) {
+          const startStr = details._startzeit || termin.startzeit || termin.bring_zeit;
+          if (startStr && /^\d{1,2}:\d{2}/.test(startStr)) {
+            const fertigLokal = new Date(termin.fertigstellung_zeit);
+            const fertigMin = fertigLokal.getHours() * 60 + fertigLokal.getMinutes();
+            const [sh, sm] = startStr.split(':').map(Number);
+            const diffMin = fertigMin - (sh * 60 + sm);
+            if (diffMin > 5) tatsaechlich = diffMin;
+          }
+        }
+
         if (tatsaechlich > 0 && ['in_arbeit', 'abgeschlossen'].includes(termin.status)) {
           let d = tatsaechlich;
           if (nebenzeitProzent > 0) d = d * (1 + nebenzeitProzent / 100);
@@ -22698,9 +22716,23 @@ class App {
       }
     }
 
-    // Fallback: tatsaechliche_zeit nur für laufende/abgeschlossene Termine verwenden
-    const usesTatsaechlich = (termin.tatsaechliche_zeit > 0) && ['in_arbeit', 'abgeschlossen'].includes(termin.status);
-    let dauer = usesTatsaechlich ? termin.tatsaechliche_zeit : (termin.geschaetzte_zeit || 30);
+    // Fallback: tatsaechliche_zeit für laufende/abgeschlossene; sonst fertigstellung_zeit − startzeit; sonst geschaetzte_zeit
+    let dauer = 0;
+    if (['in_arbeit', 'abgeschlossen'].includes(termin.status)) {
+      if (parseInt(termin.tatsaechliche_zeit) > 0) {
+        dauer = parseInt(termin.tatsaechliche_zeit);
+      } else if (termin.status === 'abgeschlossen' && termin.fertigstellung_zeit) {
+        const startStr = termin.startzeit || termin.bring_zeit;
+        if (startStr && /^\d{1,2}:\d{2}/.test(startStr)) {
+          const fertigLokal = new Date(termin.fertigstellung_zeit);
+          const fertigMin = fertigLokal.getHours() * 60 + fertigLokal.getMinutes();
+          const [sh, sm] = startStr.split(':').map(Number);
+          const diffMin = fertigMin - (sh * 60 + sm);
+          if (diffMin > 5) dauer = diffMin;
+        }
+      }
+    }
+    if (!dauer) dauer = termin.geschaetzte_zeit || 30;
 
     // 1. Nebenzeit-Aufschlag anwenden
     if (nebenzeitProzent > 0) {
@@ -24755,6 +24787,7 @@ class App {
 
     const pixelPerMinute = 100 / 60;
     const nebenzeitProzent = this._planungNebenzeitProzent || 0;
+    const tracksToResolve = new Set();
 
     // Einzelne / zusammengefasste Termine (createTimelineTerminWithPause → .timeline-termin)
     container.querySelectorAll('.timeline-termin:not(.fortsetzung):not(.arbeit-block)').forEach(el => {
@@ -24767,6 +24800,7 @@ class App {
       if (parseFloat(el.style.width) !== neueBreite) {
         el.style.width = `${neueBreite}px`;
         el.dataset.dauer = neueDauer;
+        tracksToResolve.add(el.parentElement);
       }
     });
 
@@ -24779,6 +24813,8 @@ class App {
       const liveDauerGesamt = this.getTerminGesamtdauer(termin);
       const originalDauer = parseInt(el.dataset.originalDauer) || 0;
       if (!originalDauer) return;
+
+      tracksToResolve.add(el.parentElement);
 
       // Geplante Gesamtzeit aller Arbeiten für die Proportionsberechnung
       let geplantGesamt = 0;
@@ -24804,6 +24840,10 @@ class App {
       if (parseFloat(el.style.width) !== neueBreite) {
         el.style.width = `${neueBreite}px`;
       }
+    });
+
+    tracksToResolve.forEach(track => {
+      if (track) this.resolveTimelineOverlaps(track);
     });
   }
 
