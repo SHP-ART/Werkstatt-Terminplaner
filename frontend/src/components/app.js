@@ -20930,10 +20930,19 @@ class App {
             }
             
             // Erstelle virtuellen Termin für diese Arbeit
-            // tatsaechliche_zeit verwenden wenn vorhanden (länger/kürzer als geplant)
-            const arbeitDauer = parseInt(arbeit.tatsaechliche_zeit) > 0
-              ? parseInt(arbeit.tatsaechliche_zeit)
-              : ((parseInt(arbeit.zeit) > 0) ? parseInt(arbeit.zeit) : zeitProArbeitOhneZeit);
+            // Dauer bestimmen: per-Arbeit tatsaechliche_zeit > proportional aus Gesamt-tatsaechliche_zeit > geplante Zeit
+            let arbeitDauer;
+            if (parseInt(arbeit.tatsaechliche_zeit) > 0) {
+              // Per-Arbeit tatsaechliche_zeit ist explizit gesetzt
+              arbeitDauer = parseInt(arbeit.tatsaechliche_zeit);
+            } else if (termin.status === 'abgeschlossen' && parseInt(termin.tatsaechliche_zeit) > 0 && gesamtArbeitZeit > 0) {
+              // Abgeschlossener Termin ohne per-Arbeit Zeitangabe:
+              // Proportionale tatsaechliche Zeit berechnen (gleiche Logik wie in Auslastungsanzeige)
+              const arbeitPlanzeit = parseInt(arbeit.zeit) > 0 ? parseInt(arbeit.zeit) : zeitProArbeitOhneZeit;
+              arbeitDauer = Math.max(1, Math.round(parseInt(termin.tatsaechliche_zeit) * (arbeitPlanzeit / gesamtArbeitZeit)));
+            } else {
+              arbeitDauer = (parseInt(arbeit.zeit) > 0) ? parseInt(arbeit.zeit) : zeitProArbeitOhneZeit;
+            }
             // Effektive Startzeit: gespeicherte individuelle Zeit, sonst sequentiell berechnet
             const effektiveArbeitStartzeit = arbeit.startzeit || laufendeArbeitsStartzeit;
             const arbeitTermin = {
@@ -22236,10 +22245,13 @@ class App {
     let startzeit = this.normalizeZeit(termin.startzeit || '08:00');
     const [startH, startM] = startzeit.split(':').map(Number);
     
-    // Dauer: tatsaechliche_zeit immer verwenden wenn vorhanden (kürzer oder länger als geplant)
-    const dauer = parseInt(arbeit.tatsaechliche_zeit) > 0
-      ? parseInt(arbeit.tatsaechliche_zeit)
-      : (parseInt(arbeit.zeit) || 30);
+    // Dauer: _arbeitDauer (vom Aufrufer vorberechnet, z.B. proportional für abgeschlossen) hat höchste Priorität,
+    // dann per-Arbeit tatsaechliche_zeit, schließlich geplante Zeit
+    const dauer = parseInt(termin._arbeitDauer) > 0
+      ? parseInt(termin._arbeitDauer)
+      : (parseInt(arbeit.tatsaechliche_zeit) > 0
+          ? parseInt(arbeit.tatsaechliche_zeit)
+          : (parseInt(arbeit.zeit) || 30));
     
     // Nebenzeit-Aufschlag
     const nebenzeitProzent = this._planungNebenzeitProzent || 0;
@@ -22385,7 +22397,8 @@ class App {
 
   createArbeitBlockFortsetzung(termin, arbeit, startzeitStr, startHour, endHour, pauseStart, type) {
     // Prüfe ob Pause-Überschneidung vorliegt
-    const dauer = arbeit.zeit || 0;
+    // _arbeitDauer (vorberechnet, z.B. proportional) hat Priorität über arbeit.zeit
+    const dauer = (parseInt(termin._arbeitDauer) > 0 ? parseInt(termin._arbeitDauer) : null) || arbeit.zeit || 0;
     const nebenzeitProzent = this._planungNebenzeitProzent || 0;
     const dauerMitNebenzeit = nebenzeitProzent > 0 
       ? Math.round(dauer * (1 + nebenzeitProzent / 100)) 
