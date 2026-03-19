@@ -23205,35 +23205,47 @@ class App {
               this.showToast('❌ Termin nicht gefunden (ID: ' + terminId + ')', 'error');
               return;
             }
-            
-            const kapazitaetWarnung = await this.checkKapazitaetVorZuweisung(
-              person, 
-              selectedDatum, 
-              dauer, 
-              targetType,
-              parseInt(mitarbeiterId || lehrlingId)
-            );
-            console.log('[DROP] kapazitaetWarnung:', kapazitaetWarnung?.ueberlastet, '| aktuelle:', kapazitaetWarnung?.aktuelleAuslastung, '| max:', kapazitaetWarnung?.maxKapazitaet);
-            
-            if (kapazitaetWarnung.ueberlastet) {
-              console.log('[DROP] Überlastet → showVerschiebeWarnung wird aufgerufen...');
-              // Zeige Warnung mit Optionen
-              await this.showVerschiebeWarnung(
-                person,
-                terminDaten,
-                kapazitaetWarnung,
-                selectedDatum,
-                mitarbeiterId,
-                lehrlingId,
-                targetType,
-                newStartzeit
-              );
-            } else {
-              console.log('[DROP] Nicht überlastet → direkt zuweisen');
-              // Keine Überlastung - direkt zuweisen
+
+            // Prüfe ob der Termin bereits diesem Mitarbeiter gehört (nur Repositionierung).
+            // In diesem Fall zählt belegt_minuten_roh die Dauer schon → Kapazitätscheck würde
+            // die Zeit doppelt zählen und fälschlicherweise eine Überlastung melden.
+            const zielPersonId = parseInt(mitarbeiterId || lehrlingId);
+            const bereitsZugewiesen = targetType === 'lehrling'
+              ? terminDaten.lehrling_id === zielPersonId
+              : terminDaten.mitarbeiter_id === zielPersonId;
+
+            if (bereitsZugewiesen) {
+              // Nur Zeitslot ändern – kein Kapazitätscheck nötig
+              console.log('[DROP] Bereits zugewiesen → direkt repositionieren (kein Kapazitätscheck)');
               await this.moveTerminToMitarbeiterWithTime(terminId, mitarbeiterId, lehrlingId, targetType, newStartzeit);
-              // Feierabend-Check: läuft der Termin über 17:00 hinaus?
               await this._checkFeierabendUeberlauf(terminId, terminDaten, newStartzeit, selectedDatum);
+            } else {
+              const kapazitaetWarnung = await this.checkKapazitaetVorZuweisung(
+                person, 
+                selectedDatum, 
+                dauer, 
+                targetType,
+                zielPersonId
+              );
+              console.log('[DROP] kapazitaetWarnung:', kapazitaetWarnung?.ueberlastet, '| aktuelle:', kapazitaetWarnung?.aktuelleAuslastung, '| max:', kapazitaetWarnung?.maxKapazitaet);
+
+              if (kapazitaetWarnung.ueberlastet) {
+                console.log('[DROP] Überlastet → showVerschiebeWarnung wird aufgerufen...');
+                await this.showVerschiebeWarnung(
+                  person,
+                  terminDaten,
+                  kapazitaetWarnung,
+                  selectedDatum,
+                  mitarbeiterId,
+                  lehrlingId,
+                  targetType,
+                  newStartzeit
+                );
+              } else {
+                console.log('[DROP] Nicht überlastet → direkt zuweisen');
+                await this.moveTerminToMitarbeiterWithTime(terminId, mitarbeiterId, lehrlingId, targetType, newStartzeit);
+                await this._checkFeierabendUeberlauf(terminId, terminDaten, newStartzeit, selectedDatum);
+              }
             }
           } catch (error) {
             console.error('[DROP] Fehler beim Zuweisen:', error);
@@ -33356,7 +33368,9 @@ App.prototype.showVerschiebeWarnung = async function(person, termin, kapazitaetW
     document.getElementById('verschiebeOptionTrotzdem')?.addEventListener('click', async () => {
       cleanup();
       try {
-        await this._assignTerminDirectToPersonInDB(termin.id, targetType, mitarbeiterId, lehrlingId, startzeit);
+        // datum (selectedDatum) als datumOverride übergeben damit schwebende/verschobene
+        // Termine auch auf das korrekte Ziel-Datum gesetzt werden.
+        await this._assignTerminDirectToPersonInDB(termin.id, targetType, mitarbeiterId, lehrlingId, startzeit, datum);
         this.showToast('⚠️ Termin trotz Überlastung zugewiesen!', 'warning');
         this.loadAuslastungDragDrop();
       } catch (err) {
