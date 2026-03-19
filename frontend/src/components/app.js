@@ -19697,6 +19697,58 @@ class App {
       }
 
       // Rendere die Zeitleiste mit Abwesenheitsinformation
+      // Vortags-Überträge: nicht-abgeschlossene, nicht-zugeordnete Termine vom Vortag
+      const [vy, vm, vd] = datum.split('-').map(Number);
+      const vortagDate = new Date(vy, vm - 1, vd - 1);
+      const vortagDatum = `${vortagDate.getFullYear()}-${String(vortagDate.getMonth()+1).padStart(2,'0')}-${String(vortagDate.getDate()).padStart(2,'0')}`;
+      const termineVortag = await TermineService.getAll(vortagDatum);
+      for (const termin of termineVortag) {
+        this.termineById[termin.id] = termin;
+      }
+      const istNichtZugeordnet = (t) => {
+        if (t.status === 'abgeschlossen') return false;
+        const schwebend = t.ist_schwebend === 1 || t.ist_schwebend === true;
+        if (schwebend) return true;
+        if (t.mitarbeiter_id) return false;
+        if (t.arbeitszeiten_details) {
+          try {
+            const d = typeof t.arbeitszeiten_details === 'string' ? JSON.parse(t.arbeitszeiten_details) : t.arbeitszeiten_details;
+            if (d._gesamt_mitarbeiter_id) return false;
+            for (const k in d) { if (!k.startsWith('_') && typeof d[k] === 'object' && d[k].mitarbeiter_id) return false; }
+          } catch(e) {}
+        }
+        return true;
+      };
+      const uebertraege = termineVortag.filter(istNichtZugeordnet);
+      for (const termin of uebertraege) {
+        // Als einfachen "Übertrag"-Block in ohneZuordnung eintragen
+        const arbeitenListe = this.parseArbeiten(termin.arbeit || '') || [termin.kennzeichen || '?'];
+        const zeitMin = termin.tatsaechliche_zeit || termin.geschaetzte_zeit || 60;
+        const vortagLabel = vortagDate.toLocaleDateString('de-DE', { weekday: 'short', day: '2-digit', month: '2-digit' });
+        ohneZuordnung.push({
+          terminId: termin.id,
+          terminNr: termin.termin_nr,
+          kunde: termin.kunde_name,
+          kennzeichen: termin.kennzeichen,
+          arbeit: `📅 ${vortagLabel}: ${arbeitenListe.join(', ')}`,
+          arbeitenListe,
+          zeitMinuten: zeitMin,
+          anzeigeZeitMinuten: zeitMin,
+          bringZeit: termin.bring_zeit || null,
+          abholungZeit: termin.abholung_zeit || null,
+          status: termin.status || 'geplant',
+          istSchwebend: termin.ist_schwebend === 1 || termin.ist_schwebend === true,
+          istErweiterung: termin.ist_erweiterung === 1 || termin.ist_erweiterung === true,
+          erweiterungAnzahl: 0,
+          erweiterungVonId: termin.erweiterung_von_id || null,
+          zuordnungsTyp: null,
+          mitarbeiterId: null,
+          lehrlingId: null,
+          istNacharbeit: false,
+          nacharbeitStartZeit: null
+        });
+      }
+
       this.renderZeitleiste(body, arbeitenMap, ohneZuordnung, mitarbeiter, lehrlinge, mittagspauseDauer, abwesendeMitarbeiter, abwesendeLehrlinge, datum);
 
     } catch (error) {
