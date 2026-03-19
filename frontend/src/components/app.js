@@ -20971,10 +20971,12 @@ class App {
               }
             } else {
               console.warn(`[DEBUG] ${termin.termin_nr} - Arbeit "${arbeit.name}" NICHT zugeordnet, Zuordnung:`, arbeitZuordnung);
-              // Nicht zugeordnet - als Mini-Card anzeigen
-              const card = this.createArbeitMiniCard(termin, arbeit, index);
-              card.dataset.dauer = arbeit.zeit; // Setze Dauer für Drag & Drop
-              sourceContainer.appendChild(card);
+              // Nicht zugeordnet - als Mini-Card anzeigen (nur wenn nicht abgeschlossen)
+              if (termin.status !== 'abgeschlossen' && termin.status !== 'storniert') {
+                const card = this.createArbeitMiniCard(termin, arbeit, index);
+                card.dataset.dauer = arbeit.zeit; // Setze Dauer für Drag & Drop
+                sourceContainer.appendChild(card);
+              }
             }
           });
           return; // Termin ist abgearbeitet, nächster Termin
@@ -21069,7 +21071,7 @@ class App {
             console.log('[DEBUG] - lehrlingeMap  Keys:', Object.keys(lehrlingeMap).join(', ') || '(leer)', '→ gesuchter Key', lehrlingId, ':', !!lehrlingeMap[lehrlingId]);
             // Nicht zugeordnet - als Mini-Card in der Timeline-Dropzone anzeigen
             // (Schwebende Termine erscheinen im linken Panel, nicht-zugeordnete hier)
-            if (!termin._istSchwebend) {
+            if (!termin._istSchwebend && termin.status !== 'abgeschlossen' && termin.status !== 'storniert') {
               const card = this.createTerminMiniCard(termin);
               sourceContainer.appendChild(card);
             }
