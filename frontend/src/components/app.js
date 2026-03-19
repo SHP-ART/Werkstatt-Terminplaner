@@ -21009,6 +21009,11 @@ class App {
             if (details._startzeit) {
               effektiveStartzeit = details._startzeit;
             }
+            // Tatsächliche Startzeit vom Tablet (startzeit-Feld) überschreibt geplante _startzeit
+            // wenn der Termin bereits gestartet wurde (in_arbeit oder abgeschlossen)
+            if (termin.startzeit && (termin.status === 'in_arbeit' || termin.status === 'abgeschlossen')) {
+              effektiveStartzeit = termin.startzeit;
+            }
             
             // Priorität 2: Erste Arbeit mit eigener Zuordnung
             if (!zuordnungsTyp && arbeiten.length === 1) {

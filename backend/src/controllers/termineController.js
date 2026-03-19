@@ -865,12 +865,27 @@ class TermineController {
         }
       }
 
+      // Wenn Termin auf in_arbeit gesetzt wird und tatsächliche Startzeit übergeben:
+      // arbeitszeiten_details._startzeit synchronisieren (einzige Quelle für Balkenposition)
+      if (neuerStatus === 'in_arbeit' && updateData.startzeit && updateData.arbeitszeiten_details === undefined) {
+        try {
+          const existingDetails = termin.arbeitszeiten_details
+            ? (typeof termin.arbeitszeiten_details === 'string' ? JSON.parse(termin.arbeitszeiten_details) : termin.arbeitszeiten_details)
+            : {};
+          existingDetails._startzeit = updateData.startzeit;
+          updateData.arbeitszeiten_details = JSON.stringify(existingDetails);
+          console.log(`[StartSync] Termin ${termin.id}: _startzeit in arbeitszeiten_details auf ${updateData.startzeit} gesetzt`);
+        } catch (e) {
+          console.warn(`[StartSync] Fehler beim Synchronisieren von _startzeit für Termin ${termin.id}:`, e.message);
+        }
+      }
+
       // Wenn arbeitszeiten_details geändert wird, berechne Endzeit neu
       if (updateData.arbeitszeiten_details !== undefined) {
         const terminMitUpdate = { ...termin, ...updateData };
         const { startzeit, endzeit } = await berechneEndzeitFuerTermin(terminMitUpdate, updateData.arbeitszeiten_details);
-        // Nur überschreiben wenn tatsächlich berechnet wurde
-        if (startzeit) updateData.startzeit = startzeit;
+        // Nur überschreiben wenn tatsächlich berechnet wurde – ABER nicht die vom Tablet gesetzte Startzeit überschreiben
+        if (startzeit && neuerStatus !== 'in_arbeit') updateData.startzeit = startzeit;
         if (endzeit) updateData.endzeit_berechnet = endzeit;
       } else if (updateData.startzeit !== undefined || updateData.bring_zeit !== undefined || updateData.geschaetzte_zeit !== undefined) {
         // Auch bei Änderung von startzeit/bring_zeit/geschaetzte_zeit Endzeit neu berechnen
