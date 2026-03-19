@@ -14392,7 +14392,20 @@ class App {
     const abholDatum = termin.abhol_datum || termin.datum || '';
     
     // Fertigstellungszeit berechnen (Startzeit + Dauer)
-    let fertigstellungszeit = termin.fertigstellung_zeit || termin.geplante_fertigstellung || '';
+    let fertigstellungszeit = '';
+    const _fzRaw = termin.fertigstellung_zeit || termin.geplante_fertigstellung;
+    if (_fzRaw) {
+      // ISO-Datetime → HH:MM konvertieren (für <input type="time">)
+      if (_fzRaw.includes('T') || _fzRaw.includes('Z') || _fzRaw.length > 5) {
+        try {
+          const _d = new Date(_fzRaw);
+          if (!isNaN(_d)) fertigstellungszeit = String(_d.getHours()).padStart(2,'0') + ':' + String(_d.getMinutes()).padStart(2,'0');
+          else fertigstellungszeit = _fzRaw;
+        } catch(e) { fertigstellungszeit = _fzRaw; }
+      } else {
+        fertigstellungszeit = _fzRaw; // bereits HH:MM
+      }
+    }
     if (!fertigstellungszeit) {
       // Berechne aus Startzeit + Dauer
       const startzeit = termin.startzeit || termin.bring_zeit || '08:00';
@@ -14546,7 +14559,18 @@ class App {
       if (abholDatum) updateData.abhol_datum = abholDatum;
       if (abholZeit) updateData.abholung_zeit = abholZeit;
       if (startzeit) updateData.startzeit = startzeit;
-      if (fertigstellung) updateData.fertigstellung_zeit = fertigstellung;
+      if (fertigstellung) {
+        // HH:MM → ISO-Datetime rekonstruieren für DB-Konsistenz
+        const _datumStr = abholDatum || termin.abhol_datum || termin.datum;
+        if (_datumStr) {
+          try {
+            const _iso = new Date(`${_datumStr}T${fertigstellung}:00`);
+            updateData.fertigstellung_zeit = isNaN(_iso) ? fertigstellung : _iso.toISOString();
+          } catch(e) { updateData.fertigstellung_zeit = fertigstellung; }
+        } else {
+          updateData.fertigstellung_zeit = fertigstellung;
+        }
+      }
       if (dauer) {
         // Bei "in_arbeit" oder "abgeschlossen" -> tatsaechliche_zeit für Balkenlänge
         // Sonst -> geschaetzte_zeit
