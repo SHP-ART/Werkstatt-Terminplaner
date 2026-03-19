@@ -830,17 +830,18 @@ class TermineController {
       // berechne automatisch aus aktueller Uhrzeit - Startzeit
       // ABER nur wenn: Termin heute ist UND aktuelle Zeit nach Startzeit liegt
       const neuerStatus = status || updateData.status;
+      const effektiveStartzeit = termin.startzeit || termin.bring_zeit; // tatsächliche Startzeit bevorzugen
       if (neuerStatus === 'abgeschlossen' && 
           termin.status !== 'abgeschlossen' && // War vorher nicht abgeschlossen
           !tatsaechliche_zeit && // Keine tatsächliche Zeit übergeben
-          termin.bring_zeit) {
+          effektiveStartzeit) {
         
         const jetzt = new Date();
         const heute = jetzt.toISOString().split('T')[0]; // YYYY-MM-DD
         
         // Nur automatisch berechnen wenn der Termin HEUTE ist
         if (termin.datum === heute) {
-          const [startH, startM] = termin.bring_zeit.split(':').map(Number);
+          const [startH, startM] = effektiveStartzeit.split(':').map(Number);
           const startMinuten = startH * 60 + startM;
           const jetztMinuten = jetzt.getHours() * 60 + jetzt.getMinutes();
           
@@ -854,7 +855,7 @@ class TermineController {
               console.log(`[Auto-Zeit] Termin ${termin.id}: Berechnete Zeit (${berechneteZeit} Min) zu hoch, keine automatische Berechnung`);
             } else {
               updateData.tatsaechliche_zeit = berechneteZeit;
-              console.log(`[Auto-Zeit] Termin ${termin.id}: Automatisch berechnete Zeit = ${berechneteZeit} Min (Start: ${termin.bring_zeit}, Jetzt: ${jetzt.getHours()}:${String(jetzt.getMinutes()).padStart(2, '0')})`);
+              console.log(`[Auto-Zeit] Termin ${termin.id}: Automatisch berechnete Zeit = ${berechneteZeit} Min (Start: ${effektiveStartzeit}${termin.startzeit && termin.startzeit !== termin.bring_zeit ? ' [tatsächlich]' : ' [geplant]'}, Jetzt: ${jetzt.getHours()}:${String(jetzt.getMinutes()).padStart(2, '0')})`);
             }
           } else {
             console.log(`[Auto-Zeit] Termin ${termin.id}: Keine automatische Berechnung - aktuelle Zeit (${jetztMinuten} Min) liegt vor Startzeit (${startMinuten} Min)`);
