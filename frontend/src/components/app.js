@@ -14080,6 +14080,26 @@ class App {
             <span class="detail-label">🏁</span>
             <span class="detail-value">Fertigstellung ca.: <strong>${(() => { const endMin = startMinuten + dauer; return String(Math.floor(endMin/60)%24).padStart(2,'0') + ':' + String(endMin%60).padStart(2,'0'); })()}</strong></span>
           </div>
+          ${(() => {
+            // Tatsächliche gestempelte Startzeit aus arbeitszeiten_details._startzeit
+            let tatsStart = null;
+            try {
+              const det = typeof termin.arbeitszeiten_details === 'string'
+                ? JSON.parse(termin.arbeitszeiten_details)
+                : termin.arbeitszeiten_details;
+              if (det && det._startzeit) tatsStart = det._startzeit;
+            } catch(e) {}
+            if (!tatsStart && termin.startzeit) tatsStart = termin.startzeit;
+            const startRow = tatsStart ? `<div class="detail-row"><span class="detail-label">🕐</span><span class="detail-value">Gestartet: <strong style="color:#2563eb;">${tatsStart}</strong></span></div>` : '';
+            // Tatsächliche Fertigstellungszeit
+            let fertigRow = '';
+            if (termin.fertigstellung_zeit) {
+              const fd = new Date(termin.fertigstellung_zeit);
+              const fStr = String(fd.getHours()).padStart(2,'0') + ':' + String(fd.getMinutes()).padStart(2,'0');
+              fertigRow = `<div class="detail-row"><span class="detail-label" style="color:#16a34a;">✅</span><span class="detail-value">Fertiggestellt: <strong style="color:#16a34a;">${fStr}</strong></span></div>`;
+            }
+            return startRow + fertigRow;
+          })()}
           <div class="detail-row">
             <span class="detail-label">📅</span>
             <span class="detail-value">Abholung: <strong>${abholzeitText}</strong> (${abholDatumText})</span>
