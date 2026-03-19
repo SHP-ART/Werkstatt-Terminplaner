@@ -20435,9 +20435,9 @@ class App {
         if (t.ist_schwebend) return false; // Schwebende bereits oben erfasst
         // Nur bis einschließlich morgen anzeigen (nicht übermorgen und weiter)
         if (t.datum > naechsterTagStr) return false;
-        // Termin vom Vortag/früheren Tag: nur wenn Abholdatum >= gewählter Tag
+        // Termin vom Vortag/früheren Tag: ausblenden nur wenn Abholdatum explizit gesetzt UND vergangen
         if (t.datum < datum) {
-          if (!t.abholung_datum || t.abholung_datum < datum) return false;
+          if (t.abholung_datum && t.abholung_datum < datum) return false;
         }
         if (t.status === 'abgeschlossen' || t.status === 'storniert') return false;
         if (t.geloescht_am) return false;
