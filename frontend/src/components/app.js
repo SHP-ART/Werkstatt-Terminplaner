@@ -20912,16 +20912,9 @@ class App {
         console.log('[DEBUG] - Parsed details:', details);
           
           if (details) {
-            // Priorität 1: _gesamt_mitarbeiter_id
-            // ABER: Nur verwenden wenn KEINE individuellen Zuordnungen in Arbeiten existieren
-            // (Gesamtzeit-Modus mit Lehrling sollte nicht automatisch zugeordnet werden)
-            const hatIndividuelleArbeitsZuordnungen = Object.keys(details).some(key => {
-              if (key.startsWith('_')) return false;
-              const val = details[key];
-              return typeof val === 'object' && (val.mitarbeiter_id || val.lehrling_id);
-            });
-            
-            if (details._gesamt_mitarbeiter_id && !hatIndividuelleArbeitsZuordnungen) {
+            // Priorität 1: _gesamt_mitarbeiter_id – gilt immer als primäre Zuordnung,
+            // unabhängig davon ob einzelne Arbeiten eigene mitarbeiter_id/lehrling_id haben.
+            if (details._gesamt_mitarbeiter_id) {
               zuordnungsTyp = details._gesamt_mitarbeiter_id.type;
               if (zuordnungsTyp === 'mitarbeiter') {
                 mitarbeiterId = details._gesamt_mitarbeiter_id.id;
