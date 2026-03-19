@@ -31187,7 +31187,8 @@ class App {
     // Termin-Blöcke positionieren (nur Termine MIT Uhrzeit)
     mitZeit.forEach(termin => {
       const startzeit = termin.bring_zeit || termin.startzeit || termin.abholung_zeit || '08:00';
-      const dauer = termin.geschaetzte_zeit || 60;
+      const istAbgeschlossen = termin.status === 'abgeschlossen' && termin.tatsaechliche_zeit > 0;
+      const dauer = istAbgeschlossen ? termin.tatsaechliche_zeit : (termin.geschaetzte_zeit || 60);
       const [sh, sm] = startzeit.split(':').map(Number);
       if (isNaN(sh)) return;
       const topOffset = (sh - startStunde + sm / 60) * slotHoehe;
@@ -31203,7 +31204,7 @@ class App {
       
       const arbeiten = (termin.arbeit || '').split('\n').filter(Boolean);
       block.innerHTML = `
-        <div class="termin-block-zeit">${startzeit} (${dauer} Min.)</div>
+        <div class="termin-block-zeit">${startzeit} (${dauer} Min.${istAbgeschlossen ? ' ✓' : ''})</div>
         <div class="termin-block-titel">${termin.kunde_name || 'Unbekannt'} · ${termin.kennzeichen || ''}</div>
         <div class="termin-block-arbeit">${arbeiten[0] || ''}${arbeiten.length > 1 ? ` +${arbeiten.length - 1}` : ''}</div>
       `;
@@ -31476,7 +31477,7 @@ class App {
     // Termin-Blöcke (nur mit Uhrzeit)
     mitZeit.forEach(t => {
       const startzeit = t.bring_zeit || t.startzeit || t.abholung_zeit || '08:00';
-      const dauer = t.geschaetzte_zeit || 60;
+      const dauer = (t.status === 'abgeschlossen' && t.tatsaechliche_zeit > 0) ? t.tatsaechliche_zeit : (t.geschaetzte_zeit || 60);
       const [sh, sm] = startzeit.split(':').map(Number);
       if (isNaN(sh)) return;
       const top = (sh - startStunde + (sm || 0) / 60) * slotHoehe;
