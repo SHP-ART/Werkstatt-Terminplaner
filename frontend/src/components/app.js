@@ -19574,7 +19574,7 @@ class App {
                 arbeitenMap.set(key, { typ: 'mitarbeiter', id: entry.mitarbeiterId, arbeiten: [] });
               }
               arbeitenMap.get(key).arbeiten.push(entry);
-            } else {
+            } else if (entry.status !== 'abgeschlossen' && entry.status !== 'storniert') {
               ohneZuordnung.push(entry);
             }
           }
@@ -19756,7 +19756,7 @@ class App {
               arbeitenMap.set(key, { typ: 'mitarbeiter', id: terminEntry.mitarbeiterId, arbeiten: [] });
             }
             arbeitenMap.get(key).arbeiten.push(terminEntry);
-          } else {
+          } else if (terminEntry.status !== 'abgeschlossen' && terminEntry.status !== 'storniert') {
             ohneZuordnung.push(terminEntry);
           }
         }
