@@ -19238,6 +19238,22 @@ class App {
           } catch (e) {}
         }
 
+        // Effektive tatsächliche Zeit: gespeicherter Wert oder Fallback aus fertigstellung_zeit - startzeit
+        // (wenn tatsaechliche_zeit nicht gesetzt, aber Termin abgeschlossen und fertigstellung_zeit vorhanden)
+        let effectiveTatsaechlicheZeit = termin.tatsaechliche_zeit || 0;
+        if (!effectiveTatsaechlicheZeit && termin.status === 'abgeschlossen' && termin.fertigstellung_zeit) {
+          const startStr = termin.startzeit || termin.bring_zeit;
+          if (startStr) {
+            const fertigLokal = new Date(termin.fertigstellung_zeit);
+            const fertigMin = fertigLokal.getHours() * 60 + fertigLokal.getMinutes();
+            const [sh, sm] = startStr.split(':').map(Number);
+            const diffMin = fertigMin - (sh * 60 + sm);
+            if (diffMin > 5 && diffMin < (termin.geschaetzte_zeit || 60) * 3) {
+              effectiveTatsaechlicheZeit = diffMin;
+            }
+          }
+        }
+
         // Schwebende Termine immer in "Nicht zugeordnet" anzeigen
         const istSchwebend = termin.ist_schwebend === 1 || termin.ist_schwebend === true;
 
@@ -19363,14 +19379,14 @@ class App {
             
             // Feature 10: Bei abgeschlossenen Terminen die ANGEZEIGTE Zeit auf tatsächliche Zeit kürzen
             let anzeigeZeitMinuten = zeitMinuten;
-            if (termin.status === 'abgeschlossen' && termin.tatsaechliche_zeit && termin.tatsaechliche_zeit > 0) {
+            if (termin.status === 'abgeschlossen' && effectiveTatsaechlicheZeit > 0) {
               if (arbeitenListe.length > 1) {
                 // Korrekte Anteilsberechnung: Summe aus arbeitszeiten_details als Nenner verwenden,
                 // nicht das ggf. veraltete termin.geschaetzte_zeit
                 const anteil = zeitMinuten / gesamtZeitFuerAnteil;
-                anzeigeZeitMinuten = Math.round(termin.tatsaechliche_zeit * anteil);
+                anzeigeZeitMinuten = Math.round(effectiveTatsaechlicheZeit * anteil);
               } else {
-                anzeigeZeitMinuten = termin.tatsaechliche_zeit;
+                anzeigeZeitMinuten = effectiveTatsaechlicheZeit;
               }
             }
             
@@ -19454,9 +19470,9 @@ class App {
             // Nacharbeit: bei der ersten Arbeit Startzeit + Dauer überschreiben
             if (i === 0 && terminEntry.istNacharbeit && terminEntry.nacharbeitStartZeit) {
               terminEntry.startzeit = terminEntry.nacharbeitStartZeit;
-              if (termin.status === 'abgeschlossen' && termin.tatsaechliche_zeit) {
+              if (termin.status === 'abgeschlossen' && effectiveTatsaechlicheZeit > 0) {
                 terminEntry.anzeigeZeitMinuten = Math.round(
-                  termin.tatsaechliche_zeit * (zeitMinuten / (termin.geschaetzte_zeit || zeitMinuten))
+                  effectiveTatsaechlicheZeit * (zeitMinuten / (termin.geschaetzte_zeit || zeitMinuten))
                 );
               } else {
                 const jetztNa2 = new Date();
@@ -19593,14 +19609,14 @@ class App {
             const duerOverride = parseInt(details._dauer_override) || 0;
             const verwendeteGesamt = duerOverride > 0
               ? duerOverride
-              : (termin.tatsaechliche_zeit > 0 ? termin.tatsaechliche_zeit : (termin.geschaetzte_zeit || gesamtZeitMinuten));
+              : (effectiveTatsaechlicheZeit > 0 ? effectiveTatsaechlicheZeit : (termin.geschaetzte_zeit || gesamtZeitMinuten));
             gesamtZeitMinuten = verwendeteGesamt;
             gesamtAnzeigeZeitMinuten = verwendeteGesamt;
           }
 
           // Abgeschlossene Termine: tatsächliche Zeit hat höchste Priorität
-          if (termin.status === 'abgeschlossen' && termin.tatsaechliche_zeit && termin.tatsaechliche_zeit > 0) {
-            gesamtAnzeigeZeitMinuten = termin.tatsaechliche_zeit;
+          if (termin.status === 'abgeschlossen' && effectiveTatsaechlicheZeit > 0) {
+            gesamtAnzeigeZeitMinuten = effectiveTatsaechlicheZeit;
           }
           
           // Bestimme die endzeit_berechnet
@@ -19650,8 +19666,8 @@ class App {
           // Nacharbeit: Startzeit und angezeigte Dauer überschreiben
           if (terminEntry.istNacharbeit && terminEntry.nacharbeitStartZeit) {
             terminEntry.startzeit = terminEntry.nacharbeitStartZeit;
-            if (termin.status === 'abgeschlossen' && termin.tatsaechliche_zeit) {
-              terminEntry.anzeigeZeitMinuten = termin.tatsaechliche_zeit;
+            if (termin.status === 'abgeschlossen' && effectiveTatsaechlicheZeit > 0) {
+              terminEntry.anzeigeZeitMinuten = effectiveTatsaechlicheZeit;
             } else {
               // Noch laufend: Balken bis "jetzt" (nur für heute sinnvoll)
               const jetztNa = new Date();
