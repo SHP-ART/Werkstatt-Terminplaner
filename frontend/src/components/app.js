@@ -19238,9 +19238,20 @@ class App {
           } catch (e) {}
         }
 
-        // Effektive tatsächliche Zeit: gespeicherter Wert oder Fallback aus fertigstellung_zeit - startzeit
-        // (wenn tatsaechliche_zeit nicht gesetzt, aber Termin abgeschlossen und fertigstellung_zeit vorhanden)
-        let effectiveTatsaechlicheZeit = termin.tatsaechliche_zeit || 0;
+        // Effektive tatsächliche Zeit: nur für laufende/abgeschlossene Termine, nie für geplante
+        let effectiveTatsaechlicheZeit = (['in_arbeit', 'abgeschlossen'].includes(termin.status)) ? (termin.tatsaechliche_zeit || 0) : 0;
+        if (!effectiveTatsaechlicheZeit && termin.status === 'abgeschlossen' && termin.fertigstellung_zeit) {
+          const startStr = termin.startzeit || termin.bring_zeit;
+          if (startStr) {
+            const fertigLokal = new Date(termin.fertigstellung_zeit);
+            const fertigMin = fertigLokal.getHours() * 60 + fertigLokal.getMinutes();
+            const [sh, sm] = startStr.split(':').map(Number);
+            const diffMin = fertigMin - (sh * 60 + sm);
+            if (diffMin > 5 && diffMin < (termin.geschaetzte_zeit || 60) * 3) {
+              effectiveTatsaechlicheZeit = diffMin;
+            }
+          }
+        }
         if (!effectiveTatsaechlicheZeit && termin.status === 'abgeschlossen' && termin.fertigstellung_zeit) {
           const startStr = termin.startzeit || termin.bring_zeit;
           if (startStr) {
@@ -22657,8 +22668,9 @@ class App {
       }
     }
 
-    // Fallback: tatsaechliche_zeit oder geschaetzte_zeit
-    let dauer = termin.tatsaechliche_zeit || termin.geschaetzte_zeit || 30;
+    // Fallback: tatsaechliche_zeit nur für laufende/abgeschlossene Termine verwenden
+    const usesTatsaechlich = (termin.tatsaechliche_zeit > 0) && ['in_arbeit', 'abgeschlossen'].includes(termin.status);
+    let dauer = usesTatsaechlich ? termin.tatsaechliche_zeit : (termin.geschaetzte_zeit || 30);
 
     // 1. Nebenzeit-Aufschlag anwenden
     if (nebenzeitProzent > 0) {
