@@ -10878,6 +10878,8 @@ class App {
     
     termine.forEach(termin => {
       if (!termin.bring_zeit) return;
+      // Bereits laufende, abgeschlossene oder stornierte Termine nicht als "Nächster Kunde" zeigen
+      if (termin.status === 'in_arbeit' || termin.status === 'abgeschlossen' || termin.status === 'storniert') return;
       
       const [stunden, minuten] = termin.bring_zeit.split(':').map(Number);
       const terminZeitMinuten = stunden * 60 + minuten;
