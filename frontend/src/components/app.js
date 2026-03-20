@@ -21461,11 +21461,35 @@ class App {
       
       if (terminId) {
         try {
+          // Personenzuweisung aus arbeitszeiten_details entfernen (nur Planzeiten behalten)
+          let saubereDetails = null;
+          const aktuellerTermin = this.alleTermine?.find(t => t.id == terminId);
+          if (aktuellerTermin?.arbeitszeiten_details) {
+            try {
+              const det = typeof aktuellerTermin.arbeitszeiten_details === 'string'
+                ? JSON.parse(aktuellerTermin.arbeitszeiten_details)
+                : { ...aktuellerTermin.arbeitszeiten_details };
+              delete det._gesamt_mitarbeiter_id;
+              delete det._startzeit;
+              for (const key of Object.keys(det)) {
+                if (det[key] && typeof det[key] === 'object' && ('mitarbeiter_id' in det[key] || 'type' in det[key])) {
+                  const entry = { ...det[key] };
+                  delete entry.mitarbeiter_id;
+                  delete entry.type;
+                  delete entry.startzeit;
+                  det[key] = entry;
+                }
+              }
+              saubereDetails = JSON.stringify(det);
+            } catch {}
+          }
+
           // Termin als schwebend markieren und Mitarbeiter-Zuweisung entfernen
           await TermineService.update(terminId, { 
             ist_schwebend: 1, 
             mitarbeiter_id: null,
-            startzeit: null
+            startzeit: null,
+            arbeitszeiten_details: saubereDetails
           });
           
           this.showToast('📋 Termin in "Nicht zugeordnet" verschoben', 'success');
