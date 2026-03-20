@@ -28413,11 +28413,15 @@ class App {
       this.isTerminFuerPerson(t, personId, isLehrling)
     );
 
-    // Sortiere nach Zeit
+    // Sortiere nach Zeit: Termine mit expliziter startzeit (durch Planung gesetzt) kommen
+    // vor Terminen die nur eine bring_zeit haben, damit Planungsreihenfolge korrekt angezeigt wird.
     personTermine.sort((a, b) => {
-      const zeitA = a.startzeit || a.bring_zeit || '23:59';
-      const zeitB = b.startzeit || b.bring_zeit || '23:59';
-      return zeitA.localeCompare(zeitB);
+      const hasStartA = !!(a.startzeit);
+      const hasStartB = !!(b.startzeit);
+      if (hasStartA && hasStartB) return a.startzeit.localeCompare(b.startzeit);
+      if (hasStartA) return -1;
+      if (hasStartB) return 1;
+      return (a.bring_zeit || '23:59').localeCompare(b.bring_zeit || '23:59');
     });
 
     // Aktuelle Uhrzeit für Zeitvergleiche

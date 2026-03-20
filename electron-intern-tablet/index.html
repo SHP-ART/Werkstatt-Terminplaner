@@ -1865,10 +1865,15 @@
       const personTermine = alleTermine.filter(t => isTerminFuerPerson(t, personId, isLehrling));
       console.log(`[DEBUG] ${personName}: ${personTermine.length} Termine gefunden`, personTermine);
       
+      // Sortiere: Termine mit expliziter startzeit (durch Planung gesetzt) kommen
+      // vor Terminen die nur eine bring_zeit haben, damit Planungsreihenfolge stimmt.
       personTermine.sort((a, b) => {
-        const zeitA = a.startzeit || a.bring_zeit || '23:59';
-        const zeitB = b.startzeit || b.bring_zeit || '23:59';
-        return zeitA.localeCompare(zeitB);
+        const hasStartA = !!(a.startzeit);
+        const hasStartB = !!(b.startzeit);
+        if (hasStartA && hasStartB) return a.startzeit.localeCompare(b.startzeit);
+        if (hasStartA) return -1;
+        if (hasStartB) return 1;
+        return (a.bring_zeit || '23:59').localeCompare(b.bring_zeit || '23:59');
       });
 
       const jetzt = new Date();
