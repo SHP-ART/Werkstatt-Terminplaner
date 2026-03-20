@@ -29546,17 +29546,17 @@ class App {
     try {
       const alleTermine = await ApiService.get('/termine');
       
-      // Filtere nur interne Termine
+      // Filtere nur interne Termine (abgeschlossene und stornierte ausblenden)
       const interneTermine = alleTermine.filter(t => 
-        t.kunde_name === 'Intern' || 
+        (t.kunde_name === 'Intern' || 
         t.abholung_details === 'Interner Termin' ||
-        t.kennzeichen === 'INTERN'
+        t.kennzeichen === 'INTERN') &&
+        t.status !== 'abgeschlossen' &&
+        t.status !== 'storniert'
       );
 
-      // Sortiere: Offene zuerst, dann nach Datum
+      // Sortiere nach Datum
       interneTermine.sort((a, b) => {
-        if (a.status === 'abgeschlossen' && b.status !== 'abgeschlossen') return 1;
-        if (a.status !== 'abgeschlossen' && b.status === 'abgeschlossen') return -1;
         return new Date(a.datum) - new Date(b.datum);
       });
 
