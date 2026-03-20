@@ -28413,16 +28413,18 @@ class App {
       this.isTerminFuerPerson(t, personId, isLehrling)
     );
 
-    // Sortiere nach Zeit: Termine mit expliziter startzeit (durch Planung gesetzt) kommen
-    // vor Terminen die nur eine bring_zeit haben, damit Planungsreihenfolge korrekt angezeigt wird.
-    personTermine.sort((a, b) => {
-      const hasStartA = !!(a.startzeit);
-      const hasStartB = !!(b.startzeit);
-      if (hasStartA && hasStartB) return a.startzeit.localeCompare(b.startzeit);
-      if (hasStartA) return -1;
-      if (hasStartB) return 1;
-      return (a.bring_zeit || '23:59').localeCompare(b.bring_zeit || '23:59');
-    });
+    // Sortiere: startzeit (DB) → arbeitszeiten_details._startzeit → bring_zeit
+    const getSortZeit = t => {
+      if (t.startzeit) return t.startzeit;
+      if (t.arbeitszeiten_details) {
+        try {
+          const d = typeof t.arbeitszeiten_details === 'string' ? JSON.parse(t.arbeitszeiten_details) : t.arbeitszeiten_details;
+          if (d && d._startzeit) return d._startzeit;
+        } catch(e) {}
+      }
+      return t.bring_zeit || '23:59';
+    };
+    personTermine.sort((a, b) => getSortZeit(a).localeCompare(getSortZeit(b)));
 
     // Aktuelle Uhrzeit für Zeitvergleiche
     const jetzt = new Date();
