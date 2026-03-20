@@ -22669,15 +22669,20 @@ class App {
         // (Termin hat länger/kürzer gedauert als geplant)
         let tatsaechlich = parseInt(termin.tatsaechliche_zeit) || 0;
 
-        // Fallback für abgeschlossene Termine ohne tatsaechliche_zeit: fertigstellung_zeit − startzeit
-        if (!tatsaechlich && termin.status === 'abgeschlossen' && termin.fertigstellung_zeit) {
+        // Für abgeschlossene Termine mit fertigstellung_zeit: tatsächliche Dauer via Stempel berechnen.
+        // Wenn die gemessene Zeit kürzer ist als tatsaechliche_zeit (z.B. weil Planzeit beim
+        // Abschließen übernommen wurde), hat der Stempel Vorrang → verhindert falsche Pausen-Splits.
+        if (termin.status === 'abgeschlossen' && termin.fertigstellung_zeit) {
           const startStr = details._startzeit || termin.startzeit || termin.bring_zeit;
           if (startStr && /^\d{1,2}:\d{2}/.test(startStr)) {
             const fertigLokal = new Date(termin.fertigstellung_zeit);
             const fertigMin = fertigLokal.getHours() * 60 + fertigLokal.getMinutes();
             const [sh, sm] = startStr.split(':').map(Number);
             const diffMin = fertigMin - (sh * 60 + sm);
-            if (diffMin > 5) tatsaechlich = diffMin;
+            if (diffMin > 5) {
+              // Nimm den kleineren Wert: Stempel ist verlässlicher wenn er kleiner ist
+              tatsaechlich = tatsaechlich > 0 ? Math.min(tatsaechlich, diffMin) : diffMin;
+            }
           }
         }
 
