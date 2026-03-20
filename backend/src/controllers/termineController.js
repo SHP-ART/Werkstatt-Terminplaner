@@ -2326,6 +2326,8 @@ class TermineController {
       const termineWithTeile = [];
       
       for (const termin of rows) {
+        // Abgeschlossene und stornierte Termine aus der Teile-Übersicht ausschließen
+        if (termin.status === 'abgeschlossen' || termin.status === 'storniert') continue;
         if (!termin.arbeitszeiten_details) continue;
         
         let details;
