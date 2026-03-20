@@ -787,9 +787,10 @@ class KIPlanungController {
         warnungen.add(`Überlastung: ${person.name} ${entry.usedMin}/${person.capacityMin} min.`);
       }
 
+      // Echte Doppelbuchung: zwei Termine mit exakt identischer Startzeit
       const blocks = [...entry.blocks].sort((a, b) => a.start - b.start);
       for (let i = 1; i < blocks.length; i++) {
-        if (blocks[i].start < blocks[i - 1].end) {
+        if (blocks[i].start === blocks[i - 1].start) {
           warnungen.add(`Doppelbuchung bei ${person.name} um ${KIPlanungController.minutesToTime(blocks[i].start)}.`);
           break;
         }
