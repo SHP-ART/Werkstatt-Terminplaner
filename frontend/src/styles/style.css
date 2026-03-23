@@ -4575,17 +4575,30 @@ tr.schwebend {
 }
 
 .kalender-tag-heute {
-    border-color: var(--accent) !important;
-    border-width: 2px !important;
     font-weight: bold;
     position: relative;
     z-index: 1;
-    box-shadow: 0 0 0 2px var(--accent);
+}
+
+.kalender-tag-heute .kalender-tag-nummer::after {
+    content: '';
+    display: block;
+    width: 5px;
+    height: 5px;
+    background: var(--accent);
+    border-radius: 50%;
+    margin: 2px auto 0;
 }
 
 .kalender-tag-selected {
-    border-color: var(--steel) !important;
-    box-shadow: 0 0 0 2px rgba(13, 27, 42, 0.2);
+    background: #0d1b2a !important;
+    border-color: #0d1b2a !important;
+    box-shadow: 0 2px 8px rgba(13, 27, 42, 0.35);
+}
+
+.kalender-tag-selected .kalender-tag-nummer,
+.kalender-tag-selected .kalender-tag-prozent {
+    color: white !important;
 }
 
 .kalender-tag-vergangen {

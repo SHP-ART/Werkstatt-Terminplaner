@@ -1221,6 +1221,10 @@ class App {
     if (schnellDatumInit) schnellDatumInit.value = '';
     const terminDatumInit = document.getElementById('datum');
     if (terminDatumInit) terminDatumInit.value = '';
+    // Anzeige und Kalender nach dem Leeren aktualisieren
+    this.updateSelectedDatumDisplay();
+    this.updateSchnellDatumDisplay();
+    this.renderAuslastungKalender();
 
     const kmStandInput = document.getElementById('kilometerstand');
     this.bindEventListenerOnce(kmStandInput, 'input', () => {
