@@ -2978,6 +2978,14 @@ class App {
         this.resetTerminForm();
         this.resetTermineSubTabs();
       }
+      // Datum immer leeren – auch wenn gespeicherter State vorhanden
+      const terminDatum = document.getElementById('datum');
+      if (terminDatum) terminDatum.value = '';
+      const schnellDatum = document.getElementById('schnell_datum');
+      if (schnellDatum) schnellDatum.value = '';
+      this.updateSelectedDatumDisplay();
+      this.updateSchnellDatumDisplay();
+      this.renderAuslastungKalender();
       this.loadTerminAuslastungAnzeige();
       this.loadArbeitszeiten();
     } else if (tabName === 'auslastung') {
