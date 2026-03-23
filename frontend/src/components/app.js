@@ -1595,10 +1595,6 @@ class App {
     if (internDatum) {
       internDatum.value = today;
     }
-    const schnellDatum = document.getElementById('schnell_datum');
-    if (schnellDatum && !schnellDatum.value) {
-      schnellDatum.value = today;
-    }
   }
 
   async loadTerminAuslastungAnzeige() {
