@@ -1216,7 +1216,7 @@ class App {
     this.setupAuslastungKalender();
     this.setupEditAuslastungKalender();
     this.setupEditSuchKalender();
-    this.setupSchnellKalender();
+    // Schnell-Kalender wird beim ersten Tab-Wechsel zu 'schnellerTermin' initialisiert
 
     const kmStandInput = document.getElementById('kilometerstand');
     this.bindEventListenerOnce(kmStandInput, 'input', () => {
@@ -18883,8 +18883,14 @@ class App {
   setupSchnellKalender() {
     const kalenderTage = document.getElementById('schnellKalenderTage');
     const kalenderMonatJahr = document.getElementById('schnellKalenderMonatJahr');
-    if (!kalenderTage || !kalenderMonatJahr || this.schnellKalenderInitialized) {
-      if (this.schnellKalenderInitialized) this.renderSchnellKalender();
+    if (!kalenderTage || !kalenderMonatJahr) return;
+
+    // Immer neu rendern wenn Kalender leer ist
+    if (this.schnellKalenderInitialized) {
+      if (!kalenderTage.querySelector('.kalender-tag')) {
+        this.renderSchnellKalender();
+        this.updateSchnellDatumDisplay();
+      }
       return;
     }
 
@@ -33536,6 +33542,7 @@ window.switchSubTab = function(tabName) {
   if (tabName === 'schnellerTermin' && window.app) {
     setTimeout(() => {
       window.app.setupSchnellKalender();
+      window.app.updateSchnellDatumDisplay();
     }, 50);
   }
   
