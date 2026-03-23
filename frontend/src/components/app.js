@@ -11,6 +11,7 @@ class App {
     this.auslastungKalenderInitialized = false;
     this.editAuslastungKalenderInitialized = false;
     this.editSuchKalenderInitialized = false;
+    this.schnellKalenderInitialized = false;
     
     // KI-Funktionen Status (wird beim Laden der Einstellungen aktualisiert)
     this.kiEnabled = true; // Standard: aktiviert
@@ -1215,6 +1216,7 @@ class App {
     this.setupAuslastungKalender();
     this.setupEditAuslastungKalender();
     this.setupEditSuchKalender();
+    this.setupSchnellKalender();
 
     const kmStandInput = document.getElementById('kilometerstand');
     this.bindEventListenerOnce(kmStandInput, 'input', () => {
@@ -2025,11 +2027,11 @@ class App {
     try {
       const termine = await TermineService.getAll(datum);
       
-      // Filter: Nur nicht-interne Termine (mit Kennzeichen) und nicht gelöschte
+      // Filter: Keine internen Termine und nicht gelöschte (Schnell-Termine ohne Kennzeichen werden eingeschlossen)
       const filteredTermine = termine.filter(t => 
-        t.kennzeichen && 
-        t.kennzeichen.trim() !== '' && 
         t.kennzeichen !== 'INTERN' &&
+        t.abholung_details !== 'Interner Termin' &&
+        t.kunde_name !== 'Intern' &&
         !t.ist_geloescht
       );
       
@@ -2070,7 +2072,7 @@ class App {
                  onmouseout="this.style.background='#fff'">
               <div style="display: flex; justify-content: space-between; align-items: center;">
                 <div style="font-weight: 600; color: #1565c0; font-size: 1.05em;">
-                  ${termin.termin_nr || '-'} • ${termin.kennzeichen || '-'}
+                  ${termin.termin_nr || '-'}${termin.kennzeichen ? ' • ' + termin.kennzeichen : ' ⚡ Schnell-Termin'}
                 </div>
                 <div style="display: flex; gap: 8px; align-items: center;">
                   <span style="background: ${statusFarbe}; color: white; padding: 2px 8px; border-radius: 4px; font-size: 0.75em; font-weight: 600;">${termin.status || '-'}</span>
@@ -5186,6 +5188,10 @@ class App {
       const heute = this.formatDateLocal(this.getToday());
       const schnellDatum = document.getElementById('schnell_datum');
       if (schnellDatum) schnellDatum.value = heute;
+      // Kalender-Anzeige zurücksetzen
+      this.schnellKalenderInitialized = false;
+      this.setupSchnellKalender();
+      this.selectSchnellKalenderDatum(heute);
 
       this.loadTermine();
       this.loadTermineCache();
@@ -18867,6 +18873,172 @@ class App {
       });
     } catch (error) {
       console.warn('Fehler beim Laden der Auslastung für Kalender:', error);
+    }
+  }
+
+  // ==========================================
+  // SCHNELL-TERMIN KALENDER
+  // ==========================================
+
+  setupSchnellKalender() {
+    const kalenderTage = document.getElementById('schnellKalenderTage');
+    const kalenderMonatJahr = document.getElementById('schnellKalenderMonatJahr');
+    if (!kalenderTage || !kalenderMonatJahr || this.schnellKalenderInitialized) {
+      if (this.schnellKalenderInitialized) this.renderSchnellKalender();
+      return;
+    }
+
+    this.schnellKalenderAktuellMonat = new Date();
+
+    const prevBtn = document.getElementById('schnellKalenderPrevMonth');
+    this.bindEventListenerOnce(prevBtn, 'click', () => this.navigateSchnellKalenderMonat(-1), 'SchnellKalenderPrev');
+
+    const nextBtn = document.getElementById('schnellKalenderNextMonth');
+    this.bindEventListenerOnce(nextBtn, 'click', () => this.navigateSchnellKalenderMonat(1), 'SchnellKalenderNext');
+
+    const heuteBtn = document.getElementById('schnellKalenderHeuteBtn');
+    this.bindEventListenerOnce(heuteBtn, 'click', () => this.selectSchnellKalenderHeute(), 'SchnellKalenderHeute');
+
+    // Heute vorauswählen wenn noch kein Datum gesetzt
+    const datumInput = document.getElementById('schnell_datum');
+    if (datumInput && !datumInput.value) {
+      datumInput.value = this.formatDateLocal(new Date());
+    }
+
+    this.renderSchnellKalender();
+    this.updateSchnellDatumDisplay();
+    this.schnellKalenderInitialized = true;
+  }
+
+  updateSchnellDatumDisplay() {
+    const datumInput = document.getElementById('schnell_datum');
+    const display = document.getElementById('schnellDatumDisplay');
+    if (!display) return;
+    if (datumInput && datumInput.value) {
+      const datum = new Date(datumInput.value + 'T00:00:00');
+      const optionen = { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' };
+      display.textContent = datum.toLocaleDateString('de-DE', optionen);
+      display.style.color = '#1565c0';
+    } else {
+      display.textContent = 'Bitte Datum wählen...';
+      display.style.color = '#94a3b8';
+    }
+  }
+
+  async navigateSchnellKalenderMonat(offset) {
+    if (!this.schnellKalenderAktuellMonat) this.schnellKalenderAktuellMonat = new Date();
+    this.schnellKalenderAktuellMonat.setMonth(this.schnellKalenderAktuellMonat.getMonth() + offset);
+    await this.renderSchnellKalender();
+  }
+
+  async selectSchnellKalenderHeute() {
+    const heute = new Date();
+    const datumInput = document.getElementById('schnell_datum');
+    if (datumInput) {
+      datumInput.value = this.formatDateLocal(heute);
+      datumInput.dispatchEvent(new Event('change'));
+    }
+    this.updateSchnellDatumDisplay();
+    this.schnellKalenderAktuellMonat = new Date(heute.getFullYear(), heute.getMonth(), 1);
+    await this.renderSchnellKalender();
+  }
+
+  async selectSchnellKalenderDatum(datumStr) {
+    const datumInput = document.getElementById('schnell_datum');
+    if (datumInput) {
+      datumInput.value = datumStr;
+      datumInput.dispatchEvent(new Event('change'));
+    }
+    this.updateSchnellDatumDisplay();
+    await this.renderSchnellKalender();
+  }
+
+  async renderSchnellKalender() {
+    const kalenderTage = document.getElementById('schnellKalenderTage');
+    const kalenderMonatJahr = document.getElementById('schnellKalenderMonatJahr');
+    if (!kalenderTage || !kalenderMonatJahr) return;
+
+    if (!this.schnellKalenderAktuellMonat) this.schnellKalenderAktuellMonat = new Date();
+
+    const jahr = this.schnellKalenderAktuellMonat.getFullYear();
+    const monat = this.schnellKalenderAktuellMonat.getMonth();
+
+    const monatNamen = ['Januar', 'Februar', 'März', 'April', 'Mai', 'Juni',
+                        'Juli', 'August', 'September', 'Oktober', 'November', 'Dezember'];
+    kalenderMonatJahr.textContent = `${monatNamen[monat]} ${jahr}`;
+
+    const ersterTag = new Date(jahr, monat, 1);
+    const letzterTag = new Date(jahr, monat + 1, 0);
+    const heute = new Date();
+    heute.setHours(0, 0, 0, 0);
+
+    let startWochentag = ersterTag.getDay();
+    startWochentag = startWochentag === 0 ? 6 : startWochentag - 1;
+
+    const datumInput = document.getElementById('schnell_datum');
+    const selectedDate = datumInput && datumInput.value ? datumInput.value : null;
+
+    let html = '';
+    for (let i = 0; i < startWochentag; i++) {
+      html += '<div class="kalender-tag kalender-tag-leer"></div>';
+    }
+
+    for (let tag = 1; tag <= letzterTag.getDate(); tag++) {
+      const datum = new Date(jahr, monat, tag);
+      const datumStr = this.formatDateLocal(datum);
+      const istHeute = datum.getTime() === heute.getTime();
+      const istVergangen = datum < heute;
+      const istWochenende = datum.getDay() === 0 || datum.getDay() === 6;
+      const istAusgewaehlt = datumStr === selectedDate;
+
+      const klassen = [
+        'kalender-tag',
+        istHeute ? 'kalender-tag-heute' : '',
+        istVergangen ? 'kalender-tag-vergangen' : '',
+        istWochenende ? 'kalender-tag-wochenende' : '',
+        istAusgewaehlt ? 'kalender-tag-selected' : '',
+        !istWochenende ? 'kalender-tag-auslastung-0-50' : ''
+      ].filter(k => k).join(' ');
+
+      html += `
+        <div class="${klassen}" data-datum="${datumStr}" onclick="app.selectSchnellKalenderDatum('${datumStr}')" style="cursor: pointer;">
+          <span class="kalender-tag-nummer">${tag}</span>
+        </div>
+      `;
+    }
+
+    kalenderTage.innerHTML = html;
+    this.loadSchnellKalenderAuslastung(jahr, monat);
+  }
+
+  async loadSchnellKalenderAuslastung(jahr, monat) {
+    try {
+      const auslastungDaten = await this.loadMonatAuslastung(jahr, monat);
+      const kalenderTage = document.getElementById('schnellKalenderTage');
+      if (!kalenderTage) return;
+
+      kalenderTage.querySelectorAll('.kalender-tag[data-datum]').forEach(tagEl => {
+        const datumStr = tagEl.dataset.datum;
+        const auslastung = auslastungDaten[datumStr];
+        if (auslastung && !tagEl.classList.contains('kalender-tag-wochenende')) {
+          const prozent = auslastung.auslastung_prozent || 0;
+          tagEl.classList.remove('kalender-tag-auslastung-0-50', 'kalender-tag-auslastung-51-80',
+                                  'kalender-tag-auslastung-81-100', 'kalender-tag-auslastung-over-100');
+          if (prozent > 100) tagEl.classList.add('kalender-tag-auslastung-over-100');
+          else if (prozent > 80) tagEl.classList.add('kalender-tag-auslastung-81-100');
+          else if (prozent > 50) tagEl.classList.add('kalender-tag-auslastung-51-80');
+          else tagEl.classList.add('kalender-tag-auslastung-0-50');
+
+          if (!tagEl.querySelector('.kalender-tag-prozent')) {
+            const prozentSpan = document.createElement('span');
+            prozentSpan.className = 'kalender-tag-prozent';
+            prozentSpan.textContent = `${Math.round(prozent)}%`;
+            tagEl.appendChild(prozentSpan);
+          }
+        }
+      });
+    } catch (error) {
+      console.warn('Fehler beim Laden der Auslastung für Schnell-Kalender:', error);
     }
   }
 
@@ -33320,7 +33492,7 @@ window.app = app;
 
 // Globale Funktion für Sub-Tab-Wechsel (Fallback für onclick)
 window.switchSubTab = function(tabName) {
-  const allTabs = ['neuerTermin', 'terminBearbeiten', 'internerTermin', 'wartendeAktionen', 'wiederkehrendeTermine'];
+  const allTabs = ['neuerTermin', 'schnellerTermin', 'terminBearbeiten', 'internerTermin', 'wartendeAktionen', 'wiederkehrendeTermine'];
   
   // Alle Sub-Tabs verstecken
   allTabs.forEach(name => {
@@ -33358,6 +33530,12 @@ window.switchSubTab = function(tabName) {
     setTimeout(() => {
       window.app.setupAuslastungKalender();
       window.app.toggleAbholungDetails();
+    }, 50);
+  }
+
+  if (tabName === 'schnellerTermin' && window.app) {
+    setTimeout(() => {
+      window.app.setupSchnellKalender();
     }, 50);
   }
   

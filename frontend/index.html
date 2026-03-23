@@ -1137,7 +1137,37 @@
                         <div class="form-row">
                             <div class="form-group">
                                 <label>📅 Datum: *</label>
-                                <input type="date" id="schnell_datum" required>
+                                <!-- Verstecktes Datum-Input für Formular-Validierung -->
+                                <input type="date" id="schnell_datum" required style="position: absolute; opacity: 0; pointer-events: none; width: 0; height: 0;">
+
+                                <!-- Ausgewähltes Datum Anzeige -->
+                                <div id="schnellDatumDisplay" style="text-align: center; font-size: 1.1em; font-weight: 700; color: #1565c0; margin-bottom: 10px; padding: 8px; background: white; border-radius: 8px; border: 2px solid #2196f3;">
+                                    Bitte Datum wählen...
+                                </div>
+
+                                <!-- Inline Kalender mit Auslastung -->
+                                <div id="schnellKalenderInline" class="auslastung-kalender-inline">
+                                    <div class="kalender-header">
+                                        <button type="button" class="kalender-nav-btn" id="schnellKalenderPrevMonth">◀</button>
+                                        <span id="schnellKalenderMonatJahr">Januar 2025</span>
+                                        <button type="button" class="kalender-nav-btn" id="schnellKalenderNextMonth">▶</button>
+                                    </div>
+                                    <div class="kalender-legende">
+                                        <span class="legende-item"><span class="legende-farbe legende-gruen"></span>0-50%</span>
+                                        <span class="legende-item"><span class="legende-farbe legende-gelb"></span>51-80%</span>
+                                        <span class="legende-item"><span class="legende-farbe legende-orange"></span>81-100%</span>
+                                        <span class="legende-item"><span class="legende-farbe legende-rot"></span>&gt;100%</span>
+                                    </div>
+                                    <div class="kalender-wochentage">
+                                        <span>Mo</span><span>Di</span><span>Mi</span><span>Do</span><span>Fr</span><span>Sa</span><span>So</span>
+                                    </div>
+                                    <div id="schnellKalenderTage" class="kalender-tage">
+                                        <!-- Tage werden dynamisch gefüllt -->
+                                    </div>
+                                    <div class="kalender-footer" style="margin-top: 10px; display: flex; justify-content: center;">
+                                        <button type="button" class="btn btn-primary" id="schnellKalenderHeuteBtn" style="padding: 8px 20px;">📅 Heute</button>
+                                    </div>
+                                </div>
                             </div>
                             <div class="form-group">
                                 <label>⏱️ Geschätzte Zeit (Stunden):</label>
