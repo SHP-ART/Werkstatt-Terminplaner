@@ -3193,6 +3193,18 @@ class App {
       targetContent.classList.add('active');
     }
     button.classList.add('active');
+    // Datum beim Wechsel zu Neuer/Schneller Termin immer leeren
+    if (subTabName === 'neuerTermin') {
+      const d = document.getElementById('datum');
+      if (d) d.value = '';
+      this.updateSelectedDatumDisplay();
+      this.renderAuslastungKalender();
+    }
+    if (subTabName === 'schnellerTermin') {
+      const sd = document.getElementById('schnell_datum');
+      if (sd) sd.value = '';
+      this.updateSchnellDatumDisplay();
+    }
     this.handleSubTabActivation(subTabName);
   }
 
@@ -33610,18 +33622,25 @@ window.switchSubTab = function(tabName) {
   
   // Spezifische Aktionen je nach Tab
   if (tabName === 'neuerTermin' && window.app) {
-    // Kalender initialisieren/neu rendern falls nötig
-    // Abholungs-Felder sofort korrekt ein-/ausblenden (basierend auf gewähltem Radio-Button)
+    // Datum leeren beim Tab-Wechsel
+    const d = document.getElementById('datum');
+    if (d) d.value = '';
+    window.app.updateSelectedDatumDisplay();
     setTimeout(() => {
       window.app.setupAuslastungKalender();
+      window.app.renderAuslastungKalender();
       window.app.toggleAbholungDetails();
     }, 50);
   }
 
   if (tabName === 'schnellerTermin' && window.app) {
+    // Datum leeren beim Tab-Wechsel
+    const sd = document.getElementById('schnell_datum');
+    if (sd) sd.value = '';
+    window.app.updateSchnellDatumDisplay();
     setTimeout(() => {
       window.app.setupSchnellKalender();
-      window.app.updateSchnellDatumDisplay();
+      window.app.renderSchnellKalender();
       window.app.closeSchnellKalenderPopup();
     }, 50);
   }
