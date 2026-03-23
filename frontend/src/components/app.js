@@ -1216,9 +1216,11 @@ class App {
     this.setupAuslastungKalender();
     this.setupEditAuslastungKalender();
     this.setupEditSuchKalender();
-    // Schnell-Datum beim Seitenaufruf immer leeren (Browser-Formularwiederherstellung verhindern)
+    // Schnell-Datum + Termin-Datum beim Seitenaufruf immer leeren (Browser-Formularwiederherstellung verhindern)
     const schnellDatumInit = document.getElementById('schnell_datum');
     if (schnellDatumInit) schnellDatumInit.value = '';
+    const terminDatumInit = document.getElementById('datum');
+    if (terminDatumInit) terminDatumInit.value = '';
 
     const kmStandInput = document.getElementById('kilometerstand');
     this.bindEventListenerOnce(kmStandInput, 'input', () => {
@@ -1570,12 +1572,9 @@ class App {
   setTodayDate(forceOverwrite = true) {
     const today = this.formatDateLocal(new Date());
     
-    // Termin-Datum nur setzen wenn leer oder explizit gewollt
-    const datumInput = document.getElementById('datum');
-    if (datumInput && (forceOverwrite || !datumInput.value)) {
-      datumInput.value = today;
-    }
-    
+    // Termin-Datum bewusst NICHT vorauswählen – Benutzer muss aktiv wählen
+    // (nur Auslastungs- und Abwesenheitsdatum auf heute setzen)
+
     // Auslastung-Datum immer auf heute setzen (separate Ansicht)
     const auslastungDatum = document.getElementById('auslastungDatum');
     if (auslastungDatum) {
@@ -1588,7 +1587,6 @@ class App {
     }
     this.toggleAbholungDetails();
     this.loadAuslastung();
-    this.loadTerminAuslastungAnzeige();
   }
 
   setInternerTerminTodayDate() {
@@ -1791,14 +1789,19 @@ class App {
       form.reset();
     }
 
-    // Datum wiederherstellen oder auf heute setzen
+    // Datum wiederherstellen (wenn preserveDatum) – sonst leer lassen
     if (savedDatum) {
       document.getElementById('datum').value = savedDatum;
-      // Auslastungsanzeige für das gespeicherte Datum laden
       this.loadTerminAuslastungAnzeige();
     } else {
-      this.setTodayDate(true); // forceOverwrite=true für expliziten Reset
+      // Datum leeren – Benutzer muss bewusst wählen
+      const datumInput = document.getElementById('datum');
+      if (datumInput) datumInput.value = '';
     }
+    this.updateSelectedDatumDisplay();
+    const datumFehler = document.getElementById('terminDatumFehler');
+    if (datumFehler) datumFehler.style.display = 'none';
+    this.setTodayDate(false); // Nur Auslastungs-/Abwesenheitsdatum auf heute
 
     // KM-Stand Placeholder und Styling zurücksetzen
     const kmStandInput = document.getElementById('kilometerstand');
@@ -4605,6 +4608,15 @@ class App {
     // Bug 1 Debug: Datum aus Formular lesen
     const datumValue = document.getElementById('datum').value;
     console.log('[DEBUG] handleTerminSubmit - Datum aus Formular:', datumValue);
+
+    if (!datumValue) {
+      const fehler = document.getElementById('terminDatumFehler');
+      const display = document.getElementById('selectedDatumDisplay');
+      if (fehler) fehler.style.display = 'block';
+      if (display) { display.style.border = '2px solid #dc3545'; display.style.color = '#dc3545'; }
+      display?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      return;
+    }
 
     const termin = {
       kennzeichen: document.getElementById('kennzeichen').value.trim(),
@@ -18292,6 +18304,7 @@ class App {
   updateSelectedDatumDisplay() {
     const datumInput = document.getElementById('datum');
     const display = document.getElementById('selectedDatumDisplay');
+    const fehler = document.getElementById('terminDatumFehler');
     if (!display) return;
     
     if (datumInput && datumInput.value) {
@@ -18299,9 +18312,12 @@ class App {
       const optionen = { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' };
       display.textContent = datum.toLocaleDateString('de-DE', optionen);
       display.style.color = '#1565c0';
+      display.style.border = '2px solid #2196f3';
+      if (fehler) fehler.style.display = 'none';
     } else {
       display.textContent = 'Bitte Datum wählen...';
       display.style.color = '#94a3b8';
+      display.style.border = '2px dashed #94a3b8';
     }
   }
 
@@ -18476,6 +18492,8 @@ class App {
       datumInput.value = datumStr;
       datumInput.dispatchEvent(new Event('change'));
     }
+    const fehler = document.getElementById('terminDatumFehler');
+    if (fehler) fehler.style.display = 'none';
     // Aktualisiere Anzeige und re-rendere Kalender für Markierung
     this.updateSelectedDatumDisplay();
     await this.renderAuslastungKalender();
