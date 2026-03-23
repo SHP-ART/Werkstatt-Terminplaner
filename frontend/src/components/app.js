@@ -2174,7 +2174,17 @@ class App {
     }
     
     document.getElementById('edit_datum').value = termin.datum;
-    document.getElementById('edit_kennzeichen').value = termin.kennzeichen || '';
+    const editKennzeichen = document.getElementById('edit_kennzeichen');
+    const editKennzeichenPflicht = document.getElementById('edit_kennzeichen_pflicht');
+    editKennzeichen.value = termin.kennzeichen || '';
+    // Kennzeichen ist nur Pflicht wenn es kein Schnell-Termin (ohne Kennzeichen) ist
+    if (termin.kennzeichen) {
+      editKennzeichen.setAttribute('required', 'required');
+      if (editKennzeichenPflicht) editKennzeichenPflicht.textContent = '*';
+    } else {
+      editKennzeichen.removeAttribute('required');
+      if (editKennzeichenPflicht) editKennzeichenPflicht.textContent = '(optional)';
+    }
     document.getElementById('edit_kilometerstand').value = termin.kilometerstand || '';
     document.getElementById('edit_vin').value = termin.vin || '';
     document.getElementById('edit_fahrzeugtyp').value = termin.fahrzeugtyp || '';
