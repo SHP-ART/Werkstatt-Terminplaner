@@ -1216,7 +1216,9 @@ class App {
     this.setupAuslastungKalender();
     this.setupEditAuslastungKalender();
     this.setupEditSuchKalender();
-    // Schnell-Kalender wird beim ersten Tab-Wechsel zu 'schnellerTermin' initialisiert
+    // Schnell-Datum beim Seitenaufruf immer leeren (Browser-Formularwiederherstellung verhindern)
+    const schnellDatumInit = document.getElementById('schnell_datum');
+    if (schnellDatumInit) schnellDatumInit.value = '';
 
     const kmStandInput = document.getElementById('kilometerstand');
     this.bindEventListenerOnce(kmStandInput, 'input', () => {
