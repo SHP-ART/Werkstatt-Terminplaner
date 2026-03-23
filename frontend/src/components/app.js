@@ -5129,7 +5129,11 @@ class App {
 
     const datumValue = document.getElementById('schnell_datum').value;
     if (!datumValue) {
-      alert('Bitte ein Datum wählen.');
+      const fehler = document.getElementById('schnellDatumFehler');
+      const trigger = document.getElementById('schnellDatumTrigger');
+      if (fehler) fehler.style.display = 'block';
+      if (trigger) { trigger.style.borderColor = '#dc3545'; trigger.style.borderStyle = 'solid'; }
+      trigger?.scrollIntoView({ behavior: 'smooth', block: 'center' });
       return;
     }
 
@@ -5184,14 +5188,14 @@ class App {
       alert('⚡ Schneller Termin erfolgreich erstellt!');
 
       document.getElementById('schnellerTerminForm').reset();
-      // Heute als Standard-Datum wieder setzen
-      const heute = this.formatDateLocal(this.getToday());
+      // Datum leeren – Benutzer muss beim nächsten Termin bewusst ein Datum wählen
       const schnellDatum = document.getElementById('schnell_datum');
-      if (schnellDatum) schnellDatum.value = heute;
-      // Kalender-Anzeige zurücksetzen
-      this.schnellKalenderInitialized = false;
-      this.setupSchnellKalender();
-      this.selectSchnellKalenderDatum(heute);
+      if (schnellDatum) schnellDatum.value = '';
+      this.updateSchnellDatumDisplay();
+      // Kalender zurücksetzen
+      const fehler = document.getElementById('schnellDatumFehler');
+      if (fehler) fehler.style.display = 'none';
+      this.closeSchnellKalenderPopup();
 
       this.loadTermine();
       this.loadTermineCache();
@@ -18905,10 +18909,17 @@ class App {
     const heuteBtn = document.getElementById('schnellKalenderHeuteBtn');
     this.bindEventListenerOnce(heuteBtn, 'click', () => this.selectSchnellKalenderHeute(), 'SchnellKalenderHeute');
 
-    // Heute vorauswählen wenn noch kein Datum gesetzt
-    const datumInput = document.getElementById('schnell_datum');
-    if (datumInput && !datumInput.value) {
-      datumInput.value = this.formatDateLocal(new Date());
+    // Außen-Klick schließt das Popup
+    if (!this._schnellPopupOutsideHandler) {
+      this._schnellPopupOutsideHandler = (e) => {
+        const popup = document.getElementById('schnellKalenderPopup');
+        const trigger = document.getElementById('schnellDatumTrigger');
+        if (popup && popup.style.display !== 'none' &&
+            !popup.contains(e.target) && e.target !== trigger && !trigger?.contains(e.target)) {
+          this.closeSchnellKalenderPopup();
+        }
+      };
+      document.addEventListener('click', this._schnellPopupOutsideHandler);
     }
 
     this.renderSchnellKalender();
@@ -18919,16 +18930,54 @@ class App {
   updateSchnellDatumDisplay() {
     const datumInput = document.getElementById('schnell_datum');
     const display = document.getElementById('schnellDatumDisplay');
+    const trigger = document.getElementById('schnellDatumTrigger');
+    const fehler = document.getElementById('schnellDatumFehler');
     if (!display) return;
     if (datumInput && datumInput.value) {
       const datum = new Date(datumInput.value + 'T00:00:00');
       const optionen = { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' };
       display.textContent = datum.toLocaleDateString('de-DE', optionen);
       display.style.color = '#1565c0';
+      if (trigger) {
+        trigger.style.borderColor = '#2196f3';
+        trigger.style.borderStyle = 'solid';
+        trigger.style.background = '#e3f2fd';
+      }
+      if (fehler) fehler.style.display = 'none';
     } else {
-      display.textContent = 'Bitte Datum wählen...';
+      display.textContent = 'Datum wählen...';
       display.style.color = '#94a3b8';
+      if (trigger) {
+        trigger.style.borderColor = '#94a3b8';
+        trigger.style.borderStyle = 'dashed';
+        trigger.style.background = '#f8fafc';
+      }
     }
+  }
+
+  toggleSchnellKalenderPopup() {
+    const popup = document.getElementById('schnellKalenderPopup');
+    const arrow = document.getElementById('schnellDatumArrow');
+    if (!popup) return;
+    if (popup.style.display === 'none' || !popup.style.display) {
+      popup.style.display = 'block';
+      if (arrow) arrow.style.transform = 'rotate(180deg)';
+      // Kalender rendern falls noch nicht geschehen
+      if (!this.schnellKalenderInitialized) {
+        this.setupSchnellKalender();
+      } else {
+        this.renderSchnellKalender();
+      }
+    } else {
+      this.closeSchnellKalenderPopup();
+    }
+  }
+
+  closeSchnellKalenderPopup() {
+    const popup = document.getElementById('schnellKalenderPopup');
+    const arrow = document.getElementById('schnellDatumArrow');
+    if (popup) popup.style.display = 'none';
+    if (arrow) arrow.style.transform = 'rotate(0deg)';
   }
 
   async navigateSchnellKalenderMonat(offset) {
@@ -18947,6 +18996,7 @@ class App {
     this.updateSchnellDatumDisplay();
     this.schnellKalenderAktuellMonat = new Date(heute.getFullYear(), heute.getMonth(), 1);
     await this.renderSchnellKalender();
+    this.closeSchnellKalenderPopup();
   }
 
   async selectSchnellKalenderDatum(datumStr) {
@@ -18957,6 +19007,7 @@ class App {
     }
     this.updateSchnellDatumDisplay();
     await this.renderSchnellKalender();
+    this.closeSchnellKalenderPopup();
   }
 
   async renderSchnellKalender() {
@@ -33543,6 +33594,7 @@ window.switchSubTab = function(tabName) {
     setTimeout(() => {
       window.app.setupSchnellKalender();
       window.app.updateSchnellDatumDisplay();
+      window.app.closeSchnellKalenderPopup();
     }, 50);
   }
   
