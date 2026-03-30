@@ -1975,7 +1975,9 @@
         
         // Prüfe verschoben und verspätet
         const istVerschoben = aktuellerAuftrag.verschoben_von_datum != null;
-        const istVerspaetet = aktuellerAuftrag.endzeit_berechnet && aktuellerAuftrag.abholung_zeit && 
+        // Verspätet nur wenn: Abholzeit überschritten UND Abholung ist heute (nicht morgen/übermorgen)
+        const abholDatumGilt = !aktuellerAuftrag.abholung_datum || aktuellerAuftrag.abholung_datum === aktuellerAuftrag.datum;
+        const istVerspaetet = abholDatumGilt && aktuellerAuftrag.endzeit_berechnet && aktuellerAuftrag.abholung_zeit && 
                               aktuellerAuftrag.endzeit_berechnet > aktuellerAuftrag.abholung_zeit;
         
         let badges = '';

@@ -14031,7 +14031,9 @@ class App {
     
     // Abholzeit formatieren
     const abholzeitText = termin.abholung_zeit || termin.abhol_zeit || '—';
-    const abholDatumText = termin.abhol_datum ? this.formatDatum(termin.abhol_datum) : (termin.datum ? this.formatDatum(termin.datum) : '—');
+    const abholDatumText = (termin.abholung_datum || termin.abhol_datum)
+      ? this.formatDatum(termin.abholung_datum || termin.abhol_datum)
+      : (termin.datum ? this.formatDatum(termin.datum) : '—');
     
     // Dauer formatieren
     const dauerText = dauer >= 60 
@@ -15923,6 +15925,11 @@ class App {
 
   formatDatum(datum) {
     if (!datum) return '-';
+    // Reine Datums-Strings (YYYY-MM-DD) direkt parsen, kein Date-Objekt (Timezone-Bug!)
+    if (typeof datum === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(datum)) {
+      const [jahr, monat, tag] = datum.split('-');
+      return `${tag}.${monat}.${jahr}`;
+    }
     const d = new Date(datum);
     const tag = String(d.getDate()).padStart(2, '0');
     const monat = String(d.getMonth() + 1).padStart(2, '0');
