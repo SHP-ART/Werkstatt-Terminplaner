@@ -2844,24 +2844,29 @@ class TermineController {
             return { start, end: start + dauer };
           });
 
-          const slotStart = KIPlanungController.findAvailableSlot(
-            blocks, tagStart, benoetigt, tagStart, tagEnde
-          );
+          const zeiten = [];
+          let suchAb = tagStart;
+          while (zeiten.length < 4) {
+            const slotStart = KIPlanungController.findAvailableSlot(
+              blocks, suchAb, benoetigt, tagStart, tagEnde
+            );
+            if (slotStart === null) break;
+            const h = Math.floor(slotStart / 60);
+            const m = slotStart % 60;
+            zeiten.push(`${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`);
+            suchAb = slotStart + benoetigt;
+          }
 
-          if (slotStart !== null) {
+          if (zeiten.length > 0) {
             const belegtMinuten = blocks.reduce((sum, b) => sum + (b.end - b.start), 0);
             const verfuegbarMinuten = (kandidat.arbeitsstunden_pro_tag || 8) * 60;
             const auslastungProzent = verfuegbarMinuten > 0
               ? Math.round((belegtMinuten / verfuegbarMinuten) * 100)
               : 0;
 
-            const h = Math.floor(slotStart / 60);
-            const m = slotStart % 60;
-            const startzeit = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
-
             slots.push({
               datum: datumStr,
-              startzeit,
+              zeiten,
               mitarbeiter_id: kandidat._typ === 'mitarbeiter' ? kandidat.id : null,
               lehrling_id: kandidat._typ === 'lehrling' ? kandidat.id : null,
               mitarbeiter_name: kandidat.name,
