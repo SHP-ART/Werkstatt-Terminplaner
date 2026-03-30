@@ -8251,6 +8251,9 @@ class App {
         // Hole Abholzeit aus dem Termin (DB-Feld: abholung_zeit)
         const abholzeit = termin.abholung_zeit;
         if (!abholzeit) continue;
+
+        // Wenn Abholdatum gesetzt ist und nach dem Termindatum liegt → kein Konflikt möglich
+        if (termin.abholung_datum && termin.abholung_datum > datum) continue;
         
         // Abholzeit in Minuten
         const [abholH, abholM] = abholzeit.split(':').map(Number);
