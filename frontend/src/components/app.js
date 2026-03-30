@@ -7038,7 +7038,24 @@ class App {
           </div>
           <div class="detail-item">
             <span class="detail-label">Kilometerstand</span>
-            <span class="detail-value">${termin.kilometerstand ? termin.kilometerstand.toLocaleString('de-DE') + ' km' : '-'}</span>
+            <div style="display:flex; gap:6px; align-items:center;">
+              <input type="number" id="detailKilometerstand" value="${termin.kilometerstand || ''}"
+                placeholder="km" min="0"
+                style="padding:5px 8px; border:1px solid #ddd; border-radius:4px; width:130px; font-size:0.95em;">
+              <span style="color:#666; font-size:0.9em;">km</span>
+            </div>
+          </div>
+          <div class="detail-item">
+            <span class="detail-label">Fahrgestellnr. (VIN)</span>
+            <input type="text" id="detailVin" value="${termin.vin || ''}"
+              placeholder="17-stellige VIN" maxlength="17"
+              style="padding:5px 8px; border:1px solid #ddd; border-radius:4px; width:100%; font-family:'Courier New',monospace; font-size:0.9em; text-transform:uppercase;">
+          </div>
+          <div class="detail-item" style="display:flex; align-items:flex-end;">
+            <button onclick="app.detailKmVinSpeichern(${termin.id})" 
+              style="padding:6px 14px; background:#2563eb; color:white; border:none; border-radius:6px; cursor:pointer; font-size:0.9em;">
+              💾 KM / VIN speichern
+            </button>
           </div>
         </div>
       </div>
@@ -7357,6 +7374,32 @@ class App {
 
   closeTerminDetails() {
     document.getElementById('terminDetailsModal').style.display = 'none';
+  }
+
+  async detailKmVinSpeichern(terminId) {
+    const kmInput = document.getElementById('detailKilometerstand');
+    const vinInput = document.getElementById('detailVin');
+    if (!kmInput || !vinInput) return;
+
+    const km = kmInput.value !== '' ? parseInt(kmInput.value, 10) : null;
+    const vin = vinInput.value.trim().toUpperCase() || null;
+
+    try {
+      await TermineService.update(terminId, { kilometerstand: km, vin });
+      // Cache aktualisieren
+      if (this.termineById[terminId]) {
+        this.termineById[terminId].kilometerstand = km;
+        this.termineById[terminId].vin = vin;
+      }
+      const btn = document.querySelector('[onclick*="detailKmVinSpeichern"]');
+      if (btn) {
+        btn.textContent = '✅ Gespeichert';
+        btn.style.background = '#16a34a';
+        setTimeout(() => { btn.textContent = '💾 KM / VIN speichern'; btn.style.background = '#2563eb'; }, 2000);
+      }
+    } catch (e) {
+      alert('Fehler beim Speichern: ' + e.message);
+    }
   }
 
   // Zurück zu Termin-Details vom Arbeitszeiten-Modal
