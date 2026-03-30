@@ -135,8 +135,9 @@ const getFaellige = async (req, res) => {
       ...termineMitArbeitenTeileStatus
     ];
     
-    // Zähle Bestellungen mit Status "bestellt" für die Statistik
+    // Zähle Bestellungen für die Statistik
     const bestelltCount = alleBestellungen.filter(b => b.status === 'bestellt').length;
+    const geliefertCount = alleBestellungen.filter(b => b.status === 'geliefert').length;
     
     res.json({
       gruppiert,
@@ -148,6 +149,7 @@ const getFaellige = async (req, res) => {
         dieseWoche: gruppiert.dieseWoche.length,
         naechsteWoche: gruppiert.naechsteWoche.length,
         bestellt: bestelltCount,
+        geliefert: geliefertCount,
         gesamt: alleBestellungen.length
       }
     });

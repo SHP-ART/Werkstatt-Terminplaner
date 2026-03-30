@@ -96,13 +96,16 @@ class TeileBestellung {
         LEFT JOIN termine t ON tb.termin_id = t.id
         LEFT JOIN kunden k ON t.kunde_id = k.id
         LEFT JOIN kunden k_direkt ON tb.kunde_id = k_direkt.id
-        WHERE tb.status IN ('offen', 'bestellt')
+        WHERE tb.status IN ('offen', 'bestellt', 'geliefert')
           AND (
-            -- Termine ab heute bis zum Zeitraum
-            (t.datum >= ? AND t.datum <= ?)
+            -- Offene Teile: Termine ab heute bis zum Zeitraum
+            (tb.status = 'offen' AND t.datum >= ? AND t.datum <= ?)
+            OR
+            -- Bestellt/Geliefert: auch vergangene Termine anzeigen (letzten 30 Tage + Zukunft)
+            (tb.status IN ('bestellt', 'geliefert') AND t.datum >= date('now', '-30 days'))
             OR
             -- Bestellungen direkt einem Kunden zugeordnet (ohne Termin)
-            (tb.termin_id IS NULL AND tb.kunde_id IS NOT NULL AND tb.status = 'offen')
+            (tb.termin_id IS NULL AND tb.kunde_id IS NOT NULL AND tb.status != 'storniert')
           )
           AND (t.geloescht_am IS NULL OR t.geloescht_am = '' OR t.id IS NULL)
           AND (t.ist_schwebend IS NULL OR t.ist_schwebend = 0 OR t.id IS NULL)
@@ -142,7 +145,7 @@ class TeileBestellung {
         FROM teile_bestellungen tb
         LEFT JOIN termine t ON tb.termin_id = t.id
         LEFT JOIN kunden k ON t.kunde_id = k.id
-        WHERE tb.status IN ('offen', 'bestellt')
+        WHERE tb.status IN ('offen', 'bestellt', 'geliefert')
           AND t.ist_schwebend = 1
           AND (t.geloescht_am IS NULL OR t.geloescht_am = '')
           AND t.status != 'abgeschlossen'
