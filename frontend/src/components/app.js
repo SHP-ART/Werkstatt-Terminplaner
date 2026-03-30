@@ -26878,6 +26878,18 @@ class App {
       const tage = zeitraum === 'alle' ? 365 : parseInt(zeitraum);
       
       const response = await TeileBestellService.getFaellige(tage);
+
+      // Cache für Tab-Wechsel ohne Reload
+      this._letzteTeileAntwort = response;
+
+      // Badge-Zähler pro Status-Tab
+      const alleFlat = response.alle || [];
+      const ofBadge = document.getElementById('teileTabBadge_offen');
+      const beBadge = document.getElementById('teileTabBadge_bestellt');
+      const geBadge = document.getElementById('teileTabBadge_geliefert');
+      if (ofBadge) ofBadge.textContent = alleFlat.filter(b => b.status === 'offen').length;
+      if (beBadge) beBadge.textContent = alleFlat.filter(b => b.status === 'bestellt').length;
+      if (geBadge) geBadge.textContent = alleFlat.filter(b => b.status === 'geliefert').length;
       
       // Statistik aktualisieren (alles aus einer Response)
       if (response.statistik) {
@@ -26916,19 +26928,12 @@ class App {
    * Rendert die Teile-Bestellungen gruppiert nach Dringlichkeit
    */
   renderTeileBestellungen(gruppiert, container) {
-    const filterOffen = document.getElementById('teileFilterOffen')?.checked !== false;
-    const filterBestellt = document.getElementById('teileFilterBestellt')?.checked !== false;
-    const filterGeliefert = document.getElementById('teileFilterGeliefert')?.checked === true;
+    const aktiverStatusTab = this._aktiveTeileStatusTab || 'offen';
     
     let html = '';
     
-    // Funktion zum Filtern
-    const filterBestellung = (b) => {
-      if (b.status === 'offen' && !filterOffen) return false;
-      if (b.status === 'bestellt' && !filterBestellt) return false;
-      if (b.status === 'geliefert' && !filterGeliefert) return false;
-      return true;
-    };
+    // Funktion zum Filtern: nur Einträge des aktiven Status-Tabs
+    const filterBestellung = (b) => b.status === aktiverStatusTab;
     
     // Kunden-Direkt (ohne Termin)
     const kundenDirektGefiltert = (gruppiert.kundenDirekt || []).filter(filterBestellung);
@@ -26962,15 +26967,46 @@ class App {
     
     // Keine Bestellungen?
     if (html === '') {
+      const emptyMessages = {
+        offen: '🎉 Keine Teile müssen bestellt werden',
+        bestellt: '📦 Keine bestellten Teile vorhanden',
+        geliefert: '✅ Keine eingetroffenen Teile vorhanden'
+      };
       html = `
         <div class="teile-leer">
           <span class="teile-leer-icon">📦</span>
-          <p>Keine Teile-Bestellungen für den ausgewählten Zeitraum</p>
+          <p>${emptyMessages[aktiverStatusTab] || 'Keine Teile-Bestellungen für den ausgewählten Zeitraum'}</p>
         </div>
       `;
     }
     
     container.innerHTML = html;
+  }
+
+  /**
+   * Wechselt den aktiven Status-Tab im Teile-Bestellen-Tab
+   * @param {string} status - 'offen' | 'bestellt' | 'geliefert'
+   */
+  teileStatusTabWechseln(status) {
+    this._aktiveTeileStatusTab = status;
+
+    // Tab-Buttons umschalten
+    ['offen', 'bestellt', 'geliefert'].forEach(s => {
+      const btn = document.getElementById(`teileTab_${s}`);
+      if (btn) btn.classList.toggle('active', s === status);
+    });
+
+    // Kontextbezogene Aktions-Buttons
+    const btnBestellt = document.getElementById('teileBtn_bestellt');
+    const btnEingetroffen = document.getElementById('teileBtn_eingetroffen');
+    if (btnBestellt) btnBestellt.style.display = status === 'offen' ? '' : 'none';
+    if (btnEingetroffen) btnEingetroffen.style.display = status === 'bestellt' ? '' : 'none';
+
+    // Neu rendern mit gecachten Daten (kein Netzwerk-Reload nötig)
+    if (this._letzteTeileAntwort) {
+      const container = document.getElementById('teileBestellListe');
+      if (container) this.renderTeileBestellungen(this._letzteTeileAntwort.gruppiert, container);
+    }
   }
 
   /**

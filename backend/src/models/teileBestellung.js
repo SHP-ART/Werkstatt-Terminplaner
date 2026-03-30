@@ -719,6 +719,136 @@ class TeileBestellung {
       });
     });
   }
+  /**
+   * Termine mit einem bestimmten teile_status-Wert (direkt auf Termin)
+   * Wird für "Bestellt"- und "Eingetroffen"-Tab benötigt
+   */
+  static getTerminMarkierungen(teileStatusList, mapToStatus, tage = 90) {
+    return new Promise((resolve, reject) => {
+      const vonDate = new Date();
+      vonDate.setDate(vonDate.getDate() - tage);
+      const vonStr = vonDate.toISOString().split('T')[0];
+      const futureDate = new Date();
+      futureDate.setDate(futureDate.getDate() + tage);
+      const futureStr = futureDate.toISOString().split('T')[0];
+
+      const placeholders = teileStatusList.map(() => '?').join(',');
+      const sql = `
+        SELECT t.id as termin_id, t.datum as termin_datum, t.arbeit as termin_arbeiten,
+          t.fahrzeugtyp as termin_fahrzeug, t.ist_schwebend, t.schwebend_prioritaet,
+          t.kennzeichen as termin_kennzeichen, t.teile_status,
+          k.name as kunde_name, k.kennzeichen as kunde_kennzeichen,
+          julianday(t.datum) - julianday('now') as tage_bis_termin
+        FROM termine t
+        LEFT JOIN kunden k ON t.kunde_id = k.id
+        WHERE t.teile_status IN (${placeholders})
+          AND ((t.datum >= ? AND t.datum <= ?) OR t.ist_schwebend = 1)
+          AND (t.geloescht_am IS NULL OR t.geloescht_am = '')
+          AND t.status != 'abgeschlossen'
+        ORDER BY t.ist_schwebend DESC, t.datum ASC
+      `;
+
+      db.all(sql, [...teileStatusList, vonStr, futureStr], (err, rows) => {
+        if (err) {
+          console.error('[Teile] getTerminMarkierungen SQL-Fehler:', err.message);
+          resolve([]);
+        } else {
+          const formattiert = (rows || []).map(row => ({
+            id: `termin_${row.termin_id}_mark_${mapToStatus}`,
+            termin_id: row.termin_id,
+            teil_name: `⚠️ ${row.termin_arbeiten || 'Teile'}`,
+            teil_oe_nummer: null,
+            menge: 1,
+            fuer_arbeit: row.termin_arbeiten,
+            status: mapToStatus,
+            termin_datum: row.termin_datum,
+            termin_arbeiten: row.termin_arbeiten,
+            termin_fahrzeug: row.termin_fahrzeug,
+            ist_schwebend: row.ist_schwebend,
+            schwebend_prioritaet: row.schwebend_prioritaet,
+            termin_kennzeichen: row.termin_kennzeichen,
+            kunde_name: row.kunde_name,
+            kunde_kennzeichen: row.kunde_kennzeichen,
+            tage_bis_termin: row.tage_bis_termin,
+            ist_teile_status_markierung: true
+          }));
+          resolve(formattiert);
+        }
+      });
+    });
+  }
+
+  /**
+   * Arbeiten aus arbeitszeiten_details mit einem bestimmten teile_status-Wert
+   * Wird für "Bestellt"- und "Eingetroffen"-Tab benötigt
+   */
+  static getArbeitenMarkierungen(teileStatus, mapToStatus, tage = 90) {
+    return new Promise((resolve, reject) => {
+      const vonDate = new Date();
+      vonDate.setDate(vonDate.getDate() - tage);
+      const vonStr = vonDate.toISOString().split('T')[0];
+      const futureDate = new Date();
+      futureDate.setDate(futureDate.getDate() + tage);
+      const futureStr = futureDate.toISOString().split('T')[0];
+
+      const likeParam = `%"teile_status":"${teileStatus}"%`;
+      const sql = `
+        SELECT t.id as termin_id, t.datum as termin_datum, t.arbeit as termin_arbeiten,
+          t.fahrzeugtyp as termin_fahrzeug, t.ist_schwebend, t.schwebend_prioritaet,
+          t.kennzeichen as termin_kennzeichen, t.arbeitszeiten_details,
+          k.name as kunde_name, k.kennzeichen as kunde_kennzeichen,
+          julianday(t.datum) - julianday('now') as tage_bis_termin
+        FROM termine t
+        LEFT JOIN kunden k ON t.kunde_id = k.id
+        WHERE t.arbeitszeiten_details LIKE ?
+          AND ((t.datum >= ? AND t.datum <= ?) OR t.ist_schwebend = 1)
+          AND (t.geloescht_am IS NULL OR t.geloescht_am = '')
+          AND t.status != 'abgeschlossen'
+        ORDER BY t.ist_schwebend DESC, t.datum ASC
+      `;
+
+      db.all(sql, [likeParam, vonStr, futureStr], (err, rows) => {
+        if (err) {
+          console.error('[Teile] getArbeitenMarkierungen SQL-Fehler:', err.message);
+          resolve([]);
+        } else {
+          const ergebnisse = [];
+          (rows || []).forEach(row => {
+            try {
+              const details = JSON.parse(row.arbeitszeiten_details || '{}');
+              for (const [arbeitName, arbeitData] of Object.entries(details)) {
+                if (arbeitName.startsWith('_')) continue;
+                if (typeof arbeitData === 'object' && arbeitData.teile_status === teileStatus) {
+                  ergebnisse.push({
+                    id: `arbeit_${row.termin_id}_${arbeitName.replace(/[^a-zA-Z0-9]/g, '_')}_${mapToStatus}`,
+                    termin_id: row.termin_id,
+                    teil_name: `⚠️ ${arbeitName}`,
+                    teil_oe_nummer: null,
+                    menge: 1,
+                    fuer_arbeit: arbeitName,
+                    status: mapToStatus,
+                    termin_datum: row.termin_datum,
+                    termin_arbeiten: row.termin_arbeiten,
+                    termin_fahrzeug: row.termin_fahrzeug,
+                    ist_schwebend: row.ist_schwebend,
+                    schwebend_prioritaet: row.schwebend_prioritaet,
+                    termin_kennzeichen: row.termin_kennzeichen,
+                    kunde_name: row.kunde_name,
+                    kunde_kennzeichen: row.kunde_kennzeichen,
+                    tage_bis_termin: row.tage_bis_termin,
+                    ist_arbeiten_teile_status: true
+                  });
+                }
+              }
+            } catch (e) {
+              console.error('Fehler beim Parsen von arbeitszeiten_details:', e);
+            }
+          });
+          resolve(ergebnisse);
+        }
+      });
+    });
+  }
 }
 
 module.exports = TeileBestellung;

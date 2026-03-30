@@ -42,10 +42,16 @@ const getFaellige = async (req, res) => {
       TeileBestellung.getSchwebende(),
       TeileBestellung.getTermineMitTeileStatusBestellen(tage),
       TeileBestellung.getSchwbendeTermineMitTeileStatusBestellen(),
-      TeileBestellung.getTermineMitArbeitenTeileStatusBestellen(tage)
+      TeileBestellung.getTermineMitArbeitenTeileStatusBestellen(tage),
+      // Bestellt-Markierungen (teile_status = 'bestellt' auf Termin / arbeiten)
+      TeileBestellung.getTerminMarkierungen(['bestellt'], 'bestellt'),
+      TeileBestellung.getArbeitenMarkierungen('bestellt', 'bestellt'),
+      // Eingetroffen-Markierungen (teile_status = 'vorraetig' auf Termin / arbeiten)
+      TeileBestellung.getTerminMarkierungen(['vorraetig'], 'geliefert'),
+      TeileBestellung.getArbeitenMarkierungen('vorraetig', 'geliefert')
     ]);
 
-    const [r0, r1, r2, r3, r4] = results;
+    const [r0, r1, r2, r3, r4, r5, r6, r7, r8] = results;
     if (r0.status === 'rejected') console.error('[Teile] getFaellige Fehler:', r0.reason?.message);
     if (r1.status === 'rejected') console.error('[Teile] getSchwebende Fehler:', r1.reason?.message);
     if (r2.status === 'rejected') console.error('[Teile] getTermineMitTeileStatusBestellen Fehler:', r2.reason?.message);
@@ -57,6 +63,10 @@ const getFaellige = async (req, res) => {
     const termineMitTeileStatus      = r2.status === 'fulfilled' ? r2.value : [];
     const schwebendeTermineMitTeileStatus = r3.status === 'fulfilled' ? r3.value : [];
     const termineMitArbeitenTeileStatus   = r4.status === 'fulfilled' ? r4.value : [];
+    const bestelltMarkierungenTermin      = r5.status === 'fulfilled' ? r5.value : [];
+    const bestelltMarkierungenArbeiten    = r6.status === 'fulfilled' ? r6.value : [];
+    const vorraetMarkierungenTermin       = r7.status === 'fulfilled' ? r7.value : [];
+    const vorraetMarkierungenArbeiten     = r8.status === 'fulfilled' ? r8.value : [];
     
     // Gruppiere nach Dringlichkeit
     const heute = new Date();
@@ -126,16 +136,29 @@ const getFaellige = async (req, res) => {
     
     // NEU: Termine mit arbeitszeiten_details teile_status = 'bestellen' gruppieren
     termineMitArbeitenTeileStatus.forEach(gruppiereNachDringlichkeit);
+
+    // Bestellt-Markierungen (Status = 'bestellt') gruppieren
+    bestelltMarkierungenTermin.forEach(gruppiereNachDringlichkeit);
+    bestelltMarkierungenArbeiten.forEach(gruppiereNachDringlichkeit);
+
+    // Eingetroffen-Markierungen (Status = 'geliefert') gruppieren
+    vorraetMarkierungenTermin.forEach(gruppiereNachDringlichkeit);
+    vorraetMarkierungenArbeiten.forEach(gruppiereNachDringlichkeit);
     
     const alleBestellungen = [
       ...schwebende, 
       ...bestellungen, 
       ...termineMitTeileStatus.filter(b => !b.ist_schwebend),
       ...schwebendeTermineMitTeileStatus,
-      ...termineMitArbeitenTeileStatus
+      ...termineMitArbeitenTeileStatus,
+      ...bestelltMarkierungenTermin,
+      ...bestelltMarkierungenArbeiten,
+      ...vorraetMarkierungenTermin,
+      ...vorraetMarkierungenArbeiten
     ];
     
     // Zähle Bestellungen für die Statistik
+    const offenCount    = alleBestellungen.filter(b => b.status === 'offen').length;
     const bestelltCount = alleBestellungen.filter(b => b.status === 'bestellt').length;
     const geliefertCount = alleBestellungen.filter(b => b.status === 'geliefert').length;
     
@@ -148,6 +171,7 @@ const getFaellige = async (req, res) => {
         dringend: gruppiert.dringend.length,
         dieseWoche: gruppiert.dieseWoche.length,
         naechsteWoche: gruppiert.naechsteWoche.length,
+        offen: offenCount,
         bestellt: bestelltCount,
         geliefert: geliefertCount,
         gesamt: alleBestellungen.length

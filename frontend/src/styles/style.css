@@ -11339,6 +11339,74 @@ mark.highlight {
 
 /* ===== TEILE-BESTELLEN TAB STYLES ===== */
 
+/* 3-Status-Tabs */
+.teile-status-tabs {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 15px;
+    flex-wrap: wrap;
+}
+
+.teile-status-tab {
+    flex: 1;
+    min-width: 160px;
+    padding: 14px 20px;
+    border: 2px solid #e0e0e0;
+    border-radius: 10px;
+    background: white;
+    cursor: pointer;
+    font-size: 1em;
+    font-weight: 600;
+    color: #666;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    transition: all 0.2s;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+}
+
+.teile-status-tab:hover {
+    border-color: #bbb;
+    background: #f8f8f8;
+}
+
+.teile-status-tab--offen.active {
+    border-color: #c62828;
+    background: #ffebee;
+    color: #c62828;
+}
+
+.teile-status-tab--bestellt.active {
+    border-color: #1565c0;
+    background: #e3f2fd;
+    color: #1565c0;
+}
+
+.teile-status-tab--geliefert.active {
+    border-color: #2e7d32;
+    background: #e8f5e9;
+    color: #2e7d32;
+}
+
+.teile-tab-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 26px;
+    height: 22px;
+    padding: 0 6px;
+    border-radius: 11px;
+    font-size: 0.8em;
+    font-weight: 700;
+    background: #e0e0e0;
+    color: #555;
+    transition: all 0.2s;
+}
+
+.teile-status-tab--offen.active .teile-tab-badge { background: #c62828; color: white; }
+.teile-status-tab--bestellt.active .teile-tab-badge { background: #1565c0; color: white; }
+.teile-status-tab--geliefert.active .teile-tab-badge { background: #2e7d32; color: white; } */
+
 /* Statistik-Karten */
 .teile-statistik {
     display: grid;
