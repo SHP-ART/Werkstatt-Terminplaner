@@ -30,7 +30,7 @@ class App {
     
     // Planungs-Drag&Drop: Lokaler Änderungspuffer
     this.planungAenderungen = new Map(); // terminId -> { startzeit, mitarbeiter_id, lehrling_id, type, originalData }
-    this.planungRaster = 5; // Standard-Raster: 5 Minuten
+    this.planungRaster = 15; // Standard-Raster: 15 Minuten (muss mit HTML-Select übereinstimmen)
 
     // === Performance-Optimierung: Tab-Element-Caching ===
     // Cache für häufig verwendete DOM-Elemente
@@ -23681,11 +23681,12 @@ class App {
       const pixelPerHour = 100;
       const hoursFromStart = dropX / pixelPerHour;
       const totalMinutes = Math.round((startHour + hoursFromStart) * 60);
-      let newHour = Math.floor(totalMinutes / 60);
-      // Raster aus Einstellung holen (Standard: 5 Minuten)
-      const raster = this.planungRaster || 5;
-      let newMinute = Math.round((totalMinutes % 60) / raster) * raster;
-      let snappedMinutes = newHour * 60 + newMinute;
+      // Raster aus Einstellung holen (Standard: 15 Minuten)
+      const raster = this.planungRaster || 15;
+      // Gesamtminuten snappen (identisch zu Dragover-Logik, verhindert Abweichung)
+      let snappedMinutes = Math.round(totalMinutes / raster) * raster;
+      let newHour = Math.floor(snappedMinutes / 60);
+      let newMinute = snappedMinutes % 60;
       
       // Hole Dauer: primär aus dataTransfer (zuverlässiger als DOM-Suche)
       const dauerFromTransfer = parseInt(e.dataTransfer.getData('application/x-dauer')) || 0;
