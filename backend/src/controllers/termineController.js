@@ -2755,122 +2755,122 @@ class TermineController {
 
         const datumStr = d.toISOString().split('T')[0];
 
-        // Abwesenheiten prüfen
-        const abwesenheiten = await AbwesenheitenModel.getByDatum(datumStr);
-        const abwesendIds = new Set((abwesenheiten || []).map(a => a.mitarbeiter_id));
+        // Abwesenheiten aus neuer Tabelle laden (mitarbeiter UND lehrlinge)
+        const abwesenheitenRows = await new Promise((resolve) => {
+          db.all(
+            `SELECT mitarbeiter_id, lehrling_id FROM abwesenheiten WHERE datum_von <= ? AND datum_bis >= ?`,
+            [datumStr, datumStr],
+            (err, rows) => resolve(err ? [] : (rows || []))
+          );
+        });
+        const abwesendMAIds = new Set(abwesenheitenRows.filter(a => a.mitarbeiter_id).map(a => a.mitarbeiter_id));
+        const abwesendLehrlingIds = new Set(abwesenheitenRows.filter(a => a.lehrling_id).map(a => a.lehrling_id));
 
-        // Aktive Mitarbeiter laden
+        // Kandidaten: aktive nicht-service Mitarbeiter + aktive Lehrlinge (jeweils ohne Abwesenheit)
         const mitarbeiterListe = await getCachedAktiveMitarbeiter();
-        const verfuegbar = mitarbeiterId
-          ? mitarbeiterListe.filter(m => m.id === mitarbeiterId && !abwesendIds.has(m.id))
-          : mitarbeiterListe.filter(m => !abwesendIds.has(m.id));
+        const lehrlingsListe = await getCachedAktiveLehrlinge();
 
-        if (!verfuegbar.length) continue;
+        const verfuegbarMA = mitarbeiterListe
+          .filter(m => !m.nur_service && !abwesendMAIds.has(m.id))
+          .map(m => ({ ...m, _typ: 'mitarbeiter' }));
+        const verfuegbarLehrlinge = lehrlingsListe
+          .filter(l => !abwesendLehrlingIds.has(l.id))
+          .map(l => ({ ...l, _typ: 'lehrling' }));
 
-        // Service-Mitarbeiter (nur_service=1) nur als Fallback wenn kein anderer verfügbar
-        const nichtService = verfuegbar.filter(m => !m.nur_service);
-        const nurService = verfuegbar.filter(m => m.nur_service);
-        // Bei explizit gewähltem Mitarbeiter: keine Einschränkung
-        const zuPruefende = mitarbeiterId ? verfuegbar : (nichtService.length ? nichtService : nurService);
+        const zuPruefende = [...verfuegbarMA, ...verfuegbarLehrlinge];
+        if (!zuPruefende.length) continue;
 
         // Bestehende Termine des Tages laden
         const termineDesTages = await TermineModel.getByDatum(datumStr);
 
-        // Echte Auslastung pro Mitarbeiter für diesen Tag (inkl. arbeitszeiten_details)
-        const auslastungProMA = await TermineModel.getAuslastungProMitarbeiter(datumStr);
-        const auslastungMAMap = {};
-        (auslastungProMA || []).forEach(a => { auslastungMAMap[a.mitarbeiter_id] = a; });
-
         const KIPlanungController = require('./kiPlanungController');
-        let slotGefunden = false;
 
-        const pruefeGruppe = (gruppe) => {
-          for (const ma of gruppe) {
-            if (slots.length >= 5) break;
-
-            // Blöcke für diesen Mitarbeiter ermitteln:
-            // - Direkt zugewiesene Termine (mitarbeiter_id oder arbeitszeiten_details)
-            // - PLUS Termine ohne jede Mitarbeiter-Zuweisung (gelten für alle = Werkstatt-Pool)
-            const hatMitarbeiterZuweisung = (t) => {
-              if (t.mitarbeiter_id) return true;
-              if (t.arbeitszeiten_details) {
-                try {
-                  const det = typeof t.arbeitszeiten_details === 'string'
-                    ? JSON.parse(t.arbeitszeiten_details)
-                    : t.arbeitszeiten_details;
-                  if (det._gesamt_mitarbeiter_id?.id) return true;
-                  for (const [key, val] of Object.entries(det)) {
-                    if (key.startsWith('_')) continue;
-                    if (typeof val === 'object' && val.mitarbeiter_id) return true;
-                  }
-                } catch (e) { /* ignorieren */ }
+        // Prüft ob ein Termin einem Kandidaten zugeordnet ist
+        const gehoertZuKandidat = (t, kandidat) => {
+          try {
+            if (kandidat._typ === 'mitarbeiter' && t.mitarbeiter_id === kandidat.id) return true;
+            if (t.arbeitszeiten_details) {
+              const det = typeof t.arbeitszeiten_details === 'string'
+                ? JSON.parse(t.arbeitszeiten_details)
+                : t.arbeitszeiten_details;
+              const gm = det._gesamt_mitarbeiter_id;
+              if (gm && gm.id === kandidat.id && gm.type === kandidat._typ) return true;
+              for (const [key, val] of Object.entries(det)) {
+                if (key.startsWith('_')) continue;
+                if (typeof val === 'object') {
+                  if (kandidat._typ === 'mitarbeiter' && val.mitarbeiter_id === kandidat.id) return true;
+                  if (kandidat._typ === 'lehrling' && val.lehrling_id === kandidat.id) return true;
+                }
               }
-              return false;
-            };
-            const gehoertZuMA = (t) => {
-              if (t.mitarbeiter_id === ma.id) return true;
-              if (t.arbeitszeiten_details) {
-                try {
-                  const det = typeof t.arbeitszeiten_details === 'string'
-                    ? JSON.parse(t.arbeitszeiten_details)
-                    : t.arbeitszeiten_details;
-                  if (det._gesamt_mitarbeiter_id?.id === ma.id) return true;
-                  for (const [key, val] of Object.entries(det)) {
-                    if (key.startsWith('_')) continue;
-                    if (typeof val === 'object' && val.mitarbeiter_id === ma.id) return true;
-                  }
-                } catch (e) { /* ignorieren */ }
-              }
-              return false;
-            };
-            const maTermine = (termineDesTages || []).filter(t => {
-              const startzeit = t.startzeit || t.bring_zeit;
-              if (!startzeit) return false;
-              return gehoertZuMA(t) || !hatMitarbeiterZuweisung(t);
-            });
-            const blocks = maTermine.map(t => {
-              const startzeit = t.startzeit || t.bring_zeit || '08:00';
-              const [h, m] = startzeit.split(':').map(Number);
-              const start = h * 60 + m;
-              const dauer = t.tatsaechliche_zeit || t.geschaetzte_zeit || 60;
-              return { start, end: start + dauer };
-            });
-
-            // Freien Slot finden
-            const slotStart = KIPlanungController.findAvailableSlot(
-              blocks, tagStart, benoetigt, tagStart, tagEnde
-            );
-
-            if (slotStart !== null) {
-              // Auslastung aus tatsächlichen Blöcken (inkl. Pool-Termine ohne MA-Zuweisung)
-              const belegtMinuten = blocks.reduce((sum, b) => sum + (b.end - b.start), 0);
-              const verfuegbarMinuten = (ma.arbeitsstunden_pro_tag || 8) * 60;
-              const auslastungProzent = verfuegbarMinuten > 0
-                ? Math.round((belegtMinuten / verfuegbarMinuten) * 100)
-                : 0;
-
-              const h = Math.floor(slotStart / 60);
-              const m = slotStart % 60;
-              const startzeit = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
-
-              slots.push({
-                datum: datumStr,
-                startzeit,
-                mitarbeiter_id: ma.id,
-                mitarbeiter_name: ma.name,
-                auslastung_prozent: auslastungProzent
-              });
-              slotGefunden = true;
             }
-          }
+          } catch (e) { /* ignorieren */ }
+          return false;
         };
 
-        pruefeGruppe(zuPruefende);
+        // Prüft ob ein Termin irgendjemandem zugeordnet ist
+        const hatZuweisung = (t) => {
+          if (t.mitarbeiter_id) return true;
+          try {
+            if (t.arbeitszeiten_details) {
+              const det = typeof t.arbeitszeiten_details === 'string'
+                ? JSON.parse(t.arbeitszeiten_details)
+                : t.arbeitszeiten_details;
+              if (det._gesamt_mitarbeiter_id?.id) return true;
+              for (const [key, val] of Object.entries(det)) {
+                if (key.startsWith('_')) continue;
+                if (typeof val === 'object' && (val.mitarbeiter_id || val.lehrling_id)) return true;
+              }
+            }
+          } catch (e) { /* ignorieren */ }
+          return false;
+        };
 
-        // Kein Slot bei normalen Mitarbeitern → Service-Mitarbeiter als Fallback
-        if (!slotGefunden && !mitarbeiterId && nichtService.length && nurService.length) {
-          pruefeGruppe(nurService);
+        let slotGefunden = false;
+
+        for (const kandidat of zuPruefende) {
+          if (slots.length >= 5) break;
+
+          // Blöcke: eigene Termine + Pool-Termine (ohne Zuweisung)
+          const kandTermine = (termineDesTages || []).filter(t => {
+            const startzeit = t.startzeit || t.bring_zeit;
+            if (!startzeit) return false;
+            return gehoertZuKandidat(t, kandidat) || !hatZuweisung(t);
+          });
+          const blocks = kandTermine.map(t => {
+            const startzeit = t.startzeit || t.bring_zeit || '08:00';
+            const [h, m] = startzeit.split(':').map(Number);
+            const start = h * 60 + m;
+            const dauer = t.tatsaechliche_zeit || t.geschaetzte_zeit || 60;
+            return { start, end: start + dauer };
+          });
+
+          const slotStart = KIPlanungController.findAvailableSlot(
+            blocks, tagStart, benoetigt, tagStart, tagEnde
+          );
+
+          if (slotStart !== null) {
+            const belegtMinuten = blocks.reduce((sum, b) => sum + (b.end - b.start), 0);
+            const verfuegbarMinuten = (kandidat.arbeitsstunden_pro_tag || 8) * 60;
+            const auslastungProzent = verfuegbarMinuten > 0
+              ? Math.round((belegtMinuten / verfuegbarMinuten) * 100)
+              : 0;
+
+            const h = Math.floor(slotStart / 60);
+            const m = slotStart % 60;
+            const startzeit = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+
+            slots.push({
+              datum: datumStr,
+              startzeit,
+              mitarbeiter_id: kandidat._typ === 'mitarbeiter' ? kandidat.id : null,
+              lehrling_id: kandidat._typ === 'lehrling' ? kandidat.id : null,
+              mitarbeiter_name: kandidat.name,
+              auslastung_prozent: auslastungProzent
+            });
+            slotGefunden = true;
+          }
         }
+
       }
 
       res.json({ success: true, slots });
