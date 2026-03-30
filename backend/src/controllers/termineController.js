@@ -2788,11 +2788,26 @@ class TermineController {
           for (const ma of gruppe) {
             if (slots.length >= 5) break;
 
-            // Blöcke für diesen Mitarbeiter ermitteln
-            // Prüfe direktes mitarbeiter_id ODER Zuordnung via arbeitszeiten_details
-            const maTermine = (termineDesTages || []).filter(t => {
-              const startzeit = t.startzeit || t.bring_zeit;
-              if (!startzeit) return false;
+            // Blöcke für diesen Mitarbeiter ermitteln:
+            // - Direkt zugewiesene Termine (mitarbeiter_id oder arbeitszeiten_details)
+            // - PLUS Termine ohne jede Mitarbeiter-Zuweisung (gelten für alle = Werkstatt-Pool)
+            const hatMitarbeiterZuweisung = (t) => {
+              if (t.mitarbeiter_id) return true;
+              if (t.arbeitszeiten_details) {
+                try {
+                  const det = typeof t.arbeitszeiten_details === 'string'
+                    ? JSON.parse(t.arbeitszeiten_details)
+                    : t.arbeitszeiten_details;
+                  if (det._gesamt_mitarbeiter_id?.id) return true;
+                  for (const [key, val] of Object.entries(det)) {
+                    if (key.startsWith('_')) continue;
+                    if (typeof val === 'object' && val.mitarbeiter_id) return true;
+                  }
+                } catch (e) { /* ignorieren */ }
+              }
+              return false;
+            };
+            const gehoertZuMA = (t) => {
               if (t.mitarbeiter_id === ma.id) return true;
               if (t.arbeitszeiten_details) {
                 try {
@@ -2807,6 +2822,11 @@ class TermineController {
                 } catch (e) { /* ignorieren */ }
               }
               return false;
+            };
+            const maTermine = (termineDesTages || []).filter(t => {
+              const startzeit = t.startzeit || t.bring_zeit;
+              if (!startzeit) return false;
+              return gehoertZuMA(t) || !hatMitarbeiterZuweisung(t);
             });
             const blocks = maTermine.map(t => {
               const startzeit = t.startzeit || t.bring_zeit || '08:00';
@@ -2822,9 +2842,8 @@ class TermineController {
             );
 
             if (slotStart !== null) {
-              // Echte Auslastung aus getAuslastungProMitarbeiter verwenden
-              const maAuslastung = auslastungMAMap[ma.id];
-              const belegtMinuten = maAuslastung ? (maAuslastung.belegt_minuten || 0) : 0;
+              // Auslastung aus tatsächlichen Blöcken (inkl. Pool-Termine ohne MA-Zuweisung)
+              const belegtMinuten = blocks.reduce((sum, b) => sum + (b.end - b.start), 0);
               const verfuegbarMinuten = (ma.arbeitsstunden_pro_tag || 8) * 60;
               const auslastungProzent = verfuegbarMinuten > 0
                 ? Math.round((belegtMinuten / verfuegbarMinuten) * 100)
