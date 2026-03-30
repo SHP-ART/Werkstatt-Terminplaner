@@ -2799,7 +2799,7 @@ class TermineController {
                   const det = typeof t.arbeitszeiten_details === 'string'
                     ? JSON.parse(t.arbeitszeiten_details)
                     : t.arbeitszeiten_details;
-                  if (det._gesamt_mitarbeiter_id?.type === 'mitarbeiter' && det._gesamt_mitarbeiter_id.id === ma.id) return true;
+                  if (det._gesamt_mitarbeiter_id?.id === ma.id) return true;
                   for (const [key, val] of Object.entries(det)) {
                     if (key.startsWith('_')) continue;
                     if (typeof val === 'object' && val.mitarbeiter_id === ma.id) return true;
