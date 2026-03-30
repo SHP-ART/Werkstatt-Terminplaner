@@ -27066,7 +27066,9 @@ class App {
               <div class="teile-arbeit">${teil.fuer_arbeit || ''}</div>
               <div class="teile-aktionen-item">
                 <button class="btn-mini btn-primary" onclick="app.terminBearbeitenAusTeile(${teil.termin_id})" title="Termin bearbeiten">✏️ Bearbeiten</button>
-                <button class="btn-mini btn-success" onclick="app.arbeitenTeileStatusAufLoesen(${teil.termin_id}, '${(teil.fuer_arbeit || '').replace(/'/g, "\\'")}')" title="Als erledigt markieren">✅ Erledigt</button>
+                <button class="btn-mini btn-warning" onclick="app.arbeitenTeileStatusSetzen(${teil.termin_id}, '${(teil.fuer_arbeit || '').replace(/'/g, "\\'")}', 'bestellt')" title="Teile wurden bestellt">📦 Teile bestellt</button>
+                <button class="btn-mini btn-success" onclick="app.arbeitenTeileStatusSetzen(${teil.termin_id}, '${(teil.fuer_arbeit || '').replace(/'/g, "\\'")}', 'eingetroffen')" title="Teile eingetroffen">✅ Eingetroffen</button>
+                <button class="btn-mini btn-secondary" onclick="app.arbeitenTeileStatusAufLoesen(${teil.termin_id}, '${(teil.fuer_arbeit || '').replace(/'/g, "\\'")}')" title="Als erledigt/vorrätig markieren">🟢 Erlädigt</button>
               </div>
             </div>
           `;
@@ -27478,6 +27480,53 @@ class App {
    * @param {number} terminId - ID des Termins
    * @param {string} arbeitName - Name der Arbeit
    */
+  /**
+   * Teile-Status einer Arbeit setzen (bestellt / eingetroffen)
+   * Aktualisiert arbeitszeiten_details JSON-Feld im Termin
+   */
+  async arbeitenTeileStatusSetzen(terminId, arbeitName, neuerStatus) {
+    try {
+      const termin = await ApiService.get(`/termine/${terminId}`);
+      if (!termin) { this.showToast('Termin nicht gefunden', 'error'); return; }
+      
+      let details = {};
+      try {
+        details = typeof termin.arbeitszeiten_details === 'string'
+          ? JSON.parse(termin.arbeitszeiten_details || '{}')
+          : (termin.arbeitszeiten_details || {});
+      } catch (e) { details = {}; }
+
+      // Status setzen: 'bestellt' bleibt als teile_status sichtbar, 'eingetroffen' = vorraetig
+      const dbStatus = neuerStatus === 'eingetroffen' ? 'vorraetig' : 'bestellt';
+
+      if (details[arbeitName] && typeof details[arbeitName] === 'object') {
+        details[arbeitName].teile_status = dbStatus;
+      } else {
+        // Auch am Termin-Level setzen (für einfache Markierungen ohne arbeitszeiten_details)
+        await ApiService.put(`/termine/${terminId}`, {
+          ...termin,
+          teile_status: dbStatus
+        });
+        const label = neuerStatus === 'eingetroffen' ? 'Eingetroffen' : 'Bestellt';
+        this.showToast(`Teile-Status: ${label} ✅`, 'success');
+        this.loadTeileBestellungen();
+        return;
+      }
+
+      await ApiService.put(`/termine/${terminId}`, {
+        ...termin,
+        arbeitszeiten_details: JSON.stringify(details)
+      });
+
+      const label = neuerStatus === 'eingetroffen' ? 'Eingetroffen ✅' : 'Bestellt 📦';
+      this.showToast(`Teile-Status: ${label}`, 'success');
+      this.loadTeileBestellungen();
+    } catch (error) {
+      console.error('Fehler beim Setzen des Teile-Status:', error);
+      this.showToast('Fehler: ' + error.message, 'error');
+    }
+  }
+
   async arbeitenTeileStatusAufLoesen(terminId, arbeitName) {
     try {
       // Bestätigung anfordern
