@@ -27261,6 +27261,28 @@ class App {
   }
 
   /**
+   * Ausgewählte Teile als eingetroffen (geliefert) markieren
+   */
+  async teileAlsEingetroffen() {
+    const ausgewaehlt = Array.from(document.querySelectorAll('.teil-select:checked'))
+      .map(cb => parseInt(cb.dataset.id));
+    
+    if (ausgewaehlt.length === 0) {
+      this.showToast('Bitte wählen Sie Teile aus', 'warning');
+      return;
+    }
+    
+    try {
+      await TeileBestellService.markAlsEingetroffen(ausgewaehlt);
+      this.showToast(`${ausgewaehlt.length} Teile als eingetroffen markiert`, 'success');
+      this.loadTeileBestellungen();
+    } catch (error) {
+      console.error('Fehler beim Markieren:', error);
+      this.showToast('Fehler: ' + error.message, 'error');
+    }
+  }
+
+  /**
    * Status einer einzelnen Bestellung ändern
    */
   async teileStatusAendern(id, status) {

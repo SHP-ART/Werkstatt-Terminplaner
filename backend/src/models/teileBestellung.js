@@ -401,6 +401,31 @@ class TeileBestellung {
     });
   }
 
+  static markAlsEingetroffen(ids) {
+    return new Promise((resolve, reject) => {
+      if (!ids || ids.length === 0) {
+        resolve({ changes: 0 });
+        return;
+      }
+      
+      const placeholders = ids.map(() => '?').join(',');
+      const sql = `
+        UPDATE teile_bestellungen 
+        SET status = 'geliefert', 
+            aktualisiert_am = CURRENT_TIMESTAMP
+        WHERE id IN (${placeholders}) AND status IN ('offen', 'bestellt')
+      `;
+      
+      db.run(sql, ids, function(err) {
+        if (err) {
+          reject(err);
+        } else {
+          resolve({ changes: this.changes });
+        }
+      });
+    });
+  }
+
   /**
    * Bestellung löschen
    */

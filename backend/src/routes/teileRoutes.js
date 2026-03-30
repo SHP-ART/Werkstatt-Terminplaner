@@ -31,6 +31,9 @@ router.post('/bulk', teileController.createBulk);
 // PUT /api/teile-bestellungen/mark-bestellt - Mehrere als bestellt
 router.put('/mark-bestellt', teileController.markAlsBestellt);
 
+// PUT /api/teile-bestellungen/mark-eingetroffen - Mehrere als eingetroffen/geliefert
+router.put('/mark-eingetroffen', teileController.markAlsEingetroffen);
+
 // PUT /api/teile-bestellungen/:id - Bestellung aktualisieren
 router.put('/:id', teileController.update);
 

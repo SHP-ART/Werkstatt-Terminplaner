@@ -1077,6 +1077,13 @@ class TeileBestellService {
   }
 
   /**
+   * Mehrere Bestellungen als "eingetroffen/geliefert" markieren
+   */
+  static async markAlsEingetroffen(ids) {
+    return ApiService.put('/teile-bestellungen/mark-eingetroffen', { ids });
+  }
+
+  /**
    * Bestellung löschen
    */
   static async delete(id) {

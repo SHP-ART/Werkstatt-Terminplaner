@@ -329,6 +329,28 @@ const markAlsBestellt = async (req, res) => {
 };
 
 /**
+ * PUT /api/teile-bestellungen/mark-eingetroffen
+ */
+const markAlsEingetroffen = async (req, res) => {
+  try {
+    const { ids } = req.body;
+    
+    if (!ids || !Array.isArray(ids) || ids.length === 0) {
+      return res.status(400).json({ error: 'ids Array ist erforderlich' });
+    }
+    
+    const result = await TeileBestellung.markAlsEingetroffen(ids);
+    res.json({
+      success: true,
+      aktualisiert: result.changes
+    });
+  } catch (error) {
+    console.error('Fehler beim Markieren als eingetroffen:', error);
+    res.status(500).json({ error: 'Fehler beim Aktualisieren' });
+  }
+};
+
+/**
  * Bestellung löschen
  * DELETE /api/teile-bestellungen/:id
  */
@@ -377,6 +399,7 @@ module.exports = {
   update,
   updateStatus,
   markAlsBestellt,
+  markAlsEingetroffen,
   remove,
   getStatistik
 };
