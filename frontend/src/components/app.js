@@ -33061,25 +33061,42 @@ class App {
       container.style.display = 'block';
       return;
     }
-    container.innerHTML = '<div class="slot-header">🗓️ Vorgeschlagene freie Slots:</div>' +
-      slots.map((s, i) => {
-        const datum = new Date(s.datum).toLocaleDateString('de-DE', { weekday: 'long', day: '2-digit', month: '2-digit' });
-        return `<div class="slot-item" onclick="app._uebernimmSlot('${s.datum}','${s.mitarbeiter_id}','${s.mitarbeiter_name}',${i})">
-          <strong>${datum}</strong> ab ${s.startzeit} Uhr
-          <span class="slot-ma">${s.mitarbeiter_name}</span>
-          <span class="slot-auslastung">${s.auslastung_prozent}% ausgelastet</span>
-        </div>`;
-      }).join('') +
-      '<div class="slot-close" onclick="document.getElementById(\'slotVorschlaegeDropdown\').style.display=\'none\'">✕ Schließen</div>';
+    const zeilen = slots.map(s => {
+      const datum = new Date(s.datum).toLocaleDateString('de-DE', { weekday: 'long', day: '2-digit', month: '2-digit' });
+      const zeiten = (s.zeiten || (s.startzeit ? [s.startzeit] : []));
+      const chipsHtml = zeiten.map(zeit =>
+        `<span class="slot-zeit-chip" onclick="app._uebernimmSlot('${s.datum}','${s.mitarbeiter_id || ''}','${s.mitarbeiter_name}','${zeit}')" style="
+          display:inline-block;padding:4px 10px;border-radius:14px;cursor:pointer;
+          font-size:12px;font-weight:600;margin:2px;
+          background:#e8f4fd;color:#4a90e2;border:1px solid #4a90e2;">
+          ${zeit}
+        </span>`
+      ).join('');
+      return `<div class="slot-item-row" style="display:flex;align-items:center;padding:10px 14px;border-bottom:1px solid #f0f0f0;gap:10px;flex-wrap:wrap;">
+        <span style="min-width:130px;font-weight:600;color:#333;font-size:13px;">${datum}</span>
+        <span style="display:flex;flex-wrap:wrap;flex:1;gap:4px;">${chipsHtml}</span>
+        <span class="slot-auslastung" style="font-size:11px;color:#888;white-space:nowrap;">${s.mitarbeiter_name} · ${s.auslastung_prozent}% ausgelastet</span>
+      </div>`;
+    }).join('');
+    container.innerHTML =
+      '<div class="slot-header">🗓️ Vorgeschlagene freie Slots:</div>' +
+      zeilen +
+      '<div class="slot-close" onclick="document.getElementById(\'slotVorschlaegeDropdown\').style.display=\'none\'" style="padding:8px 14px;text-align:right;cursor:pointer;color:#999;font-size:12px;">✕ Schließen</div>';
     container.style.display = 'block';
   }
 
-  _uebernimmSlot(datum, mitarbeiterId, mitarbeiterName, idx) {
+  _uebernimmSlot(datum, mitarbeiterId, mitarbeiterName, zeit) {
     // Datum ins Terminformular übernehmen
     const datumInput = document.getElementById('datum');
     if (datumInput) {
       datumInput.value = datum;
       datumInput.dispatchEvent(new Event('change'));
+    }
+    // Bringzeit setzen
+    const bringZeitInput = document.getElementById('bring_zeit');
+    if (bringZeitInput && zeit) {
+      bringZeitInput.value = zeit;
+      bringZeitInput.dispatchEvent(new Event('change'));
     }
     // Kalender auf das Datum setzen
     if (this.setupAuslastungKalender) {
@@ -33096,7 +33113,7 @@ class App {
       maSelect.value = mitarbeiterId;
     }
     document.getElementById('slotVorschlaegeDropdown').style.display = 'none';
-    this.showToast(`Slot ${datum} übernommen`, 'success');
+    this.showToast(`Slot ${datum} ${zeit ? 'um ' + zeit + ' Uhr ' : ''}übernommen`, 'success');
   }
 
   // =========================================================================
