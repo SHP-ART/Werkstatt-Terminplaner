@@ -53,8 +53,58 @@ class ArbeitszeitenModel {
     return { changes: result.changes };
   }
 
+  // Fuzzy-Matching: Prüft ob ein Suchbegriff zu einer Bezeichnung oder deren Aliasen passt
+  // Unterstützt: exakte Treffer, Teilwort-Treffer, normalisierte Vergleiche
+  static _normalizeForMatch(text) {
+    return text.toLowerCase()
+      .replace(/[\/\-_\.]+/g, ' ')  // So/Wi → So Wi, Brems-Service → Brems Service
+      .replace(/\s+/g, ' ')
+      .trim();
+  }
+
+  static _fuzzyMatch(suchBegriff, bezeichnung, aliase) {
+    const normSuche = ArbeitszeitenModel._normalizeForMatch(suchBegriff);
+    const normBezeichnung = ArbeitszeitenModel._normalizeForMatch(bezeichnung);
+
+    // 1. Exakte Übereinstimmung (normalisiert)
+    if (normSuche === normBezeichnung) return true;
+
+    // 2. Teilwort-Suche: Suchbegriff ist in Bezeichnung enthalten oder umgekehrt
+    if (normBezeichnung.includes(normSuche) || normSuche.includes(normBezeichnung)) return true;
+
+    // 3. Wort-Überlappung: Mindestens ein signifikantes Wort stimmt überein
+    const suchWorte = normSuche.split(' ').filter(w => w.length >= 3);
+    const bezWorte = normBezeichnung.split(' ').filter(w => w.length >= 3);
+    if (suchWorte.length > 0 && bezWorte.length > 0) {
+      const ueberlappung = suchWorte.filter(sw => 
+        bezWorte.some(bw => bw.includes(sw) || sw.includes(bw))
+      );
+      if (ueberlappung.length > 0) return true;
+    }
+
+    // 4. Alias-Prüfung (exakt und Teilwort)
+    if (aliase) {
+      const aliasListe = aliase.split(',').map(a => ArbeitszeitenModel._normalizeForMatch(a));
+      for (const alias of aliasListe) {
+        if (!alias) continue;
+        if (alias === normSuche) return true;
+        if (alias.includes(normSuche) || normSuche.includes(alias)) return true;
+        // Wort-Überlappung mit Alias
+        const aliasWorte = alias.split(' ').filter(w => w.length >= 3);
+        if (suchWorte.length > 0 && aliasWorte.length > 0) {
+          const ueberlappung = suchWorte.filter(sw =>
+            aliasWorte.some(aw => aw.includes(sw) || sw.includes(aw))
+          );
+          if (ueberlappung.length > 0) return true;
+        }
+      }
+    }
+
+    return false;
+  }
+
   static async findByBezeichnung(bezeichnung) {
-    // Suche zuerst nach exakter Bezeichnung
+    // Suche zuerst nach exakter Bezeichnung (schnellster Pfad)
     const row = await getAsync(
       'SELECT * FROM arbeitszeiten WHERE LOWER(bezeichnung) = LOWER(?)',
       [bezeichnung]
@@ -62,10 +112,10 @@ class ArbeitszeitenModel {
     
     if (row) return row;
     
-    // Falls nicht gefunden, suche in Aliasen
-    const rows = await allAsync('SELECT * FROM arbeitszeiten WHERE aliase IS NOT NULL AND aliase != ""', []);
-    
+    // Falls nicht gefunden, suche in Aliasen (exakt)
+    const rows = await allAsync('SELECT * FROM arbeitszeiten', []);
     const suchBegriff = bezeichnung.toLowerCase();
+    
     for (const arbeit of rows) {
       if (arbeit.aliase) {
         const aliasListe = arbeit.aliase.split(',').map(a => a.trim().toLowerCase());
@@ -74,15 +124,29 @@ class ArbeitszeitenModel {
         }
       }
     }
+
+    // Fuzzy-Matching: Teilwort, normalisiert, Wort-Überlappung
+    for (const arbeit of rows) {
+      if (ArbeitszeitenModel._fuzzyMatch(bezeichnung, arbeit.bezeichnung, arbeit.aliase)) {
+        return arbeit;
+      }
+    }
+
     return null;
   }
 
   static async updateByBezeichnung(bezeichnung, neueStandardzeit) {
     // Gewichteter Durchschnitt: 70% alte Zeit, 30% neue Zeit
-    const row = await getAsync(
+    // Suche zuerst exakt
+    let row = await getAsync(
       'SELECT * FROM arbeitszeiten WHERE LOWER(bezeichnung) = LOWER(?)',
       [bezeichnung]
     );
+
+    // Falls nicht exakt gefunden, über Alias und Fuzzy-Match suchen
+    if (!row) {
+      row = await ArbeitszeitenModel.findByBezeichnung(bezeichnung);
+    }
 
     if (!row) {
       return { changes: 0, message: 'Arbeit nicht gefunden' };
@@ -92,15 +156,16 @@ class ArbeitszeitenModel {
     const gewichteteZeit = Math.round((alteZeit * 0.7) + (neueStandardzeit * 0.3));
 
     const result = await runAsync(
-      'UPDATE arbeitszeiten SET standard_minuten = ? WHERE LOWER(bezeichnung) = LOWER(?)',
-      [gewichteteZeit, bezeichnung]
+      'UPDATE arbeitszeiten SET standard_minuten = ? WHERE id = ?',
+      [gewichteteZeit, row.id]
     );
     
     return {
       changes: result.changes,
       alte_zeit: alteZeit,
       neue_zeit: gewichteteZeit,
-      tatsaechliche_zeit: neueStandardzeit
+      tatsaechliche_zeit: neueStandardzeit,
+      bezeichnung: row.bezeichnung
     };
   }
 }

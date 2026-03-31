@@ -2466,15 +2466,19 @@ class App {
     const details = [];
     
     arbeiten.forEach(arbeit => {
-      // Suche nach der Arbeit in den Standardzeiten (case-insensitive)
-      const gefunden = this.arbeitszeiten.find(
-        az => az.bezeichnung.toLowerCase() === arbeit.toLowerCase()
-      );
+      // Suche mit Fuzzy-Matching (exakt → Alias → Teilwort/Wort-Überlappung)
+      const gefunden = this.findArbeitszeitMitDetails(arbeit);
       
       if (gefunden) {
         const minuten = gefunden.standard_minuten || 0;
         gesamtMinuten += minuten;
-        details.push(`✓ ${arbeit}: ${minuten} min`);
+        let hinweis = '';
+        if (gefunden.matchTyp === 'alias') {
+          hinweis = ` → ${gefunden.bezeichnung}`;
+        } else if (gefunden.matchTyp === 'fuzzy') {
+          hinweis = ` ≈ ${gefunden.bezeichnung}`;
+        }
+        details.push(`✓ ${arbeit}${hinweis}: ${minuten} min`);
       } else {
         details.push(`⚠️ ${arbeit}: keine Standardzeit`);
       }
@@ -4097,23 +4101,8 @@ class App {
     const nichtGefunden = [];
     
     arbeiten.forEach(arbeit => {
-      // Suche nach der Arbeit in den Standardzeiten (case-insensitive)
-      // Erst in Bezeichnung suchen, dann in Aliasen
-      let gefunden = this.arbeitszeiten.find(
-        az => az.bezeichnung.toLowerCase() === arbeit.toLowerCase()
-      );
-      
-      // Falls nicht gefunden, in Aliasen suchen
-      if (!gefunden) {
-        const suchBegriff = arbeit.toLowerCase();
-        gefunden = this.arbeitszeiten.find(az => {
-          if (az.aliase) {
-            const aliasListe = az.aliase.split(',').map(a => a.trim().toLowerCase());
-            return aliasListe.includes(suchBegriff);
-          }
-          return false;
-        });
-      }
+      // Suche mit Fuzzy-Matching (exakt → Alias → Teilwort/Wort-Überlappung)
+      const gefunden = this.findArbeitszeitMitDetails(arbeit);
       
       if (gefunden) {
         const minuten = gefunden.standard_minuten || 0;
@@ -4130,10 +4119,13 @@ class App {
           zeitStr = `${minutenAnteil} min`;
         }
         
-        // Zeige den erkannten Standardzeit-Namen wenn über Alias gefunden
-        const hinweis = gefunden.bezeichnung.toLowerCase() !== arbeit.toLowerCase() 
-          ? ` → ${gefunden.bezeichnung}` 
-          : '';
+        // Zeige den erkannten Standardzeit-Namen wenn über Alias oder Fuzzy gefunden
+        let hinweis = '';
+        if (gefunden.matchTyp === 'alias') {
+          hinweis = ` → ${gefunden.bezeichnung}`;
+        } else if (gefunden.matchTyp === 'fuzzy') {
+          hinweis = ` ≈ ${gefunden.bezeichnung}`;
+        }
         details.push(`✓ ${arbeit}${hinweis}: <strong>${zeitStr}</strong>`);
       } else {
         nichtGefunden.push(arbeit);
@@ -15137,11 +15129,12 @@ class App {
   }
 
   // Timeline-Block visuell kürzen (bei Abschluss mit tatsächlicher Zeit)
-  // Nur kürzen, nicht verlängern!
   updateTimelineBlockVisual(terminId, tatsaechlicheMinuten) {
     // Status immer aktualisieren – auch für Multi-Arbeit-Blöcke (timeline-arbeit-{id}-*),
     // die kein korrespondierendes timeline-termin-{id} Element besitzen.
     this.updateTimelineBlockStatus(terminId, 'abgeschlossen');
+
+    const pixelPerMinute = 100 / 60;
 
     const block = document.getElementById(`timeline-termin-${terminId}`);
     if (block) {
@@ -15149,15 +15142,14 @@ class App {
       // Ursprüngliche Dauer aus data-Attribut holen
       const originalDauer = parseInt(block.dataset.dauer) || 0;
       
-      // Nur kürzen wenn tatsächliche Zeit kürzer als geplant, NICHT verlängern
-      if (tatsaechlicheMinuten < originalDauer) {
-        // Breite anpassen (100px pro Stunde = 1.67px pro Minute)
-        const pixelPerMinute = 100 / 60;
+      // Balken auf tatsächliche Dauer anpassen (kürzen oder verlängern)
+      if (tatsaechlicheMinuten !== originalDauer && tatsaechlicheMinuten > 0) {
         const neueBreite = Math.max(tatsaechlicheMinuten * pixelPerMinute, 40); // Mindestbreite 40px
         
         // Animation für den Balken
         block.style.transition = 'width 0.3s ease-out';
         block.style.width = `${neueBreite}px`;
+        block.dataset.dauer = tatsaechlicheMinuten;
       }
       
       // Termin-Info aktualisieren
@@ -15178,6 +15170,52 @@ class App {
           teil2.style.opacity = '0';
           setTimeout(() => teil2.remove(), 300);
         }
+      }
+    }
+
+    // Multi-Arbeit-Blöcke aktualisieren (timeline-arbeit-{id}-*)
+    const arbeitBloecke = document.querySelectorAll(`[id^="timeline-arbeit-${terminId}-"]`);
+    if (arbeitBloecke.length > 0) {
+      // Gesamte geplante Dauer aller Arbeit-Blöcke berechnen
+      let gesamtGeplanteZeit = 0;
+      arbeitBloecke.forEach(ab => {
+        // Nur Hauptblöcke zählen (keine -teil2 Fortsetzungen)
+        if (!ab.id.endsWith('-teil2')) {
+          gesamtGeplanteZeit += parseInt(ab.dataset.originalDauer) || parseInt(ab.dataset.dauer) || 0;
+        }
+      });
+
+      if (gesamtGeplanteZeit > 0) {
+        arbeitBloecke.forEach(ab => {
+          // Fortsetzungs-Teile entfernen
+          if (ab.id.endsWith('-teil2')) {
+            ab.style.transition = 'opacity 0.3s ease-out';
+            ab.style.opacity = '0';
+            setTimeout(() => ab.remove(), 300);
+            return;
+          }
+
+          // Proportionale tatsächliche Zeit berechnen
+          const blockOriginalDauer = parseInt(ab.dataset.originalDauer) || parseInt(ab.dataset.dauer) || 0;
+          const proportionaleDauer = Math.max(1, Math.round(tatsaechlicheMinuten * (blockOriginalDauer / gesamtGeplanteZeit)));
+          const neueBreite = Math.max(proportionaleDauer * pixelPerMinute, 40);
+
+          ab.style.transition = 'width 0.3s ease-out';
+          ab.style.width = `${neueBreite}px`;
+          ab.dataset.dauer = proportionaleDauer;
+
+          // Abgeschlossen-Klasse hinzufügen
+          ab.classList.add('arbeit-abgeschlossen');
+
+          // Dauer-Text aktualisieren
+          const dauerInfo = ab.querySelector('.termin-info:not(.arbeit-name)');
+          if (dauerInfo) {
+            const dauerText = proportionaleDauer >= 60
+              ? `${Math.floor(proportionaleDauer/60)}h ${proportionaleDauer%60 > 0 ? (proportionaleDauer%60) + 'min' : ''}`.trim()
+              : `${proportionaleDauer} min`;
+            dauerInfo.textContent = `✅ ${dauerText}`;
+          }
+        });
       }
     }
   }
@@ -16310,9 +16348,110 @@ class App {
     return summe > 0 ? summe : 30;
   }
 
+  // Normalisiert Text für Fuzzy-Vergleich (So/Wi → so wi, Brems-Service → brems service)
+  _normalizeForMatch(text) {
+    return text.toLowerCase()
+      .replace(/[\/\-_\.]+/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+  }
+
   findArbeitszeit(arbeitName) {
-    const match = (this.arbeitszeiten || []).find(a => a.bezeichnung.toLowerCase() === arbeitName.toLowerCase());
-    return match ? match.standard_minuten : null;
+    if (!this.arbeitszeiten || !arbeitName) return null;
+    const suche = arbeitName.toLowerCase();
+    const normSuche = this._normalizeForMatch(arbeitName);
+
+    // 1. Exakte Bezeichnung
+    let match = this.arbeitszeiten.find(a => a.bezeichnung.toLowerCase() === suche);
+    if (match) return match.standard_minuten;
+
+    // 2. Exakter Alias
+    match = this.arbeitszeiten.find(a => {
+      if (!a.aliase) return false;
+      return a.aliase.split(',').map(al => al.trim().toLowerCase()).includes(suche);
+    });
+    if (match) return match.standard_minuten;
+
+    // 3. Fuzzy: normalisierter Vergleich, Teilwort, Wort-Überlappung
+    const suchWorte = normSuche.split(' ').filter(w => w.length >= 3);
+    match = this.arbeitszeiten.find(a => {
+      const normBez = this._normalizeForMatch(a.bezeichnung);
+      // Normalisiert exakt
+      if (normSuche === normBez) return true;
+      // Teilwort (Suche in Bezeichnung oder umgekehrt)
+      if (normBez.includes(normSuche) || normSuche.includes(normBez)) return true;
+      // Wort-Überlappung
+      const bezWorte = normBez.split(' ').filter(w => w.length >= 3);
+      if (suchWorte.length > 0 && bezWorte.length > 0) {
+        const ueberlappung = suchWorte.filter(sw => bezWorte.some(bw => bw.includes(sw) || sw.includes(bw)));
+        if (ueberlappung.length > 0) return true;
+      }
+      // Alias fuzzy
+      if (a.aliase) {
+        const aliasListe = a.aliase.split(',').map(al => this._normalizeForMatch(al));
+        for (const alias of aliasListe) {
+          if (!alias) continue;
+          if (alias === normSuche) return true;
+          if (alias.includes(normSuche) || normSuche.includes(alias)) return true;
+          const aliasWorte = alias.split(' ').filter(w => w.length >= 3);
+          if (suchWorte.length > 0 && aliasWorte.length > 0) {
+            const ueberlappung = suchWorte.filter(sw => aliasWorte.some(aw => aw.includes(sw) || sw.includes(aw)));
+            if (ueberlappung.length > 0) return true;
+          }
+        }
+      }
+      return false;
+    });
+    if (match) return match.standard_minuten;
+
+    return null;
+  }
+
+  // Fuzzy-Suche: Findet die passende Standardzeit inkl. des gefundenen Eintrags (für Anzeige)
+  findArbeitszeitMitDetails(arbeitName) {
+    if (!this.arbeitszeiten || !arbeitName) return null;
+    const suche = arbeitName.toLowerCase();
+    const normSuche = this._normalizeForMatch(arbeitName);
+
+    // 1. Exakte Bezeichnung
+    let match = this.arbeitszeiten.find(a => a.bezeichnung.toLowerCase() === suche);
+    if (match) return { ...match, matchTyp: 'exakt' };
+
+    // 2. Exakter Alias
+    match = this.arbeitszeiten.find(a => {
+      if (!a.aliase) return false;
+      return a.aliase.split(',').map(al => al.trim().toLowerCase()).includes(suche);
+    });
+    if (match) return { ...match, matchTyp: 'alias' };
+
+    // 3. Fuzzy
+    const suchWorte = normSuche.split(' ').filter(w => w.length >= 3);
+    match = this.arbeitszeiten.find(a => {
+      const normBez = this._normalizeForMatch(a.bezeichnung);
+      if (normSuche === normBez) return true;
+      if (normBez.includes(normSuche) || normSuche.includes(normBez)) return true;
+      const bezWorte = normBez.split(' ').filter(w => w.length >= 3);
+      if (suchWorte.length > 0 && bezWorte.length > 0) {
+        const ueberlappung = suchWorte.filter(sw => bezWorte.some(bw => bw.includes(sw) || sw.includes(bw)));
+        if (ueberlappung.length > 0) return true;
+      }
+      if (a.aliase) {
+        const aliasListe = a.aliase.split(',').map(al => this._normalizeForMatch(al));
+        for (const alias of aliasListe) {
+          if (!alias) continue;
+          if (alias === normSuche || alias.includes(normSuche) || normSuche.includes(alias)) return true;
+          const aliasWorte = alias.split(' ').filter(w => w.length >= 3);
+          if (suchWorte.length > 0 && aliasWorte.length > 0) {
+            const ueberlappung = suchWorte.filter(sw => aliasWorte.some(aw => aw.includes(sw) || sw.includes(aw)));
+            if (ueberlappung.length > 0) return true;
+          }
+        }
+      }
+      return false;
+    });
+    if (match) return { ...match, matchTyp: 'fuzzy' };
+
+    return null;
   }
 
   parseArbeiten(text) {

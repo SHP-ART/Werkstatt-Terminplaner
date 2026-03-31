@@ -964,6 +964,16 @@ class TermineController {
       // 🤖 KI-LERN-DATENBANK: Lernpunkt speichern wenn Termin abgeschlossen mit tatsächlicher Zeit
       const gespeicherteZeit = updateData.tatsaechliche_zeit || tatsaechliche_zeit;
       if (neuerStatus === 'abgeschlossen' && gespeicherteZeit > 0 && termin.arbeit) {
+        // Standardzeiten aus vergangenen Terminen lernen (gewichteter Durchschnitt)
+        try {
+          const lernErgebnis = await TermineController.lerneAusTatsaechlicherZeit(termin.arbeit, gespeicherteZeit);
+          if (lernErgebnis && lernErgebnis.aktualisiert > 0) {
+            console.log(`[Standardzeit-Lernen] ${lernErgebnis.aktualisiert} Standardzeit(en) aktualisiert für Termin ${termin.id}`);
+          }
+        } catch (lernErr) {
+          console.warn('[Standardzeit-Lernen] Fehler:', lernErr.message);
+        }
+
         try {
           const EinstellungenModel = require('../models/einstellungenModel');
           const einst = await EinstellungenModel.getWerkstatt();
