@@ -29337,8 +29337,8 @@ class App {
       const restzeit = this.berechneRestzeitMitFaktoren(aktuellerAuftrag, person, isLehrling, kontext);
       const isUeberzogen = fortschritt > 100;
 
-      // Arbeitszeiten aus arbeitszeiten_details extrahieren
-      const arbeitenDetails = this.getArbeitenDetailsList(aktuellerAuftrag);
+      // Arbeitszeiten aus arbeitszeiten_details extrahieren (nur zugeordnete Arbeiten)
+      const arbeitenDetails = this.getArbeitenDetailsList(aktuellerAuftrag, person?.id, isLehrling);
 
       bodyContent = `
         <div class="intern-person-auftrag">
@@ -29734,7 +29734,7 @@ class App {
    * @param {Object} termin - Der Termin
    * @returns {Array} Array mit {name, zeit}
    */
-  getArbeitenDetailsList(termin) {
+  getArbeitenDetailsList(termin, personId, isLehrling) {
     const arbeiten = [];
     
     if (!termin.arbeitszeiten_details) {
@@ -29745,16 +29745,35 @@ class App {
       const details = typeof termin.arbeitszeiten_details === 'string' 
         ? JSON.parse(termin.arbeitszeiten_details) 
         : termin.arbeitszeiten_details;
+
+      // Prüfen ob individuelle Arbeitszuordnungen vorhanden sind
+      let hatIndividuelleZuordnung = false;
+      if (personId != null) {
+        for (const [key, value] of Object.entries(details)) {
+          if (key.startsWith('_')) continue;
+          if (typeof value === 'object' && (value.mitarbeiter_id != null || value.lehrling_id != null)) {
+            hatIndividuelleZuordnung = true;
+            break;
+          }
+        }
+      }
       
       for (const [key, value] of Object.entries(details)) {
         // Meta-Felder überspringen
         if (key.startsWith('_')) continue;
         
         if (typeof value === 'number') {
-          // Einfaches Format: "Ölwechsel": 30
+          // Einfaches Format: "Ölwechsel": 30 — keine individuelle Zuordnung
           arbeiten.push({ name: key, zeit: value });
-        } else if (typeof value === 'object' && value.zeit) {
+        } else if (typeof value === 'object' && value.zeit != null) {
           // Detailliertes Format: "Bremsen": { zeit: 90, mitarbeiter_id: 2 }
+          // Bei individuellen Zuordnungen nur Arbeiten dieser Person anzeigen
+          if (hatIndividuelleZuordnung) {
+            const zugeordnet = isLehrling
+              ? value.lehrling_id === personId
+              : value.mitarbeiter_id === personId;
+            if (!zugeordnet) continue;
+          }
           arbeiten.push({ name: key, zeit: value.zeit });
         }
       }
