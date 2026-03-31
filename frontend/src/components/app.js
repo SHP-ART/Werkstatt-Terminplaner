@@ -7808,8 +7808,11 @@ class App {
         
         <div class="form-group" style="margin-top: 15px;">
           <div id="einplanenBestehendeArbeitenBox" style="display:none; margin-bottom: 12px; padding: 8px 12px; background: #f0f4ff; border-radius: 6px; border-left: 3px solid #5c6bc0;">
-            <div style="font-size: 0.8em; font-weight: 600; color: #3949ab; margin-bottom: 5px;">📋 Bestehende Arbeiten (bereits gespeichert):</div>
-            <div id="einplanenBestehendeArbeitenListe" style="font-size: 0.85em; color: #444;"></div>
+            <div style="font-size: 0.8em; font-weight: 600; color: #3949ab; margin-bottom: 6px;">📋 Arbeiten auswählen (Haken = wird jetzt eingeplant):</div>
+            <div id="einplanenBestehendeArbeitenListe" style="font-size: 0.88em; color: #333; display:flex; flex-direction:column; gap:4px;"></div>
+            <div id="einplanenSplitHinweis" style="display:none;margin-top:6px;padding:5px 8px;background:#fff3cd;border-radius:4px;font-size:0.8em;color:#856404;">
+              ℹ️ Nicht ausgewählte Arbeiten werden als neuer schwebender Termin gespeichert.
+            </div>
           </div>
           <label><strong>➕ Neue Arbeit hinzufügen (optional):</strong></label>
           <div style="display: flex; gap: 10px; margin-top: 5px;">
@@ -7896,15 +7899,30 @@ class App {
       });
     }
     
-    // Bestehende Arbeiten als read-only anzeigen
+    // Bestehende Arbeiten als auswählbare Checkboxen anzeigen
     const bestehendeBox = document.getElementById('einplanenBestehendeArbeitenBox');
     const bestehendeListe = document.getElementById('einplanenBestehendeArbeitenListe');
+    const splitHinweis = document.getElementById('einplanenSplitHinweis');
     if (bestehendeBox && bestehendeListe) {
       if (this.einplanenBestehendeArbeiten.length > 0) {
         bestehendeBox.style.display = 'block';
         bestehendeListe.innerHTML = this.einplanenBestehendeArbeiten
-          .map(a => `<div>• ${this.escapeHtml(a.bezeichnung)} <span style="color:#666;">(${(a.zeit/60).toFixed(1)}h)</span></div>`)
+          .map((a, i) => {
+            const zeitText = a.zeit >= 60
+              ? `${Math.floor(a.zeit/60)}h${a.zeit%60>0?' '+(a.zeit%60)+'min':''}` : `${a.zeit}min`;
+            return `<label style="display:flex;align-items:center;gap:8px;padding:3px 0;cursor:pointer;">
+              <input type="checkbox" class="einplanen-arbeit-check" data-index="${i}" checked
+                style="width:16px;height:16px;cursor:pointer;">
+              <span>${this.escapeHtml(a.bezeichnung)} <span style="color:#555;font-size:0.9em;">(${zeitText})</span></span>
+            </label>`;
+          })
           .join('');
+        // Split-Hinweis dynamisch ein-/ausblenden
+        bestehendeListe.addEventListener('change', () => {
+          const checks = bestehendeListe.querySelectorAll('.einplanen-arbeit-check');
+          const alleGesetzt = Array.from(checks).every(cb => cb.checked);
+          if (splitHinweis) splitHinweis.style.display = alleGesetzt ? 'none' : 'block';
+        });
       } else {
         bestehendeBox.style.display = 'none';
       }
@@ -8685,41 +8703,42 @@ class App {
         } catch (e) {}
       }
       
-      // Neue Arbeiten zu den bestehenden HINZUFÜGEN (nicht ersetzen)
-      if (this.einplanenArbeiten && this.einplanenArbeiten.length > 0) {
-        // Bestehende Arbeitsnamen aus der Referenz-Liste
-        const bestehendeNamen = (this.einplanenBestehendeArbeiten || []).map(a => a.bezeichnung);
-        const bestehendeArbeitenAusTerMin = termin.arbeit
-          ? termin.arbeit.split('\n').map(a => a.trim()).filter(a => a)
-          : [];
-        const alleBestehendeNamen = bestehendeNamen.length > 0 ? bestehendeNamen : bestehendeArbeitenAusTerMin;
-        
-        // Neue Arbeiten (nur wirklich neue, keine Duplikate)
-        const neueArbeiten = this.einplanenArbeiten.filter(a => !alleBestehendeNamen.includes(a.bezeichnung));
-        
-        if (neueArbeiten.length > 0) {
-          // Merge: Bestehende + Neue
-          const alleNamen = [...alleBestehendeNamen, ...neueArbeiten.map(a => a.bezeichnung)];
-          updateData.arbeit = alleNamen.join('\n');
-          
-          // Details für neue Arbeiten hinzufügen
-          neueArbeiten.forEach(arbeit => {
-            details[arbeit.bezeichnung] = { zeit: arbeit.zeit };
-          });
-          
-          // Gesamtzeit = bestehende Zeit + neue Zeit
-          const neueZeit = neueArbeiten.reduce((s, a) => s + a.zeit, 0);
-          updateData.geschaetzte_zeit = (termin.geschaetzte_zeit || 0) + neueZeit;
-        }
+      // Ausgewählte bestehende Arbeiten aus den Checkboxen ermitteln
+      let ausgewaehlteBestehendeArbeiten = [...(this.einplanenBestehendeArbeiten || [])];
+      let nichtAusgewaehlteArbeiten = [];
+      const checkboxen = document.querySelectorAll('.einplanen-arbeit-check');
+      if (checkboxen.length > 0 && (this.einplanenBestehendeArbeiten || []).length > 0) {
+        ausgewaehlteBestehendeArbeiten = [];
+        checkboxen.forEach(cb => {
+          const idx = parseInt(cb.dataset.index, 10);
+          const arbeit = this.einplanenBestehendeArbeiten[idx];
+          if (!arbeit) return;
+          if (cb.checked) ausgewaehlteBestehendeArbeiten.push(arbeit);
+          else nichtAusgewaehlteArbeiten.push(arbeit);
+        });
       }
-      // Wenn keine neuen Arbeiten, bleiben bestehende unverändert (kein arbeit/geschaetzte_zeit Update)
+
+      // Neue Arbeiten (aus dem ➕-Bereich) zu den ausgewählten HINZUFÜGEN, keine Duplikate
+      const neueArbeiten = (this.einplanenArbeiten || []).filter(
+        a => !ausgewaehlteBestehendeArbeiten.some(b => b.bezeichnung === a.bezeichnung)
+      );
+      const alleEinzuplanendeArbeiten = [...ausgewaehlteBestehendeArbeiten, ...neueArbeiten];
+
+      if (alleEinzuplanendeArbeiten.length > 0) {
+        updateData.arbeit = alleEinzuplanendeArbeiten.map(a => a.bezeichnung).join('\n');
+        updateData.geschaetzte_zeit = alleEinzuplanendeArbeiten.reduce((s, a) => s + a.zeit, 0);
+        neueArbeiten.forEach(a => { details[a.bezeichnung] = { zeit: a.zeit }; });
+        // Details von abgewählten Arbeiten entfernen
+        nichtAusgewaehlteArbeiten.forEach(a => { delete details[a.bezeichnung]; });
+      }
+      // Wenn keine Auswahl geändert, bleiben bestehende unverändert
       
       // Wenn Uhrzeit angegeben, in arbeitszeiten_details speichern
       if (neueUhrzeit) {
-        // Setze Startzeit als Gesamt-Startzeit; erste Arbeit (bestehend oder neu) bekommt auch Startzeit
-        const ersteArbeitName = (this.einplanenBestehendeArbeiten?.length > 0)
-          ? this.einplanenBestehendeArbeiten[0].bezeichnung
-          : (this.einplanenArbeiten?.length > 0 ? this.einplanenArbeiten[0].bezeichnung : null);
+        // Setze Startzeit als Gesamt-Startzeit; erste Arbeit bekommt auch Startzeit
+        const ersteArbeitName = ausgewaehlteBestehendeArbeiten.length > 0
+          ? ausgewaehlteBestehendeArbeiten[0].bezeichnung
+          : (neueArbeiten.length > 0 ? neueArbeiten[0].bezeichnung : null);
         if (ersteArbeitName) {
           if (!details[ersteArbeitName]) details[ersteArbeitName] = {};
           details[ersteArbeitName].startzeit = neueUhrzeit;
@@ -8740,6 +8759,34 @@ class App {
       
       // Dann Schwebend-Status aufheben
       await TermineService.setSchwebend(this.einplanenTerminId, false);
+
+      // Wenn nicht alle bestehenden Arbeiten ausgewählt → Rest als neuen schwebenden Termin anlegen
+      if (nichtAusgewaehlteArbeiten.length > 0) {
+        const restDetails = {};
+        nichtAusgewaehlteArbeiten.forEach(a => {
+          restDetails[a.bezeichnung] = { zeit: a.zeit };
+        });
+        const restTermin = {
+          kunde_name: termin.kunde_name || null,
+          kennzeichen: termin.kennzeichen || null,
+          telefon: termin.telefon || null,
+          arbeit: nichtAusgewaehlteArbeiten.map(a => a.bezeichnung).join('\n'),
+          geschaetzte_zeit: nichtAusgewaehlteArbeiten.reduce((s, a) => s + a.zeit, 0),
+          datum: '9999-12-31',
+          ist_schwebend: 1,
+          status: 'neu',
+          bring_zeit: null,
+          abholung_typ: termin.abholung_typ || null,
+          abholung_details: termin.abholung_details || null,
+          vin: termin.vin || null,
+          fahrzeugtyp: termin.fahrzeugtyp || null,
+          dringlichkeit: termin.dringlichkeit || null,
+          kilometerstand: termin.kilometerstand || null,
+          ersatzauto: termin.ersatzauto || false,
+          arbeitszeiten_details: JSON.stringify(restDetails)
+        };
+        await TermineService.create(restTermin);
+      }
       
       // Lokalen Cache aktualisieren
       termin.datum = neuesDatum;
@@ -8758,9 +8805,10 @@ class App {
       this.closeEinplanenDatumModal();
       
       const uhrzeitText = neueUhrzeit ? ` um ${neueUhrzeit} Uhr` : '';
-      const neueArb = this.einplanenArbeiten?.length || 0;
-      const arbeitenText = neueArb > 0 ? `\n${neueArb} neue Arbeit(en) hinzugefügt.` : '';
-      alert(`Termin wurde für ${neuesDatum}${uhrzeitText} eingeplant!${arbeitenText}`);
+      const neueArbTxt = neueArbeiten.length > 0 ? `\n${neueArbeiten.length} neue Arbeit(en) hinzugefügt.` : '';
+      const splitTxt = nichtAusgewaehlteArbeiten.length > 0
+        ? `\n${nichtAusgewaehlteArbeiten.length} Arbeit(en) als neuen schwebenden Termin gespeichert.` : '';
+      alert(`Termin wurde für ${neuesDatum}${uhrzeitText} eingeplant!${neueArbTxt}${splitTxt}`);
       
       // Daten neu laden
       this.loadTermine();
@@ -10301,13 +10349,16 @@ class App {
         
         // Click-Handler für nicht zugeordnete Termine hinzufügen
         container.querySelectorAll('.nicht-zugeordnet-item[data-termin-id]').forEach(item => {
-          item.addEventListener('click', async () => {
+          item.addEventListener('click', async (e) => {
+            e.stopPropagation();
             const terminId = parseInt(item.dataset.terminId, 10);
-            const termin = alleTermine.find(t => Number(t.id) === terminId);
+            // Fallback: auch Cache und alle geladenen Termine prüfen
+            let termin = alleTermine.find(t => Number(t.id) === terminId)
+              || this.termineById[terminId];
             if (termin) {
               this.termineById[terminId] = termin;
-              await this.showTerminDetails(terminId);
             }
+            await this.showTerminDetails(terminId);
           });
         });
       } else {
