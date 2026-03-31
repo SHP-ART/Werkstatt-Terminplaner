@@ -274,20 +274,8 @@ async function reportStatusToServer() {
  * Startet regelmäßigen Update-Check
  */
 function startUpdateCheck() {
-  // Sofort beim Start prüfen
-  checkForUpdates().then(updateInfo => {
-    if (updateInfo && updateInfo.updateAvailable) {
-      // Zeige Update-Benachrichtigung
-      if (mainWindow) {
-        mainWindow.webContents.send('update-available', updateInfo);
-      }
-    }
-  });
-  
-  // Status an Server melden
-  reportStatusToServer();
-  
-  // Alle 30 Minuten prüfen
+  // Erster Check erfolgt via did-finish-load in createWindow() sobald der Renderer bereit ist.
+  // Starte den periodischen Check-Intervall (alle 30 Minuten):
   updateCheckInterval = setInterval(() => {
     checkForUpdates().then(updateInfo => {
       if (updateInfo && updateInfo.updateAvailable) {
@@ -300,6 +288,9 @@ function startUpdateCheck() {
     // Status an Server melden
     reportStatusToServer();
   }, 30 * 60 * 1000); // 30 Minuten
+
+  // Status sofort beim Start an Server melden
+  reportStatusToServer();
 }
 
 function createWindow() {
@@ -325,6 +316,15 @@ function createWindow() {
 
   // Lade die HTML-Datei
   mainWindow.loadFile('index.html');
+
+  // Erster Update-Check erst nach vollständigem Laden (sonst ist der Listener im Renderer noch nicht bereit)
+  mainWindow.webContents.once('did-finish-load', () => {
+    checkForUpdates().then(updateInfo => {
+      if (updateInfo && updateInfo.updateAvailable && mainWindow) {
+        mainWindow.webContents.send('update-available', updateInfo);
+      }
+    });
+  });
 
   // DevTools für lokales Testen aktiviert
   if (!app.isPackaged) mainWindow.webContents.openDevTools();
