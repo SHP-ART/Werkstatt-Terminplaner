@@ -15033,6 +15033,12 @@ class App {
       // Dashboard und andere Views aktualisieren
       this.loadDashboard();
       await this.loadHeuteTermine();
+
+      // Planungsansicht komplett neu laden falls aktiv (Fallback für korrekte Balkendarstellung)
+      const planungTab = document.getElementById('auslastung-dragdrop');
+      if (planungTab && planungTab.classList.contains('active')) {
+        setTimeout(() => this.loadAuslastungDragDrop(), 500);
+      }
       
     } catch (error) {
       console.error('Fehler beim Status-Wechsel:', error);
@@ -15176,33 +15182,65 @@ class App {
     // Multi-Arbeit-Blöcke aktualisieren (timeline-arbeit-{id}-*)
     const arbeitBloecke = document.querySelectorAll(`[id^="timeline-arbeit-${terminId}-"]`);
     if (arbeitBloecke.length > 0) {
-      // Gesamte geplante Dauer aller Arbeit-Blöcke berechnen
+      // Per-Arbeit tatsächliche Zeiten aus Cache holen (falls verfügbar)
+      let perArbeitZeiten = null;
+      const termin = this.termineById ? this.termineById[terminId] : null;
+      if (termin && termin.arbeitszeiten_details) {
+        try {
+          const details = typeof termin.arbeitszeiten_details === 'string'
+            ? JSON.parse(termin.arbeitszeiten_details) : termin.arbeitszeiten_details;
+          if (Array.isArray(details)) {
+            perArbeitZeiten = {};
+            details.forEach((a, idx) => {
+              if (parseInt(a.tatsaechliche_zeit) > 0) {
+                perArbeitZeiten[idx] = parseInt(a.tatsaechliche_zeit);
+              }
+            });
+            if (Object.keys(perArbeitZeiten).length === 0) perArbeitZeiten = null;
+          }
+        } catch (e) { /* ignorieren */ }
+      }
+
+      // Gesamte geplante Dauer aller Haupt-Arbeit-Blöcke berechnen (für proportionale Verteilung)
       let gesamtGeplanteZeit = 0;
+      const hauptBloecke = [];
       arbeitBloecke.forEach(ab => {
-        // Nur Hauptblöcke zählen (keine -teil2 Fortsetzungen)
         if (!ab.id.endsWith('-teil2')) {
           gesamtGeplanteZeit += parseInt(ab.dataset.originalDauer) || parseInt(ab.dataset.dauer) || 0;
+          hauptBloecke.push(ab);
         }
       });
 
-      if (gesamtGeplanteZeit > 0) {
+      if (gesamtGeplanteZeit > 0 || hauptBloecke.length > 0) {
+        // Erst alle teil2-Fortsetzungsblöcke entfernen (Pausen-Splits)
         arbeitBloecke.forEach(ab => {
-          // Fortsetzungs-Teile entfernen
           if (ab.id.endsWith('-teil2')) {
             ab.style.transition = 'opacity 0.3s ease-out';
             ab.style.opacity = '0';
             setTimeout(() => ab.remove(), 300);
-            return;
+          }
+        });
+
+        // Jeden Hauptblock einzeln aktualisieren
+        hauptBloecke.forEach(ab => {
+          const arbeitIndex = parseInt(ab.dataset.arbeitIndex);
+          const blockOriginalDauer = parseInt(ab.dataset.originalDauer) || parseInt(ab.dataset.dauer) || 0;
+
+          // Dauer bestimmen: per-Arbeit tatsächliche Zeit > proportional aus Gesamt
+          let neueDauer;
+          if (perArbeitZeiten && perArbeitZeiten[arbeitIndex] !== undefined) {
+            neueDauer = perArbeitZeiten[arbeitIndex];
+          } else if (gesamtGeplanteZeit > 0) {
+            neueDauer = Math.max(1, Math.round(tatsaechlicheMinuten * (blockOriginalDauer / gesamtGeplanteZeit)));
+          } else {
+            neueDauer = Math.round(tatsaechlicheMinuten / hauptBloecke.length);
           }
 
-          // Proportionale tatsächliche Zeit berechnen
-          const blockOriginalDauer = parseInt(ab.dataset.originalDauer) || parseInt(ab.dataset.dauer) || 0;
-          const proportionaleDauer = Math.max(1, Math.round(tatsaechlicheMinuten * (blockOriginalDauer / gesamtGeplanteZeit)));
-          const neueBreite = Math.max(proportionaleDauer * pixelPerMinute, 40);
+          const neueBreite = Math.max(neueDauer * pixelPerMinute, 40);
 
           ab.style.transition = 'width 0.3s ease-out';
           ab.style.width = `${neueBreite}px`;
-          ab.dataset.dauer = proportionaleDauer;
+          ab.dataset.dauer = neueDauer;
 
           // Abgeschlossen-Klasse hinzufügen
           ab.classList.add('arbeit-abgeschlossen');
@@ -15210,9 +15248,9 @@ class App {
           // Dauer-Text aktualisieren
           const dauerInfo = ab.querySelector('.termin-info:not(.arbeit-name)');
           if (dauerInfo) {
-            const dauerText = proportionaleDauer >= 60
-              ? `${Math.floor(proportionaleDauer/60)}h ${proportionaleDauer%60 > 0 ? (proportionaleDauer%60) + 'min' : ''}`.trim()
-              : `${proportionaleDauer} min`;
+            const dauerText = neueDauer >= 60
+              ? `${Math.floor(neueDauer/60)}h ${neueDauer%60 > 0 ? (neueDauer%60) + 'min' : ''}`.trim()
+              : `${neueDauer} min`;
             dauerInfo.textContent = `✅ ${dauerText}`;
           }
         });
