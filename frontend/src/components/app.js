@@ -14248,10 +14248,36 @@ class App {
       ? this.formatDatum(termin.abholung_datum || termin.abhol_datum)
       : (termin.datum ? this.formatDatum(termin.datum) : '—');
     
+    // Geplante Dauer: immer die originale geschaetzte_zeit (ohne Lehrling-Faktor / tatsächliche Zeit)
+    // dauer (Parameter) enthält die Timeline-Dauer (kann tatsächliche Zeit × Lehrling-Faktor sein)
+    let geplanteDauer = dauer;
+    {
+      // Bevorzuge Summe der geplanten Einzelzeiten aus arbeitszeiten_details
+      let summe = 0;
+      try {
+        const det = termin.arbeitszeiten_details
+          ? (typeof termin.arbeitszeiten_details === 'string'
+              ? JSON.parse(termin.arbeitszeiten_details)
+              : termin.arbeitszeiten_details)
+          : null;
+        if (det) {
+          for (const [k, v] of Object.entries(det)) {
+            if (k.startsWith('_')) continue;
+            if (typeof v === 'number' && v > 0) summe += v;
+            else if (typeof v === 'object' && parseInt(v.zeit) > 0) summe += parseInt(v.zeit);
+          }
+        }
+      } catch (e) {}
+      if (summe > 0) {
+        geplanteDauer = summe;
+      } else if (parseInt(termin.geschaetzte_zeit) > 0) {
+        geplanteDauer = parseInt(termin.geschaetzte_zeit);
+      }
+    }
     // Dauer formatieren
-    const dauerText = dauer >= 60 
-      ? `${Math.floor(dauer/60)}h ${dauer%60 > 0 ? (dauer%60) + 'min' : ''}`.trim()
-      : `${dauer} min`;
+    const dauerText = geplanteDauer >= 60 
+      ? `${Math.floor(geplanteDauer/60)}h ${geplanteDauer%60 > 0 ? (geplanteDauer%60) + 'min' : ''}`.trim()
+      : `${geplanteDauer} min`;
     
     // Dialog erstellen
     const dialog = document.createElement('div');
@@ -14283,7 +14309,7 @@ class App {
       statusAktionen = `
         <div class="schnell-status-frage">
           <p>⏱️ Läuft seit: <strong>${verstricheneText}</strong> (aktuell ${aktuelleZeit})</p>
-          <p>🏁 Fertigstellung ca.: <strong>${(() => { const endMin = startMinuten + dauer; return String(Math.floor(endMin/60)%24).padStart(2,'0') + ':' + String(endMin%60).padStart(2,'0'); })()}</strong> (${dauer >= 60 ? Math.floor(dauer/60) + 'h ' + (dauer%60 > 0 ? dauer%60 + 'min' : '') : dauer + ' min'} geplant)</p>
+          <p>🏁 Fertigstellung ca.: <strong>${(() => { const endMin = startMinuten + geplanteDauer; return String(Math.floor(endMin/60)%24).padStart(2,'0') + ':' + String(endMin%60).padStart(2,'0'); })()}</strong> (${geplanteDauer >= 60 ? Math.floor(geplanteDauer/60) + 'h ' + (geplanteDauer%60 > 0 ? geplanteDauer%60 + 'min' : '') : geplanteDauer + ' min'} geplant)</p>
         </div>
         <div class="schnell-status-zeit-eingabe">
           <label>🏁 Tatsächliche Arbeitszeit:</label>
@@ -14352,7 +14378,7 @@ class App {
           </div>
           <div class="detail-row">
             <span class="detail-label">🏁</span>
-            <span class="detail-value">Fertigstellung ca.: <strong>${(() => { const endMin = startMinuten + dauer; return String(Math.floor(endMin/60)%24).padStart(2,'0') + ':' + String(endMin%60).padStart(2,'0'); })()}</strong></span>
+            <span class="detail-value">Fertigstellung ca.: <strong>${(() => { const endMin = startMinuten + geplanteDauer; return String(Math.floor(endMin/60)%24).padStart(2,'0') + ':' + String(endMin%60).padStart(2,'0'); })()}</strong></span>
           </div>
           ${(() => {
             // Tatsächliche gestempelte Startzeit aus arbeitszeiten_details._startzeit
@@ -14391,7 +14417,7 @@ class App {
               const tatsH = Math.floor(tatsZeit / 60);
               const tatsM = tatsZeit % 60;
               const tatsStr = tatsH > 0 ? `${tatsH}h${tatsM > 0 ? ' ' + tatsM + 'min' : ''}` : `${tatsM}min`;
-              const diff = tatsZeit - dauer;
+              const diff = tatsZeit - geplanteDauer;
               const diffStr = diff !== 0 ? ` <span style="color:${diff > 0 ? '#dc3545' : '#16a34a'};font-size:0.85em;">(${diff > 0 ? '+' : ''}${diff}min)</span>` : '';
               tatsZeitRow = `<div class="detail-row"><span class="detail-label">⏱️</span><span class="detail-value">Tatsächlich: <strong style="color:#16a34a;">${tatsStr}</strong>${diffStr}</span></div>`;
             }
