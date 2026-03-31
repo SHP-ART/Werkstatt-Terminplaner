@@ -14245,14 +14245,26 @@ class App {
             const startRow = tatsStart ? `<div class="detail-row"><span class="detail-label">🕐</span><span class="detail-value">Gestartet: <strong style="color:#2563eb;">${tatsStart}</strong></span></div>` : '';
             // Tatsächliche Fertigstellungszeit
             let fertigRow = '';
+            let fertigDate = null;
             if (termin.fertigstellung_zeit) {
-              const fd = new Date(termin.fertigstellung_zeit);
-              const fStr = String(fd.getHours()).padStart(2,'0') + ':' + String(fd.getMinutes()).padStart(2,'0');
+              fertigDate = new Date(termin.fertigstellung_zeit);
+              const fStr = String(fertigDate.getHours()).padStart(2,'0') + ':' + String(fertigDate.getMinutes()).padStart(2,'0');
               fertigRow = `<div class="detail-row"><span class="detail-label" style="color:#16a34a;">✅</span><span class="detail-value">Fertiggestellt: <strong style="color:#16a34a;">${fStr}</strong></span></div>`;
             }
-            // Tatsächliche Arbeitszeit (aus tatsaechliche_zeit oder berechneter Differenz)
+            // Tatsächliche Arbeitszeit: bevorzuge Berechnung aus Startzeit→Fertigstellung
             let tatsZeitRow = '';
-            const tatsZeit = termin.tatsaechliche_zeit;
+            let tatsZeit = termin.tatsaechliche_zeit;
+            // Wenn fertigstellung_zeit bekannt: echte Dauer aus Differenz berechnen
+            if (fertigDate && !isNaN(fertigDate)) {
+              let startStr = tatsStart; // tatsStart wurde oben ermittelt
+              if (startStr) {
+                const [sh, sm] = startStr.split(':').map(Number);
+                const sd = new Date(fertigDate);
+                sd.setHours(sh, sm, 0, 0);
+                const diffMs = fertigDate - sd;
+                if (diffMs > 0) tatsZeit = Math.round(diffMs / 60000);
+              }
+            }
             if (tatsZeit && tatsZeit > 0) {
               const tatsH = Math.floor(tatsZeit / 60);
               const tatsM = tatsZeit % 60;
