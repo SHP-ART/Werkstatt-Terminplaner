@@ -22861,7 +22861,7 @@ class App {
       return { type: arbeit.type || 'mitarbeiter', id: arbeit.mitarbeiter_id };
     }
     
-    // Fallback: _gesamt_mitarbeiter_id
+    // Fallback: _gesamt_mitarbeiter_id (ganzer Termin zugewiesen)
     if (details && details._gesamt_mitarbeiter_id) {
       return { 
         type: details._gesamt_mitarbeiter_id.type, 
@@ -22869,22 +22869,6 @@ class App {
       };
     }
 
-    // Fallback: Andere Arbeiten im gleichen Termin haben eine Zuweisung → übernehmen
-    // (z.B. HU/AU ohne explizite Zuweisung, aber Wartung hat mitarbeiter_id)
-    if (details) {
-      for (const key of Object.keys(details)) {
-        if (key.startsWith('_')) continue;
-        const d = details[key];
-        if (!d || typeof d !== 'object') continue;
-        if (d.type === 'lehrling' && (d.lehrling_id || d.mitarbeiter_id)) {
-          return { type: 'lehrling', id: d.lehrling_id || d.mitarbeiter_id };
-        }
-        if (d.mitarbeiter_id) {
-          return { type: d.type || 'mitarbeiter', id: d.mitarbeiter_id };
-        }
-      }
-    }
-    
     // Fallback: termin.mitarbeiter_id
     if (termin.mitarbeiter_id) {
       return { type: 'mitarbeiter', id: termin.mitarbeiter_id };
