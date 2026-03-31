@@ -10317,6 +10317,46 @@ class App {
         const bringZeitText = termin.bring_zeit ? `🚗↓ ${termin.bring_zeit}` : '';
         const abholZeitText = termin.abholung_zeit ? `🚗↑ ${termin.abholung_zeit}` : '';
         const zeitenInfo = [bringZeitText, abholZeitText].filter(t => t).join(' • ') || '--:--';
+
+        // Einzelne Arbeiten ermitteln
+        let arbeitenListe = [];
+        if (termin.arbeit) {
+          const namen = termin.arbeit.split(/\n|\s*\|\|\s*/).map(a => a.trim()).filter(a => a);
+          if (namen.length > 1) {
+            let details = {};
+            if (termin.arbeitszeiten_details) {
+              try { details = typeof termin.arbeitszeiten_details === 'string' ? JSON.parse(termin.arbeitszeiten_details) : termin.arbeitszeiten_details; } catch(e) {}
+            }
+            const gesamtZeit = termin.geschaetzte_zeit || 60;
+            const standardZeit = Math.round(gesamtZeit / namen.length);
+            arbeitenListe = namen.map(name => {
+              let az = standardZeit;
+              let hatEinzelzeit = false;
+              if (details[name]) {
+                if (typeof details[name] === 'object' && details[name].zeit > 0) { az = details[name].zeit; hatEinzelzeit = true; }
+                else if (typeof details[name] === 'number' && details[name] > 0) { az = details[name]; hatEinzelzeit = true; }
+              }
+              return { name, zeit: az, hatEinzelzeit };
+            });
+          }
+        }
+
+        const hatMehrereArbeiten = arbeitenListe.length > 1;
+        const arbeitAnzeige = hatMehrereArbeiten
+          ? `<span style="color:#5c6bc0;font-size:0.82em;font-weight:600;">🔧 ${arbeitenListe.length} Arbeiten</span>`
+          : `${this.escapeHtml(termin.arbeit || '-')}`;
+
+        const arbeitenSubzeilen = hatMehrereArbeiten ? `
+          <div class="nz-arbeiten-detail" style="margin-top:5px;padding:4px 8px;background:rgba(92,107,192,0.07);border-radius:5px;display:flex;flex-direction:column;gap:2px;">
+            ${arbeitenListe.map(a => {
+              const azText = a.zeit >= 60 ? `${Math.floor(a.zeit/60)}h${a.zeit%60>0?' '+a.zeit%60+'min':''}` : `${a.zeit}min`;
+              return `<div style="display:flex;justify-content:space-between;align-items:center;font-size:0.82em;color:#333;">
+                <span>🔧 ${this.escapeHtml(a.name)}</span>
+                <span style="color:${a.hatEinzelzeit?'#5c6bc0':'#888'};font-weight:${a.hatEinzelzeit?'600':'normal'}">⏱️ ${azText}</span>
+              </div>`;
+            }).join('')}
+          </div>` : '';
+
         return `
           <div class="nicht-zugeordnet-item${istSchwebend ? ' schwebend' : ''}${istUebertrag ? ' nz-uebertrag' : ''}" data-termin-id="${termin.id}" style="cursor: pointer;" title="${istUebertrag ? 'Übertrag vom Vortag – Klicken zum Bearbeiten' : 'Klicken zum Bearbeiten'}">
             <div class="nz-info">
@@ -10324,7 +10364,8 @@ class App {
               <span class="nz-kunde">${this.escapeHtml(kundenName)}</span>
               <span class="nz-kennzeichen">${this.escapeHtml(termin.kennzeichen || '-')}</span>
             </div>
-            <div class="nz-arbeit">${this.escapeHtml(termin.arbeit || '-')}${istSchwebend ? '<span class="schwebend-indicator">⏸️ Schwebend</span>' : ''}${istUebertrag ? `<span class="uebertrag-indicator">📅 ${vortagLabel}</span>` : ''}</div>
+            <div class="nz-arbeit">${arbeitAnzeige}${istSchwebend ? '<span class="schwebend-indicator">⏸️ Schwebend</span>' : ''}${istUebertrag ? `<span class="uebertrag-indicator">📅 ${vortagLabel}</span>` : ''}</div>
+            ${arbeitenSubzeilen}
             <div class="nz-dauer">⏱️ ${this.formatMinutesToHours(zeit)}</div>
           </div>
         `;
