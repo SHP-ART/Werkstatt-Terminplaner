@@ -1384,6 +1384,20 @@
       return Math.round(basisZeit);
     }
 
+    // Liefert die effektive Startzeit eines Termins:
+    // Priorität: arbeitszeiten_details._startzeit → termin.startzeit → termin.bring_zeit
+    function getEffektiveStartzeit(termin) {
+      if (termin.arbeitszeiten_details) {
+        try {
+          const d = typeof termin.arbeitszeiten_details === 'string'
+            ? JSON.parse(termin.arbeitszeiten_details)
+            : termin.arbeitszeiten_details;
+          if (d && d._startzeit) return d._startzeit;
+        } catch(e) {}
+      }
+      return termin.startzeit || termin.bring_zeit || null;
+    }
+
     function berechneEndzeit(termin, person, isLehrling, globaleNebenzeit) {
       if (termin.status === 'abgeschlossen' && termin.fertigstellung_zeit) {
         // Formatiere ISO-Timestamp zu HH:MM
@@ -1398,7 +1412,7 @@
         }
       }
 
-      const startzeit = termin.startzeit || termin.bring_zeit;
+      const startzeit = getEffektiveStartzeit(termin);
       if (!startzeit) return '--:--';
 
       const dauer = getEffektiveArbeitszeitMitFaktoren(termin, person, isLehrling, globaleNebenzeit);
@@ -1489,7 +1503,7 @@
     }
 
     function berechneRestzeit(termin, person, isLehrling, globaleNebenzeit) {
-      const startzeit = termin.startzeit || termin.bring_zeit;
+      const startzeit = getEffektiveStartzeit(termin);
       if (!startzeit) return '--:--';
 
       // Basiere Restzeit auf der berechneten Endzeit (inkl. Pause)
@@ -1511,7 +1525,7 @@
     }
 
     function berechneFortschritt(termin, person, isLehrling, globaleNebenzeit) {
-      const startzeit = termin.startzeit || termin.bring_zeit;
+      const startzeit = getEffektiveStartzeit(termin);
       if (!startzeit) return 0;
 
       const jetzt = new Date();
@@ -1865,16 +1879,9 @@
       const personTermine = alleTermine.filter(t => isTerminFuerPerson(t, personId, isLehrling));
       console.log(`[DEBUG] ${personName}: ${personTermine.length} Termine gefunden`, personTermine);
       
-      // Sortiere: startzeit (DB) → arbeitszeiten_details._startzeit → bring_zeit
+      // Sortiere: arbeitszeiten_details._startzeit → startzeit (DB) → bring_zeit
       const getSortZeit = t => {
-        if (t.startzeit) return t.startzeit;
-        if (t.arbeitszeiten_details) {
-          try {
-            const d = typeof t.arbeitszeiten_details === 'string' ? JSON.parse(t.arbeitszeiten_details) : t.arbeitszeiten_details;
-            if (d && d._startzeit) return d._startzeit;
-          } catch(e) {}
-        }
-        return t.bring_zeit || '23:59';
+        return getEffektiveStartzeit(t) || '23:59';
       };
       personTermine.sort((a, b) => getSortZeit(a).localeCompare(getSortZeit(b)));
 
@@ -2006,7 +2013,7 @@
           <div class="zeit-info">
             <div class="zeit-item">
               <div class="zeit-label">Beginn</div>
-              <div class="zeit-value">${aktuellerAuftrag.startzeit || aktuellerAuftrag.bring_zeit || '--:--'}</div>
+              <div class="zeit-value">${getEffektiveStartzeit(aktuellerAuftrag) || '--:--'}</div>
             </div>
             <div class="zeit-item">
               <div class="zeit-label">Fertig ca.</div>
@@ -2033,7 +2040,7 @@
               <div class="naechster-label">📋 Danach:</div>
               <div class="naechster-info">
                 <span>${escapeHtml(naechsterAuftrag.termin_nr) || ''}${naechsterAuftrag.interne_auftragsnummer && naechsterAuftrag.interne_auftragsnummer.trim() ? ` · ${escapeHtml(naechsterAuftrag.interne_auftragsnummer.trim())}` : ''} – ${escapeHtml(naechsterAuftrag.kunde_name) || '-'} • ${escapeHtml(naechsterAuftrag.kennzeichen) || '-'}</span>
-                <span>${naechsterAuftrag.startzeit || naechsterAuftrag.bring_zeit || '--:--'}</span>
+                <span>${getEffektiveStartzeit(naechsterAuftrag) || '--:--'}</span>
               </div>
             </div>
           ` : ''}
@@ -2060,7 +2067,7 @@
             <div class="zeit-info" style="margin-top: 10px;">
               <div class="zeit-item">
                 <div class="zeit-label">Start</div>
-                <div class="zeit-value">${naechsterAuftrag.startzeit || naechsterAuftrag.bring_zeit || '--:--'}</div>
+                <div class="zeit-value">${getEffektiveStartzeit(naechsterAuftrag) || '--:--'}</div>
               </div>
               <div class="zeit-item">
                 <div class="zeit-label">Dauer</div>

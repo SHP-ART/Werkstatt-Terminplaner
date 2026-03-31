@@ -29166,7 +29166,7 @@ class App {
         <div class="intern-person-zeit">
           <div class="intern-person-zeit-item">
             <div class="zeit-label">Beginn</div>
-            <div class="zeit-value">${this.normalizeZeit(aktuellerAuftrag.startzeit || aktuellerAuftrag.bring_zeit) || '--:--'}</div>
+            <div class="zeit-value">${this.normalizeZeit(this.getEffektiveStartzeit(aktuellerAuftrag)) || '--:--'}</div>
           </div>
           <div class="intern-person-zeit-item">
             <div class="zeit-label">${aktuellerAuftrag.status === 'abgeschlossen' ? 'Fertig' : 'Fertig ca.'}</div>
@@ -29198,7 +29198,7 @@ class App {
             <div class="naechster-label">📋 Danach:</div>
             <div class="naechster-info">
               <span class="naechster-kunde">${this.escapeHtml(naechsterAuftrag.kunde_name || '-')} • ${this.escapeHtml(naechsterAuftrag.kennzeichen || '-')}</span>
-              <span class="naechster-zeit">${this.normalizeZeit(naechsterAuftrag.startzeit || naechsterAuftrag.bring_zeit) || '--:--'}</span>
+              <span class="naechster-zeit">${this.normalizeZeit(this.getEffektiveStartzeit(naechsterAuftrag)) || '--:--'}</span>
             </div>
           </div>
         ` : ''}
@@ -29223,7 +29223,7 @@ class App {
           <div class="intern-person-zeit" style="margin-top: 10px;">
             <div class="intern-person-zeit-item">
               <div class="zeit-label">Start${naechsterIstVerzoegert ? ' ca.' : ''}</div>
-              <div class="zeit-value">${naechsterAuftrag.startzeit || naechsterAuftrag.bring_zeit || '--:--'}</div>
+              <div class="zeit-value">${this.normalizeZeit(this.getEffektiveStartzeit(naechsterAuftrag)) || '--:--'}</div>
             </div>
             <div class="intern-person-zeit-item">
               <div class="zeit-label">Fertig ca.</div>
@@ -29403,6 +29403,23 @@ class App {
   }
 
   /**
+   * Liest die effektive Startzeit eines Termins:
+   * Bevorzugt arbeitszeiten_details._startzeit (geplante Einsatzzeit),
+   * fällt auf termin.startzeit bzw. bring_zeit zurück.
+   */
+  getEffektiveStartzeit(termin) {
+    if (termin.arbeitszeiten_details) {
+      try {
+        const d = typeof termin.arbeitszeiten_details === 'string'
+          ? JSON.parse(termin.arbeitszeiten_details)
+          : termin.arbeitszeiten_details;
+        if (d && d._startzeit) return d._startzeit;
+      } catch (e) {}
+    }
+    return termin.startzeit || termin.bring_zeit || null;
+  }
+
+  /**
    * Berechnet die geplante Endzeit MIT Nebenzeit/Aufgabenbewältigung
    */
   berechneEndzeitMitFaktoren(termin, person, isLehrling, kontext = {}) {
@@ -29412,7 +29429,7 @@ class App {
     }
 
     // Fallback: Berechne lokal aus Startzeit und Dauer MIT Faktoren
-    const startzeit = termin.startzeit || termin.bring_zeit;
+    const startzeit = this.getEffektiveStartzeit(termin);
     if (!startzeit) return '--:--';
 
     // Hole effektive Arbeitszeit MIT Faktoren
@@ -29676,7 +29693,7 @@ class App {
    * Berechnet die Wartezeit bis zu einem Termin
    */
   berechneWartezeitBis(termin) {
-    const zeit = termin.startzeit || termin.bring_zeit;
+    const zeit = this.getEffektiveStartzeit(termin);
     if (!zeit) return '--:--';
 
     const jetzt = this.getToday();
