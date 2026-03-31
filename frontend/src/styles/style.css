@@ -5786,6 +5786,9 @@ mark.highlight {
     padding: 7px 12px;
     margin: 14px 0 5px 0;
     letter-spacing: 0.01em;
+    width: 100%;       /* auch in FlexWrap-Containern volle Breite */
+    flex-shrink: 0;
+    box-sizing: border-box;
 }
 
 .nz-section-header:first-child {

@@ -21497,6 +21497,51 @@ class App {
       Object.values(mitarbeiterMap).forEach(track => this.resolveTimelineOverlaps(track));
       Object.values(lehrlingeMap).forEach(track => this.resolveTimelineOverlaps(track));
 
+      // Nicht-zugeordnete Karten nach Gestern / Heute / Morgen gruppieren
+      (function groupNichtZugeordnet(container, heute, datum) {
+        const karten = Array.from(container.children);
+        if (karten.length === 0) return;
+        const [hy, hm, hd] = datum.split('-').map(Number);
+        const vortagDate = new Date(hy, hm - 1, hd - 1);
+        const folgetagDate = new Date(hy, hm - 1, hd + 1);
+        const fmt = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+        const vortagDatum = fmt(vortagDate);
+        const folgetagDatum = fmt(folgetagDate);
+        const label = d => d.toLocaleDateString('de-DE', { weekday: 'short', day: '2-digit', month: '2-digit' });
+        const gruppen = [
+          { key: vortagDatum, klass: 'nz-section-header--gestern', icon: '⬅️', text: `Gestern (${label(vortagDate)})` },
+          { key: datum,       klass: 'nz-section-header--heute',   icon: '📌', text: `Heute (${label(new Date(hy, hm-1, hd))})` },
+          { key: folgetagDatum, klass: 'nz-section-header--morgen', icon: '➡️', text: `Morgen (${label(folgetagDate)})` }
+        ];
+        const byDatum = {};
+        karten.forEach(k => {
+          const d = k.dataset.datum || datum;
+          if (!byDatum[d]) byDatum[d] = [];
+          byDatum[d].push(k);
+        });
+        container.innerHTML = '';
+        gruppen.forEach(g => {
+          const liste = byDatum[g.key];
+          if (!liste || liste.length === 0) return;
+          const header = document.createElement('div');
+          header.className = `nz-section-header ${g.klass}`;
+          const min = liste.reduce((s, k) => s + (parseInt(k.dataset.dauer) || 0), 0);
+          const daurText = min >= 60 ? `${Math.floor(min/60)}h${min%60>0?' '+(min%60)+'min':''}` : `${min}min`;
+          header.innerHTML = `<span>${g.icon} ${g.text}</span><span class="nz-section-count">${liste.length} ${liste.length===1?'Termin':'Termine'} · ${daurText}</span>`;
+          container.appendChild(header);
+          liste.forEach(k => container.appendChild(k));
+        });
+        // Datum die keiner Gruppe entsprechen
+        const sonstige = Object.entries(byDatum).filter(([d]) => !gruppen.find(g => g.key === d));
+        if (sonstige.length > 0) {
+          const header = document.createElement('div');
+          header.className = 'nz-section-header nz-section-header--heute';
+          header.innerHTML = `<span>📋 Weitere</span>`;
+          container.appendChild(header);
+          sonstige.forEach(([, liste]) => liste.forEach(k => container.appendChild(k)));
+        }
+      })(sourceContainer, this.formatDateLocal(new Date()), datum);
+
       // Drop-Zone für "Nicht zugeordnet"
       this.setupDropZone(sourceContainer);
 
@@ -22943,6 +22988,7 @@ class App {
     card.dataset.terminId = termin.id;
     card.dataset.arbeitName = arbeit.name;
     card.dataset.arbeitIndex = index;
+    card.dataset.datum = termin.datum || '';
     
     const dauer = arbeit.zeit || 30;
     
@@ -25321,6 +25367,7 @@ class App {
     const dauer = this.getTerminGesamtdauer(termin);
     card.dataset.dauer = dauer;
     card.dataset.schwebend = isSchwebend ? '1' : '0';
+    card.dataset.datum = termin.datum || '';
 
     const schwebendBadge = isSchwebend ? '<span class="schwebend-badge" title="Schwebender Termin">⏸</span>' : '';
     
