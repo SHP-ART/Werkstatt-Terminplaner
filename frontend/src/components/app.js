@@ -17671,6 +17671,14 @@ class App {
     const interneAuftragsnummerInput = document.getElementById('modalInterneAuftragsnummer');
     const interneAuftragsnummer = interneAuftragsnummerInput ? interneAuftragsnummerInput.value.trim() : '';
 
+    // _dauer_override synchronisieren: Immer auf den gespeicherten Gesamtwert setzen,
+    // damit getTerminGesamtdauer den richtigen Wert liefert (verhindert Stale-Override-Bug).
+    if (gesamtzeitMinuten > 0) {
+      arbeitszeitenDetails._dauer_override = gesamtzeitMinuten;
+    } else {
+      delete arbeitszeitenDetails._dauer_override;
+    }
+
     // DEBUG: Zeige was gespeichert wird
     console.log(`[DEBUG SAVE] Termin ${termin.termin_nr}:`, {
       terminId: this.currentTerminId,
