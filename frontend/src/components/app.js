@@ -21703,8 +21703,24 @@ class App {
           let laufendeArbeitsStartzeit = termin.startzeit || (details && details._startzeit) || termin.bring_zeit || '08:00';
 
           // Mehrere Arbeiten - jede als separater Block
+          // Erst Zuordnungen ermitteln, um proportionale Berechnung korrekt zu machen
+          const arbeitZuordnungen = arbeiten.map(arbeit => this.getArbeitZuordnung(arbeit, details, termin));
+          
+          // Summe der Planzeiten nur von ZUGEORDNETEN Arbeiten (für proportionale tatsächliche Zeit)
+          let zugeordneteGesamtZeit = 0;
           arbeiten.forEach((arbeit, index) => {
-            const arbeitZuordnung = this.getArbeitZuordnung(arbeit, details, termin);
+            const z = arbeitZuordnungen[index];
+            const istZugeordnet = (z.type === 'lehrling' && z.id && lehrlingeMap[z.id]) ||
+                                  (z.type === 'mitarbeiter' && z.id && mitarbeiterMap[z.id]);
+            if (istZugeordnet) {
+              zugeordneteGesamtZeit += parseInt(arbeit.zeit) > 0 ? parseInt(arbeit.zeit) : zeitProArbeitOhneZeit;
+            }
+          });
+          // Fallback: wenn keine Arbeit zugeordnet, alle verwenden
+          if (zugeordneteGesamtZeit <= 0) zugeordneteGesamtZeit = gesamtArbeitZeit;
+
+          arbeiten.forEach((arbeit, index) => {
+            const arbeitZuordnung = arbeitZuordnungen[index];
             
             // DEBUG
             if (termin.termin_nr && termin.termin_nr.includes('2026-06')) {
@@ -21724,9 +21740,10 @@ class App {
               arbeitDauer = parseInt(arbeit.tatsaechliche_zeit);
             } else if (termin.status === 'abgeschlossen' && parseInt(termin.tatsaechliche_zeit) > 0 && gesamtArbeitZeit > 0) {
               // Abgeschlossener Termin ohne per-Arbeit Zeitangabe:
-              // Proportionale tatsaechliche Zeit berechnen (gleiche Logik wie in Auslastungsanzeige)
+              // Proportionale tatsaechliche Zeit berechnen — aber nur anteilig an zugeordneten Arbeiten,
+              // damit nicht-zugeordnete Arbeiten (z.B. für morgen) die sichtbaren Balken verzerren.
               const arbeitPlanzeit = parseInt(arbeit.zeit) > 0 ? parseInt(arbeit.zeit) : zeitProArbeitOhneZeit;
-              arbeitDauer = Math.max(1, Math.round(parseInt(termin.tatsaechliche_zeit) * (arbeitPlanzeit / gesamtArbeitZeit)));
+              arbeitDauer = Math.max(1, Math.round(parseInt(termin.tatsaechliche_zeit) * (arbeitPlanzeit / zugeordneteGesamtZeit)));
             } else {
               arbeitDauer = (parseInt(arbeit.zeit) > 0) ? parseInt(arbeit.zeit) : zeitProArbeitOhneZeit;
             }
