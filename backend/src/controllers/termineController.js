@@ -2846,7 +2846,7 @@ class TermineController {
 
           const zeiten = [];
           let suchAb = tagStart;
-          while (zeiten.length < 4) {
+          while (zeiten.length < 4 && suchAb < tagEnde) {
             const slotStart = KIPlanungController.findAvailableSlot(
               blocks, suchAb, benoetigt, tagStart, tagEnde
             );
@@ -2854,7 +2854,7 @@ class TermineController {
             const h = Math.floor(slotStart / 60);
             const m = slotStart % 60;
             zeiten.push(`${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`);
-            suchAb = slotStart + benoetigt;
+            suchAb = slotStart + Math.max(benoetigt, 15);
           }
 
           if (zeiten.length > 0) {
