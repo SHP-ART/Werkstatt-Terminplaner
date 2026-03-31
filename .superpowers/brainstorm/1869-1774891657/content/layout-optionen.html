@@ -1,0 +1,152 @@
+<h2>🏗️ Planung & Zuweisung — Layout-Optionen</h2>
+<p class="subtitle">Welches Layout gefällt dir am besten?</p>
+
+<div class="cards">
+
+  <!-- Option A -->
+  <div class="card" data-choice="a" onclick="toggleSelect(this)">
+    <div class="card-image" style="background:#f5f7fa; padding:12px; font-family:monospace; font-size:11px; border-radius:6px;">
+      <div style="background:#1565c0;color:#fff;padding:5px 8px;border-radius:4px;margin-bottom:6px;font-size:10px;display:flex;gap:6px;align-items:center;">
+        <span>◀ Tag</span>
+        <span style="background:#fff;color:#1565c0;padding:2px 6px;border-radius:3px;">Mo 30.03.</span>
+        <span>Tag ▶</span>
+        <span style="margin-left:auto;">Heute</span>
+        <span style="background:rgba(255,255,255,0.2);padding:2px 8px;border-radius:3px;">💾 Speichern</span>
+        <span style="background:rgba(255,255,255,0.2);padding:2px 8px;border-radius:3px;">Raster: 15min</span>
+      </div>
+      <div style="display:flex;gap:6px;margin-bottom:6px;">
+        <div style="background:#e3f2fd;border-radius:4px;padding:6px;flex:1;text-align:center;">
+          <div style="font-size:18px;font-weight:bold;color:#1565c0;">4</div>
+          <div style="font-size:9px;color:#555;">Zugeordnet</div>
+        </div>
+        <div style="background:#fff3e0;border-radius:4px;padding:6px;flex:1;text-align:center;">
+          <div style="font-size:18px;font-weight:bold;color:#e65100;">2</div>
+          <div style="font-size:9px;color:#555;">Nicht zugeordnet</div>
+        </div>
+        <div style="background:#fce4ec;border-radius:4px;padding:6px;flex:1;text-align:center;">
+          <div style="font-size:18px;font-weight:bold;color:#c62828;">3</div>
+          <div style="font-size:9px;color:#555;">Schwebend</div>
+        </div>
+        <div style="background:#f3e5f5;border-radius:4px;padding:6px;flex:1;text-align:center;">
+          <div style="font-size:18px;font-weight:bold;color:#6a1b9a;">1</div>
+          <div style="font-size:9px;color:#555;">Überfällig</div>
+        </div>
+      </div>
+      <div style="background:#fff;border:1px solid #ddd;border-radius:4px;padding:6px;margin-bottom:4px;">
+        <div style="font-size:10px;font-weight:bold;margin-bottom:4px;">⏰ Zeitplan</div>
+        <div style="display:flex;gap:4px;align-items:center;margin-bottom:3px;">
+          <div style="width:50px;font-size:9px;color:#555;">Max M.</div>
+          <div style="flex:1;height:14px;background:#bbdefb;border-radius:3px;"></div>
+        </div>
+        <div style="display:flex;gap:4px;align-items:center;">
+          <div style="width:50px;font-size:9px;color:#555;">Lisa S.</div>
+          <div style="width:40%;height:14px;background:#c8e6c9;border-radius:3px;"></div>
+        </div>
+      </div>
+      <div style="background:#fff;border:1px solid #ddd;border-radius:4px;padding:4px;font-size:9px;color:#666;">
+        📋 Nicht zugeordnet (2) | ⏸️ Schwebend (3) | ⚠️ Überfällig (1)
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>A — Kompakte Toolbar + Statistik-Karten</h3>
+      <p>Navigation und Aktionen in einer einzigen Zeile oben. Darunter 4 Zählerkarten für schnellen Tagesüberblick. Timeline bleibt der Hauptfokus.</p>
+      <div class="pros-cons" style="font-size:0.85em;">
+        <div class="pros"><h4>Vorteile</h4><ul><li>Viel mehr Platz für Timeline</li><li>Sofort sichtbar: wie viele Aufträge wo</li><li>Ähnlich wie Teile-Bestellen (bekannt)</li></ul></div>
+        <div class="cons"><h4>Nachteile</h4><ul><li>Pool-Bereiche noch untereinander</li></ul></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Option B -->
+  <div class="card" data-choice="b" onclick="toggleSelect(this)">
+    <div class="card-image" style="background:#f5f7fa; padding:12px; font-family:monospace; font-size:11px; border-radius:6px;">
+      <div style="background:#1565c0;color:#fff;padding:5px 8px;border-radius:4px;margin-bottom:6px;font-size:10px;display:flex;gap:6px;align-items:center;">
+        <span>◀ Tag</span>
+        <span style="background:#fff;color:#1565c0;padding:2px 6px;border-radius:3px;">Mo 30.03.</span>
+        <span>Tag ▶</span>
+        <span>Heute</span>
+        <span style="margin-left:auto;background:rgba(255,255,255,0.2);padding:2px 8px;border-radius:3px;">💾</span>
+        <span style="background:rgba(255,255,255,0.2);padding:2px 8px;border-radius:3px;">15min</span>
+      </div>
+      <div style="display:flex;gap:6px;">
+        <!-- Timeline links breit -->
+        <div style="flex:2;background:#fff;border:1px solid #ddd;border-radius:4px;padding:6px;">
+          <div style="font-size:10px;font-weight:bold;margin-bottom:4px;">⏰ Zeitplan</div>
+          <div style="display:flex;gap:4px;align-items:center;margin-bottom:3px;">
+            <div style="width:50px;font-size:9px;color:#555;">Max M.</div>
+            <div style="flex:1;height:14px;background:#bbdefb;border-radius:3px;"></div>
+          </div>
+          <div style="display:flex;gap:4px;align-items:center;margin-bottom:3px;">
+            <div style="width:50px;font-size:9px;color:#555;">Lisa S.</div>
+            <div style="width:55%;height:14px;background:#c8e6c9;border-radius:3px;"></div>
+          </div>
+          <div style="display:flex;gap:4px;align-items:center;">
+            <div style="width:50px;font-size:9px;color:#555;">Tom K.</div>
+            <div style="width:30%;height:14px;background:#ffe0b2;border-radius:3px;"></div>
+          </div>
+        </div>
+        <!-- Sidebar rechts -->
+        <div style="flex:1;display:flex;flex-direction:column;gap:4px;">
+          <div style="background:#fff3e0;border:1px solid #ffcc80;border-radius:4px;padding:5px;">
+            <div style="font-size:9px;font-weight:bold;color:#e65100;margin-bottom:3px;">📋 Nicht zugeordnet (2)</div>
+            <div style="background:#fff;border-radius:3px;padding:3px;font-size:8px;color:#333;margin-bottom:2px;">Schmidt – Inspektion 90min</div>
+            <div style="background:#fff;border-radius:3px;padding:3px;font-size:8px;color:#333;">Müller – Bremsen 60min</div>
+          </div>
+          <div style="background:#fce4ec;border:1px solid #f48fb1;border-radius:4px;padding:5px;">
+            <div style="font-size:9px;font-weight:bold;color:#c62828;margin-bottom:3px;">⏸️ Schwebend (3)</div>
+            <div style="font-size:8px;color:#555;">↕ Nach Dringlichkeit</div>
+          </div>
+          <div style="background:#f3e5f5;border:1px solid #ce93d8;border-radius:4px;padding:5px;">
+            <div style="font-size:9px;font-weight:bold;color:#6a1b9a;">⚠️ Überfällig (1)</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>B — 2-Spalten: Timeline + Sidebar</h3>
+      <p>Timeline nimmt 2/3 der Breite, rechts eine Sidebar mit allen Pool-Bereichen. Kein Scrollen nach unten nötig — alles gleichzeitig sichtbar.</p>
+      <div class="pros-cons" style="font-size:0.85em;">
+        <div class="pros"><h4>Vorteile</h4><ul><li>Alles auf einen Blick</li><li>Schnelleres Drag & Drop</li><li>Professionellere Ansicht</li></ul></div>
+        <div class="cons"><h4>Nachteile</h4><ul><li>Sidebar wird auf kleinen Bildschirmen eng</li></ul></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Option C -->
+  <div class="card" data-choice="c" onclick="toggleSelect(this)">
+    <div class="card-image" style="background:#f5f7fa; padding:12px; font-family:monospace; font-size:11px; border-radius:6px;">
+      <div style="background:#1565c0;color:#fff;padding:5px 8px;border-radius:4px;margin-bottom:6px;font-size:10px;display:flex;gap:6px;align-items:center;">
+        <span>◀</span>
+        <span style="background:#fff;color:#1565c0;padding:2px 6px;border-radius:3px;">Mo 30.03.</span>
+        <span>▶</span>
+        <span>Heute</span>
+        <span style="background:#ef5350;padding:2px 6px;border-radius:3px;margin-left:auto;">⚠️ 1 überfällig</span>
+        <span style="background:rgba(255,255,255,0.2);padding:2px 8px;border-radius:3px;">💾</span>
+      </div>
+      <div style="display:flex;gap:4px;margin-bottom:5px;">
+        <div style="background:#e3f2fd;border-bottom:2px solid #1565c0;border-radius:4px 4px 0 0;padding:5px 8px;font-size:9px;font-weight:bold;color:#1565c0;">⏰ Zeitplan (4)</div>
+        <div style="background:#fff;border:1px solid #ddd;border-radius:4px 4px 0 0;padding:5px 8px;font-size:9px;color:#555;">📋 Pool (5)</div>
+        <div style="background:#fff;border:1px solid #ddd;border-radius:4px 4px 0 0;padding:5px 8px;font-size:9px;color:#555;">⏸️ Schwebend (3)</div>
+      </div>
+      <div style="background:#fff;border:1px solid #ddd;border-radius:0 4px 4px 4px;padding:6px;">
+        <div style="display:flex;gap:4px;align-items:center;margin-bottom:3px;">
+          <div style="width:50px;font-size:9px;color:#555;">Max M.</div>
+          <div style="flex:1;height:14px;background:#bbdefb;border-radius:3px;"></div>
+        </div>
+        <div style="display:flex;gap:4px;align-items:center;">
+          <div style="width:50px;font-size:9px;color:#555;">Lisa S.</div>
+          <div style="width:60%;height:14px;background:#c8e6c9;border-radius:3px;"></div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>C — Tab-Navigation innerhalb der Ansicht</h3>
+      <p>Interne Tabs: "Zeitplan / Pool / Schwebend". Überfällige als roter Badge in der Toolbar. Volle Bildschirmbreite für jeden Bereich.</p>
+      <div class="pros-cons" style="font-size:0.85em;">
+        <div class="pros"><h4>Vorteile</h4><ul><li>Maximale Breite für Timeline</li><li>Klare Trennung der Bereiche</li></ul></div>
+        <div class="cons"><h4>Nachteile</h4><ul><li>Pool & Timeline nicht gleichzeitig sichtbar</li><li>Drag & Drop über Tabs schwieriger</li></ul></div>
+      </div>
+    </div>
+  </div>
+
+</div>

@@ -1,0 +1,63 @@
+<h2>Mehrere Zeitslots pro Tag</h2>
+<p class="subtitle">So sehen die Slot-Vorschläge mit mehreren Zeiten pro Tag aus</p>
+
+<div class="mockup">
+  <div class="mockup-header">🗓️ Vorgeschlagene freie Slots</div>
+  <div class="mockup-body" style="padding:0; font-family:sans-serif; font-size:13px;">
+
+    <!-- Tag 1 -->
+    <div style="display:flex; align-items:center; padding:12px 16px; border-bottom:1px solid #f0f0f0; gap:12px; flex-wrap:wrap;">
+      <div style="min-width:130px; font-weight:600; color:#333;">Dienstag, 31.03.</div>
+      <div style="display:flex; gap:6px; flex-wrap:wrap; flex:1;">
+        <span style="padding:5px 12px; background:#4a90e2; color:white; border-radius:16px; cursor:pointer; font-size:12px; font-weight:600;">08:00</span>
+        <span style="padding:5px 12px; background:#e8f4fd; color:#4a90e2; border:1px solid #4a90e2; border-radius:16px; cursor:pointer; font-size:12px;">10:00</span>
+        <span style="padding:5px 12px; background:#e8f4fd; color:#4a90e2; border:1px solid #4a90e2; border-radius:16px; cursor:pointer; font-size:12px;">13:00</span>
+        <span style="padding:5px 12px; background:#e8f4fd; color:#4a90e2; border:1px solid #4a90e2; border-radius:16px; cursor:pointer; font-size:12px;">15:30</span>
+      </div>
+      <div style="font-size:11px; color:#888; white-space:nowrap;">Justin · 45% ausgelastet</div>
+    </div>
+
+    <!-- Tag 2 -->
+    <div style="display:flex; align-items:center; padding:12px 16px; border-bottom:1px solid #f0f0f0; gap:12px; flex-wrap:wrap;">
+      <div style="min-width:130px; font-weight:600; color:#333;">Mittwoch, 01.04.</div>
+      <div style="display:flex; gap:6px; flex-wrap:wrap; flex:1;">
+        <span style="padding:5px 12px; background:#e8f4fd; color:#4a90e2; border:1px solid #4a90e2; border-radius:16px; cursor:pointer; font-size:12px;">08:00</span>
+        <span style="padding:5px 12px; background:#e8f4fd; color:#4a90e2; border:1px solid #4a90e2; border-radius:16px; cursor:pointer; font-size:12px;">11:30</span>
+        <span style="padding:5px 12px; background:#e8f4fd; color:#4a90e2; border:1px solid #4a90e2; border-radius:16px; cursor:pointer; font-size:12px;">14:00</span>
+      </div>
+      <div style="font-size:11px; color:#888; white-space:nowrap;">Justin · 20% ausgelastet</div>
+    </div>
+
+    <!-- Tag 3 - voll -->
+    <div style="display:flex; align-items:center; padding:12px 16px; border-bottom:1px solid #f0f0f0; gap:12px; flex-wrap:wrap; background:#fafafa;">
+      <div style="min-width:130px; font-weight:600; color:#aaa;">Donnerstag, 02.04.</div>
+      <div style="flex:1; font-size:12px; color:#aaa; font-style:italic;">Kein freier Slot (ausgelastet)</div>
+      <div style="font-size:11px; color:#ccc; white-space:nowrap;">Justin · 100%</div>
+    </div>
+
+    <!-- Tag 4 -->
+    <div style="display:flex; align-items:center; padding:12px 16px; gap:12px; flex-wrap:wrap;">
+      <div style="min-width:130px; font-weight:600; color:#333;">Freitag, 03.04.</div>
+      <div style="display:flex; gap:6px; flex-wrap:wrap; flex:1;">
+        <span style="padding:5px 12px; background:#e8f4fd; color:#4a90e2; border:1px solid #4a90e2; border-radius:16px; cursor:pointer; font-size:12px;">08:00</span>
+        <span style="padding:5px 12px; background:#e8f4fd; color:#4a90e2; border:1px solid #4a90e2; border-radius:16px; cursor:pointer; font-size:12px;">10:30</span>
+      </div>
+      <div style="font-size:11px; color:#888; white-space:nowrap;">Justin · 10% ausgelastet</div>
+    </div>
+
+    <div style="padding:10px 16px; text-align:right; border-top:1px solid #f0f0f0;">
+      <span style="cursor:pointer; color:#999; font-size:12px;">✕ Schließen</span>
+    </div>
+  </div>
+</div>
+
+<div class="section" style="margin-top:20px;">
+  <h3>Ablauf beim Klick auf eine Zeit</h3>
+  <ol style="line-height:2; color:#555; font-size:14px;">
+    <li>Klick auf z.B. <strong>10:00</strong> am Dienstag</li>
+    <li>Datum <code>2026-03-31</code> wird ins Formular übernommen (wie bisher)</li>
+    <li><strong>NEU:</strong> Bringzeit-Feld wird auf <code>10:00</code> gesetzt</li>
+    <li>Mitarbeiter/Lehrling wird vorausgewählt (wie bisher)</li>
+    <li>Dropdown schließt sich</li>
+  </ol>
+</div>

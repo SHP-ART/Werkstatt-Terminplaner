@@ -37,6 +37,8 @@ const getFaellige = async (req, res) => {
     const tage = parseInt(req.query.tage) || 7;
     
     // allSettled statt all: ein fehlgeschlagener Query bricht nicht alles ab
+    // Hinweis: Termine mit teile_status='vorraetig' sind erledigt (Teile da) und
+    // werden NICHT mehr in der Bestell-Übersicht angezeigt.
     const results = await Promise.allSettled([
       TeileBestellung.getFaellige(tage),
       TeileBestellung.getSchwebende(),
@@ -45,13 +47,10 @@ const getFaellige = async (req, res) => {
       TeileBestellung.getTermineMitArbeitenTeileStatusBestellen(tage),
       // Bestellt-Markierungen (teile_status = 'bestellt' auf Termin / arbeiten)
       TeileBestellung.getTerminMarkierungen(['bestellt'], 'bestellt'),
-      TeileBestellung.getArbeitenMarkierungen('bestellt', 'bestellt'),
-      // Eingetroffen-Markierungen (teile_status = 'vorraetig' auf Termin / arbeiten)
-      TeileBestellung.getTerminMarkierungen(['vorraetig'], 'geliefert'),
-      TeileBestellung.getArbeitenMarkierungen('vorraetig', 'geliefert')
+      TeileBestellung.getArbeitenMarkierungen('bestellt', 'bestellt')
     ]);
 
-    const [r0, r1, r2, r3, r4, r5, r6, r7, r8] = results;
+    const [r0, r1, r2, r3, r4, r5, r6] = results;
     if (r0.status === 'rejected') console.error('[Teile] getFaellige Fehler:', r0.reason?.message);
     if (r1.status === 'rejected') console.error('[Teile] getSchwebende Fehler:', r1.reason?.message);
     if (r2.status === 'rejected') console.error('[Teile] getTermineMitTeileStatusBestellen Fehler:', r2.reason?.message);
@@ -65,8 +64,6 @@ const getFaellige = async (req, res) => {
     const termineMitArbeitenTeileStatus   = r4.status === 'fulfilled' ? r4.value : [];
     const bestelltMarkierungenTermin      = r5.status === 'fulfilled' ? r5.value : [];
     const bestelltMarkierungenArbeiten    = r6.status === 'fulfilled' ? r6.value : [];
-    const vorraetMarkierungenTermin       = r7.status === 'fulfilled' ? r7.value : [];
-    const vorraetMarkierungenArbeiten     = r8.status === 'fulfilled' ? r8.value : [];
     
     // Gruppiere nach Dringlichkeit
     const heute = new Date();
@@ -140,10 +137,6 @@ const getFaellige = async (req, res) => {
     // Bestellt-Markierungen (Status = 'bestellt') gruppieren
     bestelltMarkierungenTermin.forEach(gruppiereNachDringlichkeit);
     bestelltMarkierungenArbeiten.forEach(gruppiereNachDringlichkeit);
-
-    // Eingetroffen-Markierungen (Status = 'geliefert') gruppieren
-    vorraetMarkierungenTermin.forEach(gruppiereNachDringlichkeit);
-    vorraetMarkierungenArbeiten.forEach(gruppiereNachDringlichkeit);
     
     const alleBestellungen = [
       ...schwebende, 
@@ -152,9 +145,7 @@ const getFaellige = async (req, res) => {
       ...schwebendeTermineMitTeileStatus,
       ...termineMitArbeitenTeileStatus,
       ...bestelltMarkierungenTermin,
-      ...bestelltMarkierungenArbeiten,
-      ...vorraetMarkierungenTermin,
-      ...vorraetMarkierungenArbeiten
+      ...bestelltMarkierungenArbeiten
     ];
     
     // Zähle Bestellungen für die Statistik

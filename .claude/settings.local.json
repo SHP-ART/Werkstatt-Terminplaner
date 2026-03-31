@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(bash \"C:\\\\Users\\\\Sven\\\\.claude\\\\plugins\\\\cache\\\\claude-plugins-official\\\\superpowers\\\\5.0.6\\\\skills\\\\brainstorming\\\\scripts\\\\start-server.sh\" --project-dir \"c:\\\\Users\\\\Sven\\\\Documents\\\\Github\\\\Terminplaner\\\\Werkstatt-Terminplaner\")",
+      "Bash(npm run:*)",
+      "Bash(bash \"C:/Users/Sven/.claude/plugins/cache/claude-plugins-official/superpowers/5.0.6/skills/brainstorming/scripts/start-server.sh\" --project-dir \"c:/Users/Sven/Documents/Github/Terminplaner/Werkstatt-Terminplaner\")",
+      "Bash(ssh root@100.124.168.108 \"cd /opt/werkstatt-terminplaner && git pull && systemctl restart werkstatt-terminplaner && echo ''DEPLOY OK''\")"
+    ]
+  }
+}

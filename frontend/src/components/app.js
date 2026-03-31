@@ -10162,6 +10162,8 @@ class App {
       const folgetagDatum = `${folgetagDate.getFullYear()}-${String(folgetagDate.getMonth()+1).padStart(2,'0')}-${String(folgetagDate.getDate()).padStart(2,'0')}`;
       const vortagLabel = vortagDate.toLocaleDateString('de-DE', { weekday: 'short', day: '2-digit', month: '2-digit' });
       const folgetagLabel = folgetagDate.toLocaleDateString('de-DE', { weekday: 'short', day: '2-digit', month: '2-digit' });
+      const datumDate = new Date(vy, vm - 1, vd);
+      const heuteLabel = datumDate.toLocaleDateString('de-DE', { weekday: 'short', day: '2-digit', month: '2-digit' });
       const termineAmVortag = allTermine.filter(t => t.datum === vortagDatum);
       const termineAmFolgetag = allTermine.filter(t => t.datum === folgetagDatum);
 
@@ -10215,34 +10217,44 @@ class App {
       // Zeige nicht zugeordnete Termine
       if (nichtZugeordnet.length > 0 || nichtZugeordnetVortag.length > 0 || nichtZugeordnetFolgetag.length > 0) {
         section.style.display = 'block';
-        
+
+        const gruppenMin = (liste) => liste.reduce((s, t) => s + (t.tatsaechliche_zeit || t.geschaetzte_zeit || 0), 0);
+        const nzCount = (n) => `${n} ${n === 1 ? 'Termin' : 'Termine'}`;
+
         let html = `<div class="nicht-zugeordnet-liste">`;
         let gesamtNichtZugeordnetMinuten = 0;
-        
-        nichtZugeordnet.forEach(termin => {
-          gesamtNichtZugeordnetMinuten += (termin.tatsaechliche_zeit || termin.geschaetzte_zeit || 0);
-          html += renderNzItem(termin, false);
-        });
 
-        // Vortags-Überträge anhängen (nur geplante / in_arbeit)
+        // --- Gestern ---
         if (nichtZugeordnetVortag.length > 0) {
-          html += `<div class="nz-vortag-header">📅 Übertrag vom ${vortagLabel} – nicht zugeordnet</div>`;
+          const min = gruppenMin(nichtZugeordnetVortag);
+          gesamtNichtZugeordnetMinuten += min;
+          html += `<div class="nz-section-header nz-section-header--gestern"><span>⬅️ Gestern (${vortagLabel})</span><span class="nz-section-count">${nzCount(nichtZugeordnetVortag.length)} · ${this.formatMinutesToHours(min)}</span></div>`;
           nichtZugeordnetVortag.forEach(termin => {
-            gesamtNichtZugeordnetMinuten += (termin.tatsaechliche_zeit || termin.geschaetzte_zeit || 0);
             html += renderNzItem(termin, true);
           });
         }
 
-        // Folgetag-Termine anhängen (morgen, noch nicht zugeordnet)
-        if (nichtZugeordnetFolgetag.length > 0) {
-          html += `<div class="nz-vortag-header" style="color:#1565c0;">📅 Morgen (${folgetagLabel}) – noch nicht zugeordnet</div>`;
-          nichtZugeordnetFolgetag.forEach(termin => {
-            gesamtNichtZugeordnetMinuten += (termin.tatsaechliche_zeit || termin.geschaetzte_zeit || 0);
+        // --- Heute ---
+        if (nichtZugeordnet.length > 0) {
+          const min = gruppenMin(nichtZugeordnet);
+          gesamtNichtZugeordnetMinuten += min;
+          html += `<div class="nz-section-header nz-section-header--heute"><span>📌 Heute (${heuteLabel})</span><span class="nz-section-count">${nzCount(nichtZugeordnet.length)} · ${this.formatMinutesToHours(min)}</span></div>`;
+          nichtZugeordnet.forEach(termin => {
             html += renderNzItem(termin, false);
           });
         }
 
-        const alleTermine = [...nichtZugeordnet, ...nichtZugeordnetVortag, ...nichtZugeordnetFolgetag];
+        // --- Morgen ---
+        if (nichtZugeordnetFolgetag.length > 0) {
+          const min = gruppenMin(nichtZugeordnetFolgetag);
+          gesamtNichtZugeordnetMinuten += min;
+          html += `<div class="nz-section-header nz-section-header--morgen"><span>➡️ Morgen (${folgetagLabel})</span><span class="nz-section-count">${nzCount(nichtZugeordnetFolgetag.length)} · ${this.formatMinutesToHours(min)}</span></div>`;
+          nichtZugeordnetFolgetag.forEach(termin => {
+            html += renderNzItem(termin, false);
+          });
+        }
+
+        const alleTermine = [...nichtZugeordnetVortag, ...nichtZugeordnet, ...nichtZugeordnetFolgetag];
         html += `</div>`;
         html += `<div class="nz-gesamt">
           <strong>Gesamt nicht zugeordnet:</strong> ${this.formatMinutesToHours(gesamtNichtZugeordnetMinuten)} 
