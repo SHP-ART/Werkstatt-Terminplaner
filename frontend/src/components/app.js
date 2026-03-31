@@ -7882,7 +7882,7 @@ class App {
       }
       
       // Bestehende Arbeiten nur als Referenz speichern
-      const arbeitenListe = termin.arbeit.split('\n').map(a => a.trim()).filter(a => a);
+      const arbeitenListe = termin.arbeit.split(/\n|\s*\|\|\s*/).map(a => a.trim()).filter(a => a);
       const gesamtZeitMinuten = termin.geschaetzte_zeit || 60;
       const standardZeitProArbeit = arbeitenListe.length > 0 ? Math.round(gesamtZeitMinuten / arbeitenListe.length) : 60;
       
@@ -8725,7 +8725,7 @@ class App {
       const alleEinzuplanendeArbeiten = [...ausgewaehlteBestehendeArbeiten, ...neueArbeiten];
 
       if (alleEinzuplanendeArbeiten.length > 0) {
-        updateData.arbeit = alleEinzuplanendeArbeiten.map(a => a.bezeichnung).join('\n');
+        updateData.arbeit = alleEinzuplanendeArbeiten.map(a => a.bezeichnung).join(' || ');
         updateData.geschaetzte_zeit = alleEinzuplanendeArbeiten.reduce((s, a) => s + a.zeit, 0);
         neueArbeiten.forEach(a => { details[a.bezeichnung] = { zeit: a.zeit }; });
         // Details von abgewählten Arbeiten entfernen
@@ -8770,7 +8770,7 @@ class App {
           kunde_name: termin.kunde_name || null,
           kennzeichen: termin.kennzeichen || null,
           telefon: termin.telefon || null,
-          arbeit: nichtAusgewaehlteArbeiten.map(a => a.bezeichnung).join('\n'),
+          arbeit: nichtAusgewaehlteArbeiten.map(a => a.bezeichnung).join(' || '),
           geschaetzte_zeit: nichtAusgewaehlteArbeiten.reduce((s, a) => s + a.zeit, 0),
           datum: '9999-12-31',
           ist_schwebend: 1,
