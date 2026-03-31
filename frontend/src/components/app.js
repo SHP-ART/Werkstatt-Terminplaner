@@ -7808,7 +7808,7 @@ class App {
         
         <div class="form-group" style="margin-top: 15px;">
           <div id="einplanenBestehendeArbeitenBox" style="display:none; margin-bottom: 12px; padding: 8px 12px; background: #f0f4ff; border-radius: 6px; border-left: 3px solid #5c6bc0;">
-            <div style="font-size: 0.8em; font-weight: 600; color: #3949ab; margin-bottom: 6px;">📋 Arbeiten auswählen (Haken = wird jetzt eingeplant):</div>
+            <div id="einplanenBestehendeArbeitenTitel" style="font-size: 0.8em; font-weight: 600; color: #3949ab; margin-bottom: 6px;">📋 Arbeiten:</div>
             <div id="einplanenBestehendeArbeitenListe" style="font-size: 0.88em; color: #333; display:flex; flex-direction:column; gap:4px;"></div>
             <div id="einplanenSplitHinweis" style="display:none;margin-top:6px;padding:5px 8px;background:#fff3cd;border-radius:4px;font-size:0.8em;color:#856404;">
               ℹ️ Nicht ausgewählte Arbeiten werden als neuer schwebender Termin gespeichert.
@@ -7886,43 +7886,71 @@ class App {
       const gesamtZeitMinuten = termin.geschaetzte_zeit || 60;
       const standardZeitProArbeit = arbeitenListe.length > 0 ? Math.round(gesamtZeitMinuten / arbeitenListe.length) : 60;
       
+      // Prüfen ob explizite Einzelzeiten gesetzt → Split-Modus
+      let hatEinzelzeiten = false;
       arbeitenListe.forEach(bezeichnung => {
         let zeitMinuten = standardZeitProArbeit;
+        let einzelzeitExplizit = false;
         if (details[bezeichnung]) {
-          if (typeof details[bezeichnung] === 'object' && details[bezeichnung].zeit) {
+          if (typeof details[bezeichnung] === 'object' && details[bezeichnung].zeit > 0) {
             zeitMinuten = details[bezeichnung].zeit;
-          } else if (typeof details[bezeichnung] === 'number') {
+            einzelzeitExplizit = true;
+          } else if (typeof details[bezeichnung] === 'number' && details[bezeichnung] > 0) {
             zeitMinuten = details[bezeichnung];
+            einzelzeitExplizit = true;
           }
         }
-        this.einplanenBestehendeArbeiten.push({ bezeichnung, zeit: zeitMinuten });
+        if (einzelzeitExplizit) hatEinzelzeiten = true;
+        this.einplanenBestehendeArbeiten.push({ bezeichnung, zeit: zeitMinuten, einzelzeitExplizit });
       });
+      // Split-Modus nur wenn Termin mehrere Arbeiten UND Einzelzeiten hat
+      this.einplanenSplitModus = hatEinzelzeiten && arbeitenListe.length > 1;
     }
     
-    // Bestehende Arbeiten als auswählbare Checkboxen anzeigen
+    // Bestehende Arbeiten anzeigen – Modus abhängig von Einzelzeiten
     const bestehendeBox = document.getElementById('einplanenBestehendeArbeitenBox');
     const bestehendeListe = document.getElementById('einplanenBestehendeArbeitenListe');
     const splitHinweis = document.getElementById('einplanenSplitHinweis');
+    const bestehendeTitle = document.getElementById('einplanenBestehendeArbeitenTitel');
     if (bestehendeBox && bestehendeListe) {
       if (this.einplanenBestehendeArbeiten.length > 0) {
         bestehendeBox.style.display = 'block';
-        bestehendeListe.innerHTML = this.einplanenBestehendeArbeiten
-          .map((a, i) => {
-            const zeitText = a.zeit >= 60
-              ? `${Math.floor(a.zeit/60)}h${a.zeit%60>0?' '+(a.zeit%60)+'min':''}` : `${a.zeit}min`;
-            return `<label style="display:flex;align-items:center;gap:8px;padding:3px 0;cursor:pointer;">
-              <input type="checkbox" class="einplanen-arbeit-check" data-index="${i}" checked
-                style="width:16px;height:16px;cursor:pointer;">
-              <span>${this.escapeHtml(a.bezeichnung)} <span style="color:#555;font-size:0.9em;">(${zeitText})</span></span>
-            </label>`;
-          })
-          .join('');
-        // Split-Hinweis dynamisch ein-/ausblenden
-        bestehendeListe.addEventListener('change', () => {
-          const checks = bestehendeListe.querySelectorAll('.einplanen-arbeit-check');
-          const alleGesetzt = Array.from(checks).every(cb => cb.checked);
-          if (splitHinweis) splitHinweis.style.display = alleGesetzt ? 'none' : 'block';
-        });
+        if (this.einplanenSplitModus) {
+          // Split-Modus: Checkboxen + Hinweis
+          if (bestehendeTitle) bestehendeTitle.textContent = '📋 Arbeiten auswählen (Haken = wird jetzt eingeplant):';
+          bestehendeBox.style.background = '#f0f4ff';
+          bestehendeBox.style.borderLeftColor = '#5c6bc0';
+          bestehendeListe.innerHTML = this.einplanenBestehendeArbeiten
+            .map((a, i) => {
+              const zeitText = a.zeit >= 60
+                ? `${Math.floor(a.zeit/60)}h${a.zeit%60>0?' '+(a.zeit%60)+'min':''}` : `${a.zeit}min`;
+              return `<label style="display:flex;align-items:center;gap:8px;padding:3px 0;cursor:pointer;">
+                <input type="checkbox" class="einplanen-arbeit-check" data-index="${i}" checked
+                  style="width:16px;height:16px;cursor:pointer;">
+                <span>${this.escapeHtml(a.bezeichnung)} <span style="color:#555;font-size:0.9em;">(${zeitText})</span></span>
+              </label>`;
+            })
+            .join('');
+          // Split-Hinweis dynamisch ein-/ausblenden
+          bestehendeListe.addEventListener('change', () => {
+            const checks = bestehendeListe.querySelectorAll('.einplanen-arbeit-check');
+            const alleGesetzt = Array.from(checks).every(cb => cb.checked);
+            if (splitHinweis) splitHinweis.style.display = alleGesetzt ? 'none' : 'block';
+          });
+        } else {
+          // Komplett-Modus: Read-only, keine Checkboxen
+          if (bestehendeTitle) bestehendeTitle.textContent = '📋 Alle Arbeiten werden komplett übernommen:';
+          bestehendeBox.style.background = '#f0fdf4';
+          bestehendeBox.style.borderLeftColor = '#16a34a';
+          const gesamtZeit = this.einplanenBestehendeArbeiten.reduce((s, a) => s + a.zeit, 0);
+          const gesamtText = gesamtZeit >= 60
+            ? `${Math.floor(gesamtZeit/60)}h${gesamtZeit%60>0?' '+gesamtZeit%60+'min':''}` : `${gesamtZeit}min`;
+          bestehendeListe.innerHTML = this.einplanenBestehendeArbeiten
+            .map(a => `<div style="padding:2px 0;">✅ ${this.escapeHtml(a.bezeichnung)}</div>`)
+            .join('')
+            + `<div style="margin-top:6px;font-size:0.85em;color:#16a34a;">⏱️ Gesamtzeit: <strong>${gesamtText}</strong></div>`;
+          if (splitHinweis) splitHinweis.style.display = 'none';
+        }
       } else {
         bestehendeBox.style.display = 'none';
       }
@@ -8703,20 +8731,24 @@ class App {
         } catch (e) {}
       }
       
-      // Ausgewählte bestehende Arbeiten aus den Checkboxen ermitteln
+      // Ausgewählte bestehende Arbeiten ermitteln
       let ausgewaehlteBestehendeArbeiten = [...(this.einplanenBestehendeArbeiten || [])];
       let nichtAusgewaehlteArbeiten = [];
-      const checkboxen = document.querySelectorAll('.einplanen-arbeit-check');
-      if (checkboxen.length > 0 && (this.einplanenBestehendeArbeiten || []).length > 0) {
-        ausgewaehlteBestehendeArbeiten = [];
-        checkboxen.forEach(cb => {
-          const idx = parseInt(cb.dataset.index, 10);
-          const arbeit = this.einplanenBestehendeArbeiten[idx];
-          if (!arbeit) return;
-          if (cb.checked) ausgewaehlteBestehendeArbeiten.push(arbeit);
-          else nichtAusgewaehlteArbeiten.push(arbeit);
-        });
+      // Nur im Split-Modus (Einzelzeiten gesetzt) Checkboxen auswerten
+      if (this.einplanenSplitModus) {
+        const checkboxen = document.querySelectorAll('.einplanen-arbeit-check');
+        if (checkboxen.length > 0) {
+          ausgewaehlteBestehendeArbeiten = [];
+          checkboxen.forEach(cb => {
+            const idx = parseInt(cb.dataset.index, 10);
+            const arbeit = this.einplanenBestehendeArbeiten[idx];
+            if (!arbeit) return;
+            if (cb.checked) ausgewaehlteBestehendeArbeiten.push(arbeit);
+            else nichtAusgewaehlteArbeiten.push(arbeit);
+          });
+        }
       }
+      // Im Komplett-Modus: alle bestehenden Arbeiten werden übernommen, kein Split
 
       // Neue Arbeiten (aus dem ➕-Bereich) zu den ausgewählten HINZUFÜGEN, keine Duplikate
       const neueArbeiten = (this.einplanenArbeiten || []).filter(
