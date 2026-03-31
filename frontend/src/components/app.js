@@ -23109,6 +23109,17 @@ class App {
         }
 
         if (tatsaechlich > 0 && ['in_arbeit', 'abgeschlossen'].includes(termin.status)) {
+          // Bei in_arbeit: Live-Zeit (Jetzt - Start) gewinnt wenn sie größer ist als tatsaechlich.
+          // So wächst der Balken automatisch über die ursprünglich geplante Zeit hinaus.
+          if (termin.status === 'in_arbeit') {
+            const startStr = details._startzeit || termin.startzeit || termin.bring_zeit;
+            if (startStr && /^\d{1,2}:\d{2}/.test(startStr)) {
+              const [sh, sm] = startStr.split(':').map(Number);
+              const jetzt = new Date();
+              const liveMin = jetzt.getHours() * 60 + jetzt.getMinutes() - (sh * 60 + sm);
+              if (liveMin > tatsaechlich) tatsaechlich = liveMin;
+            }
+          }
           let d = tatsaechlich;
           if (nebenzeitProzent > 0) d = d * (1 + nebenzeitProzent / 100);
           if (zugeordneterLehrling && zugeordneterLehrling.aufgabenbewaeltigung_prozent &&
@@ -23408,6 +23419,26 @@ class App {
     div.draggable = !istFortsetzung; // Nur Hauptteil ist draggable
     div.style.left = `${leftPx}px`;
     div.style.width = `${widthPx}px`;
+
+    // Geplante Dauer (ohne Live-Override) für den roten Überlauf-Balken speichern
+    let geplanteDauerFuerOvertime = gesamtDauer;
+    if (termin.status === 'in_arbeit' && !istFortsetzung) {
+      try {
+        const detailsForOvertime = termin.arbeitszeiten_details
+          ? (typeof termin.arbeitszeiten_details === 'string'
+              ? JSON.parse(termin.arbeitszeiten_details)
+              : termin.arbeitszeiten_details)
+          : {};
+        if (parseInt(detailsForOvertime._dauer_override) > 0) {
+          geplanteDauerFuerOvertime = parseInt(detailsForOvertime._dauer_override);
+        } else if (parseInt(termin.tatsaechliche_zeit) > 0) {
+          geplanteDauerFuerOvertime = parseInt(termin.tatsaechliche_zeit);
+        } else {
+          geplanteDauerFuerOvertime = parseInt(termin.geschaetzte_zeit) || gesamtDauer;
+        }
+      } catch(e) { /* ignore */ }
+    }
+    div.dataset.geplanteDauer = geplanteDauerFuerOvertime;
     
     // Erweiterungs-Badge HTML
     const erweiterungBadgeHtml = erweiterungAnzahl > 0 
@@ -23437,6 +23468,17 @@ class App {
         <div class="termin-info">${termin.kunde_name || ''} • ${dauerText}</div>
       `;
       div.title = `${termin.termin_nr}\n${termin.kunde_name}\n${termin.arbeit}\n${startzeit} - ${dauerText}${abholzeitInfo}${erweiterungInfo}${hatErweiterungenInfo}`;
+
+      // Roter Überlauf-Balken wenn in_arbeit und Planzeit überschritten
+      if (termin.status === 'in_arbeit' && gesamtDauer > geplanteDauerFuerOvertime) {
+        const overtimeDiv = document.createElement('div');
+        overtimeDiv.className = 'timeline-termin-overtime';
+        const plannedPx = geplanteDauerFuerOvertime * pixelPerMinute;
+        const overtimePx = (gesamtDauer - geplanteDauerFuerOvertime) * pixelPerMinute;
+        overtimeDiv.style.left = `${plannedPx}px`;
+        overtimeDiv.style.width = `${Math.max(overtimePx, 4)}px`;
+        div.appendChild(overtimeDiv);
+      }
     }
     
     // Klick-Handler für Erweiterungs-Badge (wenn vorhanden)
@@ -25275,6 +25317,25 @@ class App {
         el.style.width = `${neueBreite}px`;
         el.dataset.dauer = neueDauer;
         tracksToResolve.add(el.parentElement);
+      }
+
+      // Roten Überlauf-Balken aktualisieren
+      const geplanteDauer = parseInt(el.dataset.geplanteDauer) || 0;
+      if (geplanteDauer > 0) {
+        let overtimeDiv = el.querySelector('.timeline-termin-overtime');
+        if (neueDauer > geplanteDauer) {
+          const plannedPx = geplanteDauer * pixelPerMinute;
+          const overtimePx = Math.max((neueDauer - geplanteDauer) * pixelPerMinute, 4);
+          if (!overtimeDiv) {
+            overtimeDiv = document.createElement('div');
+            overtimeDiv.className = 'timeline-termin-overtime';
+            el.appendChild(overtimeDiv);
+          }
+          overtimeDiv.style.left = `${plannedPx}px`;
+          overtimeDiv.style.width = `${overtimePx}px`;
+        } else if (overtimeDiv) {
+          overtimeDiv.remove();
+        }
       }
     });
 

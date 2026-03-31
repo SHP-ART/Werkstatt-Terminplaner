@@ -9670,6 +9670,24 @@ mark.highlight {
     font-weight: bold;
 }
 
+/* Roter Überlauf-Balken für Termine die über die Planzeit laufen */
+.timeline-termin-overtime {
+    position: absolute;
+    top: 0;
+    height: 100%;
+    background: rgba(198, 40, 40, 0.75);
+    border-left: 2px solid #b71c1c;
+    border-radius: 0 4px 4px 0;
+    pointer-events: none;
+    animation: overtime-pulse 2s ease-in-out infinite;
+    z-index: 2;
+}
+
+@keyframes overtime-pulse {
+    0%, 100% { opacity: 0.75; }
+    50%       { opacity: 1;    }
+}
+
 /* ========================================
    PLANNING CONTROLS (Raster, Speichern, etc.)
    ======================================== */
