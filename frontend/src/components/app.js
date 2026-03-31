@@ -7807,7 +7807,11 @@ class App {
         </div>
         
         <div class="form-group" style="margin-top: 15px;">
-          <label><strong>Arbeiten hinzufügen (optional):</strong></label>
+          <div id="einplanenBestehendeArbeitenBox" style="display:none; margin-bottom: 12px; padding: 8px 12px; background: #f0f4ff; border-radius: 6px; border-left: 3px solid #5c6bc0;">
+            <div style="font-size: 0.8em; font-weight: 600; color: #3949ab; margin-bottom: 5px;">📋 Bestehende Arbeiten (bereits gespeichert):</div>
+            <div id="einplanenBestehendeArbeitenListe" style="font-size: 0.85em; color: #444;"></div>
+          </div>
+          <label><strong>➕ Neue Arbeit hinzufügen (optional):</strong></label>
           <div style="display: flex; gap: 10px; margin-top: 5px;">
             <input type="text" id="einplanenArbeitText" class="form-control" style="flex: 1;" placeholder="Arbeit eingeben...">
             <input type="number" id="einplanenArbeitZeit" class="form-control" style="width: 70px;" placeholder="h" min="0.1" step="0.1">
@@ -7817,7 +7821,7 @@ class App {
           </div>
           <div id="einplanenArbeitenListe" style="margin-top: 10px; max-height: 150px; overflow-y: auto;"></div>
           <div style="margin-top: 10px; display: flex; justify-content: space-between; align-items: center;">
-            <span style="color: #666; font-size: 0.9em;">Geschätzte Zeit:</span>
+            <span style="color: #666; font-size: 0.9em;">Zusätzliche Zeit neuer Arbeiten:</span>
             <strong id="einplanenGesamtzeit">0 h</strong>
           </div>
         </div>
@@ -7860,8 +7864,9 @@ class App {
     // Speichere die ursprüngliche geschätzte Zeit des Termins
     this.einplanenUrspruenglicheZeit = termin.geschaetzte_zeit || 60;
     
-    // Lade bestehende Arbeiten aus dem Termin
-    this.einplanenArbeiten = [];
+    // Bestehende Arbeiten aus dem Termin als read-only Referenz speichern (NICHT in die editable Liste laden)
+    this.einplanenBestehendeArbeiten = [];
+    this.einplanenArbeiten = []; // Neue Arbeiten starten immer leer
     if (termin.arbeit) {
       // Parse arbeitszeiten_details für die Zeiten
       let details = {};
@@ -7873,15 +7878,13 @@ class App {
         } catch (e) {}
       }
       
-      // Arbeiten aus dem Termin laden
+      // Bestehende Arbeiten nur als Referenz speichern
       const arbeitenListe = termin.arbeit.split('\n').map(a => a.trim()).filter(a => a);
-      
-      // Berechne Standard-Zeit pro Arbeit aus geschätzter Gesamtzeit des Termins
       const gesamtZeitMinuten = termin.geschaetzte_zeit || 60;
       const standardZeitProArbeit = arbeitenListe.length > 0 ? Math.round(gesamtZeitMinuten / arbeitenListe.length) : 60;
       
       arbeitenListe.forEach(bezeichnung => {
-        let zeitMinuten = standardZeitProArbeit; // Aus Termin-Gesamtzeit berechnet
+        let zeitMinuten = standardZeitProArbeit;
         if (details[bezeichnung]) {
           if (typeof details[bezeichnung] === 'object' && details[bezeichnung].zeit) {
             zeitMinuten = details[bezeichnung].zeit;
@@ -7889,11 +7892,25 @@ class App {
             zeitMinuten = details[bezeichnung];
           }
         }
-        this.einplanenArbeiten.push({ bezeichnung, zeit: zeitMinuten });
+        this.einplanenBestehendeArbeiten.push({ bezeichnung, zeit: zeitMinuten });
       });
     }
     
-    // Arbeiten-Liste anzeigen
+    // Bestehende Arbeiten als read-only anzeigen
+    const bestehendeBox = document.getElementById('einplanenBestehendeArbeitenBox');
+    const bestehendeListe = document.getElementById('einplanenBestehendeArbeitenListe');
+    if (bestehendeBox && bestehendeListe) {
+      if (this.einplanenBestehendeArbeiten.length > 0) {
+        bestehendeBox.style.display = 'block';
+        bestehendeListe.innerHTML = this.einplanenBestehendeArbeiten
+          .map(a => `<div>• ${this.escapeHtml(a.bezeichnung)} <span style="color:#666;">(${(a.zeit/60).toFixed(1)}h)</span></div>`)
+          .join('');
+      } else {
+        bestehendeBox.style.display = 'none';
+      }
+    }
+    
+    // Arbeiten-Liste anzeigen (startet leer)
     this.renderEinplanenArbeiten();
     
     // Modal anzeigen
@@ -8658,34 +8675,54 @@ class App {
         updateData.bring_zeit = neueBringzeit;
       }
       
-      // Arbeiten aus der Liste übernehmen (komplett ersetzen)
+      // Bestehende arbeitszeiten_details als Basis laden
       let details = {};
-      
-      // Arbeiten-Text und Details aus der Liste erstellen
-      if (this.einplanenArbeiten && this.einplanenArbeiten.length > 0) {
-        const arbeitenBezeichnungen = this.einplanenArbeiten.map(a => a.bezeichnung);
-        updateData.arbeit = arbeitenBezeichnungen.join('\n');
-        
-        // Arbeitszeit-Details für jede Arbeit speichern
-        this.einplanenArbeiten.forEach(arbeit => {
-          details[arbeit.bezeichnung] = { zeit: arbeit.zeit };
-        });
-        
-        // Gesamtzeit aktualisieren
-        updateData.geschaetzte_zeit = this.einplanenGesamtzeit;
+      if (termin.arbeitszeiten_details) {
+        try {
+          details = typeof termin.arbeitszeiten_details === 'string'
+            ? JSON.parse(termin.arbeitszeiten_details)
+            : { ...termin.arbeitszeiten_details };
+        } catch (e) {}
       }
-      // Wenn keine Arbeiten in der Liste, aber welche existierten, die bestehenden behalten
-      // (Nur das Datum wird aktualisiert)
+      
+      // Neue Arbeiten zu den bestehenden HINZUFÜGEN (nicht ersetzen)
+      if (this.einplanenArbeiten && this.einplanenArbeiten.length > 0) {
+        // Bestehende Arbeitsnamen aus der Referenz-Liste
+        const bestehendeNamen = (this.einplanenBestehendeArbeiten || []).map(a => a.bezeichnung);
+        const bestehendeArbeitenAusTerMin = termin.arbeit
+          ? termin.arbeit.split('\n').map(a => a.trim()).filter(a => a)
+          : [];
+        const alleBestehendeNamen = bestehendeNamen.length > 0 ? bestehendeNamen : bestehendeArbeitenAusTerMin;
+        
+        // Neue Arbeiten (nur wirklich neue, keine Duplikate)
+        const neueArbeiten = this.einplanenArbeiten.filter(a => !alleBestehendeNamen.includes(a.bezeichnung));
+        
+        if (neueArbeiten.length > 0) {
+          // Merge: Bestehende + Neue
+          const alleNamen = [...alleBestehendeNamen, ...neueArbeiten.map(a => a.bezeichnung)];
+          updateData.arbeit = alleNamen.join('\n');
+          
+          // Details für neue Arbeiten hinzufügen
+          neueArbeiten.forEach(arbeit => {
+            details[arbeit.bezeichnung] = { zeit: arbeit.zeit };
+          });
+          
+          // Gesamtzeit = bestehende Zeit + neue Zeit
+          const neueZeit = neueArbeiten.reduce((s, a) => s + a.zeit, 0);
+          updateData.geschaetzte_zeit = (termin.geschaetzte_zeit || 0) + neueZeit;
+        }
+      }
+      // Wenn keine neuen Arbeiten, bleiben bestehende unverändert (kein arbeit/geschaetzte_zeit Update)
       
       // Wenn Uhrzeit angegeben, in arbeitszeiten_details speichern
       if (neueUhrzeit) {
-        // Setze Startzeit für die erste Arbeit oder als Gesamt-Startzeit
-        if (this.einplanenArbeiten && this.einplanenArbeiten.length > 0) {
-          const ersteArbeit = this.einplanenArbeiten[0].bezeichnung;
-          if (!details[ersteArbeit]) {
-            details[ersteArbeit] = {};
-          }
-          details[ersteArbeit].startzeit = neueUhrzeit;
+        // Setze Startzeit als Gesamt-Startzeit; erste Arbeit (bestehend oder neu) bekommt auch Startzeit
+        const ersteArbeitName = (this.einplanenBestehendeArbeiten?.length > 0)
+          ? this.einplanenBestehendeArbeiten[0].bezeichnung
+          : (this.einplanenArbeiten?.length > 0 ? this.einplanenArbeiten[0].bezeichnung : null);
+        if (ersteArbeitName) {
+          if (!details[ersteArbeitName]) details[ersteArbeitName] = {};
+          details[ersteArbeitName].startzeit = neueUhrzeit;
         }
         details._startzeit = neueUhrzeit;
       }
@@ -8707,8 +8744,8 @@ class App {
       // Lokalen Cache aktualisieren
       termin.datum = neuesDatum;
       termin.ist_schwebend = 0;
-      termin.arbeit = updateData.arbeit;
-      termin.geschaetzte_zeit = updateData.geschaetzte_zeit;
+      if (updateData.arbeit !== undefined) termin.arbeit = updateData.arbeit;
+      if (updateData.geschaetzte_zeit !== undefined) termin.geschaetzte_zeit = updateData.geschaetzte_zeit;
       termin.arbeitszeiten_details = updateData.arbeitszeiten_details;
       if (updateData.bring_zeit !== undefined) {
         termin.bring_zeit = updateData.bring_zeit;
@@ -8721,9 +8758,8 @@ class App {
       this.closeEinplanenDatumModal();
       
       const uhrzeitText = neueUhrzeit ? ` um ${neueUhrzeit} Uhr` : '';
-      const arbeitenText = (this.einplanenArbeiten && this.einplanenArbeiten.length > 0) 
-        ? `\n${this.einplanenArbeiten.length} Arbeit(en) hinzugefügt.` 
-        : '';
+      const neueArb = this.einplanenArbeiten?.length || 0;
+      const arbeitenText = neueArb > 0 ? `\n${neueArb} neue Arbeit(en) hinzugefügt.` : '';
       alert(`Termin wurde für ${neuesDatum}${uhrzeitText} eingeplant!${arbeitenText}`);
       
       // Daten neu laden
@@ -10267,7 +10303,7 @@ class App {
         container.querySelectorAll('.nicht-zugeordnet-item[data-termin-id]').forEach(item => {
           item.addEventListener('click', async () => {
             const terminId = parseInt(item.dataset.terminId, 10);
-            const termin = alleTermine.find(t => t.id === terminId);
+            const termin = alleTermine.find(t => Number(t.id) === terminId);
             if (termin) {
               this.termineById[terminId] = termin;
               await this.showTerminDetails(terminId);
@@ -14214,7 +14250,18 @@ class App {
               const fStr = String(fd.getHours()).padStart(2,'0') + ':' + String(fd.getMinutes()).padStart(2,'0');
               fertigRow = `<div class="detail-row"><span class="detail-label" style="color:#16a34a;">✅</span><span class="detail-value">Fertiggestellt: <strong style="color:#16a34a;">${fStr}</strong></span></div>`;
             }
-            return startRow + fertigRow;
+            // Tatsächliche Arbeitszeit (aus tatsaechliche_zeit oder berechneter Differenz)
+            let tatsZeitRow = '';
+            const tatsZeit = termin.tatsaechliche_zeit;
+            if (tatsZeit && tatsZeit > 0) {
+              const tatsH = Math.floor(tatsZeit / 60);
+              const tatsM = tatsZeit % 60;
+              const tatsStr = tatsH > 0 ? `${tatsH}h${tatsM > 0 ? ' ' + tatsM + 'min' : ''}` : `${tatsM}min`;
+              const diff = tatsZeit - dauer;
+              const diffStr = diff !== 0 ? ` <span style="color:${diff > 0 ? '#dc3545' : '#16a34a'};font-size:0.85em;">(${diff > 0 ? '+' : ''}${diff}min)</span>` : '';
+              tatsZeitRow = `<div class="detail-row"><span class="detail-label">⏱️</span><span class="detail-value">Tatsächlich: <strong style="color:#16a34a;">${tatsStr}</strong>${diffStr}</span></div>`;
+            }
+            return startRow + fertigRow + tatsZeitRow;
           })()}
           <div class="detail-row">
             <span class="detail-label">📅</span>
@@ -21495,7 +21542,7 @@ class App {
             // Nicht zugeordnet - als Mini-Card in der Timeline-Dropzone anzeigen
             // (Schwebende Termine erscheinen im linken Panel, nicht-zugeordnete hier)
             if (!termin._istSchwebend && termin.status !== 'abgeschlossen' && termin.status !== 'storniert') {
-              const card = this.createTerminMiniCard(termin);
+              const card = this.createTerminMiniCard(termin, { context: 'nicht-zugeordnet' });
               sourceContainer.appendChild(card);
             }
           }
@@ -25423,7 +25470,7 @@ class App {
     this.nowLineInterval = setInterval(updateNowLine, 60000);
   }
 
-  createTerminMiniCard(termin) {
+  createTerminMiniCard(termin, options = {}) {
     const card = document.createElement('div');
     const isSchwebend = termin.ist_schwebend === 1 || termin._istSchwebend;
     const istErweiterung = termin.ist_erweiterung === 1 || termin.ist_erweiterung === true || termin.erweiterung_von_id;
@@ -25526,18 +25573,18 @@ class App {
       this.removeDragTimeIndicator();
     });
 
-    // Klick: Normaler Klick = Schnell-Menü, Shift+Klick = Details
+    // Klick: Im "Nicht zugeordnet"-Panel → direkt Details; sonst Schnell-Menü / Shift+Details
     card.addEventListener('click', (e) => {
       e.preventDefault();
       e.stopPropagation();
       const aktuellerTermin = this.termineById[termin.id] || termin;
       const startzeit = termin.startzeit || termin.bring_zeit || '08:00';
       
-      if (e.shiftKey) {
-        // Shift+Klick - Details anzeigen
+      if (options.context === 'nicht-zugeordnet' || e.shiftKey) {
+        // Nicht-zugeordnet oder Shift+Klick → Details anzeigen
         this.showTerminDetails(termin.id);
       } else {
-        // Normaler Klick - Schnell-Status-Dialog
+        // Normaler Klick – Schnell-Status-Dialog
         this.showSchnellStatusDialog(aktuellerTermin, card, startzeit, dauer);
       }
     });
