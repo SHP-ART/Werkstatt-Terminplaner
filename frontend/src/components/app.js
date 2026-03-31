@@ -8732,23 +8732,21 @@ class App {
       }
       
       // Ausgewählte bestehende Arbeiten ermitteln
+      // Direkt DOM-Checkboxen prüfen – unabhängig von einplanenSplitModus
       let ausgewaehlteBestehendeArbeiten = [...(this.einplanenBestehendeArbeiten || [])];
       let nichtAusgewaehlteArbeiten = [];
-      // Nur im Split-Modus (Einzelzeiten gesetzt) Checkboxen auswerten
-      if (this.einplanenSplitModus) {
-        const checkboxen = document.querySelectorAll('.einplanen-arbeit-check');
-        if (checkboxen.length > 0) {
-          ausgewaehlteBestehendeArbeiten = [];
-          checkboxen.forEach(cb => {
-            const idx = parseInt(cb.dataset.index, 10);
-            const arbeit = this.einplanenBestehendeArbeiten[idx];
-            if (!arbeit) return;
-            if (cb.checked) ausgewaehlteBestehendeArbeiten.push(arbeit);
-            else nichtAusgewaehlteArbeiten.push(arbeit);
-          });
-        }
+      const checkboxen = document.querySelectorAll('#einplanenDatumModal .einplanen-arbeit-check');
+      if (checkboxen.length > 0 && (this.einplanenBestehendeArbeiten || []).length > 0) {
+        ausgewaehlteBestehendeArbeiten = [];
+        checkboxen.forEach(cb => {
+          const idx = parseInt(cb.dataset.index, 10);
+          const arbeit = this.einplanenBestehendeArbeiten[idx];
+          if (!arbeit) return;
+          if (cb.checked) ausgewaehlteBestehendeArbeiten.push(arbeit);
+          else nichtAusgewaehlteArbeiten.push(arbeit);
+        });
       }
-      // Im Komplett-Modus: alle bestehenden Arbeiten werden übernommen, kein Split
+      // Wenn keine Checkboxen (Komplett-Modus): alle bestehenden Arbeiten übernehmen, kein Split
 
       // Neue Arbeiten (aus dem ➕-Bereich) zu den ausgewählten HINZUFÜGEN, keine Duplikate
       const neueArbeiten = (this.einplanenArbeiten || []).filter(
@@ -22967,7 +22965,7 @@ class App {
     }
     
     const ueberschneidetPause = pauseStartMinutes !== null && 
-      startMinutes < pauseEndMinutes && endMinutes > pauseStartMinutes;
+      startMinutes < pauseStartMinutes && endMinutes > pauseStartMinutes;
     
     if (ueberschneidetPause) {
       // Teil 1: Bis zur Pause
@@ -22976,7 +22974,7 @@ class App {
         if (termin.termin_nr && termin.termin_nr.includes('2026-070')) {
           console.warn(`[DEBUG] ${termin.termin_nr} - ${arbeit.name} - Startet IN/NACH Pause (teil1Dauer: ${teil1Dauer})`);
         }
-        return null; // Startet in oder nach der Pause
+        return null; // Startet in oder nach der Pause (Sicherheits-Guard)
       }
       
       const leftPx = startMinutesFromDayStart * pixelPerMinute;
