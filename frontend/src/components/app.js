@@ -33064,13 +33064,10 @@ class App {
     const zeilen = slots.map(s => {
       const datum = new Date(s.datum).toLocaleDateString('de-DE', { weekday: 'long', day: '2-digit', month: '2-digit' });
       const zeiten = (s.zeiten || (s.startzeit ? [s.startzeit] : []));
+      if (zeiten.length === 0) return '';
+      const maNameSafe = (s.mitarbeiter_name || '').replace(/'/g, "\\'");
       const chipsHtml = zeiten.map(zeit =>
-        `<span class="slot-zeit-chip" onclick="app._uebernimmSlot('${s.datum}','${s.mitarbeiter_id || ''}','${s.mitarbeiter_name}','${zeit}')" style="
-          display:inline-block;padding:4px 10px;border-radius:14px;cursor:pointer;
-          font-size:12px;font-weight:600;margin:2px;
-          background:#e8f4fd;color:#4a90e2;border:1px solid #4a90e2;">
-          ${zeit}
-        </span>`
+        `<span class="slot-zeit-chip" onclick="app._uebernimmSlot('${s.datum}','${s.mitarbeiter_id || ''}','${maNameSafe}','${zeit}')" style="display:inline-block;padding:4px 10px;border-radius:14px;cursor:pointer;font-size:12px;font-weight:600;margin:2px;background:#e8f4fd;color:#4a90e2;border:1px solid #4a90e2;">${zeit}</span>`
       ).join('');
       return `<div class="slot-item-row" style="display:flex;align-items:center;padding:10px 14px;border-bottom:1px solid #f0f0f0;gap:10px;flex-wrap:wrap;">
         <span style="min-width:130px;font-weight:600;color:#333;font-size:13px;">${datum}</span>
