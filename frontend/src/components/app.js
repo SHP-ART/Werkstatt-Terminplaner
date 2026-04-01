@@ -21944,6 +21944,11 @@ class App {
             const endMinFuerLaufend = lH * 60 + lM + dauerFuerLaufend;
             laufendeArbeitsStartzeit = `${Math.floor(endMinFuerLaufend / 60).toString().padStart(2, '0')}:${(endMinFuerLaufend % 60).toString().padStart(2, '0')}`;
 
+            // Abgeschlossene Arbeiten nicht auf der Timeline rendern (besonders Überträge vom Vortag)
+            if (arbeit.abgeschlossen === true) {
+              return; // Arbeit ist fertig, nicht mehr anzeigen
+            }
+
             // Prüfe ob diese Arbeit zugeordnet ist
             if (arbeitZuordnung.type === 'lehrling' && arbeitZuordnung.id && lehrlingeMap[arbeitZuordnung.id]) {
               const pauseStart = lehrlingePauseMap[arbeitZuordnung.id];
