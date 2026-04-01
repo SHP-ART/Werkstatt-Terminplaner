@@ -21393,24 +21393,27 @@ class App {
           if (t.abholung_datum && t.abholung_datum < datum) return false;
         }
         if (t.status === 'storniert') return false;
-        // Abgeschlossene Termine: nur ausblenden wenn ALLE Arbeiten abgeschlossen
+        // Abgeschlossene Termine: nur durchlassen wenn per-Arbeit-Abschluss genutzt wurde
+        // (mindestens eine Arbeit explizit abgeschlossen UND mindestens eine noch offen)
         if (t.status === 'abgeschlossen') {
-          // Prüfe ob Multi-Arbeit-Termin mit offenen Arbeiten
-          let hatOffeneArbeiten = false;
+          let hatAbgeschlossene = false;
+          let hatOffene = false;
           if (t.arbeitszeiten_details) {
             try {
               const det = typeof t.arbeitszeiten_details === 'string'
                 ? JSON.parse(t.arbeitszeiten_details) : t.arbeitszeiten_details;
               for (const k of Object.keys(det)) {
                 if (k.startsWith('_')) continue;
-                if (!det[k] || det[k].abgeschlossen !== true) {
-                  hatOffeneArbeiten = true;
-                  break;
+                if (det[k] && det[k].abgeschlossen === true) {
+                  hatAbgeschlossene = true;
+                } else {
+                  hatOffene = true;
                 }
               }
             } catch (e) {}
           }
-          if (!hatOffeneArbeiten) return false; // Alle fertig → ausblenden
+          // Nur durchlassen wenn teilweise abgeschlossen (Feature aktiv genutzt)
+          if (!(hatAbgeschlossene && hatOffene)) return false;
         }
         if (t.geloescht_am) return false;
         // Prüfe ob kein Mitarbeiter zugeordnet ist (weder direkt noch über arbeitszeiten_details)
@@ -29609,18 +29612,19 @@ class App {
       if (t === aktuellerAuftrag) return false;
       if (t.status === 'storniert') return false;
       if (t.status === 'abgeschlossen') {
-        let hatOffeneArbeiten = false;
+        let hatAbgeschlossene = false;
+        let hatOffene = false;
         if (t.arbeitszeiten_details) {
           try {
             const det = typeof t.arbeitszeiten_details === 'string'
               ? JSON.parse(t.arbeitszeiten_details) : t.arbeitszeiten_details;
             for (const k of Object.keys(det)) {
               if (k.startsWith('_')) continue;
-              if (!det[k] || det[k].abgeschlossen !== true) { hatOffeneArbeiten = true; break; }
+              if (det[k] && det[k].abgeschlossen === true) { hatAbgeschlossene = true; } else { hatOffene = true; }
             }
           } catch (e) {}
         }
-        if (!hatOffeneArbeiten) return false;
+        if (!(hatAbgeschlossene && hatOffene)) return false;
       }
       // Aufnehmen wenn: keine Startzeit, Startzeit in der Zukunft, ODER Startzeit
       // in der Vergangenheit (→ wird dynamisch vorgerückt)
