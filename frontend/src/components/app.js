@@ -14208,7 +14208,7 @@ class App {
   // ========== SCHNELL-STATUS-WECHSEL (Shift+Click in Planung) ==========
   
   // Schnell-Status-Dialog für Timeline-Termin anzeigen
-  showSchnellStatusDialog(termin, element, startzeit, dauer) {
+  showSchnellStatusDialog(termin, element, startzeit, dauer, arbeitName = null) {
     // Alten Dialog entfernen falls vorhanden
     const existingDialog = document.getElementById('schnellStatusDialog');
     if (existingDialog) existingDialog.remove();
@@ -14344,6 +14344,47 @@ class App {
         </div>`;
     }
     
+    // Einzelne Arbeit abschließen: Nur anzeigen wenn Multi-Arbeit-Termin und eine bestimmte Arbeit angeklickt wurde
+    let einzelArbeitSektion = '';
+    if (arbeitName && currentStatus !== 'abgeschlossen') {
+      let arbeitDetails = null;
+      let arbeitenCount = 0;
+      try {
+        const det = termin.arbeitszeiten_details
+          ? (typeof termin.arbeitszeiten_details === 'string'
+              ? JSON.parse(termin.arbeitszeiten_details)
+              : termin.arbeitszeiten_details)
+          : null;
+        if (det) {
+          for (const k of Object.keys(det)) {
+            if (!k.startsWith('_')) arbeitenCount++;
+          }
+          arbeitDetails = det[arbeitName];
+        }
+      } catch (e) {}
+      
+      const istBereitsAbgeschlossen = arbeitDetails && arbeitDetails.abgeschlossen === true;
+      
+      if (arbeitenCount > 1 && !istBereitsAbgeschlossen) {
+        einzelArbeitSektion = `
+          <div class="detail-divider"></div>
+          <div style="padding: 4px 0;">
+            <p style="font-size:0.85em; color:#555; margin:0 0 6px;">📌 Angeklickte Arbeit: <strong>${arbeitName}</strong></p>
+            <button class="btn-schnell-status" data-action="einzelarbeit-abschliessen"
+              style="width:100%; background:linear-gradient(135deg, #10b981 0%, #34d399 100%); color:white; border:none; border-radius:8px; padding:10px; font-weight:600; cursor:pointer;">
+              ✅ Nur "${arbeitName}" abschließen
+            </button>
+            <small style="color:#888; display:block; margin-top:4px;">Die anderen Arbeiten bleiben offen und können separat eingeplant werden.</small>
+          </div>`;
+      } else if (istBereitsAbgeschlossen) {
+        einzelArbeitSektion = `
+          <div class="detail-divider"></div>
+          <div style="padding: 4px 0;">
+            <p style="font-size:0.85em; color:#16a34a; margin:0;">✅ "${arbeitName}" ist bereits abgeschlossen</p>
+          </div>`;
+      }
+    }
+    
     dialog.innerHTML = `
       <div class="schnell-status-content erweitert">
         <button class="schnell-status-close" data-action="close">×</button>
@@ -14435,6 +14476,8 @@ class App {
         
         ${statusAktionen}
         
+        ${einzelArbeitSektion}
+        
         <div class="schnell-status-footer">
           <button class="btn-schnell-link" data-action="erweitern" title="Auftrag erweitern">
             ➕ Erweitern
@@ -14507,6 +14550,9 @@ class App {
           const minuten = parseInt(document.getElementById('schnellZeitMinuten')?.value) || 0;
           const gesamtMinuten = stunden * 60 + minuten;
           this.setzeSchnellStatus(terminId, 'abgeschlossen', gesamtMinuten > 0 ? gesamtMinuten : null);
+        } else if (action === 'einzelarbeit-abschliessen') {
+          this.closeSchnellStatusDialog();
+          await this.abschliessenEinzelArbeit(terminId, arbeitName);
         } else if (action === 'erweitern') {
           // Auftrag erweitern - Modal öffnen
           this.closeSchnellStatusDialog();
@@ -14564,6 +14610,120 @@ class App {
       setTimeout(() => dialog.remove(), 200);
     }
     document.removeEventListener('click', this.handleSchnellStatusOutsideClick);
+  }
+
+  // Einzelne Arbeit eines Multi-Arbeit-Termins abschließen
+  async abschliessenEinzelArbeit(terminId, arbeitName) {
+    try {
+      const termin = this.termineById[terminId];
+      if (!termin) {
+        this.showToast('❌ Termin nicht gefunden', 'error');
+        return;
+      }
+
+      // arbeitszeiten_details parsen
+      let details = termin.arbeitszeiten_details
+        ? (typeof termin.arbeitszeiten_details === 'string'
+            ? JSON.parse(termin.arbeitszeiten_details)
+            : { ...termin.arbeitszeiten_details })
+        : {};
+
+      // Arbeit in Details finden und als abgeschlossen markieren
+      if (!details[arbeitName]) {
+        this.showToast(`❌ Arbeit "${arbeitName}" nicht in Details gefunden`, 'error');
+        return;
+      }
+
+      if (typeof details[arbeitName] !== 'object') {
+        details[arbeitName] = { zeit: details[arbeitName] };
+      }
+      details[arbeitName].abgeschlossen = true;
+
+      // Tatsächliche Zeit: die geplante Zeit der Arbeit als Fallback
+      if (!details[arbeitName].tatsaechliche_zeit) {
+        details[arbeitName].tatsaechliche_zeit = details[arbeitName].zeit || 30;
+      }
+
+      // Prüfe ob ALLE Arbeiten nun abgeschlossen sind
+      let alleAbgeschlossen = true;
+      let arbeitenGesamt = 0;
+      let arbeitenFertig = 0;
+      for (const key of Object.keys(details)) {
+        if (key.startsWith('_')) continue;
+        arbeitenGesamt++;
+        if (details[key] && details[key].abgeschlossen === true) {
+          arbeitenFertig++;
+        } else {
+          alleAbgeschlossen = false;
+        }
+      }
+
+      // Update-Payload
+      const updateData = {
+        arbeitszeiten_details: JSON.stringify(details)
+      };
+
+      // Termin-Status: in_arbeit setzen wenn noch nicht alle fertig, sonst abgeschlossen
+      if (alleAbgeschlossen) {
+        updateData.status = 'abgeschlossen';
+        // Tatsächliche Gesamtzeit berechnen
+        let gesamtTatsaechlich = 0;
+        for (const key of Object.keys(details)) {
+          if (key.startsWith('_')) continue;
+          gesamtTatsaechlich += parseInt(details[key].tatsaechliche_zeit) || parseInt(details[key].zeit) || 0;
+        }
+        updateData.tatsaechliche_zeit = gesamtTatsaechlich;
+      } else if (termin.status === 'geplant') {
+        updateData.status = 'in_arbeit';
+      }
+
+      await TermineService.update(terminId, updateData);
+
+      // Cache aktualisieren
+      if (this.termineById[terminId]) {
+        this.termineById[terminId].arbeitszeiten_details = JSON.stringify(details);
+        if (updateData.status) {
+          this.termineById[terminId].status = updateData.status;
+        }
+        if (updateData.tatsaechliche_zeit) {
+          this.termineById[terminId].tatsaechliche_zeit = updateData.tatsaechliche_zeit;
+        }
+      }
+
+      // Feedback
+      if (alleAbgeschlossen) {
+        this.showToast(`✅ Alle ${arbeitenGesamt} Arbeiten abgeschlossen — Termin fertig!`, 'success');
+      } else {
+        this.showToast(`✅ "${arbeitName}" abgeschlossen (${arbeitenFertig}/${arbeitenGesamt} fertig)`, 'success');
+      }
+
+      // Visuell aktualisieren
+      const arbeitBlock = document.querySelector(`[id^="timeline-arbeit-${terminId}-"][data-arbeit-name="${arbeitName}"]`);
+      if (arbeitBlock) {
+        arbeitBlock.classList.add('arbeit-abgeschlossen');
+        const titleEl = arbeitBlock.querySelector('.termin-title');
+        if (titleEl && !titleEl.innerHTML.includes('arbeit-done-badge')) {
+          titleEl.innerHTML += ' <span class="arbeit-done-badge">✓</span>';
+        }
+      }
+
+      // Timeline-Status aktualisieren
+      if (updateData.status) {
+        this.updateTimelineBlockStatus(terminId, updateData.status);
+      }
+
+      // Views neu laden
+      this.loadDashboard();
+      await this.loadHeuteTermine();
+      const planungTab = document.getElementById('auslastung-dragdrop');
+      if (planungTab && planungTab.classList.contains('active')) {
+        setTimeout(() => this.loadAuslastungDragDrop(), 300);
+      }
+
+    } catch (error) {
+      console.error('Fehler beim Abschließen der Einzelarbeit:', error);
+      this.showToast('❌ Fehler beim Abschließen', 'error');
+    }
   }
 
   // Verknüpfen-Dialog: Termin mit einem anderen als Erweiterung verknüpfen
@@ -21232,7 +21392,26 @@ class App {
         if (t.datum < datum) {
           if (t.abholung_datum && t.abholung_datum < datum) return false;
         }
-        if (t.status === 'abgeschlossen' || t.status === 'storniert') return false;
+        if (t.status === 'storniert') return false;
+        // Abgeschlossene Termine: nur ausblenden wenn ALLE Arbeiten abgeschlossen
+        if (t.status === 'abgeschlossen') {
+          // Prüfe ob Multi-Arbeit-Termin mit offenen Arbeiten
+          let hatOffeneArbeiten = false;
+          if (t.arbeitszeiten_details) {
+            try {
+              const det = typeof t.arbeitszeiten_details === 'string'
+                ? JSON.parse(t.arbeitszeiten_details) : t.arbeitszeiten_details;
+              for (const k of Object.keys(det)) {
+                if (k.startsWith('_')) continue;
+                if (!det[k] || det[k].abgeschlossen !== true) {
+                  hatOffeneArbeiten = true;
+                  break;
+                }
+              }
+            } catch (e) {}
+          }
+          if (!hatOffeneArbeiten) return false; // Alle fertig → ausblenden
+        }
         if (t.geloescht_am) return false;
         // Prüfe ob kein Mitarbeiter zugeordnet ist (weder direkt noch über arbeitszeiten_details)
         if (t.mitarbeiter_id) return false;
@@ -21790,8 +21969,9 @@ class App {
               }
             } else {
               console.warn(`[DEBUG] ${termin.termin_nr} - Arbeit "${arbeit.name}" NICHT zugeordnet, Zuordnung:`, arbeitZuordnung);
-              // Nicht zugeordnet - als Mini-Card anzeigen (nur wenn nicht abgeschlossen)
-              if (termin.status !== 'abgeschlossen' && termin.status !== 'storniert') {
+              // Nicht zugeordnet - als Mini-Card anzeigen (nur wenn diese Arbeit nicht abgeschlossen)
+              const arbeitIstAbgeschlossen = arbeit.abgeschlossen === true;
+              if (!arbeitIstAbgeschlossen && termin.status !== 'storniert') {
                 const card = this.createArbeitMiniCard(termin, arbeit, index);
                 card.dataset.dauer = arbeit.zeit; // Setze Dauer für Drag & Drop
                 sourceContainer.appendChild(card);
@@ -23367,7 +23547,7 @@ class App {
         e.stopPropagation();
         // Aktuellen Termin aus Cache holen (für aktuellen Status)
         const aktuellerTermin = this.termineById[termin.id] || termin;
-        this.showSchnellStatusDialog(aktuellerTermin, div, startzeit, arbeit.zeit || 30);
+        this.showSchnellStatusDialog(aktuellerTermin, div, startzeit, arbeit.zeit || 30, arbeit.name);
       }
     });
   }
@@ -29422,7 +29602,21 @@ class App {
     // Startzeit (nächste halbe Stunde) wird für die Anzeige verwendet.
     const naechsterAuftragRoh = personTermine.find(t => {
       if (t === aktuellerAuftrag) return false;
-      if (t.status === 'abgeschlossen' || t.status === 'storniert') return false;
+      if (t.status === 'storniert') return false;
+      if (t.status === 'abgeschlossen') {
+        let hatOffeneArbeiten = false;
+        if (t.arbeitszeiten_details) {
+          try {
+            const det = typeof t.arbeitszeiten_details === 'string'
+              ? JSON.parse(t.arbeitszeiten_details) : t.arbeitszeiten_details;
+            for (const k of Object.keys(det)) {
+              if (k.startsWith('_')) continue;
+              if (!det[k] || det[k].abgeschlossen !== true) { hatOffeneArbeiten = true; break; }
+            }
+          } catch (e) {}
+        }
+        if (!hatOffeneArbeiten) return false;
+      }
       // Aufnehmen wenn: keine Startzeit, Startzeit in der Zukunft, ODER Startzeit
       // in der Vergangenheit (→ wird dynamisch vorgerückt)
       return true;
