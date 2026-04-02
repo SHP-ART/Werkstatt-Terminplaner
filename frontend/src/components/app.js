@@ -4849,6 +4849,67 @@ class App {
     });
   }
 
+  async _zeigeWiederholungsDialog(aehnlicheTermine, neuesTerminData) {
+    return new Promise((resolve) => {
+      // Alten Dialog entfernen
+      const existing = document.getElementById('wiederholung-dialog');
+      if (existing) existing.remove();
+
+      const termineHtml = aehnlicheTermine.map(t => {
+        const datumFormatiert = new Date(t.datum + 'T12:00:00').toLocaleDateString('de-DE');
+        const arbeiten = t.arbeit && t.arbeit.length > 60 ? t.arbeit.substring(0, 60) + '…' : (t.arbeit || '—');
+        return `<div style="padding:6px 8px;background:#f9fafb;border-radius:6px;margin-bottom:4px;font-size:12px;">
+          <strong>${t.termin_nr || '?'}</strong> — ${datumFormatiert}<br>
+          <span style="color:#6b7280;">${arbeiten}</span>
+        </div>`;
+      }).join('');
+
+      const overlay = document.createElement('div');
+      overlay.id = 'wiederholung-dialog';
+      overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:10000;display:flex;align-items:center;justify-content:center;';
+
+      overlay.innerHTML = `
+        <div style="background:#fff;border-radius:12px;padding:24px;max-width:420px;width:90%;box-shadow:0 8px 32px rgba(0,0,0,0.2);">
+          <h3 style="margin:0 0 8px;font-size:16px;color:#1f2937;">🔍 Ähnlicher Termin gefunden</h3>
+          <p style="margin:0 0 12px;font-size:13px;color:#6b7280;">
+            Für <strong>${neuesTerminData.kennzeichen}</strong> gibt es ${aehnlicheTermine.length} Termin(e) in den nächsten/letzten 7 Tagen:
+          </p>
+          <div style="margin-bottom:16px;">${termineHtml}</div>
+          <p style="margin:0 0 16px;font-size:13px;color:#374151;font-weight:500;">Was ist dieser neue Termin?</p>
+          <div style="display:flex;flex-direction:column;gap:8px;">
+            <button id="wdh-gleich" style="padding:10px;border-radius:8px;border:1px solid #93b4f5;background:#e8f0fe;color:#1a4a9b;font-weight:600;cursor:pointer;text-align:left;">
+              ✏️ Gleicher Termin — bestehenden Termin bearbeiten
+            </button>
+            <button id="wdh-wiederholung" style="padding:10px;border-radius:8px;border:1px solid #f0a0a0;background:#fce8e8;color:#8a2020;font-weight:600;cursor:pointer;text-align:left;">
+              🔁 Wiederholungstermin — neu anlegen (rot markiert)
+            </button>
+            <button id="wdh-kein" style="padding:10px;border-radius:8px;border:1px solid #d0d5dd;background:#f9fafb;color:#374151;cursor:pointer;text-align:left;">
+              ➡️ Kein Zusammenhang — normal speichern
+            </button>
+          </div>
+        </div>
+      `;
+
+      document.body.appendChild(overlay);
+
+      overlay.querySelector('#wdh-gleich').addEventListener('click', () => {
+        overlay.remove();
+        const ersterTreffer = aehnlicheTermine[0];
+        resolve({ aktion: 'gleich', terminId: ersterTreffer.id });
+      });
+
+      overlay.querySelector('#wdh-wiederholung').addEventListener('click', () => {
+        overlay.remove();
+        resolve({ aktion: 'wiederholung' });
+      });
+
+      overlay.querySelector('#wdh-kein').addEventListener('click', () => {
+        overlay.remove();
+        resolve({ aktion: 'kein' });
+      });
+    });
+  }
+
   cancelTerminVorschau() {
     // Countdown stoppen
     if (this.terminCountdownInterval) {
@@ -4947,6 +5008,27 @@ class App {
         }
       }
       } // Ende Duplikat-Erkennung Guard
+
+      // Wiederholungstermin-Erkennung (gleiches Kennzeichen, ±7 Tage)
+      if (termin.kennzeichen) {
+        try {
+          const aehnlichCheck = await TermineService.getAehnliche(termin.kennzeichen, termin.datum);
+          if (aehnlichCheck.hatAehnliche) {
+            const dialogResult = await this._zeigeWiederholungsDialog(aehnlichCheck.termine, termin);
+            if (dialogResult.aktion === 'gleich') {
+              // Bestehenden Termin zur Bearbeitung öffnen
+              this.pendingTerminData = null;
+              this.showTerminDetails(dialogResult.terminId);
+              return;
+            } else if (dialogResult.aktion === 'wiederholung') {
+              termin.ist_wiederholung = 1;
+            }
+            // Bei 'kein': termin.ist_wiederholung bleibt undefined/0 → normaler Termin
+          }
+        } catch (aehnlichErr) {
+          console.warn('[Wiederholungs-Check] Fehler (ignoriert):', aehnlichErr);
+        }
+      }
 
       // Validiere Termin vor dem Erstellen
       const validation = await TermineService.validate({

@@ -335,6 +335,10 @@ class TermineService {
     return ApiService.get(url);
   }
 
+  static async getAehnliche(kennzeichen, datum) {
+    return ApiService.get(`/termine/aehnliche?kennzeichen=${encodeURIComponent(kennzeichen)}&datum=${encodeURIComponent(datum)}`);
+  }
+
   // Schwebend-Funktionen (Termin noch nicht fest eingeplant)
   static async setSchwebend(id, istSchwebend) {
     return ApiService.post(`/termine/${id}/schwebend`, { ist_schwebend: istSchwebend });
