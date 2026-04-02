@@ -4868,11 +4868,14 @@ class App {
       overlay.id = 'wiederholung-dialog';
       overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:10000;display:flex;align-items:center;justify-content:center;';
 
+      // XSS-Escaping für Kennzeichen
+      const kennzeichenEscaped = (neuesTerminData.kennzeichen || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+
       overlay.innerHTML = `
         <div style="background:#fff;border-radius:12px;padding:24px;max-width:420px;width:90%;box-shadow:0 8px 32px rgba(0,0,0,0.2);">
           <h3 style="margin:0 0 8px;font-size:16px;color:#1f2937;">🔍 Ähnlicher Termin gefunden</h3>
           <p style="margin:0 0 12px;font-size:13px;color:#6b7280;">
-            Für <strong>${neuesTerminData.kennzeichen}</strong> gibt es ${aehnlicheTermine.length} Termin(e) in den nächsten/letzten 7 Tagen:
+            Für <strong>${kennzeichenEscaped}</strong> gibt es ${aehnlicheTermine.length} Termin(e) in den nächsten/letzten 7 Tagen:
           </p>
           <div style="margin-bottom:16px;">${termineHtml}</div>
           <p style="margin:0 0 16px;font-size:13px;color:#374151;font-weight:500;">Was ist dieser neue Termin?</p>
@@ -5017,8 +5020,8 @@ class App {
             const dialogResult = await this._zeigeWiederholungsDialog(aehnlichCheck.termine, termin);
             if (dialogResult.aktion === 'gleich') {
               // Bestehenden Termin zur Bearbeitung öffnen
-              this.pendingTerminData = null;
               this.showTerminDetails(dialogResult.terminId);
+              this.pendingTerminData = null;
               return;
             } else if (dialogResult.aktion === 'wiederholung') {
               termin.ist_wiederholung = 1;
