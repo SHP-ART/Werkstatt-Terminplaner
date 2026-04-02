@@ -11369,6 +11369,7 @@ class App {
       saveBtn.style.color      = c ? c.color : '#aaa';
       saveBtn.style.border     = c ? `1px solid ${c.border}` : '1px solid #555';
     }
+    if (saveBtn) saveBtn.disabled = false;
 
     if (status === 'in_arbeit') {
       const geplant = termin ? (termin.startzeit || termin.bring_zeit || '') : '';
@@ -11427,6 +11428,50 @@ class App {
         input.style.borderColor = valid ? borderOk : '#cc4444';
         saveBtn.disabled = !valid;
       });
+    }
+  }
+
+  async saveStatusPopup(terminId, status, zeitValue) {
+    const termin = this.termineById[terminId];
+    const updatePayload = { status };
+
+    if (status === 'in_arbeit' && zeitValue) {
+      updatePayload.startzeit = zeitValue;
+    } else if (status === 'abgeschlossen' && zeitValue) {
+      const datum = termin ? termin.datum : new Date().toISOString().slice(0, 10);
+      const iso   = new Date(`${datum}T${zeitValue}:00`);
+      updatePayload.fertigstellung_zeit = isNaN(iso.getTime()) ? zeitValue : iso.toISOString();
+    }
+
+    try {
+      const result = await TermineService.update(terminId, updatePayload);
+
+      // Cache aktualisieren
+      if (this.termineById[terminId]) {
+        this.termineById[terminId].status = status;
+        if (updatePayload.startzeit)           this.termineById[terminId].startzeit           = updatePayload.startzeit;
+        if (updatePayload.fertigstellung_zeit) this.termineById[terminId].fertigstellung_zeit = updatePayload.fertigstellung_zeit;
+        if (result && result.berechneteZeit)   this.termineById[terminId].tatsaechliche_zeit  = result.berechneteZeit;
+      }
+
+      const statusLabel = {
+        wartend: 'Wartend', geplant: 'Geplant', in_arbeit: 'In Arbeit',
+        abgeschlossen: 'Abgeschlossen', abgesagt: 'Abgesagt'
+      }[status] || status;
+      this.showToast(`✅ Status: ${statusLabel}`, 'success');
+
+      // Tabelle + Seiteneffekte
+      await this.loadTermine();
+      if (status === 'in_arbeit' || status === 'abgeschlossen') {
+        if (termin) this._nachrueckenFuerTermin(termin).catch(() => {});
+      }
+      this.updateTimelineBlockStatus(terminId, status);
+      this.loadDashboard();
+      await this.loadHeuteTermine();
+
+    } catch (e) {
+      console.error('[saveStatusPopup] Fehler:', e);
+      this.showToast('Fehler beim Speichern des Status', 'error');
     }
   }
 
