@@ -24315,6 +24315,10 @@ class App {
     const statusClass = termin.status ? ` status-${termin.status.toLowerCase().replace(' ', '-')}` : '';
     const erweiterungClass = istErweiterung ? ' erweiterung-block' : '';
     div.className = 'timeline-termin' + statusClass + erweiterungClass + (isSchwebend ? ' schwebend' : '') + (istFortsetzung ? ' fortsetzung' : '');
+    if (termin.ist_wiederholung) {
+      div.style.borderLeft = '3px solid #dc3545';
+      div.title = (div.title || '') + '\n🔁 Wiederholungstermin';
+    }
     div.id = istFortsetzung ? `timeline-termin-${termin.id}-teil2` : `timeline-termin-${termin.id}`;
     div.dataset.terminId = termin.id;
     div.dataset.dauer = gesamtDauer;
@@ -26342,7 +26346,10 @@ class App {
     card.dataset.datum = termin.datum || '';
 
     const schwebendBadge = isSchwebend ? '<span class="schwebend-badge" title="Schwebender Termin">⏸</span>' : '';
-    
+    const wiederholungMiniCardBadge = (termin.ist_wiederholung)
+      ? '<span style="background:#dc3545;color:white;border-radius:3px;padding:1px 5px;font-size:10px;font-weight:bold;">🔁</span>'
+      : '';
+
     // Zähle Erweiterungen zu diesem Termin
     let erweiterungAnzahl = 0;
     if (this.termineById) {
@@ -26375,7 +26382,7 @@ class App {
     
     card.innerHTML = `
       <div class="header">
-        <span>${schwebendBadge}${istErweiterungBadge}${termin.termin_nr || 'Neu'}${erweiterungBadge}</span>
+        <span>${schwebendBadge}${istErweiterungBadge}${wiederholungMiniCardBadge}${termin.termin_nr || 'Neu'}${erweiterungBadge}</span>
         <span>${termin.kennzeichen || ''}</span>
       </div>
       <div class="details">
