@@ -11280,40 +11280,49 @@ class App {
     popup.style.cssText = [
       'position:fixed',
       'z-index:9999',
-      'background:var(--card-bg,#1e2235)',
-      'border:1px solid var(--border,#3a4a6a)',
-      'border-radius:8px',
-      'padding:12px',
-      'min-width:210px',
-      'box-shadow:0 4px 20px rgba(0,0,0,0.6)',
+      'background:#ffffff',
+      'border:1px solid #d0d5dd',
+      'border-radius:10px',
+      'min-width:220px',
+      'max-height:calc(100vh - 24px)',
+      'display:flex',
+      'flex-direction:column',
+      'box-shadow:0 8px 24px rgba(0,0,0,0.15)',
       'font-family:inherit',
     ].join(';');
 
     popup.innerHTML = `
-      <div style="font-size:10px;color:#888;margin-bottom:8px;text-transform:uppercase;letter-spacing:0.8px;">Status</div>
-      <div id="status-popup-list">
-        ${STATUS_LIST.map(s => `
-          <div class="status-popup-item"
-               data-value="${s.value}"
-               style="padding:6px 8px;border-radius:5px;cursor:pointer;font-size:13px;
-                      border-left:3px solid ${s.value === currentStatus ? 'var(--primary,#4a7adb)' : 'transparent'};
-                      font-weight:${s.value === currentStatus ? 'bold' : 'normal'};">
-            ${s.label}
-          </div>
-        `).join('')}
+      <div style="padding:12px 12px 8px 12px;overflow-y:auto;flex:1;">
+        <div style="font-size:10px;color:#6b7280;margin-bottom:8px;text-transform:uppercase;letter-spacing:0.8px;font-weight:600;">Status</div>
+        <div id="status-popup-list">
+          ${STATUS_LIST.map(s => `
+            <div class="status-popup-item"
+                 data-value="${s.value}"
+                 style="padding:7px 8px;border-radius:6px;cursor:pointer;font-size:13px;color:#1f2937;
+                        border-left:3px solid ${s.value === currentStatus ? '#4a7adb' : 'transparent'};
+                        font-weight:${s.value === currentStatus ? '600' : 'normal'};">
+              ${s.label}
+            </div>
+          `).join('')}
+        </div>
+        <div id="status-popup-zeitfeld"></div>
       </div>
-      <div id="status-popup-zeitfeld"></div>
-      <button id="status-popup-save"
-              style="margin-top:10px;width:100%;border-radius:5px;padding:7px;font-size:12px;cursor:pointer;border:1px solid #555;background:#2a2a3e;color:#aaa;">
-        💾 Speichern
-      </button>
+      <div style="padding:8px 12px 12px 12px;border-top:1px solid #f3f4f6;">
+        <button id="status-popup-save"
+                style="width:100%;border-radius:6px;padding:8px;font-size:13px;font-weight:600;cursor:pointer;border:1px solid #d0d5dd;background:#f9fafb;color:#374151;">
+          💾 Speichern
+        </button>
+      </div>
     `;
 
-    // Popup positionieren mit Viewport-Clamping
-    const rect = anchorEl.getBoundingClientRect();
+    // In DOM einfügen, Zeitfeld rendern, dann positionieren (korrekte Höhe!)
     document.body.appendChild(popup);
+    this._updateStatusPopupZeitfeld(terminId, selectedStatus);
+
+    // Viewport-Clamping nach vollständigem Render
+    const rect = anchorEl.getBoundingClientRect();
     const pw = popup.offsetWidth  || 220;
-    const ph = popup.offsetHeight || 250;
+    const ph = popup.offsetHeight || 280;
     let top  = rect.bottom + 4;
     let left = rect.left;
     if (left + pw > window.innerWidth  - 8) left = window.innerWidth  - pw - 8;
@@ -11322,9 +11331,6 @@ class App {
     if (top  < 8) top  = 8;
     popup.style.top  = top  + 'px';
     popup.style.left = left + 'px';
-
-    // Initiales Zeitfeld rendern
-    this._updateStatusPopupZeitfeld(terminId, selectedStatus);
 
     // Status-Item klicken
     popup.querySelectorAll('.status-popup-item').forEach(item => {
@@ -11367,31 +11373,31 @@ class App {
 
     // Speichern-Button-Farbe je Status
     const BTN_COLORS = {
-      in_arbeit:     { bg: '#1a3050', color: '#7eb8f7', border: '#4a7adb' },
-      abgeschlossen: { bg: '#1a3025', color: '#7aba8a', border: '#4a8a5a' },
-      abgesagt:      { bg: '#3a1a1a', color: '#c07070', border: '#8a4040' },
+      in_arbeit:     { bg: '#e8f0fe', color: '#1a4a9b', border: '#93b4f5' },
+      abgeschlossen: { bg: '#e8f5e9', color: '#1a5a2a', border: '#86c98e' },
+      abgesagt:      { bg: '#fce8e8', color: '#8a2020', border: '#f0a0a0' },
     };
     const c = BTN_COLORS[status];
     if (saveBtn) {
-      saveBtn.style.background = c ? c.bg    : '#2a2a3e';
-      saveBtn.style.color      = c ? c.color : '#aaa';
-      saveBtn.style.border     = c ? `1px solid ${c.border}` : '1px solid #555';
+      saveBtn.style.background = c ? c.bg    : '#f9fafb';
+      saveBtn.style.color      = c ? c.color : '#374151';
+      saveBtn.style.border     = c ? `1px solid ${c.border}` : '1px solid #d0d5dd';
       saveBtn.disabled = false;
     }
 
     if (status === 'in_arbeit') {
       const geplant = termin ? (termin.startzeit || termin.bring_zeit || '') : '';
       zeitfeldDiv.innerHTML = `
-        <div style="border-top:1px solid #333;padding-top:10px;margin-top:8px;">
-          <div style="font-size:10px;color:#888;margin-bottom:6px;text-transform:uppercase;letter-spacing:0.8px;">Startzeit</div>
-          <div style="font-size:11px;color:#666;margin-bottom:5px;">
-            Geplant: <span style="color:#4a7a9b;">${geplant || '—'}</span>
+        <div style="border-top:1px solid #e5e7eb;padding-top:10px;margin-top:8px;">
+          <div style="font-size:10px;color:#6b7280;margin-bottom:6px;text-transform:uppercase;letter-spacing:0.8px;font-weight:600;">Startzeit</div>
+          <div style="font-size:11px;color:#6b7280;margin-bottom:5px;">
+            Geplant: <span style="color:#2563eb;">${geplant || '—'}</span>
           </div>
           <div style="display:flex;gap:6px;align-items:center;">
-            <span style="font-size:11px;color:#aaa;">Tatsächlich:</span>
+            <span style="font-size:11px;color:#374151;">Tatsächlich:</span>
             <input id="status-popup-zeit-input" type="text"
                    value="${geplant}" placeholder="HH:MM" maxlength="5"
-                   style="width:60px;background:#111827;border:1px solid #4a7a9b;color:#7eb8f7;
+                   style="width:60px;background:#f9fafb;border:1px solid #93b4f5;color:#1a4a9b;
                           padding:3px 6px;border-radius:4px;font-size:12px;" />
           </div>
         </div>`;
@@ -11410,16 +11416,16 @@ class App {
         if (!fertig) fertig = termin.endzeit_berechnet || '';
       }
       zeitfeldDiv.innerHTML = `
-        <div style="border-top:1px solid #333;padding-top:10px;margin-top:8px;">
-          <div style="font-size:10px;color:#888;margin-bottom:6px;text-transform:uppercase;letter-spacing:0.8px;">Fertigstellungszeit</div>
-          <div style="font-size:11px;color:#666;margin-bottom:5px;">
-            Berechnet: <span style="color:#4a8a5a;">${fertig || '—'}</span>
+        <div style="border-top:1px solid #e5e7eb;padding-top:10px;margin-top:8px;">
+          <div style="font-size:10px;color:#6b7280;margin-bottom:6px;text-transform:uppercase;letter-spacing:0.8px;font-weight:600;">Fertigstellungszeit</div>
+          <div style="font-size:11px;color:#6b7280;margin-bottom:5px;">
+            Berechnet: <span style="color:#16a34a;">${fertig || '—'}</span>
           </div>
           <div style="display:flex;gap:6px;align-items:center;">
-            <span style="font-size:11px;color:#aaa;">Tatsächlich:</span>
+            <span style="font-size:11px;color:#374151;">Tatsächlich:</span>
             <input id="status-popup-zeit-input" type="text"
                    value="${fertig}" placeholder="HH:MM" maxlength="5"
-                   style="width:60px;background:#111827;border:1px solid #4a8a5a;color:#7aba8a;
+                   style="width:60px;background:#f9fafb;border:1px solid #86c98e;color:#1a5a2a;
                           padding:3px 6px;border-radius:4px;font-size:12px;" />
           </div>
         </div>`;
