@@ -43,7 +43,8 @@ const migrations = [
   require('./025_ki_zeitlern_daten'), // Version 25 - KI-Zeitlern-Datenbank
   require('./026_ki_zeitlern_enabled'), // Version 26 - KI-Zeitlern Toggle
   require('./027_fix_tablet_einstellungen_schema'), // Version 27 - Repariert altes tablet_einstellungen-Schema
-  require('./028_nacharbeit_tracking') // Version 28 - Nacharbeit-Tracking: nacharbeit_start_zeit
+  require('./028_nacharbeit_tracking'), // Version 28 - Nacharbeit-Tracking: nacharbeit_start_zeit
+  require('./029_wiederholung')         // Version 29 - Wiederholungstermin-Flag
 ];
 
 /**
