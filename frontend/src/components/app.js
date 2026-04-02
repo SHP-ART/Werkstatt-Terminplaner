@@ -11368,8 +11368,8 @@ class App {
       saveBtn.style.background = c ? c.bg    : '#2a2a3e';
       saveBtn.style.color      = c ? c.color : '#aaa';
       saveBtn.style.border     = c ? `1px solid ${c.border}` : '1px solid #555';
+      saveBtn.disabled = false;
     }
-    if (saveBtn) saveBtn.disabled = false;
 
     if (status === 'in_arbeit') {
       const geplant = termin ? (termin.startzeit || termin.bring_zeit || '') : '';
@@ -11463,7 +11463,7 @@ class App {
       // Tabelle + Seiteneffekte
       await this.loadTermine();
       if (status === 'in_arbeit' || status === 'abgeschlossen') {
-        if (termin) this._nachrueckenFuerTermin(termin).catch(() => {});
+        if (termin) this._nachrueckenFuerTermin(termin).catch(e => console.warn('Nachrücken fehlgeschlagen:', e));
       }
       this.updateTimelineBlockStatus(terminId, status);
       this.loadDashboard();
