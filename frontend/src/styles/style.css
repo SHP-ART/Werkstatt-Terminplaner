@@ -16082,3 +16082,21 @@ body.intern-tablet-mode-active #intern {
 .status-popup-item:hover {
     background: rgba(255,255,255,0.07);
 }
+
+/* Wiederholungstermin-Badge */
+.wiederholung-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    background: #dc3545;
+    color: white;
+    padding: 2px 7px;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: bold;
+    margin-left: 6px;
+}
+
+tr.wiederholung-row {
+    border-left: 3px solid #dc3545;
+}

@@ -6242,7 +6242,10 @@ class App {
         
         // Teile-Status Badge (zeigt an wenn Teile bestellt werden müssen)
         const teileStatusBadge = this.getTerminTeileStatusBadge(termin);
-        
+
+        // Wiederholungs-Badge
+        const wiederholungBadge = termin.ist_wiederholung ? '<span class="wiederholung-badge">🔁 Wiederholung</span>' : '';
+
         // Arbeit-Anzeige formatieren
         const arbeitAnzeige = this.formatArbeitAnzeige(termin.arbeit);
 
@@ -6253,7 +6256,7 @@ class App {
 
         row.innerHTML = `
           <td style="text-align: center; font-size: 20px;">${zeitStatusIcon}</td>
-          <td><strong>${termin.termin_nr || '-'}</strong>${terminDringlichkeit}${terminFolgetermin}${schwebendBadge}${splitBadge}${teileStatusBadge}</td>
+          <td><strong>${termin.termin_nr || '-'}</strong>${terminDringlichkeit}${terminFolgetermin}${schwebendBadge}${splitBadge}${teileStatusBadge}${wiederholungBadge}</td>
           <td>${termin.datum}</td>
           <td>${termin.kunde_name}</td>
           <td>${termin.kennzeichen}</td>
@@ -6275,6 +6278,9 @@ class App {
 
         // NACH innerHTML: Zeile klickbar machen
         row.style.cursor = 'pointer';
+        if (termin.ist_wiederholung) {
+          row.classList.add('wiederholung-row');
+        }
 
         // Bei Klick auf die Zeile -> Modal öffnen
         row.onclick = (e) => {
@@ -11048,6 +11054,11 @@ class App {
         ? `<div style="background: #ff9800; color: white; padding: 8px; text-align: center; font-weight: bold; border-radius: ${termin.abholung_typ === 'warten' ? '0' : '5px 5px 0 0'};">🔗 FOLGETERMIN von ${folgeterminMatch[1]}</div>`
         : '';
 
+      // Wiederholungstermin-Banner
+      const wiederholungBanner = termin.ist_wiederholung
+        ? `<div style="background: #dc3545; color: white; padding: 8px; text-align: center; font-weight: bold; border-radius: ${(termin.abholung_typ === 'warten' || folgeterminMatch) ? '0' : '5px 5px 0 0'};">🔁 WIEDERHOLUNGSTERMIN</div>`
+        : '';
+
       // Dringlichkeit-Badge für Karten
       const karteDringlichkeitBadge = this.getDringlichkeitBadge(termin.dringlichkeit);
       
@@ -11057,6 +11068,7 @@ class App {
       karte.innerHTML = `
         ${kundeWartetBanner}
         ${folgeterminBanner}
+        ${wiederholungBanner}
         <div class="heute-karte-header">
           <div class="heute-karte-nr"><strong>${termin.termin_nr || '-'}</strong>${karteDringlichkeitBadge}</div>
           <div class="status-container" style="position: relative;">
