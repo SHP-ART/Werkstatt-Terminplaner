@@ -11309,11 +11309,19 @@ class App {
       </button>
     `;
 
-    // Popup positionieren
+    // Popup positionieren mit Viewport-Clamping
     const rect = anchorEl.getBoundingClientRect();
-    popup.style.top  = (rect.bottom + 4) + 'px';
-    popup.style.left = rect.left + 'px';
     document.body.appendChild(popup);
+    const pw = popup.offsetWidth  || 220;
+    const ph = popup.offsetHeight || 250;
+    let top  = rect.bottom + 4;
+    let left = rect.left;
+    if (left + pw > window.innerWidth  - 8) left = window.innerWidth  - pw - 8;
+    if (left < 8) left = 8;
+    if (top  + ph > window.innerHeight - 8) top  = rect.top - ph - 4;
+    if (top  < 8) top  = 8;
+    popup.style.top  = top  + 'px';
+    popup.style.left = left + 'px';
 
     // Initiales Zeitfeld rendern
     this._updateStatusPopupZeitfeld(terminId, selectedStatus);
