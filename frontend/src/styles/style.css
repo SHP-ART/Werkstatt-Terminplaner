@@ -16077,3 +16077,8 @@ body.intern-tablet-mode-active #intern {
   font-size: inherit;
   padding: 0;
 }
+
+/* Status-Popup */
+.status-popup-item:hover {
+    background: rgba(255,255,255,0.07);
+}
