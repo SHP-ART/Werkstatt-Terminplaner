@@ -34005,6 +34005,16 @@ class App {
       const nq = kpis.nacharbeitsquote != null ? Math.round(kpis.nacharbeitsquote) : null;
       set('kpiNacharbeitWert', nq != null ? `${nq}%` : '—');
 
+      const wdh = kpis.wiederholungen_anzahl ?? 0;
+      const wdhQuote = kpis.wiederholungen_quote != null ? Math.round(kpis.wiederholungen_quote * 100) : 0;
+      set('kpiWiederholungWert', wdh);
+      set('kpiWiederholungSub', `${wdhQuote}% der Termine`);
+      const wdhCard = document.getElementById('kpiWiederholung');
+      if (wdhCard) {
+        wdhCard.classList.toggle('kpi-schlecht', wdh > 0);
+        wdhCard.classList.toggle('kpi-gut', wdh === 0);
+      }
+
       const ueberfaellig = kpis.ueberfaellige_termine ?? 0;
       set('kpiUeberfaelligWert', ueberfaellig);
       const ueberfaelligCard = document.getElementById('kpiUeberfaellig');

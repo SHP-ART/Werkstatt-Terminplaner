@@ -18,7 +18,8 @@ async function getKPIs(vonDatum, bisDatum) {
     schwebend,
     teileOffen,
     teileDringend,
-    ueberfaellig
+    ueberfaellig,
+    wiederholungen
   ] = await Promise.all([
     // Ø Durchlaufzeit abgeschlossener Termine
     getAsync(`
@@ -102,7 +103,16 @@ async function getKPIs(vonDatum, bisDatum) {
         AND status NOT IN ('abgeschlossen', 'storniert', 'in_arbeit', 'verschoben')
         AND ist_schwebend = 0
         AND geloescht_am IS NULL
-    `, [])
+    `, []),
+
+    // Wiederholungstermine im Zeitraum
+    getAsync(`
+      SELECT COUNT(*) as wert
+      FROM termine
+      WHERE ist_wiederholung = 1
+        AND datum BETWEEN ? AND ?
+        AND geloescht_am IS NULL
+    `, [vonDatum, bisDatum])
   ]);
 
   const gesamt = (abgeschlossene?.wert || 0) + (storniert?.wert || 0);
@@ -117,7 +127,9 @@ async function getKPIs(vonDatum, bisDatum) {
     avg_wartezeit_tage: Math.round((schwebend?.avg_wartezeit_tage || 0) * 10) / 10,
     teile_offen: teileOffen?.wert || 0,
     teile_dringend: teileDringend?.wert || 0,
-    ueberfaellige_termine: ueberfaellig?.wert || 0
+    ueberfaellige_termine: ueberfaellig?.wert || 0,
+    wiederholungen_anzahl: wiederholungen?.wert || 0,
+    wiederholungen_quote: gesamt > 0 ? (wiederholungen?.wert || 0) / gesamt : 0,
   };
 }
 
