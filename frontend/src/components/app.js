@@ -6177,7 +6177,7 @@ class App {
           <td title="${termin.arbeit || ''}">${arbeitAnzeige}</td>
           <td>${this.formatZeit(zeitAnzeige)}</td>
           <td>${termin.mitarbeiter_name || '-'}</td>
-          <td><span class="status-badge ${statusClass}">${termin.status}</span></td>
+          <td><span class="status-badge ${statusClass}" style="cursor:pointer;" onclick="event.stopPropagation(); app.openStatusPopup(${termin.id}, this)">${termin.status}</span></td>
           <td class="action-buttons-grid">
             <button class="btn btn-edit action-btn-details" onclick="event.stopPropagation(); app.showTerminDetails(${termin.id})">
               📄 Details
