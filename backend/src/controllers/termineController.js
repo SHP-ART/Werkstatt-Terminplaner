@@ -2951,6 +2951,41 @@ class TermineController {
       res.status(500).json({ error: err.message });
     }
   }
+
+  /**
+   * Sucht ähnliche Termine (gleiches Kennzeichen, ±7 Tage)
+   * GET /termine/aehnliche?kennzeichen=X&datum=YYYY-MM-DD
+   */
+  static async getAehnliche(req, res) {
+    try {
+      const { kennzeichen, datum } = req.query;
+
+      if (!kennzeichen || !datum) {
+        return res.status(400).json({ error: 'kennzeichen und datum sind erforderlich' });
+      }
+
+      const { allAsync } = require('../utils/dbHelper');
+
+      const termine = await allAsync(`
+        SELECT id, termin_nr, datum, arbeit, status, bring_zeit, kunde_name, kennzeichen
+        FROM termine
+        WHERE kennzeichen = ?
+          AND datum BETWEEN date(?, '-7 days') AND date(?, '+7 days')
+          AND status != 'abgesagt'
+          AND geloescht_am IS NULL
+        ORDER BY datum ASC
+      `, [kennzeichen, datum, datum]);
+
+      res.json({
+        hatAehnliche: termine.length > 0,
+        anzahl: termine.length,
+        termine
+      });
+    } catch (err) {
+      console.error('Fehler bei getAehnliche:', err);
+      res.status(500).json({ error: err.message });
+    }
+  }
 }
 
 // Hilfsfunktion: Addiert Minuten zu HH:MM

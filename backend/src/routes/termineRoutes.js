@@ -36,6 +36,7 @@ router.get('/verfuegbarkeit', TermineController.checkAvailability);
 router.post('/validate', TermineController.validate);
 router.get('/vorschlaege', TermineController.getVorschlaege);
 router.get('/bringzeit-ueberschneidungen', TermineController.getBringzeitUeberschneidungen);
+router.get('/aehnliche', TermineController.getAehnliche);
 router.get('/duplikat-check', TermineController.checkDuplikate);
 router.get('/teile-status', TermineController.getTeileStatus);
 router.get('/dropdown', TermineController.getDropdownData);
