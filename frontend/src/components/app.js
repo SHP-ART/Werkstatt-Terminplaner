@@ -29953,6 +29953,48 @@ class App {
     return false;
   }
 
+  internGetArbeitenFromTermin(termin) {
+    if (!termin) return [];
+    try {
+      let details = termin.arbeitszeiten_details;
+      if (typeof details === 'string') details = JSON.parse(details);
+      if (!details) return [];
+      const arbeiten = Array.isArray(details) ? details : (details.arbeiten || []);
+      return arbeiten.map((a, idx) => ({
+        name: a.name || a.arbeit || `Arbeit ${idx + 1}`,
+        zeit: a.dauer_minuten || a.zeit || 0,
+        abgeschlossen: !!(a.abgeschlossen || a.fertig),
+        index: idx
+      }));
+    } catch (e) {
+      return [];
+    }
+  }
+
+  internRenderArbeitenKompakt(termin) {
+    const arbeiten = this.internGetArbeitenFromTermin(termin);
+    if (!arbeiten.length) return '';
+    return `<div class="intern-arbeiten-kompakt">${arbeiten.map(a =>
+      `<span class="${a.abgeschlossen ? 'arbeit-erledigt' : 'arbeit-offen'}">${a.abgeschlossen ? '✅' : '•'} ${this.escapeHtml(a.name)}</span>`
+    ).join('')}</div>`;
+  }
+
+  internRenderArbeitenListe(termin, personId, typ) {
+    const arbeiten = this.internGetArbeitenFromTermin(termin);
+    if (!arbeiten.length) return '';
+    return `
+      <div class="intern-arbeiten-liste">
+        ${arbeiten.map(a => `
+          <div class="intern-arbeit-item ${a.abgeschlossen ? 'abgeschlossen' : ''}">
+            <span class="arbeit-name">${a.abgeschlossen ? '✅' : '○'} ${this.escapeHtml(a.name)}</span>
+            ${!a.abgeschlossen ? `<button class="intern-btn-einzelarbeit-fertig"
+              onclick="app.internBeendenEinzelarbeit(${termin.id}, ${a.index}, this)">✓ Fertig</button>` : ''}
+          </div>
+        `).join('')}
+      </div>
+    `;
+  }
+
   /**
    * Rendert eine Kachel für einen Mitarbeiter oder Lehrling
    * @param {Object} person - Mitarbeiter oder Lehrling
