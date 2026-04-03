@@ -229,6 +229,40 @@
       color: white;
     }
 
+    .person-badge.arbeit-pausiert {
+      background: #636e72;
+      color: white;
+    }
+
+    .person-kachel.arbeit-pausiert {
+      border-color: #636e72;
+      border-left: 5px solid #fdcb6e;
+    }
+
+    .intern-btn-arbeit-pause {
+      width: 100%;
+      padding: 8px;
+      background: #636e72;
+      color: white;
+      border: none;
+      border-radius: 6px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+
+    .intern-btn-arbeit-fortsetzen {
+      width: 100%;
+      padding: 8px;
+      background: #00b894;
+      color: white;
+      border: none;
+      border-radius: 6px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+
     .person-arbeitszeit {
       padding: 8px 15px;
       background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%);
@@ -1867,7 +1901,7 @@
     }
 
     // ========== KACHEL RENDERN ==========
-    function renderPersonKachel(person, alleTermine, typ, globaleNebenzeit, arbeitszeit) {
+    function renderPersonKachel(person, alleTermine, typ, globaleNebenzeit, arbeitszeit, aktiveArbeitspausen = []) {
       const personId = person.id;
       const personName = person.name;
       const isLehrling = typ === 'lehrling';
@@ -1890,6 +1924,12 @@
 
       // Zeige nur Termine die explizit auf 'in_arbeit' gesetzt wurden
       const aktuellerAuftrag = personTermine.find(t => t.status === 'in_arbeit');
+
+      // Arbeitspause prüfen
+      const aktiveArbeitspause = aktuellerAuftrag
+        ? aktiveArbeitspausen.find(p => p.termin_id === aktuellerAuftrag.id)
+        : null;
+      const istArbeitPausiert = !!aktiveArbeitspause;
 
       // Finde nächsten Auftrag (auch überfällige offene Termine berücksichtigen!)
       const naechsterAuftrag = personTermine.find(t => {
@@ -1934,6 +1974,9 @@
       } else if (inBerufsschule) {
         badgeClass = 'pause';
         badgeText = 'Berufsschule';
+      } else if (istArbeitPausiert) {
+        badgeClass = 'arbeit-pausiert';
+        badgeText = '⏸️ Pausiert';
       } else if (aktuellerAuftrag) {
         badgeClass = 'in-arbeit';
         badgeText = 'In Arbeit';
@@ -1976,6 +2019,12 @@
           </div>
         `;
       } else if (aktuellerAuftrag) {
+        // Pause-Button HTML
+        const pausePersonId = isLehrling ? `null, ${personId}` : `${personId}, null`;
+        const pauseButtonHtml = istArbeitPausiert
+          ? `<button class="intern-btn-arbeit-fortsetzen" onclick="interneArbeitFortsetzenTablet(${aktuellerAuftrag.id})">▶️ Fortsetzen</button>`
+          : `<button class="intern-btn-arbeit-pause" onclick="interneArbeitPausierenTablet(${aktuellerAuftrag.id}, ${pausePersonId})">⏸️ Pause</button>`;
+
         const fortschritt = berechneFortschritt(aktuellerAuftrag, person, isLehrling, globaleNebenzeit);
         const restzeit = berechneRestzeit(aktuellerAuftrag, person, isLehrling, globaleNebenzeit);
         const isUeberzogen = fortschritt > 100;
@@ -2044,6 +2093,10 @@
               </div>
             </div>
           ` : ''}
+
+          <div class="intern-arbeit-pause-actions" style="padding:8px 0 0;">
+            ${pauseButtonHtml}
+          </div>
         `;
       } else if (naechsterAuftrag) {
         // Interne Auftragsnummer priorisieren, wenn verfügbar
@@ -2187,7 +2240,7 @@
       }
 
       return `
-        <div class="person-kachel ${isLehrling ? 'lehrling' : ''}">
+        <div class="person-kachel ${isLehrling ? 'lehrling' : ''} ${istArbeitPausiert ? 'arbeit-pausiert' : ''}">
           <div class="person-header">
             <div class="person-header-left">
               <div class="person-name">
@@ -2232,14 +2285,15 @@
 
       try {
         const heute = formatDateLocal(new Date());
-        const [mitarbeiterRaw, lehrlingeRaw, termineRaw, einstellungen, aktivePausen, abwesenheiten, heutigePausen] = await Promise.all([
+        const [mitarbeiterRaw, lehrlingeRaw, termineRaw, einstellungen, aktivePausen, abwesenheiten, heutigePausen, aktiveArbeitspausen] = await Promise.all([
           ApiService.get('/mitarbeiter'),
           ApiService.get('/lehrlinge'),
           ApiService.get(`/termine?datum=${heute}`),
           ApiService.get('/einstellungen/werkstatt'),
           ApiService.get('/pause/aktive'),
           ApiService.get(`/abwesenheiten/datum/${heute}`),
-          ApiService.get('/pause/heute')
+          ApiService.get('/pause/heute'),
+          ApiService.get('/arbeitspausen/aktive').catch(() => [])
         ]);
 
         // Normalisieren: /termine kann {termine, aktivePausen} oder reines Array zurückgeben
@@ -2360,17 +2414,18 @@
 
         // Alle Personen in einem Grid rendern (Mitarbeiter zuerst, dann Lehrlinge)
         let allKacheln = [];
+        const normAktiveArbeitspausen = Array.isArray(aktiveArbeitspausen) ? aktiveArbeitspausen : [];
 
         // Mitarbeiter Kacheln
         aktiveMitarbeiter.forEach(m => {
           const arbeitszeit = arbeitszeitenMap[`mitarbeiter_${m.id}`];
-          allKacheln.push(renderPersonKachel(m, relevanteTermine, 'mitarbeiter', globaleNebenzeit, arbeitszeit));
+          allKacheln.push(renderPersonKachel(m, relevanteTermine, 'mitarbeiter', globaleNebenzeit, arbeitszeit, normAktiveArbeitspausen));
         });
 
         // Lehrlinge Kacheln
         aktiveLehrlinge.forEach(l => {
           const arbeitszeit = arbeitszeitenMap[`lehrling_${l.id}`];
-          allKacheln.push(renderPersonKachel(l, relevanteTermine, 'lehrling', globaleNebenzeit, arbeitszeit));
+          allKacheln.push(renderPersonKachel(l, relevanteTermine, 'lehrling', globaleNebenzeit, arbeitszeit, normAktiveArbeitspausen));
         });
 
         if (allKacheln.length > 0) {
@@ -2521,6 +2576,73 @@
       // Refresh-Intervall neu starten
       if (window.refreshIntervalId) clearInterval(window.refreshIntervalId);
       window.refreshIntervalId = setInterval(loadTeamUebersicht, CONFIG.refreshInterval * 1000);
+    }
+
+    async function interneArbeitPausierenTablet(terminId, mitarbeiterId, lehrlingId) {
+      const grundLabels = {
+        teil_fehlt: '⏳ Teil fehlt / wird geliefert',
+        rueckfrage_kunde: '❓ Rückfrage beim Kunden',
+        vorrang: '🔀 Vorrang dringenderer Auftrag'
+      };
+
+      const modal = document.createElement('div');
+      modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;z-index:9999;';
+      modal.innerHTML = `
+        <div style="background:white;border-radius:12px;padding:24px;width:340px;box-shadow:0 8px 32px rgba(0,0,0,0.3);">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+            <strong style="font-size:15px;">⏸️ Arbeit unterbrechen</strong>
+            <span id="tabletPauseClose" style="cursor:pointer;color:#999;font-size:20px;">✕</span>
+          </div>
+          <p style="font-size:13px;color:#666;margin-bottom:14px;">Warum wird die Arbeit unterbrochen?</p>
+          <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:20px;">
+            ${Object.entries(grundLabels).map(([val, label]) => `
+              <label style="display:flex;align-items:center;gap:10px;padding:10px;border:1px solid #e0e0e0;border-radius:8px;cursor:pointer;font-size:14px;">
+                <input type="radio" name="tabletPauseGrund" value="${val}" style="accent-color:#1976d2;">
+                ${label}
+              </label>
+            `).join('')}
+          </div>
+          <div style="display:flex;gap:8px;">
+            <button id="tabletPauseAbbrechen" style="flex:1;padding:10px;background:#f0f0f0;color:#555;border:none;border-radius:6px;font-size:13px;cursor:pointer;">Abbrechen</button>
+            <button id="tabletPauseBestaetigen" style="flex:1;padding:10px;background:#636e72;color:white;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;">⏸️ Pausieren</button>
+          </div>
+        </div>
+      `;
+      document.body.appendChild(modal);
+      const schliesseModal = () => document.body.removeChild(modal);
+      modal.querySelector('#tabletPauseClose').onclick = schliesseModal;
+      modal.querySelector('#tabletPauseAbbrechen').onclick = schliesseModal;
+      modal.onclick = (e) => { if (e.target === modal) schliesseModal(); };
+      modal.querySelector('#tabletPauseBestaetigen').onclick = async () => {
+        const selected = modal.querySelector('input[name="tabletPauseGrund"]:checked');
+        if (!selected) { alert('Bitte einen Grund auswählen.'); return; }
+        try {
+          await ApiService.post('/arbeitspausen/starten', {
+            termin_id: terminId,
+            mitarbeiter_id: mitarbeiterId || null,
+            lehrling_id: lehrlingId || null,
+            grund: selected.value
+          });
+          schliesseModal();
+          await loadTeamUebersicht();
+        } catch (e) {
+          console.error('[Tablet-Pause] Fehler:', e);
+          alert('Fehler beim Starten der Pause.');
+        }
+      };
+    }
+
+    async function interneArbeitFortsetzenTablet(terminId) {
+      const btn = event?.target;
+      if (btn) btn.disabled = true;
+      try {
+        await ApiService.post('/arbeitspausen/beenden', { termin_id: terminId });
+        await loadTeamUebersicht();
+      } catch (e) {
+        console.error('[Tablet-Fortsetzen] Fehler:', e);
+        if (btn) btn.disabled = false;
+        alert('Fehler beim Fortsetzen der Arbeit.');
+      }
     }
 
     // ========== INITIALISIERUNG ==========
