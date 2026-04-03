@@ -398,6 +398,19 @@
       background: var(--danger);
     }
 
+    .fortschritt-fill.eingefroren {
+      background: #636e72;
+      transition: none;
+    }
+
+    .intern-arbeit-pause-seit {
+      margin-top: 6px;
+      font-size: 0.8em;
+      color: #636e72;
+      font-style: italic;
+      font-weight: 500;
+    }
+
     .fortschritt-text {
       display: flex;
       justify-content: space-between;
@@ -1976,7 +1989,9 @@
         badgeText = 'Berufsschule';
       } else if (istArbeitPausiert) {
         badgeClass = 'arbeit-pausiert';
-        badgeText = '⏸️ Pausiert';
+        const grundLabels = { teil_fehlt: 'Teil fehlt', rueckfrage_kunde: 'Rückfrage Kunde', vorrang: 'Vorrang' };
+        const grundText = grundLabels[aktiveArbeitspause.grund] || aktiveArbeitspause.grund || '';
+        badgeText = grundText ? `⏸️ Pausiert – ${grundText}` : '⏸️ Pausiert';
       } else if (aktuellerAuftrag) {
         badgeClass = 'in-arbeit';
         badgeText = 'In Arbeit';
@@ -2025,7 +2040,27 @@
           ? `<button class="intern-btn-arbeit-fortsetzen" onclick="interneArbeitFortsetzenTablet(${aktuellerAuftrag.id})">▶️ Fortsetzen</button>`
           : `<button class="intern-btn-arbeit-pause" onclick="interneArbeitPausierenTablet(${aktuellerAuftrag.id}, ${pausePersonId})">⏸️ Pause</button>`;
 
-        const fortschritt = berechneFortschritt(aktuellerAuftrag, person, isLehrling, globaleNebenzeit);
+        let fortschritt;
+        if (istArbeitPausiert && aktiveArbeitspause && aktiveArbeitspause.gestartet_am) {
+          const pauseStart = new Date(aktiveArbeitspause.gestartet_am);
+          const startzeitStr = getEffektiveStartzeit(aktuellerAuftrag);
+          if (startzeitStr) {
+            const [sh, sm] = startzeitStr.split(':').map(Number);
+            const startDate = new Date(pauseStart);
+            startDate.setHours(sh, sm, 0, 0);
+            const verstricheneMin = (pauseStart - startDate) / 60000;
+            if (verstricheneMin < 0) {
+              fortschritt = berechneFortschritt(aktuellerAuftrag, person, isLehrling, globaleNebenzeit);
+            } else {
+              const geschaetzteZeit = aktuellerAuftrag.geschaetzte_dauer || aktuellerAuftrag.dauer_minuten || 60;
+              fortschritt = Math.round(Math.max(0, Math.min(100, (verstricheneMin / geschaetzteZeit) * 100)));
+            }
+          } else {
+            fortschritt = berechneFortschritt(aktuellerAuftrag, person, isLehrling, globaleNebenzeit);
+          }
+        } else {
+          fortschritt = berechneFortschritt(aktuellerAuftrag, person, isLehrling, globaleNebenzeit);
+        }
         const restzeit = berechneRestzeit(aktuellerAuftrag, person, isLehrling, globaleNebenzeit);
         const isUeberzogen = fortschritt > 100;
         
@@ -2047,6 +2082,13 @@
         const interneNrAktuell = aktuellerAuftrag.interne_auftragsnummer && aktuellerAuftrag.interne_auftragsnummer.trim()
           ? escapeHtml(aktuellerAuftrag.interne_auftragsnummer.trim()) : null;
 
+        const pauseSeitText = istArbeitPausiert && aktiveArbeitspause && aktiveArbeitspause.gestartet_am
+          ? (() => {
+              const d = new Date(aktiveArbeitspause.gestartet_am);
+              return `Pausiert seit ${d.getHours().toString().padStart(2,'0')}:${d.getMinutes().toString().padStart(2,'0')} Uhr`;
+            })()
+          : null;
+
         bodyContent = `
           <div class="auftrag-info ${istVerschoben ? 'termin-verschoben' : ''} ${istVerspaetet ? 'termin-verspaetet' : ''}">
             <div class="auftrag-label">🔧 Aktueller Auftrag ${badges}</div>
@@ -2055,6 +2097,7 @@
             <div class="auftrag-kennzeichen">${escapeHtml(aktuellerAuftrag.kennzeichen) || '-'}</div>
             ${!hatMehrereArbeiten ? `<div class="auftrag-arbeit">${escapeHtml(aktuellerAuftrag.arbeit) || '-'}</div>` : ''}
             ${hatMehrereArbeiten ? renderArbeitenKompakt(aktuellerAuftrag) : ''}
+            ${pauseSeitText ? `<div class="intern-arbeit-pause-seit">${pauseSeitText}</div>` : ''}
           </div>
 
           ${hatMehrereArbeiten ? renderArbeitenListe(aktuellerAuftrag, personId, typ) : ''}
@@ -2076,7 +2119,7 @@
 
           <div class="fortschritt-container">
             <div class="fortschritt-bar">
-              <div class="fortschritt-fill ${isUeberzogen ? 'ueberzogen' : ''}" style="width: ${Math.min(fortschritt, 100)}%"></div>
+              <div class="fortschritt-fill ${isUeberzogen ? 'ueberzogen' : ''} ${istArbeitPausiert ? 'eingefroren' : ''}" style="width: ${Math.min(fortschritt, 100)}%"></div>
             </div>
             <div class="fortschritt-text">
               <span>Fortschritt</span>
