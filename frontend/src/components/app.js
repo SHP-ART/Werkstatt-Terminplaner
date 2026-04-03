@@ -30119,7 +30119,7 @@ class App {
       // Pause/Fortsetzen-Button
       const pausePersonId = isLehrling ? `null, ${personId}` : `${personId}, null`;
       const pauseButton = istArbeitPausiert
-        ? `<button class="intern-btn-arbeit-fortsetzen" onclick="app.interneArbeitFortsetzen(${aktuellerAuftrag.id})">▶️ Fortsetzen</button>`
+        ? `<button class="intern-btn-arbeit-fortsetzen" onclick="app.interneArbeitFortsetzen(${aktuellerAuftrag.id}, this)">▶️ Fortsetzen</button>`
         : `<button class="intern-btn-arbeit-pause" onclick="app.interneArbeitPausieren(${aktuellerAuftrag.id}, ${pausePersonId})">⏸️ Pause</button>`;
 
       bodyContent = `
@@ -30321,9 +30321,8 @@ class App {
   /**
    * Beendet aktive Arbeitspause für einen Termin
    */
-  async interneArbeitFortsetzen(terminId) {
-    // Doppelklick-Schutz: Button per Event-Target deaktivieren
-    const btn = event?.target;
+  async interneArbeitFortsetzen(terminId, btn) {
+    // Doppelklick-Schutz
     if (btn) btn.disabled = true;
     try {
       await ApiService.post('/arbeitspausen/beenden', { termin_id: terminId });

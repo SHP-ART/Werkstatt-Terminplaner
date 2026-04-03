@@ -2052,7 +2052,7 @@
             if (verstricheneMin < 0) {
               fortschritt = berechneFortschritt(aktuellerAuftrag, person, isLehrling, globaleNebenzeit);
             } else {
-              const geschaetzteZeit = aktuellerAuftrag.geschaetzte_dauer || aktuellerAuftrag.dauer_minuten || 60;
+              const geschaetzteZeit = aktuellerAuftrag.geschaetzte_zeit || aktuellerAuftrag.dauer_minuten || 60;
               fortschritt = Math.round(Math.max(0, Math.min(100, (verstricheneMin / geschaetzteZeit) * 100)));
             }
           } else {
