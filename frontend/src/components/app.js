@@ -30088,8 +30088,14 @@ class App {
           const startDate = new Date(pauseZeit);
           startDate.setHours(Math.floor(startMin / 60), startMin % 60, 0, 0);
           const verstricheneMin = (pauseZeit - startDate) / 60000;
-          const geschaetzteZeit = this.getEffektiveArbeitszeitMitFaktoren(aktuellerAuftrag, person, isLehrling, kontext);
-          fortschritt = Math.round(Math.max(0, Math.min(100, (verstricheneMin / geschaetzteZeit) * 100)));
+          if (verstricheneMin < 0) {
+            // Randfall: Pausezeit liegt vor berechneter Startzeit (z.B. Tageswechsel)
+            // → Fallback auf dynamische Berechnung
+            fortschritt = this.berechneAuftragFortschrittMitFaktoren(aktuellerAuftrag, person, isLehrling, kontext);
+          } else {
+            const geschaetzteZeit = this.getEffektiveArbeitszeitMitFaktoren(aktuellerAuftrag, person, isLehrling, kontext);
+            fortschritt = Math.round(Math.max(0, Math.min(100, (verstricheneMin / geschaetzteZeit) * 100)));
+          }
         } else {
           fortschritt = 0;
         }
@@ -30316,11 +30322,15 @@ class App {
    * Beendet aktive Arbeitspause für einen Termin
    */
   async interneArbeitFortsetzen(terminId) {
+    // Doppelklick-Schutz: Button per Event-Target deaktivieren
+    const btn = event?.target;
+    if (btn) btn.disabled = true;
     try {
       await ApiService.post('/arbeitspausen/beenden', { termin_id: terminId });
       this.loadInternTeamUebersicht();
     } catch (e) {
       console.error('[Arbeitspause] Fehler beim Fortsetzen:', e);
+      if (btn) btn.disabled = false;
       alert('Fehler beim Fortsetzen der Arbeit.');
     }
   }
