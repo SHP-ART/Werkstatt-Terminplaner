@@ -30070,6 +30070,9 @@ class App {
       && naechsterAuftragOriginalStart
       && naechsterAuftrag.startzeit !== naechsterAuftragOriginalStart;
 
+    // Heutiges Datum als String (YYYY-MM-DD) für API-Aufrufe
+    const today = this.formatDateLocal(this.getToday());
+
     // Prüfe ob Lehrling in Berufsschule ist
     let inBerufsschule = false;
     if (isLehrling && person.berufsschul_wochen) {
@@ -30240,6 +30243,15 @@ class App {
         </div>
 
         ${this.internRenderArbeitenListe(aktuellerAuftrag, person.id, typ)}
+
+        <div class="intern-kachel-buttons">
+          ${aktuellerAuftrag.status === 'geplant' ?
+            `<button class="intern-btn-starten" onclick="app.internStarten(${aktuellerAuftrag.id}, ${JSON.stringify(aktuellerAuftrag.kunde_name || '')})">▶ Starten</button>` : ''}
+          ${aktuellerAuftrag.status === 'in_arbeit' && !manuellePauseAktiv ?
+            `<button class="intern-btn-fertig" onclick="app.internBeenden(${aktuellerAuftrag.id}, ${JSON.stringify(aktuellerAuftrag.kunde_name || '')})">✓ Fertig</button>` : ''}
+          ${aktuellerAuftrag.status === 'in_arbeit' && !manuellePauseAktiv ?
+            `<button class="intern-btn-mittagspause" onclick="app.internPauseStarten(${person.id}, '${typ}', '${today}', true)">☕ Pause</button>` : ''}
+        </div>
 
         <div class="intern-person-zeit">
           <div class="intern-person-zeit-item">
