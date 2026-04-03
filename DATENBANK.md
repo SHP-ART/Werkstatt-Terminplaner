@@ -29,6 +29,7 @@
 | `tablet_status` | Status aller verbundenen Tablets (Hostname, IP, installierte Version, letzter Kontakt) |
 | `automation_log` | Protokoll automatischer Aktionen (Slot-Vorschläge, Duplikat-Erkennung etc.) |
 | `ki_zeitlern_daten` | KI-Trainingsdaten: Vergleich geschätzter vs. tatsächlicher Zeiten für Zeitvorhersage |
+| `arbeitspausen` | Manuelle Arbeitsunterbrechungen (Teil fehlt, Rückfrage, Vorrang) – eingefrierter Fortschritt bis Fortsetzen |
 | `_schema_meta` | Interne Schema-Versionierung – speichert aktuelle Migrations-Version |
 
 **Hinweis:** Die Tabellen `mitarbeiter_abwesenheiten` und `abwesenheiten_legacy` wurden mit Migration 018 entfernt. Alte Daten wurden automatisch migriert.
