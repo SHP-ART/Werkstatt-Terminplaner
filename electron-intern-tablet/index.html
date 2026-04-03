@@ -1990,7 +1990,7 @@
       } else if (istArbeitPausiert) {
         badgeClass = 'arbeit-pausiert';
         const grundLabels = { teil_fehlt: 'Teil fehlt', rueckfrage_kunde: 'Rückfrage Kunde', vorrang: 'Vorrang' };
-        const grundText = grundLabels[aktiveArbeitspause.grund] || aktiveArbeitspause.grund || '';
+        const grundText = grundLabels[aktiveArbeitspause.grund] || escapeHtml(aktiveArbeitspause.grund || '');
         badgeText = grundText ? `⏸️ Pausiert – ${grundText}` : '⏸️ Pausiert';
       } else if (aktuellerAuftrag) {
         badgeClass = 'in-arbeit';
@@ -2037,7 +2037,7 @@
         // Pause-Button HTML
         const pausePersonId = isLehrling ? `null, ${personId}` : `${personId}, null`;
         const pauseButtonHtml = istArbeitPausiert
-          ? `<button class="intern-btn-arbeit-fortsetzen" onclick="interneArbeitFortsetzenTablet(${aktuellerAuftrag.id})">▶️ Fortsetzen</button>`
+          ? `<button class="intern-btn-arbeit-fortsetzen" onclick="interneArbeitFortsetzenTablet(${aktuellerAuftrag.id}, this)">▶️ Fortsetzen</button>`
           : `<button class="intern-btn-arbeit-pause" onclick="interneArbeitPausierenTablet(${aktuellerAuftrag.id}, ${pausePersonId})">⏸️ Pause</button>`;
 
         let fortschritt;
@@ -2659,6 +2659,8 @@
       modal.querySelector('#tabletPauseBestaetigen').onclick = async () => {
         const selected = modal.querySelector('input[name="tabletPauseGrund"]:checked');
         if (!selected) { alert('Bitte einen Grund auswählen.'); return; }
+        const bestaetigenBtn = modal.querySelector('#tabletPauseBestaetigen');
+        bestaetigenBtn.disabled = true;
         try {
           await ApiService.post('/arbeitspausen/starten', {
             termin_id: terminId,
@@ -2670,13 +2672,13 @@
           await loadTeamUebersicht();
         } catch (e) {
           console.error('[Tablet-Pause] Fehler:', e);
+          bestaetigenBtn.disabled = false;
           alert('Fehler beim Starten der Pause.');
         }
       };
     }
 
-    async function interneArbeitFortsetzenTablet(terminId) {
-      const btn = event?.target;
+    async function interneArbeitFortsetzenTablet(terminId, btn) {
       if (btn) btn.disabled = true;
       try {
         await ApiService.post('/arbeitspausen/beenden', { termin_id: terminId });
