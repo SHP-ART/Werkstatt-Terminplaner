@@ -30,7 +30,7 @@ async function up(db) {
       termin_id      INTEGER NOT NULL,
       mitarbeiter_id INTEGER,
       lehrling_id    INTEGER,
-      grund          TEXT NOT NULL,
+      grund          TEXT NOT NULL CHECK(grund IN ('teil_fehlt', 'rueckfrage_kunde', 'vorrang')),
       gestartet_am   DATETIME NOT NULL,
       beendet_am     DATETIME,
       FOREIGN KEY (termin_id) REFERENCES termine(id)
