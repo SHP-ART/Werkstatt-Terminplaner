@@ -561,6 +561,27 @@ Trainingsdaten für die KI-basierte Zeitvorhersage. Speichert den Vergleich zwis
 
 ---
 
+### ⏸️ `arbeitspausen`
+
+Manuelle Arbeitsunterbrechungen für laufende Werkstattaufträge. Wird angelegt wenn ein Mitarbeiter oder Lehrling die Arbeit unterbricht (z.B. weil ein Teil fehlt). Die Pause ist solange aktiv bis `beendet_am` gesetzt wird.
+
+| Feld | Typ | Beschreibung |
+|------|-----|--------------|
+| `id` | INTEGER | Primärschlüssel (AUTO INCREMENT) |
+| `termin_id` | INTEGER | Referenz auf `termine.id` (**NOT NULL**) |
+| `mitarbeiter_id` | INTEGER | Zuständiger Mitarbeiter (optional, mindestens einer von beiden) |
+| `lehrling_id` | INTEGER | Zuständiger Lehrling (optional, mindestens einer von beiden) |
+| `grund` | TEXT | Pausengrund: `teil_fehlt`, `rueckfrage_kunde`, `vorrang` (**NOT NULL**, CHECK-Constraint) |
+| `gestartet_am` | DATETIME | Zeitstempel Pausenstart (**NOT NULL**) |
+| `beendet_am` | DATETIME | Zeitstempel Pausenende – `NULL` solange Pause aktiv |
+
+**Regeln:**
+- Pro Termin kann nur eine Pause gleichzeitig aktiv sein (`beendet_am IS NULL`)
+- Der Termin muss Status `in_arbeit` haben um eine Pause zu starten
+- Pausen werden **nicht** automatisch beendet – nur durch expliziten API-Aufruf
+
+---
+
 ### 🗄️ `_schema_meta`
 
 Interne Metadaten-Tabelle für die Schema-Versionierung. Wird bei jedem Server-Start geprüft – fehlende Migrationen werden automatisch ausgeführt.
@@ -645,6 +666,8 @@ Für Performance optimiert:
 | `idx_ki_lern_datum` | ki_zeitlern_daten | datum | KI-Daten nach Datum |
 | `idx_ki_lern_termin` | ki_zeitlern_daten | termin_id | KI-Daten pro Termin |
 | `idx_tablet_status_last_seen` | tablet_status | last_seen | Tablets nach letztem Kontakt |
+| `idx_arbeitspausen_termin` | arbeitspausen | termin_id | Pausen eines Termins |
+| `idx_arbeitspausen_aktiv` | arbeitspausen | beendet_am (WHERE beendet_am IS NULL) | Aktive Pausen schnell abfragen (partieller Index) |
 
 ---
 
@@ -806,6 +829,7 @@ Bei jedem Server-Start wird geprüft, ob Migrationen nötig sind. Fehlende Migra
 | 027 | `027_fix_tablet_einstellungen_schema.js` | Schema-Fix für tablet_einstellungen |
 | 028 | `028_nacharbeit_tracking.js` | nacharbeit_start_zeit in Terminen |
 | 029 | `029_wiederholung.js` | ist_wiederholung in Terminen + partieller Index für Wiederholungstermin-Erkennung |
+| 030 | `030_arbeitspausen.js` | arbeitspausen Tabelle für manuelle Arbeitsunterbrechungen |
 
 ---
 
