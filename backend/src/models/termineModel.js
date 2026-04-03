@@ -207,7 +207,8 @@ class TermineModel {
       fahrzeugtyp,
       ist_schwebend,
       schwebend_prioritaet,
-      status
+      status,
+      ist_wiederholung = 0
     } = termin;
 
     // Retry-Logik für UNIQUE constraint Fehler
@@ -221,8 +222,8 @@ class TermineModel {
 
         const result = await runAsync(
           `INSERT INTO termine
-           (termin_nr, kunde_id, kunde_name, kunde_telefon, kennzeichen, arbeit, umfang, geschaetzte_zeit, datum, abholung_typ, abholung_details, abholung_zeit, bring_zeit, kontakt_option, kilometerstand, ersatzauto, ersatzauto_tage, ersatzauto_bis_datum, ersatzauto_bis_zeit, abholung_datum, mitarbeiter_id, arbeitszeiten_details, dringlichkeit, vin, fahrzeugtyp, ist_schwebend, schwebend_prioritaet, status)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+           (termin_nr, kunde_id, kunde_name, kunde_telefon, kennzeichen, arbeit, umfang, geschaetzte_zeit, datum, abholung_typ, abholung_details, abholung_zeit, bring_zeit, kontakt_option, kilometerstand, ersatzauto, ersatzauto_tage, ersatzauto_bis_datum, ersatzauto_bis_zeit, abholung_datum, mitarbeiter_id, arbeitszeiten_details, dringlichkeit, vin, fahrzeugtyp, ist_schwebend, schwebend_prioritaet, status, ist_wiederholung)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           [
             terminNr,
             kunde_id,
@@ -251,7 +252,8 @@ class TermineModel {
             fahrzeugtyp || null,
             ist_schwebend ? 1 : 0,
             schwebend_prioritaet || 'mittel',
-            status || 'geplant'
+            status || 'geplant',
+            ist_wiederholung ? 1 : 0
           ]
         );
         // Erfolgreich - gib die Termin-Nummer zurück
