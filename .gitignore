@@ -19,6 +19,10 @@ FERNWARTUNG.md
 SMB.md
 SMB-CREDENTIALS-LOCAL.md
 
+# Lokale Tool-Konfigurationen (Pfade, Berechtigungen, Sessions)
+.claude/
+.superpowers/
+
 # Build artifacts (will be distributed via GitHub Releases)
 /backend/dist/
 /backend/dist-*/
