@@ -29748,12 +29748,13 @@ class App {
     try {
       // Hole alle Daten parallel (inkl. Einstellungen für Nebenzeit)
       const heute = this.formatDateLocal(this.getToday());
-      const [mitarbeiterRaw, lehrlingeRaw, termineRaw, einstellungen, abwesenheiten] = await Promise.all([
+      const [mitarbeiterRaw, lehrlingeRaw, termineRaw, einstellungen, abwesenheiten, aktiveArbeitspausen] = await Promise.all([
         ApiService.get('/mitarbeiter'),
         ApiService.get('/lehrlinge'),
         ApiService.get(`/termine?datum=${heute}`),
         EinstellungenService.getWerkstatt(),
-        ApiService.get(`/abwesenheiten/datum/${heute}`).catch(() => [])
+        ApiService.get(`/abwesenheiten/datum/${heute}`).catch(() => []),
+        ApiService.get('/arbeitspausen/aktive').catch(() => [])
       ]);
 
       // Normalisieren: Controller gibt manchmal { termine, aktivePausen } statt reines Array
@@ -29818,7 +29819,8 @@ class App {
         mitarbeiter,
         lehrlinge,
         arbeitszeitenMap,
-        abwesenheitenMap
+        abwesenheitenMap,
+        aktiveArbeitspausen: Array.isArray(aktiveArbeitspausen) ? aktiveArbeitspausen : []
       };
 
       // Render Mitarbeiter-Kacheln
