@@ -29748,13 +29748,15 @@ class App {
     try {
       // Hole alle Daten parallel (inkl. Einstellungen für Nebenzeit)
       const heute = this.formatDateLocal(this.getToday());
-      const [mitarbeiterRaw, lehrlingeRaw, termineRaw, einstellungen, abwesenheiten, aktiveArbeitspausen] = await Promise.all([
+      const [mitarbeiterRaw, lehrlingeRaw, termineRaw, einstellungen, abwesenheiten, aktiveArbeitspausen, aktivePausen, heutigePausen] = await Promise.all([
         ApiService.get('/mitarbeiter'),
         ApiService.get('/lehrlinge'),
         ApiService.get(`/termine?datum=${heute}`),
         EinstellungenService.getWerkstatt(),
         ApiService.get(`/abwesenheiten/datum/${heute}`).catch(() => []),
-        ApiService.get('/arbeitspausen/aktive').catch(() => [])
+        ApiService.get('/arbeitspausen/aktive').catch(() => []),
+        ApiService.get('/pause/aktive').catch(() => []),
+        ApiService.get('/pause/heute').catch(() => [])
       ]);
 
       // Normalisieren: Controller gibt manchmal { termine, aktivePausen } statt reines Array
@@ -29822,6 +29824,50 @@ class App {
         abwesenheitenMap,
         aktiveArbeitspausen: Array.isArray(aktiveArbeitspausen) ? aktiveArbeitspausen : []
       };
+
+      // Merge Mittagspause-Tracking in Person-Objekte
+      const pausenMap = {};
+      (aktivePausen || []).forEach(pause => {
+        const key = pause.mitarbeiter_id
+          ? `mitarbeiter_${pause.mitarbeiter_id}`
+          : `lehrling_${pause.lehrling_id}`;
+        pausenMap[key] = {
+          pause_tracking_aktiv: true,
+          pause_verbleibende_minuten: pause.verbleibende_minuten || 0
+        };
+      });
+
+      const heutePausenSet = new Set();
+      (heutigePausen || []).forEach(pause => {
+        if (pause.abgeschlossen === 1) {
+          const key = pause.mitarbeiter_id
+            ? `mitarbeiter_${pause.mitarbeiter_id}`
+            : `lehrling_${pause.lehrling_id}`;
+          heutePausenSet.add(key);
+        }
+      });
+
+      aktiveMitarbeiter.forEach(m => {
+        const pauseInfo = pausenMap[`mitarbeiter_${m.id}`];
+        if (pauseInfo) {
+          m.pause_tracking_aktiv = pauseInfo.pause_tracking_aktiv;
+          m.pause_verbleibende_minuten = pauseInfo.pause_verbleibende_minuten;
+        }
+        if (heutePausenSet.has(`mitarbeiter_${m.id}`)) {
+          m.pause_bereits_gemacht = true;
+        }
+      });
+
+      aktiveLehrlinge.forEach(l => {
+        const pauseInfo = pausenMap[`lehrling_${l.id}`];
+        if (pauseInfo) {
+          l.pause_tracking_aktiv = pauseInfo.pause_tracking_aktiv;
+          l.pause_verbleibende_minuten = pauseInfo.pause_verbleibende_minuten;
+        }
+        if (heutePausenSet.has(`lehrling_${l.id}`)) {
+          l.pause_bereits_gemacht = true;
+        }
+      });
 
       // Render Mitarbeiter-Kacheln
       if (mitarbeiterContainer) {
