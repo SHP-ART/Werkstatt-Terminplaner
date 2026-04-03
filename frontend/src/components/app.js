@@ -30212,6 +30212,17 @@ class App {
           })()
         : null;
 
+      // Prüfe verschoben und verspätet
+      const istVerschoben = aktuellerAuftrag.verschoben_von_datum != null;
+      const abholDatumGilt = !aktuellerAuftrag.abholung_datum || aktuellerAuftrag.abholung_datum === aktuellerAuftrag.datum;
+      const istVerspaetet = abholDatumGilt && aktuellerAuftrag.endzeit_berechnet && aktuellerAuftrag.abholung_zeit &&
+                            aktuellerAuftrag.endzeit_berechnet > aktuellerAuftrag.abholung_zeit;
+      let statusBadges = '';
+      if (istVerschoben) statusBadges += '<span class="badge-verschoben">📅 Verschoben</span>';
+      if (istVerspaetet) statusBadges += '<span class="badge-verspaetet">⚠️ Verzögerung</span>';
+      const interneNr = aktuellerAuftrag.interne_auftragsnummer && aktuellerAuftrag.interne_auftragsnummer.trim()
+        ? this.escapeHtml(aktuellerAuftrag.interne_auftragsnummer.trim()) : null;
+
       // Pause/Fortsetzen-Button
       const pausePersonId = isLehrling ? `null, ${personId}` : `${personId}, null`;
       const pauseButton = istArbeitPausiert
@@ -30219,19 +30230,16 @@ class App {
         : `<button class="intern-btn-arbeit-pause" onclick="app.interneArbeitPausieren(${aktuellerAuftrag.id}, ${pausePersonId})">⏸️ Pause</button>`;
 
       bodyContent = `
-        <div class="intern-person-auftrag">
-          <div class="auftrag-label">🔧 ${istArbeitPausiert ? 'Unterbrochener Auftrag' : 'Aktueller Auftrag'}</div>
-          <div class="auftrag-nr">${aktuellerAuftrag.termin_nr || '-'}</div>
+        <div class="intern-person-auftrag ${istVerschoben ? 'termin-verschoben' : ''} ${istVerspaetet ? 'termin-verspaetet' : ''}">
+          <div class="auftrag-label">🔧 ${istArbeitPausiert ? 'Unterbrochener Auftrag' : 'Aktueller Auftrag'} ${statusBadges}</div>
+          <div class="auftrag-nr">${aktuellerAuftrag.termin_nr || '-'}${interneNr ? ` · <span class="auftrag-interne-nr">${interneNr}</span>` : ''}</div>
           <div class="auftrag-kunde">${this.escapeHtml(aktuellerAuftrag.kunde_name || '-')}</div>
           <div class="auftrag-kennzeichen">${this.escapeHtml(aktuellerAuftrag.kennzeichen || '-')}</div>
-          ${arbeitenDetails.length > 0
-            ? `<div class="auftrag-arbeiten-liste">
-                ${arbeitenDetails.map(a => `<div class="auftrag-arbeit-item">• ${this.escapeHtml(a.name)} ${a.zeit > 0 ? `(${this.formatMinutesToHours(a.zeit)})` : ''}</div>`).join('')}
-              </div>`
-            : `<div class="auftrag-arbeit">${this.escapeHtml(aktuellerAuftrag.arbeit || '-')}</div>`
-          }
+          ${this.internRenderArbeitenKompakt(aktuellerAuftrag) || `<div class="auftrag-arbeit">${this.escapeHtml(aktuellerAuftrag.arbeit || '-')}</div>`}
           ${pauseSeitText ? `<div class="intern-arbeit-pause-seit">Pausiert seit: ${pauseSeitText}</div>` : ''}
         </div>
+
+        ${this.internRenderArbeitenListe(aktuellerAuftrag, person.id, typ)}
 
         <div class="intern-person-zeit">
           <div class="intern-person-zeit-item">
