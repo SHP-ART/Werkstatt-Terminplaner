@@ -13571,6 +13571,151 @@ mark.highlight {
     background: #00a381;
 }
 
+/* Intern-Tab Buttons (Starten/Fertig/Pause) */
+.intern-kachel-buttons {
+  display: flex;
+  gap: 8px;
+  margin: 8px 0;
+  flex-wrap: wrap;
+}
+
+.intern-btn-starten {
+  background: #28a745;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  padding: 6px 14px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+.intern-btn-starten:hover {
+  background: #1e7e34;
+}
+
+.intern-btn-fertig {
+  background: #007bff;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  padding: 6px 14px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+.intern-btn-fertig:hover {
+  background: #0056b3;
+}
+
+.intern-btn-mittagspause {
+  background: #fd7e14;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  padding: 6px 12px;
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+.intern-btn-mittagspause:hover {
+  background: #e06610;
+}
+
+/* Badges: Verschoben / Verspätet */
+.badge-verschoben {
+  background: #ffc107;
+  color: #212529;
+  font-size: 0.7rem;
+  font-weight: 700;
+  border-radius: 4px;
+  padding: 1px 6px;
+  margin-left: 4px;
+  vertical-align: middle;
+}
+
+.badge-verspaetet {
+  background: #dc3545;
+  color: white;
+  font-size: 0.7rem;
+  font-weight: 700;
+  border-radius: 4px;
+  padding: 1px 6px;
+  margin-left: 4px;
+  vertical-align: middle;
+}
+
+/* Interne Auftragsnummer */
+.auftrag-interne-nr {
+  font-size: 0.75rem;
+  color: #6c757d;
+  margin-left: 4px;
+}
+
+/* Einzelarbeiten-Liste */
+.intern-arbeiten-liste {
+  margin: 6px 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.intern-arbeit-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 0.85rem;
+  padding: 3px 0;
+}
+
+.intern-arbeit-item.abgeschlossen .arbeit-name {
+  opacity: 0.55;
+  text-decoration: line-through;
+}
+
+.intern-btn-einzelarbeit-fertig {
+  background: #6c757d;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  padding: 2px 8px;
+  font-size: 0.78rem;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.intern-btn-einzelarbeit-fertig:hover {
+  background: #545b62;
+}
+
+/* Kompakt-Darstellung Arbeiten */
+.intern-arbeiten-kompakt {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin: 4px 0;
+}
+
+.intern-arbeiten-kompakt .arbeit-offen,
+.intern-arbeiten-kompakt .arbeit-erledigt {
+  font-size: 0.8rem;
+  padding: 1px 5px;
+  border-radius: 3px;
+}
+
+.intern-arbeiten-kompakt .arbeit-offen {
+  background: #e9ecef;
+  color: #495057;
+}
+
+.intern-arbeiten-kompakt .arbeit-erledigt {
+  background: #d4edda;
+  color: #155724;
+  text-decoration: line-through;
+  opacity: 0.7;
+}
+
 @keyframes badgePulse {
     0%, 100% { transform: scale(1); }
     50% { transform: scale(1.05); }

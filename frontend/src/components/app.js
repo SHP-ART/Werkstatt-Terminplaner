@@ -30334,8 +30334,8 @@ class App {
       // Keine Aufträge heute
       bodyContent = `
         <div class="intern-person-leer">
-          <div class="leer-icon">🎉</div>
-          <div class="leer-text">Keine Aufträge für heute</div>
+          <div class="leer-icon">${typ === 'lehrling' ? '🧹' : '🎉'}</div>
+          <div class="leer-text">${typ === 'lehrling' ? 'Werkstatt-Reinigung' : 'Keine Aufträge für heute'}</div>
         </div>
       `;
     }
