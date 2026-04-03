@@ -13512,6 +13512,65 @@ mark.highlight {
     color: #333;
 }
 
+.intern-person-badge.arbeit-pausiert {
+    background: #636e72;
+    color: white;
+}
+
+.intern-person-kachel.arbeit-pausiert {
+    border-color: #636e72;
+    border-left: 5px solid #fdcb6e;
+}
+
+.intern-arbeit-pause-seit {
+    font-size: 0.8rem;
+    color: #636e72;
+    margin-top: 4px;
+}
+
+.intern-person-fortschritt-fill.eingefroren {
+    background: linear-gradient(90deg, #b2bec3, #636e72);
+}
+
+.intern-arbeit-pause-actions {
+    padding: 10px 20px;
+    border-top: 1px solid #f0f0f0;
+}
+
+.intern-btn-arbeit-pause {
+    width: 100%;
+    padding: 8px;
+    background: #636e72;
+    color: white;
+    border: none;
+    border-radius: 6px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+.intern-btn-arbeit-pause:hover {
+    background: #4a5568;
+}
+
+.intern-btn-arbeit-fortsetzen {
+    width: 100%;
+    padding: 8px;
+    background: #00b894;
+    color: white;
+    border: none;
+    border-radius: 6px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+.intern-btn-arbeit-fortsetzen:hover {
+    background: #00a381;
+}
+
 @keyframes badgePulse {
     0%, 100% { transform: scale(1); }
     50% { transform: scale(1.05); }

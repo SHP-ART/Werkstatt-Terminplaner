@@ -29992,6 +29992,13 @@ class App {
     // Prüfe ob Person gerade in Mittagspause ist (6h-Regel)
     const inPause = this.istPersonAktuellInPause(person, jetztZeit);
 
+    // Prüfe ob Person eine aktive Arbeitspause hat (für aktuellen Auftrag)
+    const aktivePausen = kontext.aktiveArbeitspausen || [];
+    const aktiveArbeitspause = aktuellerAuftrag
+      ? aktivePausen.find(p => p.termin_id === aktuellerAuftrag.id)
+      : null;
+    const istArbeitPausiert = !!aktiveArbeitspause;
+
     // Prüfe ob Person heute abwesend ist (Urlaub/Krank/Lehrgang)
     const abwesenheitenMap = kontext.abwesenheitenMap || {};
     const abwesenheitKey = isLehrling ? `lehrling_${personId}` : `mitarbeiter_${personId}`;
@@ -30018,6 +30025,9 @@ class App {
     } else if (inBerufsschule) {
       badgeClass = 'pause';
       badgeText = 'Berufsschule';
+    } else if (istArbeitPausiert) {
+      badgeClass = 'arbeit-pausiert';
+      badgeText = '⏸️ Pausiert';
     } else if (aktuellerAuftrag) {
       badgeClass = 'in-arbeit';
       badgeText = 'In Arbeit';
@@ -30068,26 +30078,57 @@ class App {
         </div>
       `;
     } else if (aktuellerAuftrag) {
-      // Berechne Fortschritt (MIT Nebenzeit/Aufgabenbewältigung)
-      const fortschritt = this.berechneAuftragFortschrittMitFaktoren(aktuellerAuftrag, person, isLehrling, kontext);
+      // Fortschritt: einfrieren wenn pausiert
+      let fortschritt;
+      if (istArbeitPausiert && aktiveArbeitspause.gestartet_am) {
+        const pauseZeit = new Date(aktiveArbeitspause.gestartet_am);
+        const startzeit = aktuellerAuftrag.startzeit || aktuellerAuftrag.bring_zeit;
+        if (startzeit) {
+          const startMin = this.timeToMinutes(startzeit);
+          const startDate = new Date(pauseZeit);
+          startDate.setHours(Math.floor(startMin / 60), startMin % 60, 0, 0);
+          const verstricheneMin = (pauseZeit - startDate) / 60000;
+          const geschaetzteZeit = this.getEffektiveArbeitszeitMitFaktoren(aktuellerAuftrag, person, isLehrling, kontext);
+          fortschritt = Math.round(Math.max(0, Math.min(100, (verstricheneMin / geschaetzteZeit) * 100)));
+        } else {
+          fortschritt = 0;
+        }
+      } else {
+        fortschritt = this.berechneAuftragFortschrittMitFaktoren(aktuellerAuftrag, person, isLehrling, kontext);
+      }
       const restzeit = this.berechneRestzeitMitFaktoren(aktuellerAuftrag, person, isLehrling, kontext);
       const isUeberzogen = fortschritt > 100;
 
       // Arbeitszeiten aus arbeitszeiten_details extrahieren (nur zugeordnete Arbeiten)
       const arbeitenDetails = this.getArbeitenDetailsList(aktuellerAuftrag, person?.id, isLehrling);
 
+      // Pausiert-Zeitangabe
+      const pauseSeitText = istArbeitPausiert && aktiveArbeitspause.gestartet_am
+        ? (() => {
+            const d = new Date(aktiveArbeitspause.gestartet_am);
+            return `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')} Uhr`;
+          })()
+        : null;
+
+      // Pause/Fortsetzen-Button
+      const pausePersonId = isLehrling ? `null, ${personId}` : `${personId}, null`;
+      const pauseButton = istArbeitPausiert
+        ? `<button class="intern-btn-arbeit-fortsetzen" onclick="app.interneArbeitFortsetzen(${aktuellerAuftrag.id})">▶️ Fortsetzen</button>`
+        : `<button class="intern-btn-arbeit-pause" onclick="app.interneArbeitPausieren(${aktuellerAuftrag.id}, ${pausePersonId})">⏸️ Pause</button>`;
+
       bodyContent = `
         <div class="intern-person-auftrag">
-          <div class="auftrag-label">🔧 Aktueller Auftrag</div>
+          <div class="auftrag-label">🔧 ${istArbeitPausiert ? 'Unterbrochener Auftrag' : 'Aktueller Auftrag'}</div>
           <div class="auftrag-nr">${aktuellerAuftrag.termin_nr || '-'}</div>
           <div class="auftrag-kunde">${this.escapeHtml(aktuellerAuftrag.kunde_name || '-')}</div>
           <div class="auftrag-kennzeichen">${this.escapeHtml(aktuellerAuftrag.kennzeichen || '-')}</div>
-          ${arbeitenDetails.length > 0 
+          ${arbeitenDetails.length > 0
             ? `<div class="auftrag-arbeiten-liste">
                 ${arbeitenDetails.map(a => `<div class="auftrag-arbeit-item">• ${this.escapeHtml(a.name)} ${a.zeit > 0 ? `(${this.formatMinutesToHours(a.zeit)})` : ''}</div>`).join('')}
               </div>`
             : `<div class="auftrag-arbeit">${this.escapeHtml(aktuellerAuftrag.arbeit || '-')}</div>`
           }
+          ${pauseSeitText ? `<div class="intern-arbeit-pause-seit">Pausiert seit: ${pauseSeitText}</div>` : ''}
         </div>
 
         <div class="intern-person-zeit">
@@ -30108,18 +30149,18 @@ class App {
             </div>
           </div>
         </div>
-        
+
         <div class="intern-person-fortschritt">
           <div class="intern-person-fortschritt-bar">
-            <div class="intern-person-fortschritt-fill ${isUeberzogen ? 'ueberzogen' : ''}" 
+            <div class="intern-person-fortschritt-fill ${isUeberzogen ? 'ueberzogen' : ''} ${istArbeitPausiert ? 'eingefroren' : ''}"
                  style="width: ${Math.min(fortschritt, 100)}%"></div>
           </div>
           <div class="intern-person-fortschritt-text">
-            <span>Fortschritt</span>
+            <span>Fortschritt${istArbeitPausiert ? ' 🧊' : ''}</span>
             <span>${Math.min(fortschritt, 150)}%</span>
           </div>
         </div>
-        
+
         ${naechsterAuftrag ? `
           <div class="intern-person-naechster">
             <div class="naechster-label">📋 Danach:</div>
@@ -30129,6 +30170,10 @@ class App {
             </div>
           </div>
         ` : ''}
+
+        <div class="intern-arbeit-pause-actions">
+          ${pauseButton}
+        </div>
       `;
     } else if (naechsterAuftrag) {
       // Kein aktueller Auftrag, aber nächster geplant
@@ -30182,7 +30227,7 @@ class App {
     const zeigeArbeitszeit = !inPause && !inBerufsschule && !istAbwesend;
 
     return `
-      <div class="intern-person-kachel ${isLehrling ? 'lehrling' : ''}">
+      <div class="intern-person-kachel ${isLehrling ? 'lehrling' : ''} ${istArbeitPausiert ? 'arbeit-pausiert' : ''}">
         <div class="intern-person-header">
           <div class="intern-person-name">
             <span class="person-icon">${isLehrling ? '🎓' : '👷'}</span>
@@ -30201,6 +30246,83 @@ class App {
         </div>
       </div>
     `;
+  }
+
+  /**
+   * Öffnet Pause-Modal und startet Arbeitspause nach Grundauswahl
+   */
+  async interneArbeitPausieren(terminId, mitarbeiterId, lehrlingId) {
+    const modal = document.createElement('div');
+    modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;z-index:9999;';
+
+    const grundLabels = {
+      teil_fehlt: '⏳ Teil fehlt / wird geliefert',
+      rueckfrage_kunde: '❓ Rückfrage beim Kunden',
+      vorrang: '🔀 Vorrang dringenderer Auftrag'
+    };
+
+    modal.innerHTML = `
+      <div style="background:white;border-radius:12px;padding:24px;width:340px;box-shadow:0 8px 32px rgba(0,0,0,0.3);">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+          <strong style="font-size:15px;color:#333;">⏸️ Arbeit unterbrechen</strong>
+          <span id="arbeitPauseModalClose" style="cursor:pointer;color:#999;font-size:20px;line-height:1;">✕</span>
+        </div>
+        <p style="font-size:13px;color:#666;margin-bottom:14px;">Warum wird die Arbeit unterbrochen?</p>
+        <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:20px;">
+          ${Object.entries(grundLabels).map(([val, label]) => `
+            <label style="display:flex;align-items:center;gap:10px;padding:10px;border:1px solid #e0e0e0;border-radius:8px;cursor:pointer;font-size:14px;">
+              <input type="radio" name="arbeitPauseGrund" value="${val}" style="accent-color:#1976d2;">
+              ${label}
+            </label>
+          `).join('')}
+        </div>
+        <div style="display:flex;gap:8px;">
+          <button id="arbeitPauseAbbrechen" style="flex:1;padding:10px;background:#f0f0f0;color:#555;border:none;border-radius:6px;font-size:13px;cursor:pointer;">Abbrechen</button>
+          <button id="arbeitPauseBestaetigen" style="flex:1;padding:10px;background:#636e72;color:white;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;">⏸️ Pausieren</button>
+        </div>
+      </div>
+    `;
+
+    document.body.appendChild(modal);
+    const schliesseModal = () => document.body.removeChild(modal);
+
+    modal.querySelector('#arbeitPauseModalClose').onclick = schliesseModal;
+    modal.querySelector('#arbeitPauseAbbrechen').onclick = schliesseModal;
+    modal.onclick = (e) => { if (e.target === modal) schliesseModal(); };
+
+    modal.querySelector('#arbeitPauseBestaetigen').onclick = async () => {
+      const selected = modal.querySelector('input[name="arbeitPauseGrund"]:checked');
+      if (!selected) {
+        alert('Bitte einen Grund auswählen.');
+        return;
+      }
+      try {
+        await ApiService.post('/arbeitspausen/starten', {
+          termin_id: terminId,
+          mitarbeiter_id: mitarbeiterId || null,
+          lehrling_id: lehrlingId || null,
+          grund: selected.value
+        });
+        schliesseModal();
+        this.loadInternTeamUebersicht();
+      } catch (e) {
+        console.error('[Arbeitspause] Fehler beim Starten:', e);
+        alert('Fehler beim Starten der Pause.');
+      }
+    };
+  }
+
+  /**
+   * Beendet aktive Arbeitspause für einen Termin
+   */
+  async interneArbeitFortsetzen(terminId) {
+    try {
+      await ApiService.post('/arbeitspausen/beenden', { termin_id: terminId });
+      this.loadInternTeamUebersicht();
+    } catch (e) {
+      console.error('[Arbeitspause] Fehler beim Fortsetzen:', e);
+      alert('Fehler beim Fortsetzen der Arbeit.');
+    }
   }
 
   /**
