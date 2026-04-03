@@ -2019,7 +2019,7 @@
             <div class="schule-text">${abwesenheitsTexte[abwesenheitsTyp] || 'Abwesend'}</div>
           </div>
         `;
-      } else if (inPause) {
+      } else if (inPause && person.pause_tracking_aktiv) {
         bodyContent = `
           <div class="schule-info">
             <div class="schule-icon">🍽️</div>
@@ -2173,16 +2173,18 @@
           </div>
         `;
       } else {
+        const leerIcon = isLehrling ? '🧹' : '🎉';
+        const leerText = isLehrling ? 'Werkstatt-Reinigung' : 'Keine Aufträge für heute';
         bodyContent = `
           <div class="leer-zustand">
-            <div class="leer-icon">🎉</div>
-            <div class="leer-text">Keine Aufträge für heute</div>
+            <div class="leer-icon">${leerIcon}</div>
+            <div class="leer-text">${leerText}</div>
           </div>
         `;
       }
 
-      // Arbeitszeit nur anzeigen, wenn Person nicht abwesend ist (nicht in Pause, nicht in Berufsschule, nicht anderweitig abwesend)
-      const zeigeArbeitszeit = !inPause && !inBerufsschule && !istAbwesend;
+      // Arbeitszeit nur anzeigen, wenn Person nicht abwesend ist (nicht in Berufsschule, nicht anderweitig abwesend, nicht in manueller Pause)
+      const zeigeArbeitszeit = !person.pause_tracking_aktiv && !inBerufsschule && !istAbwesend;
 
       // Button-Container (Toggle & Pause) - IMMER ALLE BUTTONS ANZEIGEN
       let buttonsHtml = '';
@@ -2195,11 +2197,13 @@
       const hatMehrereArbeiten = terminArbeiten.length > 1;
       
       // 1. Toggle-Button: Starten/Fertig - IMMER ANZEIGEN
-      const kannStarten = terminMitButtons && !inPause && !inBerufsschule && !istAbwesend && 
+      // Nur bei manueller Pause (pause_tracking_aktiv) sperren, nicht bei zeitbasierter Auto-Pause
+      const manuellePauseAktiv = !!person.pause_tracking_aktiv;
+      const kannStarten = terminMitButtons && !manuellePauseAktiv && !inBerufsschule && !istAbwesend && 
                          (terminMitButtons.status === 'geplant' || terminMitButtons.status === 'offen' || terminMitButtons.status === 'wartend');
       // Fertig-Button nur zeigen wenn KEINE mehreren Arbeiten oder ALLE Arbeiten abgeschlossen
       const alleArbeitenAbgeschlossen = terminArbeiten.length > 0 && terminArbeiten.every(a => a.abgeschlossen);
-      const kannBeenden = terminMitButtons && !inPause && !inBerufsschule && !istAbwesend && 
+      const kannBeenden = terminMitButtons && !manuellePauseAktiv && !inBerufsschule && !istAbwesend && 
                          terminMitButtons.status === 'in_arbeit' && !hatMehrereArbeiten;
       
       if (kannStarten) {
@@ -2219,7 +2223,7 @@
             <span class="btn-icon">✓</span> ${buttonText}
           </button>
         `;
-      } else if (hatMehrereArbeiten && terminMitButtons.status === 'in_arbeit') {
+      } else if (hatMehrereArbeiten && terminMitButtons.status === 'in_arbeit' && !manuellePauseAktiv) {
         // Bei mehreren Arbeiten in Arbeit: Globaler Fertig-Button erlaubt kompletten Abschluss
         // (Einzelarbeits-Buttons oben im Termin-Body bleiben erhalten für granulare Erfassung)
         buttonsHtml += `
