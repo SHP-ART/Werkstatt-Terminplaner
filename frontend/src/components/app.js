@@ -30086,6 +30086,7 @@ class App {
       ? aktivePausen.find(p => p.termin_id === aktuellerAuftrag.id)
       : null;
     const istArbeitPausiert = !!aktiveArbeitspause;
+    const manuellePauseAktiv = !!person.pause_tracking_aktiv;
 
     // Prüfe ob Person heute abwesend ist (Urlaub/Krank/Lehrgang)
     const abwesenheitenMap = kontext.abwesenheitenMap || {};
@@ -30115,7 +30116,14 @@ class App {
       badgeText = 'Berufsschule';
     } else if (istArbeitPausiert) {
       badgeClass = 'arbeit-pausiert';
-      badgeText = '⏸️ Pausiert';
+      const grundLabels = {
+        'sonstiges': 'Pause',
+        'krank': 'Krank',
+        'urlaub': 'Urlaub',
+        'berufsschule': 'Berufsschule',
+      };
+      const pauseGrund = aktiveArbeitspause?.grund || 'sonstiges';
+      badgeText = `⏸️ ${grundLabels[pauseGrund] || 'Pause'}`;
     } else if (aktuellerAuftrag) {
       badgeClass = 'in-arbeit';
       badgeText = 'In Arbeit';
@@ -30124,7 +30132,7 @@ class App {
     // Body Content
     let bodyContent = '';
     
-    if (inPause) {
+    if (inPause && person.pause_tracking_aktiv) {
       bodyContent = `
         <div class="intern-person-schule">
           <div class="schule-icon">🍽️</div>
