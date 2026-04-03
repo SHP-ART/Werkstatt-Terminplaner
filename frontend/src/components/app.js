@@ -30422,6 +30422,55 @@ class App {
     }
   }
 
+  async internStarten(terminId, kundeName) {
+    if (!confirm(`Termin für ${kundeName} starten?`)) return;
+    try {
+      await ApiService.post(`/termine/${terminId}/starten`, {});
+      this.loadInternTeamUebersicht();
+    } catch (err) {
+      console.error('internStarten Fehler:', err);
+      alert('Fehler beim Starten des Termins.');
+    }
+  }
+
+  async internBeenden(terminId, kundeName) {
+    if (!confirm(`Termin für ${kundeName} als fertig markieren?`)) return;
+    try {
+      await ApiService.post(`/termine/${terminId}/beenden`, {});
+      this.loadInternTeamUebersicht();
+    } catch (err) {
+      console.error('internBeenden Fehler:', err);
+      alert('Fehler beim Beenden des Termins.');
+    }
+  }
+
+  async internBeendenEinzelarbeit(terminId, arbeitIndex, btn) {
+    // TODO: Backend-Route POST /termine/:id/arbeit-beenden fehlt noch
+    if (btn && btn.disabled) return;
+    if (btn) btn.disabled = true;
+    try {
+      await ApiService.post(`/termine/${terminId}/arbeit-beenden`, { arbeit_index: arbeitIndex });
+      this.loadInternTeamUebersicht();
+    } catch (err) {
+      console.error('internBeendenEinzelarbeit Fehler:', err);
+      if (btn) btn.disabled = false;
+      alert('Fehler beim Abschließen der Arbeit.');
+    }
+  }
+
+  async internPauseStarten(personId, personTyp, datum, imZeitfenster) {
+    if (!imZeitfenster) {
+      if (!confirm('Mittagspause außerhalb des üblichen Zeitfensters starten?')) return;
+    }
+    try {
+      await ApiService.post('/pause/starten', { person_id: personId, person_typ: personTyp, datum });
+      this.loadInternTeamUebersicht();
+    } catch (err) {
+      console.error('internPauseStarten Fehler:', err);
+      alert('Fehler beim Starten der Pause.');
+    }
+  }
+
   /**
    * Berechnet den Fortschritt basierend auf der verstrichenen Zeit
    */
