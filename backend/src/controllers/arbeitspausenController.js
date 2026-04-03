@@ -1,4 +1,11 @@
-// backend/src/controllers/arbeitspausenController.js
+/**
+ * Arbeitspausen Controller
+ *
+ * Verwaltet manuelle Arbeitsunterbrechungen für laufende Werkstattaufträge:
+ * - Pause starten mit Grundangabe (teil_fehlt, rueckfrage_kunde, vorrang)
+ * - Pause manuell beenden (kein automatischer Ablauf)
+ * - Aktive Pausen abfragen
+ */
 const { db } = require('../config/database');
 
 const ERLAUBTE_GRUENDE = ['teil_fehlt', 'rueckfrage_kunde', 'vorrang'];
@@ -36,6 +43,10 @@ class ArbeitspausenController {
 
       if (!ERLAUBTE_GRUENDE.includes(grund)) {
         return res.status(400).json({ error: `grund muss einer von: ${ERLAUBTE_GRUENDE.join(', ')}` });
+      }
+
+      if (!mitarbeiter_id && !lehrling_id) {
+        return res.status(400).json({ error: 'mitarbeiter_id oder lehrling_id erforderlich' });
       }
 
       const termin = await ArbeitspausenController.dbGet(
