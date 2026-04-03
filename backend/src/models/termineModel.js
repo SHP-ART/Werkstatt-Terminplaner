@@ -367,6 +367,36 @@ class TermineModel {
     });
   }
 
+  static async arbeitBeendenByIndex(terminId, arbeitIndex) {
+    return new Promise((resolve, reject) => {
+      db.get('SELECT arbeitszeiten_details FROM termine WHERE id = ?', [terminId], async (err, row) => {
+        if (err) return reject(err);
+        if (!row) return reject(new Error('Termin nicht gefunden'));
+
+        let details = {};
+        try {
+          details = row.arbeitszeiten_details ? JSON.parse(row.arbeitszeiten_details) : {};
+        } catch (e) {
+          return reject(new Error('Fehler beim Parsen von arbeitszeiten_details'));
+        }
+
+        const arbeitsKeys = Object.keys(details).filter(k => !k.startsWith('_'));
+        const arbeitName = arbeitsKeys[arbeitIndex];
+        if (!arbeitName) return reject(new Error(`Arbeit mit Index ${arbeitIndex} nicht gefunden`));
+
+        const entry = details[arbeitName];
+        const tatsaechlicheZeit = typeof entry === 'object' ? (entry.zeit || 30) : (Number(entry) || 30);
+
+        try {
+          const result = await TermineModel.completeEinzelarbeit(terminId, arbeitName, tatsaechlicheZeit);
+          resolve(result);
+        } catch (e) {
+          reject(e);
+        }
+      });
+    });
+  }
+
   static async update(id, data) {
     const { 
       tatsaechliche_zeit, status, geschaetzte_zeit, arbeit, arbeitszeiten_details, 

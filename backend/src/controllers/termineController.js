@@ -2731,6 +2731,40 @@ class TermineController {
     }
   }
 
+  static async arbeitBeendenByIndex(req, res) {
+    try {
+      const { id } = req.params;
+      const { arbeit_index } = req.body;
+
+      if (arbeit_index === undefined || arbeit_index === null || isNaN(arbeit_index)) {
+        return res.status(400).json({ error: 'arbeit_index erforderlich' });
+      }
+
+      console.log(`[arbeitBeendenByIndex] Termin ${id}, Index: ${arbeit_index}`);
+
+      const aktualisierterTermin = await TermineModel.arbeitBeendenByIndex(id, parseInt(arbeit_index));
+
+      invalidateTermineCache();
+      invalidateAuslastungCache(aktualisierterTermin.datum);
+
+      broadcastEvent('termin_updated', {
+        terminId: id,
+        datum: aktualisierterTermin.datum
+      });
+
+      res.json({
+        success: true,
+        termin: aktualisierterTermin,
+        message: aktualisierterTermin.status === 'abgeschlossen'
+          ? 'Alle Arbeiten abgeschlossen - Termin ist fertig'
+          : 'Arbeit abgeschlossen'
+      });
+    } catch (err) {
+      console.error('Fehler bei arbeitBeendenByIndex:', err);
+      res.status(500).json({ error: err.message });
+    }
+  }
+
   /**
    * GET /termine/naechster-slot
    * Findet die nächsten freien Zeitslots für einen neuen Termin.

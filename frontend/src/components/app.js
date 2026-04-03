@@ -30473,7 +30473,6 @@ class App {
   }
 
   async internBeendenEinzelarbeit(terminId, arbeitIndex, btn) {
-    // TODO: Backend-Route POST /termine/:id/arbeit-beenden fehlt noch
     if (btn && btn.disabled) return;
     if (btn) btn.disabled = true;
     try {

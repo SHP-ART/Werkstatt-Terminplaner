@@ -44,6 +44,7 @@ router.post('/berechne-zeiten-neu', TermineController.berechneZeitenNeu);
 
 // Einzelarbeit abschließen (muss vor :id stehen!)
 router.put('/:id/arbeit/:arbeitName/abschliessen', TermineController.completeEinzelarbeit);
+router.post('/:id/arbeit-beenden', TermineController.arbeitBeendenByIndex);
 
 // Standard CRUD-Routes (müssen NACH spezifischen Routes stehen)
 router.get('/', TermineController.getAll);
