@@ -80,14 +80,22 @@ class TabletUpdateController {
         return res.status(400).json({ error: 'Version und Dateipfad erforderlich' });
       }
 
+      // Path-Traversal-Schutz: Nur Dateien im erlaubten Verzeichnis
+      const allowedDir = path.resolve(__dirname, '..', '..', 'tablet-updates');
+      const resolvedPath = path.resolve(filePath);
+
+      if (!resolvedPath.startsWith(allowedDir + path.sep) && resolvedPath !== allowedDir) {
+        return res.status(400).json({ error: 'Ungültiger Dateipfad — nur Dateien im tablet-updates Verzeichnis erlaubt' });
+      }
+
       // Prüfe ob Datei existiert
-      if (!fs.existsSync(filePath)) {
+      if (!fs.existsSync(resolvedPath)) {
         return res.status(400).json({ error: 'Update-Datei nicht gefunden' });
       }
 
       const result = await TabletUpdateModel.registerUpdate({
         version,
-        filePath,
+        filePath: resolvedPath,
         releaseNotes: releaseNotes || ''
       });
 
