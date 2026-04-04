@@ -981,6 +981,10 @@ class AIService {
     return ApiService.get(`/ai/puffer-empfehlung?arbeit=${encodeURIComponent(arbeit)}`);
   }
 
+  static async getZeitVorschlag(arbeit) {
+    return ApiService.get(`/ai/zeit-vorschlag?arbeit=${encodeURIComponent(arbeit)}`);
+  }
+
   static async checkDuplikatArbeiten(arbeiten) {
     return ApiService.post('/ai/check-duplikate', { arbeiten });
   }
