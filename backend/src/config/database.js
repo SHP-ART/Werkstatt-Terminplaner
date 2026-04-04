@@ -135,16 +135,7 @@ const db = new Proxy({}, {
       error.code = 'DB_NOT_READY';
       throw error;
     }
-    
-    // Debug: Was ist dbWrapper.connection?
-    if (prop === 'get' || prop === 'all' || prop === 'run') {
-      console.log(`[DB-Proxy] Zugriff auf '${prop}':`, {
-        connectionType: typeof dbWrapper.connection,
-        hasMethod: typeof dbWrapper.connection[prop],
-        connectionKeys: Object.keys(dbWrapper.connection).slice(0, 5)
-      });
-    }
-    
+
     // Alle anderen Props/Methoden vom aktuellen Connection-Objekt holen
     const value = dbWrapper.connection[prop];
     if (typeof value === 'function') {
