@@ -121,7 +121,8 @@ class App {
       font-size: 14px; font-weight: 500; animation: slideIn 0.3s ease-out;
       max-width: 350px; word-wrap: break-word;
     `;
-    toast.innerHTML = `<span>${color.icon}</span><span>${message}</span>`;
+    const _esc = (s) => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    toast.innerHTML = `<span>${color.icon}</span><span>${_esc(message)}</span>`;
 
     // CSS Animation hinzufügen falls noch nicht vorhanden
     if (!document.getElementById('toastAnimationStyle')) {
@@ -5637,13 +5638,13 @@ class App {
     const kundeInfo = document.getElementById('fahrzeugAuswahlKunde');
     const liste = document.getElementById('fahrzeugAuswahlListe');
     
-    kundeInfo.innerHTML = `<strong>${kunde.name}</strong>${kunde.telefon ? ` · ${kunde.telefon}` : ''}<br>
+    kundeInfo.innerHTML = `<strong>${this._escapeHtml(kunde.name)}</strong>${kunde.telefon ? ` · ${this._escapeHtml(kunde.telefon)}` : ''}<br>
       <span style="font-size: 0.9em;">Dieser Kunde hat ${fahrzeuge.length} Fahrzeuge:</span>`;
-    
+
     liste.innerHTML = fahrzeuge.map((fz, idx) => {
       const letzterTermin = fz.letzter_termin || fz.letzterTermin;
       const letzterKmStand = fz.letzter_km_stand || fz.letzterKmStand;
-      
+
       return `
       <div class="fahrzeug-auswahl-item" onclick="app.selectWartendeFahrzeugFromModal(${kunde.id}, ${idx})" style="
         padding: 15px;
@@ -5653,16 +5654,16 @@ class App {
         border: 2px solid ${idx === 0 ? '#4caf50' : '#dee2e6'};
         cursor: pointer;
         transition: all 0.2s;
-      " onmouseover="this.style.borderColor='#4a90e2'; this.style.background='#e3f2fd';" 
+      " onmouseover="this.style.borderColor='#4a90e2'; this.style.background='#e3f2fd';"
          onmouseout="this.style.borderColor='${idx === 0 ? '#4caf50' : '#dee2e6'}'; this.style.background='${idx === 0 ? '#e8f5e9' : '#f8f9fa'}';">
         <div style="display: flex; justify-content: space-between; align-items: center;">
           <div>
-            <span style="font-size: 1.2em; font-weight: bold;">🚗 ${fz.kennzeichen}</span>
-            ${fz.fahrzeugtyp ? `<span style="color: #666; margin-left: 10px;">${fz.fahrzeugtyp}</span>` : ''}
+            <span style="font-size: 1.2em; font-weight: bold;">🚗 ${this._escapeHtml(fz.kennzeichen)}</span>
+            ${fz.fahrzeugtyp ? `<span style="color: #666; margin-left: 10px;">${this._escapeHtml(fz.fahrzeugtyp)}</span>` : ''}
           </div>
           ${idx === 0 ? '<span style="background: #4caf50; color: white; padding: 2px 8px; border-radius: 4px; font-size: 0.8em;">Zuletzt</span>' : ''}
         </div>
-        ${fz.vin ? `<div style="font-size: 0.85em; color: #888; margin-top: 5px;">VIN: ${fz.vin}</div>` : ''}
+        ${fz.vin ? `<div style="font-size: 0.85em; color: #888; margin-top: 5px;">VIN: ${this._escapeHtml(fz.vin)}</div>` : ''}
         <div style="font-size: 0.85em; color: #666; margin-top: 5px;">
           ${letzterTermin ? `Letzter Termin: ${this.formatDatum(letzterTermin)}` : 'Aus Kundenstamm'}
           ${letzterKmStand ? ` · ${Number(letzterKmStand).toLocaleString('de-DE')} km` : ''}
@@ -9539,10 +9540,10 @@ class App {
         
         const erster = verfuegbare[0];
         if (erster.ist_sofort_verfuegbar) {
-          infoEl.innerHTML = `✅ ${erster.name} kann die Arbeit direkt im Anschluss übernehmen.`;
+          infoEl.innerHTML = `✅ ${this._escapeHtml(erster.name)} kann die Arbeit direkt im Anschluss übernehmen.`;
           infoEl.className = 'verfuegbarkeit-info';
         } else {
-          infoEl.innerHTML = `⏰ ${erster.name} hat den nächsten freien Slot um ${erster.naechster_freier_slot}.`;
+          infoEl.innerHTML = `⏰ ${this._escapeHtml(erster.name)} hat den nächsten freien Slot um ${this._escapeHtml(erster.naechster_freier_slot)}.`;
           infoEl.className = 'verfuegbarkeit-info nicht-verfuegbar';
         }
       }
@@ -12280,9 +12281,10 @@ class App {
 
   // Text mit Highlight für Suchmatch
   highlightMatch(text, search) {
-    if (!text || !search) return text || '';
+    if (!text || !search) return this._escapeHtml(text || '');
+    const escaped = this._escapeHtml(text);
     const regex = new RegExp(`(${search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
-    return text.replace(regex, '<span class="vorschlag-match">$1</span>');
+    return escaped.replace(regex, '<span class="vorschlag-match">$1</span>');
   }
 
   // Alle Fahrzeuge eines Kunden sammeln (aus Kunden-Daten und Terminen)
@@ -12438,14 +12440,14 @@ class App {
       return;
     }
     
-    kundeInfo.innerHTML = `<strong>${kunde.name}</strong>${kunde.telefon ? ` · ${kunde.telefon}` : ''}<br>
+    kundeInfo.innerHTML = `<strong>${this._escapeHtml(kunde.name)}</strong>${kunde.telefon ? ` · ${this._escapeHtml(kunde.telefon)}` : ''}<br>
       <span style="font-size: 0.9em;">Dieser Kunde hat ${fahrzeuge.length} Fahrzeuge:</span>`;
-    
+
     liste.innerHTML = fahrzeuge.map((fz, idx) => {
       // Unterstütze beide Feldnamen (API: letzter_termin, Cache: letzterTermin)
       const letzterTermin = fz.letzter_termin || fz.letzterTermin;
       const letzterKmStand = fz.letzter_km_stand || fz.letzterKmStand;
-      
+
       return `
       <div class="fahrzeug-auswahl-item" onclick="app.selectFahrzeugFromModal(${kunde.id}, ${idx})" style="
         padding: 15px;
@@ -12455,16 +12457,16 @@ class App {
         border: 2px solid ${idx === 0 ? '#4caf50' : '#dee2e6'};
         cursor: pointer;
         transition: all 0.2s;
-      " onmouseover="this.style.borderColor='#4a90e2'; this.style.background='#e3f2fd';" 
+      " onmouseover="this.style.borderColor='#4a90e2'; this.style.background='#e3f2fd';"
          onmouseout="this.style.borderColor='${idx === 0 ? '#4caf50' : '#dee2e6'}'; this.style.background='${idx === 0 ? '#e8f5e9' : '#f8f9fa'}';">
         <div style="display: flex; justify-content: space-between; align-items: center;">
           <div>
-            <span style="font-size: 1.2em; font-weight: bold;">🚗 ${fz.kennzeichen}</span>
-            ${fz.fahrzeugtyp ? `<span style="color: #666; margin-left: 10px;">${fz.fahrzeugtyp}</span>` : ''}
+            <span style="font-size: 1.2em; font-weight: bold;">🚗 ${this._escapeHtml(fz.kennzeichen)}</span>
+            ${fz.fahrzeugtyp ? `<span style="color: #666; margin-left: 10px;">${this._escapeHtml(fz.fahrzeugtyp)}</span>` : ''}
           </div>
           ${idx === 0 ? '<span style="background: #4caf50; color: white; padding: 2px 8px; border-radius: 4px; font-size: 0.8em;">Zuletzt</span>' : ''}
         </div>
-        ${fz.vin ? `<div style="font-size: 0.85em; color: #888; margin-top: 5px;">VIN: ${fz.vin}</div>` : ''}
+        ${fz.vin ? `<div style="font-size: 0.85em; color: #888; margin-top: 5px;">VIN: ${this._escapeHtml(fz.vin)}</div>` : ''}
         <div style="font-size: 0.85em; color: #666; margin-top: 5px;">
           ${letzterTermin ? `Letzter Termin: ${this.formatDatum(letzterTermin)}` : 'Aus Kundenstamm'}
           ${letzterKmStand ? ` · ${Number(letzterKmStand).toLocaleString('de-DE')} km` : ''}
@@ -15136,7 +15138,7 @@ class App {
             );
             if (treffer) {
               gefundenerElternId = treffer.id;
-              fundEl.innerHTML = `✅ Gefunden: <strong>${treffer.termin_nr}</strong> — ${treffer.kunde_name || '?'} • ${treffer.kennzeichen || '—'} • ${treffer.datum || ''}`;
+              fundEl.innerHTML = `✅ Gefunden: <strong>${this._escapeHtml(treffer.termin_nr)}</strong> — ${this._escapeHtml(treffer.kunde_name || '?')} • ${this._escapeHtml(treffer.kennzeichen || '—')} • ${this._escapeHtml(treffer.datum || '')}`;
               fundEl.style.display = '';
               verknuepfenBtn.style.display = '';
             } else {
@@ -34701,10 +34703,6 @@ class App {
     } catch (err) {
       this.showToast('Fehler: ' + err.message, 'error');
     }
-  }
-
-  _escapeHtml(str) {
-    return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
   }
 
   // =========================================================================
