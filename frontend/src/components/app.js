@@ -17019,28 +17019,6 @@ class App {
     const val = parseInt(input.value, 10);
     const auto = parseInt(document.getElementById(autoId)?.value || '0', 10);
 
-    // Hauptanzeige aktualisieren wenn Korrektur vom Auto-Wert abweicht
-    const wertId = deltaId.replace('Delta', 'Wert');
-    const wertEl = document.getElementById(wertId);
-    if (wertEl && Number.isFinite(val) && val > 0 && Number.isFinite(auto) && auto > 0 && val !== auto) {
-      const std = Math.floor(val / 60);
-      const min = val % 60;
-      const dez = (val / 60).toFixed(2);
-      let zeitStr = '';
-      if (std > 0 && min > 0) zeitStr = `${std} h ${min} min (${dez} h)`;
-      else if (std > 0) zeitStr = `${std} h (${dez} h)`;
-      else zeitStr = `${min} min (${dez} h)`;
-      wertEl.textContent = `✏️ ${zeitStr}`;
-      if (val <= 60) wertEl.style.color = '#27ae60';
-      else if (val <= 180) wertEl.style.color = '#4a90e2';
-      else wertEl.style.color = '#e67e22';
-    } else if (wertEl && Number.isFinite(val) && val > 0 && val === auto) {
-      // Präfix entfernen wenn wieder auf Auto-Wert
-      if (wertEl.textContent.startsWith('✏️ ')) {
-        wertEl.textContent = wertEl.textContent.replace('✏️ ', '');
-      }
-    }
-
     if (!Number.isFinite(val) || !Number.isFinite(auto) || auto === 0) {
       deltaEl.style.display = 'none';
       return;
@@ -17049,12 +17027,12 @@ class App {
     if (diff === 0) {
       deltaEl.style.display = 'none';
     } else if (diff > 0) {
-      deltaEl.textContent = `+${diff} min`;
+      deltaEl.textContent = `+${diff} min vs. KI`;
       deltaEl.style.background = '#fff3cd';
       deltaEl.style.color = '#856404';
       deltaEl.style.display = 'inline';
     } else {
-      deltaEl.textContent = `${diff} min`;
+      deltaEl.textContent = `${diff} min vs. KI`;
       deltaEl.style.background = '#d1e7dd';
       deltaEl.style.color = '#0f5132';
       deltaEl.style.display = 'inline';

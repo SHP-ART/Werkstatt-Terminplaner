@@ -644,12 +644,12 @@
                             <!-- Geschätzte Zeit Anzeige -->
                             <div id="zeitschaetzungAnzeige" style="margin-top: 10px; padding: 12px; background: linear-gradient(135deg, #e8f4fd 0%, #f0f7ff 100%); border-radius: 8px; border-left: 4px solid #4a90e2; display: none;">
                                 <div style="display: flex; justify-content: space-between; align-items: center;">
-                                    <span style="font-weight: 600; color: #333;">⏱️ Geschätzte Gesamtzeit:</span>
+                                    <span style="font-weight: 600; color: #333;">📊 KI-Vorschlag:</span>
                                     <span id="zeitschaetzungWert" style="font-size: 1.3em; font-weight: bold; color: #4a90e2;">0 h</span>
                                 </div>
                                 <div id="zeitschaetzungDetails" style="margin-top: 8px; font-size: 0.9em; color: #666;"></div>
                                 <div style="margin-top: 10px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
-                                    <span style="font-size: 0.85em; color: #555; white-space: nowrap;">✏️ Korrektur:</span>
+                                    <span style="font-size: 0.85em; font-weight: 600; color: #333; white-space: nowrap;">💾 Wird gespeichert:</span>
                                     <div style="display: flex; align-items: center; border: 1.5px solid #b0c8e8; border-radius: 6px; overflow: hidden; background: #fff;">
                                         <button type="button" onclick="app.stepZeitKorrektur('geschaetzte_zeit','geschaetzte_zeit_auto','zeitschaetzungDelta',-5)" style="padding: 4px 11px; background: #e8f4fd; border: none; border-right: 1px solid #b0c8e8; cursor: pointer; font-size: 1.1em; color: #4a90e2; font-weight: bold; line-height: 1;">−</button>
                                         <input type="number" id="geschaetzte_zeit" min="5" step="5" style="width: 52px; border: none; text-align: center; font-size: 0.9em; color: #333; padding: 4px 2px; background: transparent;" oninput="app.updateZeitKorrekturDelta('geschaetzte_zeit','geschaetzte_zeit_auto','zeitschaetzungDelta')">
@@ -946,12 +946,12 @@
                                     <!-- Geschätzte Zeit Anzeige -->
                                     <div id="editZeitschaetzungAnzeige" style="margin-top: 10px; padding: 12px; background: linear-gradient(135deg, #e8f4fd 0%, #f0f7ff 100%); border-radius: 8px; border-left: 4px solid #4a90e2; display: none;">
                                         <div style="display: flex; justify-content: space-between; align-items: center;">
-                                            <span style="font-weight: 600; color: #333;">⏱️ Geschätzte Gesamtzeit:</span>
+                                            <span style="font-weight: 600; color: #333;">📊 KI-Vorschlag:</span>
                                             <span id="editZeitschaetzungWert" style="font-size: 1.3em; font-weight: bold; color: #4a90e2;">0 h</span>
                                         </div>
                                         <div id="editZeitschaetzungDetails" style="margin-top: 8px; font-size: 0.9em; color: #666;"></div>
                                         <div style="margin-top: 10px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
-                                            <span style="font-size: 0.85em; color: #555; white-space: nowrap;">✏️ Korrektur:</span>
+                                            <span style="font-size: 0.85em; font-weight: 600; color: #333; white-space: nowrap;">💾 Wird gespeichert:</span>
                                             <div style="display: flex; align-items: center; border: 1.5px solid #b0c8e8; border-radius: 6px; overflow: hidden; background: #fff;">
                                                 <button type="button" onclick="app.stepZeitKorrektur('edit_geschaetzte_zeit','edit_geschaetzte_zeit_auto','editZeitschaetzungDelta',-5)" style="padding: 4px 11px; background: #e8f4fd; border: none; border-right: 1px solid #b0c8e8; cursor: pointer; font-size: 1.1em; color: #4a90e2; font-weight: bold; line-height: 1;">−</button>
                                                 <input type="number" id="edit_geschaetzte_zeit" min="5" step="5" style="width: 52px; border: none; text-align: center; font-size: 0.9em; color: #333; padding: 4px 2px; background: transparent;" oninput="app.updateZeitKorrekturDelta('edit_geschaetzte_zeit','edit_geschaetzte_zeit_auto','editZeitschaetzungDelta')">
