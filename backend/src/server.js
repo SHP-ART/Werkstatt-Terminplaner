@@ -3,6 +3,7 @@ const express = require('express');
 const bodyParser = require('body-parser');
 const cors = require('cors');
 const compression = require('compression');
+const helmet = require('helmet');
 const path = require('path');
 const fs = require('fs');
 
@@ -172,6 +173,13 @@ async function startServer(clientCountCallback, requestLogCallback) {
     const app = express();
     const PORT = process.env.PORT || 3001;
     logStartup(`Port: ${PORT}`);
+
+    // Security Headers
+    app.use(helmet({
+      contentSecurityPolicy: false, // CSP deaktiviert wegen Inline-Scripts im Frontend
+      crossOriginEmbedderPolicy: false // Fuer lokale Netzwerk-Nutzung
+    }));
+    logStartup('Helmet Security-Headers aktiviert');
 
     // CORS-Konfiguration (verbessert)
     const corsOrigin = process.env.CORS_ORIGIN || '*';
