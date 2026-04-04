@@ -2485,6 +2485,33 @@ class App {
       }
     });
 
+    // 📊 KI-Zeitvorschlag für unbekannte Arbeiten (historische Daten)
+    const nichtGefundenEdit = arbeiten.filter((_, i) => details[i]?.startsWith('⚠️'));
+    if (nichtGefundenEdit.length > 0) {
+      try {
+        const kiErgebnisse = await Promise.allSettled(
+          nichtGefundenEdit.map(a => window.AIService.getZeitVorschlag(a))
+        );
+        kiErgebnisse.forEach((result, i) => {
+          const arbeit = nichtGefundenEdit[i];
+          if (result.status === 'fulfilled' && result.value?.minuten) {
+            const { minuten, basis, n } = result.value;
+            gesamtMinuten += minuten;
+            const std = Math.floor(minuten / 60);
+            const min = minuten % 60;
+            const zeitStr = std > 0 ? `${std} h${min > 0 ? ` ${min} min` : ''}` : `${min} min`;
+            const quellLabel = basis === 'historisch' ? `aus ${n} Terminen`
+              : basis === 'historisch_ähnlich' ? `ähnliche Arbeit`
+              : `Kategorie-Schätzung`;
+            const idx = details.findIndex(d => d.startsWith(`⚠️ ${arbeit}:`));
+            if (idx !== -1) {
+              details[idx] = `📊 ${arbeit}: ${minuten} min <small style="color:#888">(${quellLabel})</small>`;
+            }
+          }
+        });
+      } catch (e) { /* KI-Zeitvorschlag nicht kritisch */ }
+    }
+
     // 🧠 Puffer-ML: KI-basierten Puffer abfragen wenn aktiviert
     const pufferMLAktiv = document.getElementById('pufferMLEnabled')?.checked;
     let mlPufferMinuten = 0;
@@ -2521,6 +2548,10 @@ class App {
     if (detailsEl) {
       detailsEl.innerHTML = details.join(' | ');
     }
+
+    // Hidden input für geschaetzte_zeit befüllen (wird beim Edit-Submit gelesen)
+    const editAutoZeitInput = document.getElementById('edit_geschaetzte_zeit_auto');
+    if (editAutoZeitInput) editAutoZeitInput.value = String(gesamtMitPuffer > 0 ? gesamtMitPuffer : 0);
   }
 
   async loadEditTerminAuslastungAnzeige() {
@@ -4134,6 +4165,32 @@ class App {
       }
     });
 
+    // 📊 KI-Zeitvorschlag für unbekannte Arbeiten (historische Daten)
+    if (nichtGefunden.length > 0) {
+      try {
+        const kiErgebnisse = await Promise.allSettled(
+          nichtGefunden.map(a => window.AIService.getZeitVorschlag(a))
+        );
+        kiErgebnisse.forEach((result, i) => {
+          const arbeit = nichtGefunden[i];
+          if (result.status === 'fulfilled' && result.value?.minuten) {
+            const { minuten, basis, n } = result.value;
+            gesamtMinuten += minuten;
+            const std = Math.floor(minuten / 60);
+            const min = minuten % 60;
+            const zeitStr = std > 0 ? `${std} h${min > 0 ? ` ${min} min` : ''}` : `${min} min`;
+            const quellLabel = basis === 'historisch' ? `aus ${n} Terminen`
+              : basis === 'historisch_ähnlich' ? `ähnliche Arbeit`
+              : `Kategorie-Schätzung`;
+            const idx = details.findIndex(d => d.startsWith(`⚠️ ${arbeit}:`));
+            if (idx !== -1) {
+              details[idx] = `📊 ${arbeit}: <strong>${zeitStr}</strong> <small style="color:#888">(${quellLabel})</small>`;
+            }
+          }
+        });
+      } catch (e) { /* KI-Zeitvorschlag nicht kritisch */ }
+    }
+
     // 🧠 Puffer-ML: KI-basierten Puffer abfragen wenn aktiviert
     const pufferMLAktiv = document.getElementById('pufferMLEnabled')?.checked;
     let mlPufferMinuten = 0;
@@ -4183,6 +4240,10 @@ class App {
     } else {
       zeitschaetzungWert.style.color = '#e67e22'; // Orange - lang
     }
+
+    // Hidden input für geschaetzte_zeit befüllen (wird beim Submit gelesen)
+    const autoZeitInput = document.getElementById('geschaetzte_zeit_auto');
+    if (autoZeitInput) autoZeitInput.value = String(gesamtMitPuffer > 0 ? gesamtMitPuffer : 0);
   }
 
   updateGesamtzeit() {
@@ -16863,6 +16924,24 @@ class App {
     const inputMinuten = input ? parseInt(input, 10) : null;
     if (Number.isFinite(inputMinuten) && inputMinuten > 0) {
       return inputMinuten;
+    }
+
+    // KI-Vorschlag aus Zeitschätzungs-Anzeige (Neu-Formular)
+    const autoFeld = document.getElementById('geschaetzte_zeit_auto');
+    if (autoFeld) {
+      const autoMinuten = parseInt(autoFeld.value, 10);
+      if (Number.isFinite(autoMinuten) && autoMinuten > 0) {
+        return autoMinuten;
+      }
+    }
+
+    // KI-Vorschlag aus Zeitschätzungs-Anzeige (Edit-Modal)
+    const editAutoFeld = document.getElementById('edit_geschaetzte_zeit_auto');
+    if (editAutoFeld) {
+      const editAutoMinuten = parseInt(editAutoFeld.value, 10);
+      if (Number.isFinite(editAutoMinuten) && editAutoMinuten > 0) {
+        return editAutoMinuten;
+      }
     }
 
     let summe = 0;
