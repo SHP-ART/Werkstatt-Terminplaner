@@ -648,10 +648,15 @@
                                     <span id="zeitschaetzungWert" style="font-size: 1.3em; font-weight: bold; color: #4a90e2;">0 h</span>
                                 </div>
                                 <div id="zeitschaetzungDetails" style="margin-top: 8px; font-size: 0.9em; color: #666;"></div>
-                                <div style="margin-top: 8px; display: flex; align-items: center; gap: 8px;">
-                                    <label style="font-size: 0.85em; color: #666; margin: 0; white-space: nowrap;">✏️ Korrektur:</label>
-                                    <input type="number" id="geschaetzte_zeit" min="5" step="5" style="width: 75px; padding: 3px 6px; border: 1px solid #b0c8e8; border-radius: 4px; font-size: 0.9em; color: #333;" placeholder="Min">
-                                    <span style="font-size: 0.85em; color: #666;">Min</span>
+                                <div style="margin-top: 10px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+                                    <span style="font-size: 0.85em; color: #555; white-space: nowrap;">✏️ Korrektur:</span>
+                                    <div style="display: flex; align-items: center; border: 1.5px solid #b0c8e8; border-radius: 6px; overflow: hidden; background: #fff;">
+                                        <button type="button" onclick="app.stepZeitKorrektur('geschaetzte_zeit','geschaetzte_zeit_auto','zeitschaetzungDelta',-5)" style="padding: 4px 11px; background: #e8f4fd; border: none; border-right: 1px solid #b0c8e8; cursor: pointer; font-size: 1.1em; color: #4a90e2; font-weight: bold; line-height: 1;">−</button>
+                                        <input type="number" id="geschaetzte_zeit" min="5" step="5" style="width: 52px; border: none; text-align: center; font-size: 0.9em; color: #333; padding: 4px 2px; background: transparent;" oninput="app.updateZeitKorrekturDelta('geschaetzte_zeit','geschaetzte_zeit_auto','zeitschaetzungDelta')">
+                                        <span style="font-size: 0.78em; color: #888; padding: 0 5px 0 1px;">min</span>
+                                        <button type="button" onclick="app.stepZeitKorrektur('geschaetzte_zeit','geschaetzte_zeit_auto','zeitschaetzungDelta',5)" style="padding: 4px 11px; background: #e8f4fd; border: none; border-left: 1px solid #b0c8e8; cursor: pointer; font-size: 1.1em; color: #4a90e2; font-weight: bold; line-height: 1;">+</button>
+                                    </div>
+                                    <span id="zeitschaetzungDelta" style="font-size: 0.82em; font-weight: 600; padding: 2px 8px; border-radius: 10px; display: none;"></span>
                                 </div>
                             </div>
                             <input type="hidden" id="geschaetzte_zeit_auto" value="0">
@@ -945,10 +950,15 @@
                                             <span id="editZeitschaetzungWert" style="font-size: 1.3em; font-weight: bold; color: #4a90e2;">0 h</span>
                                         </div>
                                         <div id="editZeitschaetzungDetails" style="margin-top: 8px; font-size: 0.9em; color: #666;"></div>
-                                        <div style="margin-top: 8px; display: flex; align-items: center; gap: 8px;">
-                                            <label style="font-size: 0.85em; color: #666; margin: 0; white-space: nowrap;">✏️ Korrektur:</label>
-                                            <input type="number" id="edit_geschaetzte_zeit" min="5" step="5" style="width: 75px; padding: 3px 6px; border: 1px solid #b0c8e8; border-radius: 4px; font-size: 0.9em; color: #333;" placeholder="Min">
-                                            <span style="font-size: 0.85em; color: #666;">Min</span>
+                                        <div style="margin-top: 10px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+                                            <span style="font-size: 0.85em; color: #555; white-space: nowrap;">✏️ Korrektur:</span>
+                                            <div style="display: flex; align-items: center; border: 1.5px solid #b0c8e8; border-radius: 6px; overflow: hidden; background: #fff;">
+                                                <button type="button" onclick="app.stepZeitKorrektur('edit_geschaetzte_zeit','edit_geschaetzte_zeit_auto','editZeitschaetzungDelta',-5)" style="padding: 4px 11px; background: #e8f4fd; border: none; border-right: 1px solid #b0c8e8; cursor: pointer; font-size: 1.1em; color: #4a90e2; font-weight: bold; line-height: 1;">−</button>
+                                                <input type="number" id="edit_geschaetzte_zeit" min="5" step="5" style="width: 52px; border: none; text-align: center; font-size: 0.9em; color: #333; padding: 4px 2px; background: transparent;" oninput="app.updateZeitKorrekturDelta('edit_geschaetzte_zeit','edit_geschaetzte_zeit_auto','editZeitschaetzungDelta')">
+                                                <span style="font-size: 0.78em; color: #888; padding: 0 5px 0 1px;">min</span>
+                                                <button type="button" onclick="app.stepZeitKorrektur('edit_geschaetzte_zeit','edit_geschaetzte_zeit_auto','editZeitschaetzungDelta',5)" style="padding: 4px 11px; background: #e8f4fd; border: none; border-left: 1px solid #b0c8e8; cursor: pointer; font-size: 1.1em; color: #4a90e2; font-weight: bold; line-height: 1;">+</button>
+                                            </div>
+                                            <span id="editZeitschaetzungDelta" style="font-size: 0.82em; font-weight: 600; padding: 2px 8px; border-radius: 10px; display: none;"></span>
                                         </div>
                                     </div>
                                     <input type="hidden" id="edit_geschaetzte_zeit_auto" value="0">

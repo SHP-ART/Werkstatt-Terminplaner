@@ -2365,6 +2365,10 @@ class App {
     if (zeitschaetzung) {
       zeitschaetzung.style.display = 'none';
     }
+
+    // Delta-Badge zurücksetzen
+    const delta = document.getElementById('editZeitschaetzungDelta');
+    if (delta) delta.style.display = 'none';
   }
 
   toggleEditAbholungDetails() {
@@ -2569,6 +2573,7 @@ class App {
     if (editManualZeitFeld && !editManualZeitFeld.value && gesamtMitPuffer > 0) {
       editManualZeitFeld.value = String(gesamtMitPuffer);
     }
+    this.updateZeitKorrekturDelta('edit_geschaetzte_zeit', 'edit_geschaetzte_zeit_auto', 'editZeitschaetzungDelta');
   }
 
   async loadEditTerminAuslastungAnzeige() {
@@ -4271,6 +4276,7 @@ class App {
     if (manualZeitFeld && !manualZeitFeld.value && gesamtMitPuffer > 0) {
       manualZeitFeld.value = String(gesamtMitPuffer);
     }
+    this.updateZeitKorrekturDelta('geschaetzte_zeit', 'geschaetzte_zeit_auto', 'zeitschaetzungDelta');
   }
 
   updateGesamtzeit() {
@@ -16942,6 +16948,42 @@ class App {
     } catch (error) {
       console.error('Fehler bei Bringzeit-Prüfung:', error);
       hinweisElement.style.display = 'none';
+    }
+  }
+
+  stepZeitKorrektur(inputId, autoId, deltaId, step) {
+    const input = document.getElementById(inputId);
+    if (!input) return;
+    const current = parseInt(input.value, 10);
+    const base = parseInt(document.getElementById(autoId)?.value || '0', 10);
+    const next = Number.isFinite(current) ? Math.max(5, current + step) : Math.max(5, (base || 30) + step);
+    input.value = String(next);
+    this.updateZeitKorrekturDelta(inputId, autoId, deltaId);
+  }
+
+  updateZeitKorrekturDelta(inputId, autoId, deltaId) {
+    const input = document.getElementById(inputId);
+    const deltaEl = document.getElementById(deltaId);
+    if (!input || !deltaEl) return;
+    const val = parseInt(input.value, 10);
+    const auto = parseInt(document.getElementById(autoId)?.value || '0', 10);
+    if (!Number.isFinite(val) || !Number.isFinite(auto) || auto === 0) {
+      deltaEl.style.display = 'none';
+      return;
+    }
+    const diff = val - auto;
+    if (diff === 0) {
+      deltaEl.style.display = 'none';
+    } else if (diff > 0) {
+      deltaEl.textContent = `+${diff} min`;
+      deltaEl.style.background = '#fff3cd';
+      deltaEl.style.color = '#856404';
+      deltaEl.style.display = 'inline';
+    } else {
+      deltaEl.textContent = `${diff} min`;
+      deltaEl.style.background = '#d1e7dd';
+      deltaEl.style.color = '#0f5132';
+      deltaEl.style.display = 'inline';
     }
   }
 
