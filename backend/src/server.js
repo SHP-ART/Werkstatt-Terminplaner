@@ -365,7 +365,7 @@ async function startServer(clientCountCallback, requestLogCallback) {
         logStartup(`WARNUNG: Wiederkehrende-Termine-Scheduler-Start fehlgeschlagen: ${err.message}`, 'WARN');
     });
     const MS_PER_DAY = 24 * 60 * 60 * 1000;
-    setInterval(() => {
+    const schedulerInterval = setInterval(() => {
         WiederkehrendeTermineController.runScheduler().catch(err => {
             console.warn('[WiederkehrendeTermine] Scheduler-Fehler:', err.message);
         });
@@ -379,7 +379,7 @@ async function startServer(clientCountCallback, requestLogCallback) {
     PauseController.cleanupAbgelaufenePausen().catch(err => {
         logStartup(`WARNUNG: Initiales Pause-Cleanup fehlgeschlagen: ${err.message}`, 'WARN');
     });
-    setInterval(() => {
+    const pauseCleanupInterval = setInterval(() => {
         PauseController.cleanupAbgelaufenePausen().catch(err => {
             console.warn('Pause-Cleanup Fehler:', err.message);
         });
@@ -444,7 +444,10 @@ async function startServer(clientCountCallback, requestLogCallback) {
 
     wss.on('connection', (ws) => {
         logStartup('WebSocket Client connected');
+        ws.isAlive = true;
         if (clientCountCallback) clientCountCallback(wss.clients.size);
+
+        ws.on('pong', () => { ws.isAlive = true; });
 
         ws.on('close', () => {
             logStartup('WebSocket Client disconnected');
@@ -455,6 +458,17 @@ async function startServer(clientCountCallback, requestLogCallback) {
             logStartup(`WebSocket error: ${error.message}`, 'ERROR');
         });
     });
+
+    // Heartbeat: Tote Verbindungen alle 30s aufraemen
+    const heartbeatInterval = setInterval(() => {
+        wss.clients.forEach(ws => {
+            if (!ws.isAlive) return ws.terminate();
+            ws.isAlive = false;
+            ws.ping();
+        });
+    }, 30000);
+
+    wss.on('close', () => clearInterval(heartbeatInterval));
 
     logStartup(`Starte Server auf Port ${PORT}...`);
     server.listen(PORT, '0.0.0.0', () => {
@@ -487,7 +501,12 @@ async function startServer(clientCountCallback, requestLogCallback) {
      */
     const gracefulShutdown = async (signal) => {
         console.log(`\n\n⚠️  ${signal} empfangen - starte graceful shutdown...`);
-        
+
+        // Intervals stoppen
+        clearInterval(schedulerInterval);
+        clearInterval(pauseCleanupInterval);
+        clearInterval(heartbeatInterval);
+
         // Neue Requests ablehnen
         server.close(async () => {
             console.log('✅ HTTP Server: Keine neuen Requests mehr angenommen');
@@ -520,11 +539,11 @@ async function startServer(clientCountCallback, requestLogCallback) {
     };
     
     // Shutdown-Handler registrieren
-    process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
-    process.on('SIGINT', () => gracefulShutdown('SIGINT'));
+    process.once('SIGTERM', () => gracefulShutdown('SIGTERM'));
+    process.once('SIGINT', () => gracefulShutdown('SIGINT'));
     
     // Uncaught Exception Handler
-    process.on('uncaughtException', (error) => {
+    process.once('uncaughtException', (error) => {
         console.error('❌ Uncaught Exception:', error);
         gracefulShutdown('UNCAUGHT_EXCEPTION');
     });
