@@ -2480,7 +2480,9 @@ class App {
     // Berechne die Zeiten für jede Arbeit
     let gesamtMinuten = 0;
     const details = [];
-    
+    const nichtGefundenEdit = [];
+    const gefundenArbeiten = []; // für KI-Vergleich
+
     arbeiten.forEach(arbeit => {
       // Suche mit Fuzzy-Matching (exakt → Alias → Teilwort/Wort-Überlappung)
       const gefunden = this.findArbeitszeitMitDetails(arbeit);
@@ -2488,39 +2490,60 @@ class App {
       if (gefunden) {
         const minuten = gefunden.standard_minuten || 0;
         gesamtMinuten += minuten;
+        const stundenAnteil = Math.floor(minuten / 60);
+        const minutenAnteil = minuten % 60;
+        let zeitStr = '';
+        if (stundenAnteil > 0) {
+          zeitStr = `${stundenAnteil} h`;
+          if (minutenAnteil > 0) zeitStr += ` ${minutenAnteil} min`;
+        } else {
+          zeitStr = `${minutenAnteil} min`;
+        }
         let hinweis = '';
         if (gefunden.matchTyp === 'alias') {
           hinweis = ` → ${gefunden.bezeichnung}`;
         } else if (gefunden.matchTyp === 'fuzzy') {
           hinweis = ` ≈ ${gefunden.bezeichnung}`;
         }
-        details.push(`✓ ${arbeit}${hinweis}: ${minuten} min`);
+        details.push(`✓ ${arbeit}${hinweis}: <strong>${zeitStr}</strong>`);
+        gefundenArbeiten.push({ arbeit, detailIdx: details.length - 1 });
       } else {
+        nichtGefundenEdit.push(arbeit);
         details.push(`⚠️ ${arbeit}: keine Standardzeit`);
       }
     });
 
-    // 📊 KI-Zeitvorschlag für unbekannte Arbeiten (historische Daten)
-    const nichtGefundenEdit = arbeiten.filter((_, i) => details[i]?.startsWith('⚠️'));
-    if (nichtGefundenEdit.length > 0) {
+    // 📊 KI-Zeitvorschlag für ALLE Arbeiten:
+    //   - Gefundene: KI-Wert als Hinweis anzeigen (Vergleich mit Richtzeit)
+    //   - Nicht-Gefundene: KI-Wert für Gesamtzeit übernehmen
+    const alleArbeiten = [...gefundenArbeiten.map(g => g.arbeit), ...nichtGefundenEdit];
+    if (alleArbeiten.length > 0) {
       try {
         const kiErgebnisse = await Promise.allSettled(
-          nichtGefundenEdit.map(a => window.AIService.getZeitVorschlag(a))
+          alleArbeiten.map(a => window.AIService.getZeitVorschlag(a))
         );
         kiErgebnisse.forEach((result, i) => {
-          const arbeit = nichtGefundenEdit[i];
-          if (result.status === 'fulfilled' && result.value?.minuten) {
-            const { minuten, basis, n } = result.value;
+          const arbeit = alleArbeiten[i];
+          if (result.status !== 'fulfilled' || !result.value?.minuten) return;
+          const { minuten, basis, n } = result.value;
+          const std = Math.floor(minuten / 60);
+          const min = minuten % 60;
+          const zeitStr = std > 0 ? `${std} h${min > 0 ? ` ${min} min` : ''}` : `${min} min`;
+          const quellLabel = basis === 'historisch' ? `aus ${n} Terminen`
+            : basis === 'historisch_ähnlich' ? `ähnl. Arbeit`
+            : `Kategorie-Schätzung`;
+
+          const gefundenEintrag = gefundenArbeiten.find(g => g.arbeit === arbeit);
+          if (gefundenEintrag) {
+            // Richtzeit vorhanden → KI-Wert als Vergleichs-Hinweis anhängen
+            details[gefundenEintrag.detailIdx] +=
+              ` <small style="color:#888">| 📊 KI: ${zeitStr} (${quellLabel})</small>`;
+          } else {
+            // Keine Richtzeit → KI-Wert für Gesamtzeit übernehmen
             gesamtMinuten += minuten;
-            const std = Math.floor(minuten / 60);
-            const min = minuten % 60;
-            const zeitStr = std > 0 ? `${std} h${min > 0 ? ` ${min} min` : ''}` : `${min} min`;
-            const quellLabel = basis === 'historisch' ? `aus ${n} Terminen`
-              : basis === 'historisch_ähnlich' ? `ähnliche Arbeit`
-              : `Kategorie-Schätzung`;
             const idx = details.findIndex(d => d.startsWith(`⚠️ ${arbeit}:`));
             if (idx !== -1) {
-              details[idx] = `📊 ${arbeit}: ${minuten} min <small style="color:#888">(${quellLabel})</small>`;
+              details[idx] = `📊 ${arbeit}: <strong>${zeitStr}</strong> <small style="color:#888">(${quellLabel})</small>`;
             }
           }
         });
@@ -4157,7 +4180,8 @@ class App {
     let gesamtMinuten = 0;
     const details = [];
     const nichtGefunden = [];
-    
+    const gefundenArbeiten = []; // für KI-Vergleich
+
     arbeiten.forEach(arbeit => {
       // Suche mit Fuzzy-Matching (exakt → Alias → Teilwort/Wort-Überlappung)
       const gefunden = this.findArbeitszeitMitDetails(arbeit);
@@ -4185,29 +4209,41 @@ class App {
           hinweis = ` ≈ ${gefunden.bezeichnung}`;
         }
         details.push(`✓ ${arbeit}${hinweis}: <strong>${zeitStr}</strong>`);
+        gefundenArbeiten.push({ arbeit, detailIdx: details.length - 1 });
       } else {
         nichtGefunden.push(arbeit);
         details.push(`⚠️ ${arbeit}: <em>keine Standardzeit hinterlegt</em>`);
       }
     });
 
-    // 📊 KI-Zeitvorschlag für unbekannte Arbeiten (historische Daten)
-    if (nichtGefunden.length > 0) {
+    // 📊 KI-Zeitvorschlag für ALLE Arbeiten:
+    //   - Gefundene: KI-Wert als Hinweis anzeigen (Vergleich mit Richtzeit)
+    //   - Nicht-Gefundene: KI-Wert für Gesamtzeit übernehmen
+    const alleArbeiten = [...gefundenArbeiten.map(g => g.arbeit), ...nichtGefunden];
+    if (alleArbeiten.length > 0) {
       try {
         const kiErgebnisse = await Promise.allSettled(
-          nichtGefunden.map(a => window.AIService.getZeitVorschlag(a))
+          alleArbeiten.map(a => window.AIService.getZeitVorschlag(a))
         );
         kiErgebnisse.forEach((result, i) => {
-          const arbeit = nichtGefunden[i];
-          if (result.status === 'fulfilled' && result.value?.minuten) {
-            const { minuten, basis, n } = result.value;
+          const arbeit = alleArbeiten[i];
+          if (result.status !== 'fulfilled' || !result.value?.minuten) return;
+          const { minuten, basis, n } = result.value;
+          const std = Math.floor(minuten / 60);
+          const min = minuten % 60;
+          const zeitStr = std > 0 ? `${std} h${min > 0 ? ` ${min} min` : ''}` : `${min} min`;
+          const quellLabel = basis === 'historisch' ? `aus ${n} Terminen`
+            : basis === 'historisch_ähnlich' ? `ähnl. Arbeit`
+            : `Kategorie-Schätzung`;
+
+          const gefundenEintrag = gefundenArbeiten.find(g => g.arbeit === arbeit);
+          if (gefundenEintrag) {
+            // Richtzeit vorhanden → KI-Wert als Vergleichs-Hinweis anhängen
+            details[gefundenEintrag.detailIdx] +=
+              ` <small style="color:#888">| 📊 KI: ${zeitStr} (${quellLabel})</small>`;
+          } else {
+            // Keine Richtzeit → KI-Wert für Gesamtzeit übernehmen
             gesamtMinuten += minuten;
-            const std = Math.floor(minuten / 60);
-            const min = minuten % 60;
-            const zeitStr = std > 0 ? `${std} h${min > 0 ? ` ${min} min` : ''}` : `${min} min`;
-            const quellLabel = basis === 'historisch' ? `aus ${n} Terminen`
-              : basis === 'historisch_ähnlich' ? `ähnliche Arbeit`
-              : `Kategorie-Schätzung`;
             const idx = details.findIndex(d => d.startsWith(`⚠️ ${arbeit}:`));
             if (idx !== -1) {
               details[idx] = `📊 ${arbeit}: <strong>${zeitStr}</strong> <small style="color:#888">(${quellLabel})</small>`;
