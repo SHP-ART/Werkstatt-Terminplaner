@@ -629,42 +629,32 @@ function erkenneFremdmarke(text) {
 async function trainPufferModel() {
   try {
     const rows = await allAsync(`
-      SELECT arbeit, geschaetzte_zeit, tatsaechliche_zeit
+      SELECT arbeit, tatsaechliche_zeit
       FROM termine
       WHERE status = 'abgeschlossen'
         AND tatsaechliche_zeit > 0
-        AND geschaetzte_zeit > 0
         AND geloescht_am IS NULL
         AND (ki_training_exclude IS NULL OR ki_training_exclude = 0)
     `);
 
-    // Überziehung pro Kategorie sammeln
+    // Tatsächliche Zeiten pro Kategorie sammeln
     const rawByKat = {};
     rows.forEach(row => {
-      const ueberzug = row.tatsaechliche_zeit - row.geschaetzte_zeit;
       const kat = kategorisiereArbeit(row.arbeit);
       if (!rawByKat[kat]) rawByKat[kat] = [];
-      rawByKat[kat].push(ueberzug);
+      rawByKat[kat].push(row.tatsaechliche_zeit);
     });
 
     const byKategorie = {};
     Object.entries(rawByKat).forEach(([kat, values]) => {
-      if (values.length < 3) {
-        byKategorie[kat] = Math.max(0, Math.round(values.reduce((s, v) => s + v, 0) / values.length));
-        return;
-      }
       const sorted = [...values].sort((a, b) => a - b);
-      const q1 = sorted[Math.floor(sorted.length * 0.25)];
-      const q3 = sorted[Math.floor(sorted.length * 0.75)];
-      const iqr = q3 - q1;
-      const filtered = sorted.filter(v => v >= q1 - 1.5 * iqr && v <= q3 + 1.5 * iqr);
-      if (!filtered.length) {
+      if (sorted.length < 3) {
         byKategorie[kat] = 0;
         return;
       }
-      // 80. Perzentil als empfohlener Puffer
-      const p80 = filtered[Math.floor(filtered.length * 0.8)];
-      byKategorie[kat] = Math.max(0, Math.round(p80));
+      const median = sorted[Math.floor(sorted.length * 0.5)];
+      const p80 = sorted[Math.floor(sorted.length * 0.8)];
+      byKategorie[kat] = Math.max(0, Math.round(p80 - median));
     });
 
     pufferModelCache = { trainedAt: Date.now(), byKategorie };
