@@ -649,8 +649,7 @@ async function trainPufferModel() {
     Object.entries(rawByKat).forEach(([kat, values]) => {
       const sorted = [...values].sort((a, b) => a - b);
       if (sorted.length < 3) {
-        byKategorie[kat] = 0;
-        return;
+        return; // zu wenig Daten → kein Eintrag, Standard-Fallback in getPufferEmpfehlung greift
       }
       const median = sorted[Math.floor(sorted.length * 0.5)];
       const p80 = sorted[Math.floor(sorted.length * 0.8)];
