@@ -689,6 +689,55 @@ function getPufferEmpfehlung(arbeit) {
   };
 }
 
+/**
+ * Gibt KI-Zeitvorschlag für eine Arbeit zurück.
+ * Sucht zuerst im gelernten Modell (byArbeit), dann Kategorie-Fallback.
+ * @param {string} arbeit - Arbeitsbezeichnung (frei)
+ * @returns {Promise<{minuten: number, basis: string, n: number}|null>}
+ */
+async function getZeitVorschlag(arbeit) {
+  if (!arbeit || !arbeit.trim()) return null;
+  const model = await getZeitModel(); // stellt sicher dass Cache geladen ist
+
+  // 1. Exakter Treffer im gelernten Modell
+  const key = normalizeText(arbeit);
+  if (model.byArbeit[key]) {
+    const { avgMinutes, samples } = model.byArbeit[key];
+    return { minuten: Math.round(avgMinutes), basis: 'historisch', n: samples };
+  }
+
+  // 2. Token-Overlap über alle bekannten Arbeiten
+  const tokens = new Set(tokenize(key));
+  let bestMatch = null;
+  let bestScore = 0;
+  Object.entries(model.byArbeit).forEach(([k, v]) => {
+    const ktokens = tokenize(k);
+    let overlap = 0;
+    ktokens.forEach(t => { if (tokens.has(t)) overlap++; });
+    const score = ktokens.length > 0
+      ? overlap / Math.max(ktokens.length, tokens.size)
+      : 0;
+    if (score > 0.5 && score > bestScore) {
+      bestScore = score;
+      bestMatch = v;
+    }
+  });
+  if (bestMatch) {
+    return { minuten: Math.round(bestMatch.avgMinutes), basis: 'historisch_ähnlich', n: bestMatch.samples };
+  }
+
+  // 3. Kategorie-Fallback
+  const kat = kategorisiereArbeit(arbeit);
+  const katDefaults = {
+    Inspektion: 90, Bremsen: 90, Motor: 120, Elektrik: 60,
+    Klima: 45, Reifen: 30, Karosserie: 120, Sonstiges: 60
+  };
+  if (katDefaults[kat]) {
+    return { minuten: katDefaults[kat], basis: 'kategorie', n: 0 };
+  }
+  return null;
+}
+
 // ============================================================
 // DUPLIKAT-ERKENNUNG
 // ============================================================
@@ -798,6 +847,7 @@ module.exports = {
   trainZeitModel,
   trainPufferModel,
   getPufferEmpfehlung,
+  getZeitVorschlag,
   erkenneDuplikatArbeiten,
   scheduleDailyTraining
 };
