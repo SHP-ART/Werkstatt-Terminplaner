@@ -2215,6 +2215,11 @@ class App {
     // Abholungs-Felder aktualisieren
     this.toggleEditAbholungDetails();
     
+    // Manuelles Zeitkorrektur-Feld zurücksetzen und Zeitschätzung neu berechnen
+    const editZeitManual = document.getElementById('edit_geschaetzte_zeit');
+    if (editZeitManual) editZeitManual.value = '';
+    this.updateEditZeitschaetzung();
+    
     // Edit-Kalender aktualisieren: Zeige den Monat des Termins
     if (termin.datum) {
       const terminDatum = new Date(termin.datum + 'T00:00:00');
@@ -2558,6 +2563,12 @@ class App {
     // Hidden input für geschaetzte_zeit befüllen (wird beim Edit-Submit gelesen)
     const editAutoZeitInput = document.getElementById('edit_geschaetzte_zeit_auto');
     if (editAutoZeitInput) editAutoZeitInput.value = String(gesamtMitPuffer > 0 ? gesamtMitPuffer : 0);
+
+    // Manuelles Korrektur-Feld vorausfüllen, falls noch leer
+    const editManualZeitFeld = document.getElementById('edit_geschaetzte_zeit');
+    if (editManualZeitFeld && !editManualZeitFeld.value && gesamtMitPuffer > 0) {
+      editManualZeitFeld.value = String(gesamtMitPuffer);
+    }
   }
 
   async loadEditTerminAuslastungAnzeige() {
@@ -4254,6 +4265,12 @@ class App {
     // Hidden input für geschaetzte_zeit befüllen (wird beim Submit gelesen)
     const autoZeitInput = document.getElementById('geschaetzte_zeit_auto');
     if (autoZeitInput) autoZeitInput.value = String(gesamtMitPuffer > 0 ? gesamtMitPuffer : 0);
+
+    // Manuelles Korrektur-Feld vorausfüllen, falls noch leer
+    const manualZeitFeld = document.getElementById('geschaetzte_zeit');
+    if (manualZeitFeld && !manualZeitFeld.value && gesamtMitPuffer > 0) {
+      manualZeitFeld.value = String(gesamtMitPuffer);
+    }
   }
 
   updateGesamtzeit() {
@@ -16934,6 +16951,14 @@ class App {
     const inputMinuten = input ? parseInt(input, 10) : null;
     if (Number.isFinite(inputMinuten) && inputMinuten > 0) {
       return inputMinuten;
+    }
+
+    // Edit-Modal manuelles Override-Feld
+    const editZeitFeld = document.getElementById('edit_geschaetzte_zeit');
+    const editInput = editZeitFeld ? editZeitFeld.value : null;
+    const editInputMinuten = editInput ? parseInt(editInput, 10) : null;
+    if (Number.isFinite(editInputMinuten) && editInputMinuten > 0) {
+      return editInputMinuten;
     }
 
     // KI-Vorschlag aus Zeitschätzungs-Anzeige (Neu-Formular)
