@@ -146,10 +146,8 @@ async function trainZeitModel(force = false) {
   }
 
   trainingPromise = (async () => {
-    const shouldTrain = await shouldTrainModel();
-    if (!shouldTrain) {
-      return zeitModelCache;
-    }
+    // Lokales Zeitmodell trainiert immer – unabhängig vom KI-Modus (Ollama/local/external).
+    // shouldTrainModel() steuert nur externe KI-Calls, nicht das historische Lernen.
 
     const arbeitszeiten = await ArbeitszeitenModel.getAll();
     // Nur abgeschlossene Termine, nicht ausgeschlossene, mit tatsächlicher Zeit
