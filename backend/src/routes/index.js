@@ -51,6 +51,12 @@ router.use('/tablet', tabletRoutes);
 router.use('/tablet-update', requireAuth, tabletUpdateRoutes);
 router.use('/pause', pauseRoutes);
 router.use('/arbeitspausen', arbeitspausenRoutes);
+
+// Lesende System-Endpunkte ohne Auth (nicht destruktiv)
+const SystemController = require('../controllers/systemController');
+router.get('/system/update-check', systemLimiter, SystemController.checkForUpdates);
+router.get('/system/update-log', systemLimiter, SystemController.getUpdateLog);
+
 router.use('/system', requireAuth, systemLimiter, systemRoutes);
 router.use('/reports', reportingRoutes);
 router.use('/suche', sucheRoutes);

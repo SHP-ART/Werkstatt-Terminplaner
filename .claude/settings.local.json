@@ -13,7 +13,8 @@
       "Bash(npm test:*)",
       "Bash(npx jest:*)",
       "Bash(rm -rf /c/Users/Sven/Documents/Github/Terminplaner/Werkstatt-Terminplaner/.worktrees/feature-arbeitspause/backend/node_modules)",
-      "Bash(cmd //c mklink //J \"C:\\\\Users\\\\Sven\\\\Documents\\\\Github\\\\Terminplaner\\\\Werkstatt-Terminplaner\\\\.worktrees\\\\feature-arbeitspause\\\\backend\\\\node_modules\" \"C:\\\\Users\\\\Sven\\\\Documents\\\\Github\\\\Terminplaner\\\\Werkstatt-Terminplaner\\\\backend\\\\node_modules\")"
+      "Bash(cmd //c mklink //J \"C:\\\\Users\\\\Sven\\\\Documents\\\\Github\\\\Terminplaner\\\\Werkstatt-Terminplaner\\\\.worktrees\\\\feature-arbeitspause\\\\backend\\\\node_modules\" \"C:\\\\Users\\\\Sven\\\\Documents\\\\Github\\\\Terminplaner\\\\Werkstatt-Terminplaner\\\\backend\\\\node_modules\")",
+      "Bash(ssh -o BatchMode=yes root@100.124.168.108 ':*)"
     ]
   }
 }
