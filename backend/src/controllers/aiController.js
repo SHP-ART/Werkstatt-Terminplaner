@@ -1436,6 +1436,27 @@ async function patchKiLernDatenExclude(req, res) {
 }
 
 /**
+ * GET /api/ai/zeit-vorschlag?arbeit=...
+ * Gibt den historischen Zeitvorschlag für eine Arbeitsart zurück
+ */
+async function getZeitVorschlag(req, res) {
+  try {
+    const arbeit = (req.query.arbeit || '').trim();
+    if (!arbeit) {
+      return res.status(400).json({ error: 'Parameter "arbeit" fehlt' });
+    }
+    const ergebnis = await localAiService.getZeitVorschlag(arbeit);
+    if (!ergebnis) {
+      return res.json({ minuten: null, basis: 'unbekannt', n: 0 });
+    }
+    res.json(ergebnis);
+  } catch (err) {
+    console.error('[AI] getZeitVorschlag Fehler:', err.message);
+    res.status(500).json({ error: 'Interner Fehler' });
+  }
+}
+
+/**
  * GET /api/ai/puffer-empfehlung?arbeit=...
  * Gibt die empfohlene ML-basierte Pufferzeit für eine Arbeitsart zurück
  */
@@ -1515,6 +1536,7 @@ module.exports = {
   testOllamaTermin,
   benchmarkOllama,
   // Automatisierungs-Endpunkte
+  getZeitVorschlag,
   getPufferEmpfehlung,
   checkDuplikatArbeiten,
   getAutomationLog,

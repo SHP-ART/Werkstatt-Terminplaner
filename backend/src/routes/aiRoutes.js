@@ -198,6 +198,7 @@ router.post('/vin-teile-check', aiController.checkTeileKompatibilitaet);
 router.get('/training-data', aiController.getTrainingData);
 
 // Automatisierungs-Endpoints
+router.get('/zeit-vorschlag', aiController.getZeitVorschlag);
 router.get('/puffer-empfehlung', aiController.getPufferEmpfehlung);
 router.post('/check-duplikate', aiController.checkDuplikatArbeiten);
 router.get('/automation-log', aiController.getAutomationLog);
