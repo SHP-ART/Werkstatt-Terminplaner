@@ -23,6 +23,8 @@ class App {
     this.smartSchedulingEnabled = true;
     // Anomalie-Erkennung Status
     this.anomalyDetectionEnabled = true;
+    this._zeitState = null;
+    this._editZeitState = null;
     
     // Test-Datum Override: Setze auf null für echtes Datum, oder z.B. '2026-01-04' für Tests
     // Kann auch über Browser-Konsole gesetzt werden: app.testDatum = '2026-01-05'
@@ -2479,37 +2481,24 @@ class App {
     
     // Berechne die Zeiten für jede Arbeit
     let gesamtMinuten = 0;
-    const details = [];
+    const items = [];
     const nichtGefundenEdit = [];
     const gefundenArbeiten = []; // für KI-Vergleich
 
     arbeiten.forEach(arbeit => {
       // Suche mit Fuzzy-Matching (exakt → Alias → Teilwort/Wort-Überlappung)
       const gefunden = this.findArbeitszeitMitDetails(arbeit);
-      
       if (gefunden) {
         const minuten = gefunden.standard_minuten || 0;
         gesamtMinuten += minuten;
-        const stundenAnteil = Math.floor(minuten / 60);
-        const minutenAnteil = minuten % 60;
-        let zeitStr = '';
-        if (stundenAnteil > 0) {
-          zeitStr = `${stundenAnteil} h`;
-          if (minutenAnteil > 0) zeitStr += ` ${minutenAnteil} min`;
-        } else {
-          zeitStr = `${minutenAnteil} min`;
-        }
         let hinweis = '';
-        if (gefunden.matchTyp === 'alias') {
-          hinweis = ` → ${gefunden.bezeichnung}`;
-        } else if (gefunden.matchTyp === 'fuzzy') {
-          hinweis = ` ≈ ${gefunden.bezeichnung}`;
-        }
-        details.push(`✓ ${arbeit}${hinweis}: <strong>${zeitStr}</strong>`);
-        gefundenArbeiten.push({ arbeit, detailIdx: details.length - 1, zeitverwaltungMinuten: minuten, hinweis });
+        if (gefunden.matchTyp === 'alias') hinweis = ` → ${gefunden.bezeichnung}`;
+        else if (gefunden.matchTyp === 'fuzzy') hinweis = ` ≈ ${gefunden.bezeichnung}`;
+        items.push({ arbeit, minuten, labelHtml: `✓ ${arbeit}${hinweis}: `, manualOverride: false });
+        gefundenArbeiten.push({ arbeit, itemIdx: items.length - 1, zeitverwaltungMinuten: minuten, hinweis });
       } else {
         nichtGefundenEdit.push(arbeit);
-        details.push(`⚠️ ${arbeit}: keine Standardzeit`);
+        items.push({ arbeit, minuten: 0, labelHtml: `⚠️ ${arbeit}: `, noTime: true, manualOverride: false });
       }
     });
 
@@ -2536,18 +2525,18 @@ class App {
 
           const gefundenEintrag = gefundenArbeiten.find(g => g.arbeit === arbeit);
           if (gefundenEintrag) {
-            // Richtzeit vorhanden → KI ersetzt Zeitverwaltungs-Beitrag
             gesamtMinuten -= gefundenEintrag.zeitverwaltungMinuten;
             gesamtMinuten += minuten;
-            details[gefundenEintrag.detailIdx] =
-              `📊 ${arbeit}${gefundenEintrag.hinweis}: <strong>${zeitStr}</strong> <small style="color:#888">(${quellLabel})</small>`;
+            items[gefundenEintrag.itemIdx].minuten = minuten;
+            items[gefundenEintrag.itemIdx].labelHtml = `📊 ${arbeit}${gefundenEintrag.hinweis} <small style="color:#888">(${quellLabel})</small>: `;
           } else {
-            // Keine Richtzeit → KI-Wert für Gesamtzeit + Richtzeit-Basis übernehmen
             gesamtMinuten += minuten;
             richtzeitBasis += minuten;
-            const idx = details.findIndex(d => d.startsWith(`⚠️ ${arbeit}:`));
+            const idx = items.findIndex(it => it.noTime && it.arbeit === arbeit);
             if (idx !== -1) {
-              details[idx] = `📊 ${arbeit}: <strong>${zeitStr}</strong> <small style="color:#888">(${quellLabel})</small>`;
+              items[idx].minuten = minuten;
+              items[idx].labelHtml = `📊 ${arbeit} <small style="color:#888">(${quellLabel})</small>: `;
+              delete items[idx].noTime;
             }
           }
         });
@@ -2557,56 +2546,22 @@ class App {
     // 🧠 Puffer-ML: KI-basierten Puffer abfragen wenn aktiviert
     const pufferMLAktiv = document.getElementById('pufferMLEnabled')?.checked;
     let mlPufferMinuten = 0;
+    let pufferHtml = '';
     if (pufferMLAktiv && gesamtMinuten > 0 && arbeitText.length > 2) {
       try {
         const empfehlung = await window.AIService.getPufferEmpfehlung(arbeitText);
         if (empfehlung && empfehlung.puffer_minuten > 0) {
           mlPufferMinuten = empfehlung.puffer_minuten;
           const basis = empfehlung.basis === 'ML' ? '🧠 ML' : '📊 Standard';
-          details.push(`+Puffer (${basis}): +${mlPufferMinuten} min`);
+          pufferHtml = `<div style="font-size:0.82em;color:#aaa;margin-top:2px;">+ Puffer (${basis}): +${mlPufferMinuten} min</div>`;
         }
       } catch (e) { /* Puffer-Abfrage nicht kritisch */ }
     }
-    
-    // Formatiere die Gesamtzeit
-    const gesamtMitPuffer = gesamtMinuten + mlPufferMinuten;
-    const gesamtStunden = Math.floor(gesamtMitPuffer / 60);
-    const gesamtRestMinuten = gesamtMitPuffer % 60;
-    const kiZeitStr = gesamtMitPuffer === 0 ? 'Keine Standardzeiten'
-      : gesamtStunden > 0 && gesamtRestMinuten > 0 ? `${gesamtStunden} h ${gesamtRestMinuten} min`
-      : gesamtStunden > 0 ? `${gesamtStunden} h`
-      : `${gesamtRestMinuten} min`;
-    
+
+    // Anzeige + State speichern + rendern
     anzeige.style.display = 'block';
-
-    // Details: per-Arbeit Aufschlüsselung (klein/grau) + KI- und Richtzeit-Chip
-    if (detailsEl) {
-      const perWorkHtml = details.length > 0
-        ? `<div style="font-size:0.82em;color:#aaa;margin-bottom:8px;">${details.join(' | ')}</div>`
-        : '';
-      const kiChip = gesamtMitPuffer > 0
-        ? `<button type="button" onclick="app.setZeitkorrektur('edit_geschaetzte_zeit','edit_geschaetzte_zeit_auto','editZeitschaetzungDelta',${gesamtMitPuffer})" style="font-size:0.88em;padding:5px 14px;border:2px solid #4a90e2;border-radius:20px;background:#4a90e2;color:#fff;cursor:pointer;font-weight:700;">📊 KI: ${kiZeitStr}</button>`
-        : '';
-      let richtzeitChip = '';
-      if (richtzeitBasis > 0 && richtzeitBasis !== gesamtMitPuffer) {
-        const rzStd = Math.floor(richtzeitBasis / 60);
-        const rzRest = richtzeitBasis % 60;
-        const rzStr = rzStd > 0 ? `${rzStd} h${rzRest > 0 ? ` ${rzRest} min` : ''}` : `${rzRest} min`;
-        richtzeitChip = `<button type="button" onclick="app.setZeitkorrektur('edit_geschaetzte_zeit','edit_geschaetzte_zeit_auto','editZeitschaetzungDelta',${richtzeitBasis})" style="font-size:0.88em;padding:5px 14px;border:2px solid #b0c8e8;border-radius:20px;background:#f0f7ff;color:#2c6fad;cursor:pointer;">✓ Richtzeit: ${rzStr}</button>`;
-      }
-      detailsEl.innerHTML = perWorkHtml +
-        `<div style="display:flex;gap:8px;flex-wrap:wrap;">${kiChip}${richtzeitChip}</div>`;
-    }
-
-    // Hidden input + Stepper auf KI-Wert setzen
-    const editAutoZeitInput = document.getElementById('edit_geschaetzte_zeit_auto');
-    if (editAutoZeitInput) editAutoZeitInput.value = String(gesamtMitPuffer > 0 ? gesamtMitPuffer : 0);
-    const editManualZeitFeld = document.getElementById('edit_geschaetzte_zeit');
-    if (editManualZeitFeld && gesamtMitPuffer > 0) {
-      // Stunden mit 0.25-Präzision
-      editManualZeitFeld.value = String(Math.round(gesamtMitPuffer / 15) * 0.25);
-    }
-    this.updateZeitKorrekturDelta('edit_geschaetzte_zeit', 'edit_geschaetzte_zeit_auto', 'editZeitschaetzungDelta');
+    this._editZeitState = { items, mlPufferMinuten, richtzeitBasis, pufferHtml };
+    this._renderZeitItems('edit');
   }
 
   async loadEditTerminAuslastungAnzeige() {
@@ -4188,41 +4143,25 @@ class App {
     
     // Berechne die Zeiten für jede Arbeit
     let gesamtMinuten = 0;
-    const details = [];
+    const items = [];
     const nichtGefunden = [];
     const gefundenArbeiten = []; // für KI-Vergleich
 
     arbeiten.forEach(arbeit => {
       // Suche mit Fuzzy-Matching (exakt → Alias → Teilwort/Wort-Überlappung)
       const gefunden = this.findArbeitszeitMitDetails(arbeit);
-      
+
       if (gefunden) {
         const minuten = gefunden.standard_minuten || 0;
         gesamtMinuten += minuten;
-        
-        // Formatiere die Zeit
-        const stundenAnteil = Math.floor(minuten / 60);
-        const minutenAnteil = minuten % 60;
-        let zeitStr = '';
-        if (stundenAnteil > 0) {
-          zeitStr = `${stundenAnteil} h`;
-          if (minutenAnteil > 0) zeitStr += ` ${minutenAnteil} min`;
-        } else {
-          zeitStr = `${minutenAnteil} min`;
-        }
-        
-        // Zeige den erkannten Standardzeit-Namen wenn über Alias oder Fuzzy gefunden
         let hinweis = '';
-        if (gefunden.matchTyp === 'alias') {
-          hinweis = ` → ${gefunden.bezeichnung}`;
-        } else if (gefunden.matchTyp === 'fuzzy') {
-          hinweis = ` ≈ ${gefunden.bezeichnung}`;
-        }
-        details.push(`✓ ${arbeit}${hinweis}: <strong>${zeitStr}</strong>`);
-        gefundenArbeiten.push({ arbeit, detailIdx: details.length - 1, zeitverwaltungMinuten: minuten, hinweis });
+        if (gefunden.matchTyp === 'alias') hinweis = ` → ${gefunden.bezeichnung}`;
+        else if (gefunden.matchTyp === 'fuzzy') hinweis = ` ≈ ${gefunden.bezeichnung}`;
+        items.push({ arbeit, minuten, labelHtml: `✓ ${arbeit}${hinweis}: `, manualOverride: false });
+        gefundenArbeiten.push({ arbeit, itemIdx: items.length - 1, zeitverwaltungMinuten: minuten, hinweis });
       } else {
         nichtGefunden.push(arbeit);
-        details.push(`⚠️ ${arbeit}: <em>keine Standardzeit hinterlegt</em>`);
+        items.push({ arbeit, minuten: 0, labelHtml: `⚠️ ${arbeit}: `, noTime: true, manualOverride: false });
       }
     });
 
@@ -4249,18 +4188,18 @@ class App {
 
           const gefundenEintrag = gefundenArbeiten.find(g => g.arbeit === arbeit);
           if (gefundenEintrag) {
-            // Richtzeit vorhanden → KI ersetzt Zeitverwaltungs-Beitrag
             gesamtMinuten -= gefundenEintrag.zeitverwaltungMinuten;
             gesamtMinuten += minuten;
-            details[gefundenEintrag.detailIdx] =
-              `📊 ${arbeit}${gefundenEintrag.hinweis}: <strong>${zeitStr}</strong> <small style="color:#888">(${quellLabel})</small>`;
+            items[gefundenEintrag.itemIdx].minuten = minuten;
+            items[gefundenEintrag.itemIdx].labelHtml = `📊 ${arbeit}${gefundenEintrag.hinweis} <small style="color:#888">(${quellLabel})</small>: `;
           } else {
-            // Keine Richtzeit → KI-Wert für Gesamtzeit + Richtzeit-Basis übernehmen
             gesamtMinuten += minuten;
             richtzeitBasis += minuten;
-            const idx = details.findIndex(d => d.startsWith(`⚠️ ${arbeit}:`));
+            const idx = items.findIndex(it => it.noTime && it.arbeit === arbeit);
             if (idx !== -1) {
-              details[idx] = `📊 ${arbeit}: <strong>${zeitStr}</strong> <small style="color:#888">(${quellLabel})</small>`;
+              items[idx].minuten = minuten;
+              items[idx].labelHtml = `📊 ${arbeit} <small style="color:#888">(${quellLabel})</small>: `;
+              delete items[idx].noTime;
             }
           }
         });
@@ -4270,55 +4209,108 @@ class App {
     // 🧠 Puffer-ML: KI-basierten Puffer abfragen wenn aktiviert
     const pufferMLAktiv = document.getElementById('pufferMLEnabled')?.checked;
     let mlPufferMinuten = 0;
+    let pufferHtml = '';
     if (pufferMLAktiv && gesamtMinuten > 0 && eingabe.length > 2) {
       try {
         const empfehlung = await window.AIService.getPufferEmpfehlung(eingabe);
         if (empfehlung && empfehlung.puffer_minuten > 0) {
           mlPufferMinuten = empfehlung.puffer_minuten;
           const basis = empfehlung.basis === 'ML' ? '🧠 ML' : '📊 Standard';
-          details.push(`+ Puffer (${basis}, ${empfehlung.kategorie}): <strong>+${mlPufferMinuten} min</strong>`);
+          pufferHtml = `<div style="font-size:0.82em;color:#aaa;margin-top:2px;">+ Puffer (${basis}, ${empfehlung.kategorie}): +${mlPufferMinuten} min</div>`;
         }
       } catch (e) { /* Puffer-Abfrage nicht kritisch */ }
     }
-    
-    // Formatiere die Gesamtzeit in Stunden und Minuten
-    const gesamtMitPuffer = gesamtMinuten + mlPufferMinuten;
-    const gesamtStunden = Math.floor(gesamtMitPuffer / 60);
-    const gesamtRestMinuten = gesamtMitPuffer % 60;
-    const kiZeitStr = gesamtMitPuffer === 0 ? '0 min'
-      : gesamtStunden === 0 ? `${gesamtRestMinuten} min`
-      : gesamtRestMinuten === 0 ? `${gesamtStunden} h`
-      : `${gesamtStunden} h ${gesamtRestMinuten} min`;
 
-    // Aktualisiere die Anzeige
+    // Anzeige + State speichern + rendern
     zeitschaetzungAnzeige.style.display = 'block';
+    this._zeitState = { items, mlPufferMinuten, richtzeitBasis, pufferHtml };
+    this._renderZeitItems('neu');
+  }
 
-    // Details: per-Arbeit Aufschlüsselung (klein/grau) + KI- und Richtzeit-Chip
-    const perWorkHtml = details.length > 0
-      ? `<div style="font-size:0.82em;color:#aaa;margin-bottom:8px;">${details.join(' | ')}</div>`
-      : '';
-    const kiChip = gesamtMitPuffer > 0
-      ? `<button type="button" onclick="app.setZeitkorrektur('geschaetzte_zeit','geschaetzte_zeit_auto','zeitschaetzungDelta',${gesamtMitPuffer})" style="font-size:0.88em;padding:5px 14px;border:2px solid #4a90e2;border-radius:20px;background:#4a90e2;color:#fff;cursor:pointer;font-weight:700;">📊 KI: ${kiZeitStr}</button>`
-      : '';
-    let richtzeitChip = '';
-    if (richtzeitBasis > 0 && richtzeitBasis !== gesamtMitPuffer) {
-      const rzStd = Math.floor(richtzeitBasis / 60);
-      const rzRest = richtzeitBasis % 60;
-      const rzStr = rzStd > 0 ? `${rzStd} h${rzRest > 0 ? ` ${rzRest} min` : ''}` : `${rzRest} min`;
-      richtzeitChip = `<button type="button" onclick="app.setZeitkorrektur('geschaetzte_zeit','geschaetzte_zeit_auto','zeitschaetzungDelta',${richtzeitBasis})" style="font-size:0.88em;padding:5px 14px;border:2px solid #b0c8e8;border-radius:20px;background:#f0f7ff;color:#2c6fad;cursor:pointer;">✓ Richtzeit: ${rzStr}</button>`;
+  _buildZeitItemSpan(item, idx, ctx) {
+    if (item.noTime && item.minuten === 0) {
+      return `<span style="color:#bbb;cursor:pointer;border-bottom:1px dotted #ccc;" title="Klicken zum manuellen Eingeben" onclick="app.editArbeitZeit(this,${idx},'${ctx}')">⚠️ ${item.arbeit}: keine Standardzeit ✎</span>`;
     }
-    zeitschaetzungDetails.innerHTML = perWorkHtml +
+    const std = Math.floor(item.minuten / 60);
+    const min = item.minuten % 60;
+    const zeitStr = std > 0 ? `${std} h${min > 0 ? ` ${min} min` : ''}` : `${min} min`;
+    const editHint = item.manualOverride
+      ? ' <span style="color:#f59e0b;font-size:0.85em;" title="Manuell angepasst">✎</span>'
+      : ' <span style="color:#ccc;font-size:0.8em;">✎</span>';
+    return `<span style="cursor:pointer;border-bottom:1px dotted #bbb;padding-bottom:1px;white-space:nowrap;" title="Klicken zum Anpassen" onclick="app.editArbeitZeit(this,${idx},'${ctx}')">${item.labelHtml}<strong>${zeitStr}</strong>${editHint}</span>`;
+  }
+
+  _renderZeitItems(ctx) {
+    const state = ctx === 'neu' ? this._zeitState : this._editZeitState;
+    if (!state) return;
+    const czId = ctx === 'neu' ? 'geschaetzte_zeit' : 'edit_geschaetzte_zeit';
+    const autoId = ctx === 'neu' ? 'geschaetzte_zeit_auto' : 'edit_geschaetzte_zeit_auto';
+    const deltaId = ctx === 'neu' ? 'zeitschaetzungDelta' : 'editZeitschaetzungDelta';
+    const detailsElId = ctx === 'neu' ? 'zeitschaetzungDetails' : 'editZeitschaetzungDetails';
+    const detailsEl = document.getElementById(detailsElId);
+    if (!detailsEl) return;
+
+    const totalMin = state.items.reduce((sum, it) => sum + (it.noTime ? 0 : it.minuten), 0) + state.mlPufferMinuten;
+
+    // Per-Work klickbare Spans
+    const spans = state.items.map((item, idx) => this._buildZeitItemSpan(item, idx, ctx));
+    const perWorkHtml = spans.length > 0
+      ? `<div style="font-size:0.82em;color:#aaa;margin-bottom:8px;">${spans.join(' | ')}</div>`
+      : '';
+
+    // KI-Chip (aktueller Gesamtwert)
+    const std = Math.floor(totalMin / 60);
+    const min = totalMin % 60;
+    const kiZeitStr = totalMin === 0 ? '0 min'
+      : std === 0 ? `${min} min`
+      : min === 0 ? `${std} h`
+      : `${std} h ${min} min`;
+    const kiChip = totalMin > 0
+      ? `<button type="button" onclick="app.setZeitkorrektur('${czId}','${autoId}','${deltaId}',${totalMin})" style="font-size:0.88em;padding:5px 14px;border:2px solid #4a90e2;border-radius:20px;background:#4a90e2;color:#fff;cursor:pointer;font-weight:700;">📊 KI: ${kiZeitStr}</button>`
+      : '';
+
+    // Richtzeit-Chip (unveränderter Basiswert)
+    let richtzeitChip = '';
+    const rzBase = state.richtzeitBasis;
+    if (rzBase > 0 && rzBase !== totalMin) {
+      const rzStd = Math.floor(rzBase / 60);
+      const rzRest = rzBase % 60;
+      const rzStr = rzStd > 0 ? `${rzStd} h${rzRest > 0 ? ` ${rzRest} min` : ''}` : `${rzRest} min`;
+      richtzeitChip = `<button type="button" onclick="app.setZeitkorrektur('${czId}','${autoId}','${deltaId}',${rzBase})" style="font-size:0.88em;padding:5px 14px;border:2px solid #b0c8e8;border-radius:20px;background:#f0f7ff;color:#2c6fad;cursor:pointer;">✓ Richtzeit: ${rzStr}</button>`;
+    }
+
+    detailsEl.innerHTML = perWorkHtml + (state.pufferHtml || '') +
       `<div style="display:flex;gap:8px;flex-wrap:wrap;">${kiChip}${richtzeitChip}</div>`;
 
-    // Hidden input + Stepper auf KI-Wert setzen (immer, damit Header passt)
-    const autoZeitInput = document.getElementById('geschaetzte_zeit_auto');
-    if (autoZeitInput) autoZeitInput.value = String(gesamtMitPuffer > 0 ? gesamtMitPuffer : 0);
-    const manualZeitFeld = document.getElementById('geschaetzte_zeit');
-    if (manualZeitFeld && gesamtMitPuffer > 0) {
-      // Stunden mit 0.25-Präzision
-      manualZeitFeld.value = String(Math.round(gesamtMitPuffer / 15) * 0.25);
+    // Stepper + Header aktualisieren
+    const autoInput = document.getElementById(autoId);
+    if (autoInput) autoInput.value = String(totalMin);
+    const manualInput = document.getElementById(czId);
+    if (manualInput && totalMin > 0) manualInput.value = String(Math.round(totalMin / 15) * 0.25);
+    this.updateZeitKorrekturDelta(czId, autoId, deltaId);
+  }
+
+  editArbeitZeit(spanEl, idx, ctx) {
+    const state = ctx === 'neu' ? this._zeitState : this._editZeitState;
+    if (!state) return;
+    const item = state.items[idx];
+    const currentH = (item.noTime && item.minuten === 0) ? 0.5 : Math.round(item.minuten / 15) * 0.25;
+    const labelPart = (item.noTime && item.minuten === 0) ? `⚠️ ${item.arbeit}: ` : item.labelHtml;
+    spanEl.innerHTML = `${labelPart}<input type="number" value="${currentH}" step="0.25" min="0.25" style="width:48px;border:1px solid #4a90e2;border-radius:4px;padding:1px 4px;font-size:1em;font-weight:600;color:#333;" onblur="app._saveArbeitZeit(this,${idx},'${ctx}')" onkeydown="if(event.key==='Enter'){this.blur();}if(event.key==='Escape'){app._renderZeitItems('${ctx}');}"> h`;
+    const input = spanEl.querySelector('input');
+    if (input) { input.focus(); input.select(); }
+  }
+
+  _saveArbeitZeit(inputEl, idx, ctx) {
+    const state = ctx === 'neu' ? this._zeitState : this._editZeitState;
+    if (!state) return;
+    const valH = parseFloat(inputEl.value);
+    if (Number.isFinite(valH) && valH > 0) {
+      state.items[idx].minuten = Math.round(valH * 60);
+      state.items[idx].manualOverride = true;
+      delete state.items[idx].noTime;
     }
-    this.updateZeitKorrekturDelta('geschaetzte_zeit', 'geschaetzte_zeit_auto', 'zeitschaetzungDelta');
+    this._renderZeitItems(ctx);
   }
 
   updateGesamtzeit() {
