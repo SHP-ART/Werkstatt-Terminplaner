@@ -2572,39 +2572,37 @@ class App {
     const gesamtMitPuffer = gesamtMinuten + mlPufferMinuten;
     const gesamtStunden = Math.floor(gesamtMitPuffer / 60);
     const gesamtRestMinuten = gesamtMitPuffer % 60;
-    let gesamtZeitStr = '';
-    
-    if (gesamtMitPuffer === 0) {
-      gesamtZeitStr = 'Keine Standardzeiten';
-    } else if (gesamtStunden > 0 && gesamtRestMinuten > 0) {
-      gesamtZeitStr = `${gesamtStunden} h ${gesamtRestMinuten} min`;
-    } else if (gesamtStunden > 0) {
-      gesamtZeitStr = `${gesamtStunden} h`;
-    } else {
-      gesamtZeitStr = `${gesamtRestMinuten} min`;
-    }
+    const kiZeitStr = gesamtMitPuffer === 0 ? 'Keine Standardzeiten'
+      : gesamtStunden > 0 && gesamtRestMinuten > 0 ? `${gesamtStunden} h ${gesamtRestMinuten} min`
+      : gesamtStunden > 0 ? `${gesamtStunden} h`
+      : `${gesamtRestMinuten} min`;
     
     anzeige.style.display = 'block';
-    wertEl.textContent = gesamtZeitStr;
-    
+
+    // Details: per-Arbeit Aufschlüsselung (klein/grau) + KI- und Richtzeit-Chip
     if (detailsEl) {
-      let richtzeitHtml = '';
-      if (richtzeitBasis > 0 && richtzeitBasis !== gesamtMinuten) {
+      const perWorkHtml = details.length > 0
+        ? `<div style="font-size:0.82em;color:#aaa;margin-bottom:8px;">${details.join(' | ')}</div>`
+        : '';
+      const kiChip = gesamtMitPuffer > 0
+        ? `<button type="button" onclick="app.setZeitkorrektur('edit_geschaetzte_zeit','edit_geschaetzte_zeit_auto','editZeitschaetzungDelta',${gesamtMitPuffer})" style="font-size:0.88em;padding:5px 14px;border:2px solid #4a90e2;border-radius:20px;background:#4a90e2;color:#fff;cursor:pointer;font-weight:700;">📊 KI: ${kiZeitStr}</button>`
+        : '';
+      let richtzeitChip = '';
+      if (richtzeitBasis > 0 && richtzeitBasis !== gesamtMitPuffer) {
         const rzStd = Math.floor(richtzeitBasis / 60);
-        const rzMin = richtzeitBasis % 60;
-        const rzStr = rzStd > 0 ? `${rzStd} h${rzMin > 0 ? ` ${rzMin} min` : ''}` : `${rzMin} min`;
-        richtzeitHtml = `<div style="margin-top:6px;"><button type="button" onclick="app.setZeitkorrektur('edit_geschaetzte_zeit','edit_geschaetzte_zeit_auto','editZeitschaetzungDelta',${richtzeitBasis})" style="font-size:0.82em;padding:3px 10px;border:1px solid #b0c8e8;border-radius:10px;background:#e8f4fd;color:#2c6fad;cursor:pointer;">✓ Richtzeit übernehmen: ${rzStr}</button></div>`;
+        const rzRest = richtzeitBasis % 60;
+        const rzStr = rzStd > 0 ? `${rzStd} h${rzRest > 0 ? ` ${rzRest} min` : ''}` : `${rzRest} min`;
+        richtzeitChip = `<button type="button" onclick="app.setZeitkorrektur('edit_geschaetzte_zeit','edit_geschaetzte_zeit_auto','editZeitschaetzungDelta',${richtzeitBasis})" style="font-size:0.88em;padding:5px 14px;border:2px solid #b0c8e8;border-radius:20px;background:#f0f7ff;color:#2c6fad;cursor:pointer;">✓ Richtzeit: ${rzStr}</button>`;
       }
-      detailsEl.innerHTML = details.join(' | ') + richtzeitHtml;
+      detailsEl.innerHTML = perWorkHtml +
+        `<div style="display:flex;gap:8px;flex-wrap:wrap;">${kiChip}${richtzeitChip}</div>`;
     }
 
-    // Hidden input für geschaetzte_zeit befüllen (wird beim Edit-Submit gelesen)
+    // Hidden input + Stepper auf KI-Wert setzen
     const editAutoZeitInput = document.getElementById('edit_geschaetzte_zeit_auto');
     if (editAutoZeitInput) editAutoZeitInput.value = String(gesamtMitPuffer > 0 ? gesamtMitPuffer : 0);
-
-    // Manuelles Korrektur-Feld vorausfüllen, falls noch leer
     const editManualZeitFeld = document.getElementById('edit_geschaetzte_zeit');
-    if (editManualZeitFeld && !editManualZeitFeld.value && gesamtMitPuffer > 0) {
+    if (editManualZeitFeld && gesamtMitPuffer > 0) {
       editManualZeitFeld.value = String(gesamtMitPuffer);
     }
     this.updateZeitKorrekturDelta('edit_geschaetzte_zeit', 'edit_geschaetzte_zeit_auto', 'editZeitschaetzungDelta');
@@ -4286,53 +4284,36 @@ class App {
     const gesamtMitPuffer = gesamtMinuten + mlPufferMinuten;
     const gesamtStunden = Math.floor(gesamtMitPuffer / 60);
     const gesamtRestMinuten = gesamtMitPuffer % 60;
-    let gesamtZeitStr = '';
-    
-    if (gesamtMitPuffer === 0) {
-      gesamtZeitStr = '0 min';
-    } else if (gesamtStunden === 0) {
-      gesamtZeitStr = `${gesamtRestMinuten} min`;
-    } else if (gesamtRestMinuten === 0) {
-      gesamtZeitStr = `${gesamtStunden} h`;
-    } else {
-      gesamtZeitStr = `${gesamtStunden} h ${gesamtRestMinuten} min`;
-    }
-    
-    // Zeige auch Dezimalstunden für bessere Übersicht
-    const dezimalStunden = (gesamtMitPuffer / 60).toFixed(2);
-    gesamtZeitStr += ` (${dezimalStunden} h)`;
-    
+    const kiZeitStr = gesamtMitPuffer === 0 ? '0 min'
+      : gesamtStunden === 0 ? `${gesamtRestMinuten} min`
+      : gesamtRestMinuten === 0 ? `${gesamtStunden} h`
+      : `${gesamtStunden} h ${gesamtRestMinuten} min`;
+
     // Aktualisiere die Anzeige
     zeitschaetzungAnzeige.style.display = 'block';
-    zeitschaetzungWert.textContent = gesamtZeitStr;
-    // Richtzeit-Button anzeigen falls vorhanden und abweichend von KI
-    let richtzeitHtml = '';
-    if (richtzeitBasis > 0 && richtzeitBasis !== gesamtMinuten) {
-      const rzStd = Math.floor(richtzeitBasis / 60);
-      const rzMin = richtzeitBasis % 60;
-      const rzStr = rzStd > 0 ? `${rzStd} h${rzMin > 0 ? ` ${rzMin} min` : ''}` : `${rzMin} min`;
-      richtzeitHtml = `<div style="margin-top:6px;"><button type="button" onclick="app.setZeitkorrektur('geschaetzte_zeit','geschaetzte_zeit_auto','zeitschaetzungDelta',${richtzeitBasis})" style="font-size:0.82em;padding:3px 10px;border:1px solid #b0c8e8;border-radius:10px;background:#e8f4fd;color:#2c6fad;cursor:pointer;">✓ Richtzeit übernehmen: ${rzStr}</button></div>`;
-    }
-    zeitschaetzungDetails.innerHTML = details.join('<br>') + richtzeitHtml;
-    
-    // Färbe die Gesamtzeit je nach Dauer
-    if (gesamtMitPuffer === 0) {
-      zeitschaetzungWert.style.color = '#999';
-    } else if (gesamtMitPuffer <= 60) {
-      zeitschaetzungWert.style.color = '#27ae60'; // Grün - kurz
-    } else if (gesamtMitPuffer <= 180) {
-      zeitschaetzungWert.style.color = '#4a90e2'; // Blau - mittel
-    } else {
-      zeitschaetzungWert.style.color = '#e67e22'; // Orange - lang
-    }
 
-    // Hidden input für geschaetzte_zeit befüllen (wird beim Submit gelesen)
+    // Details: per-Arbeit Aufschlüsselung (klein/grau) + KI- und Richtzeit-Chip
+    const perWorkHtml = details.length > 0
+      ? `<div style="font-size:0.82em;color:#aaa;margin-bottom:8px;">${details.join(' | ')}</div>`
+      : '';
+    const kiChip = gesamtMitPuffer > 0
+      ? `<button type="button" onclick="app.setZeitkorrektur('geschaetzte_zeit','geschaetzte_zeit_auto','zeitschaetzungDelta',${gesamtMitPuffer})" style="font-size:0.88em;padding:5px 14px;border:2px solid #4a90e2;border-radius:20px;background:#4a90e2;color:#fff;cursor:pointer;font-weight:700;">📊 KI: ${kiZeitStr}</button>`
+      : '';
+    let richtzeitChip = '';
+    if (richtzeitBasis > 0 && richtzeitBasis !== gesamtMitPuffer) {
+      const rzStd = Math.floor(richtzeitBasis / 60);
+      const rzRest = richtzeitBasis % 60;
+      const rzStr = rzStd > 0 ? `${rzStd} h${rzRest > 0 ? ` ${rzRest} min` : ''}` : `${rzRest} min`;
+      richtzeitChip = `<button type="button" onclick="app.setZeitkorrektur('geschaetzte_zeit','geschaetzte_zeit_auto','zeitschaetzungDelta',${richtzeitBasis})" style="font-size:0.88em;padding:5px 14px;border:2px solid #b0c8e8;border-radius:20px;background:#f0f7ff;color:#2c6fad;cursor:pointer;">✓ Richtzeit: ${rzStr}</button>`;
+    }
+    zeitschaetzungDetails.innerHTML = perWorkHtml +
+      `<div style="display:flex;gap:8px;flex-wrap:wrap;">${kiChip}${richtzeitChip}</div>`;
+
+    // Hidden input + Stepper auf KI-Wert setzen (immer, damit Header passt)
     const autoZeitInput = document.getElementById('geschaetzte_zeit_auto');
     if (autoZeitInput) autoZeitInput.value = String(gesamtMitPuffer > 0 ? gesamtMitPuffer : 0);
-
-    // Manuelles Korrektur-Feld vorausfüllen, falls noch leer
     const manualZeitFeld = document.getElementById('geschaetzte_zeit');
-    if (manualZeitFeld && !manualZeitFeld.value && gesamtMitPuffer > 0) {
+    if (manualZeitFeld && gesamtMitPuffer > 0) {
       manualZeitFeld.value = String(gesamtMitPuffer);
     }
     this.updateZeitKorrekturDelta('geschaetzte_zeit', 'geschaetzte_zeit_auto', 'zeitschaetzungDelta');
@@ -17032,28 +17013,21 @@ class App {
 
   updateZeitKorrekturDelta(inputId, autoId, deltaId) {
     const input = document.getElementById(inputId);
-    const deltaEl = document.getElementById(deltaId);
-    if (!input || !deltaEl) return;
+    if (!input) return;
     const val = parseInt(input.value, 10);
-    const auto = parseInt(document.getElementById(autoId)?.value || '0', 10);
+    if (!Number.isFinite(val) || val <= 0) return;
 
-    if (!Number.isFinite(val) || !Number.isFinite(auto) || auto === 0) {
-      deltaEl.style.display = 'none';
-      return;
-    }
-    const diff = val - auto;
-    if (diff === 0) {
-      deltaEl.style.display = 'none';
-    } else if (diff > 0) {
-      deltaEl.textContent = `+${diff} min vs. KI`;
-      deltaEl.style.background = '#fff3cd';
-      deltaEl.style.color = '#856404';
-      deltaEl.style.display = 'inline';
-    } else {
-      deltaEl.textContent = `${diff} min vs. KI`;
-      deltaEl.style.background = '#d1e7dd';
-      deltaEl.style.color = '#0f5132';
-      deltaEl.style.display = 'inline';
+    // Header (zeitschaetzungWert / editZeitschaetzungWert) immer auf Stepper-Wert setzen
+    const wertId = deltaId.replace('Delta', 'Wert');
+    const wertEl = document.getElementById(wertId);
+    if (wertEl) {
+      const std = Math.floor(val / 60);
+      const min = val % 60;
+      let zeitStr = std > 0 ? `${std} h${min > 0 ? ` ${min} min` : ''}` : `${min} min`;
+      wertEl.textContent = zeitStr;
+      if (val <= 60) wertEl.style.color = '#27ae60';
+      else if (val <= 180) wertEl.style.color = '#4a90e2';
+      else wertEl.style.color = '#e67e22';
     }
   }
 
