@@ -1,6 +1,10 @@
 const express = require('express');
+const bodyParser = require('body-parser');
 const router = express.Router();
 const BackupController = require('../controllers/backupController');
+
+// Backup-Upload braucht groesseres Limit
+router.use(bodyParser.json({ limit: '50mb' }));
 
 router.get('/status', BackupController.status);
 router.get('/list', BackupController.list);

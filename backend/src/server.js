@@ -182,29 +182,30 @@ async function startServer(clientCountCallback, requestLogCallback) {
     logStartup('Helmet Security-Headers aktiviert');
 
     // CORS-Konfiguration (verbessert)
-    const corsOrigin = process.env.CORS_ORIGIN || '*';
-    logStartup(`CORS Origin: ${corsOrigin}`);
+    const corsOrigin = process.env.CORS_ORIGIN || '';
+    logStartup(`CORS Origin: ${corsOrigin || '(nur localhost + LAN)'}`);
 
     const corsOptions = {
         origin: function (origin, callback) {
-            // Allow requests with no origin (like mobile apps, curl, or file://)
+            // Requests ohne Origin erlauben (curl, Electron, mobile Apps)
             if (!origin) return callback(null, true);
 
-            // If CORS_ORIGIN is *, allow all origins
-            if (corsOrigin === '*') {
-                return callback(null, true);
+            // Whitelist erstellen
+            const whitelist = ['http://localhost:3000', 'http://127.0.0.1:3000'];
+
+            if (corsOrigin) {
+                corsOrigin.split(',').map(o => o.trim()).forEach(o => whitelist.push(o));
             }
 
-            // Parse comma-separated origins
-            const whitelist = corsOrigin.split(',').map(o => o.trim());
-            
-            // Add localhost variants
-            whitelist.push('http://localhost:3000', 'http://127.0.0.1:3000');
+            // Lokale Netzwerk-IPs erlauben (192.168.x.x, 10.x.x.x, 172.16-31.x.x)
+            if (/^https?:\/\/(192\.168\.\d+\.\d+|10\.\d+\.\d+\.\d+|172\.(1[6-9]|2\d|3[01])\.\d+\.\d+)(:\d+)?$/.test(origin)) {
+                return callback(null, true);
+            }
 
             if (whitelist.indexOf(origin) !== -1) {
                 callback(null, true);
             } else {
-                console.warn(`⚠️  CORS: Origin '${origin}' blocked (not in whitelist)`);
+                console.warn(`CORS: Origin '${origin}' blockiert`);
                 callback(new Error('Not allowed by CORS'));
             }
         },
@@ -239,8 +240,8 @@ async function startServer(clientCountCallback, requestLogCallback) {
     }));
     logStartup('Compression Middleware aktiviert (optimiert)');
     
-    app.use(bodyParser.json({ limit: '10mb' }));
-    app.use(bodyParser.urlencoded({ extended: true, limit: '10mb' }));
+    app.use(bodyParser.json({ limit: '1mb' }));
+    app.use(bodyParser.urlencoded({ extended: true, limit: '1mb' }));
     logStartup('Body-Parser Middleware aktiviert');
 
     // Request-Logging Middleware für Electron
