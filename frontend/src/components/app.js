@@ -2506,7 +2506,7 @@ class App {
           hinweis = ` ≈ ${gefunden.bezeichnung}`;
         }
         details.push(`✓ ${arbeit}${hinweis}: <strong>${zeitStr}</strong>`);
-        gefundenArbeiten.push({ arbeit, detailIdx: details.length - 1 });
+        gefundenArbeiten.push({ arbeit, detailIdx: details.length - 1, zeitverwaltungMinuten: minuten, hinweis });
       } else {
         nichtGefundenEdit.push(arbeit);
         details.push(`⚠️ ${arbeit}: keine Standardzeit`);
@@ -2514,7 +2514,7 @@ class App {
     });
 
     // 📊 KI-Zeitvorschlag für ALLE Arbeiten:
-    //   - Gefundene: KI-Wert als Hinweis anzeigen (Vergleich mit Richtzeit)
+    //   - Gefundene: KI-Wert übernimmt die Gesamtzeit (Richtzeit als Referenz)
     //   - Nicht-Gefundene: KI-Wert für Gesamtzeit übernehmen
     const alleArbeiten = [...gefundenArbeiten.map(g => g.arbeit), ...nichtGefundenEdit];
     if (alleArbeiten.length > 0) {
@@ -2535,9 +2535,15 @@ class App {
 
           const gefundenEintrag = gefundenArbeiten.find(g => g.arbeit === arbeit);
           if (gefundenEintrag) {
-            // Richtzeit vorhanden → KI-Wert als Vergleichs-Hinweis anhängen
-            details[gefundenEintrag.detailIdx] +=
-              ` <small style="color:#888">| 📊 KI: ${zeitStr} (${quellLabel})</small>`;
+            // Richtzeit vorhanden → KI ersetzt Zeitverwaltungs-Beitrag; Richtzeit als Referenz
+            gesamtMinuten -= gefundenEintrag.zeitverwaltungMinuten;
+            gesamtMinuten += minuten;
+            const zvM = gefundenEintrag.zeitverwaltungMinuten;
+            const zvStd = Math.floor(zvM / 60);
+            const zvRest = zvM % 60;
+            const zvStr = zvStd > 0 ? `${zvStd} h${zvRest > 0 ? ` ${zvRest} min` : ''}` : `${zvRest} min`;
+            details[gefundenEintrag.detailIdx] =
+              `📊 ${arbeit}${gefundenEintrag.hinweis}: <strong>${zeitStr}</strong> <small style="color:#888">(${quellLabel}) | ✓ Richtzeit: ${zvStr}</small>`;
           } else {
             // Keine Richtzeit → KI-Wert für Gesamtzeit übernehmen
             gesamtMinuten += minuten;
@@ -4209,7 +4215,7 @@ class App {
           hinweis = ` ≈ ${gefunden.bezeichnung}`;
         }
         details.push(`✓ ${arbeit}${hinweis}: <strong>${zeitStr}</strong>`);
-        gefundenArbeiten.push({ arbeit, detailIdx: details.length - 1 });
+        gefundenArbeiten.push({ arbeit, detailIdx: details.length - 1, zeitverwaltungMinuten: minuten, hinweis });
       } else {
         nichtGefunden.push(arbeit);
         details.push(`⚠️ ${arbeit}: <em>keine Standardzeit hinterlegt</em>`);
@@ -4217,7 +4223,7 @@ class App {
     });
 
     // 📊 KI-Zeitvorschlag für ALLE Arbeiten:
-    //   - Gefundene: KI-Wert als Hinweis anzeigen (Vergleich mit Richtzeit)
+    //   - Gefundene: KI-Wert übernimmt die Gesamtzeit (Richtzeit als Referenz)
     //   - Nicht-Gefundene: KI-Wert für Gesamtzeit übernehmen
     const alleArbeiten = [...gefundenArbeiten.map(g => g.arbeit), ...nichtGefunden];
     if (alleArbeiten.length > 0) {
@@ -4238,9 +4244,15 @@ class App {
 
           const gefundenEintrag = gefundenArbeiten.find(g => g.arbeit === arbeit);
           if (gefundenEintrag) {
-            // Richtzeit vorhanden → KI-Wert als Vergleichs-Hinweis anhängen
-            details[gefundenEintrag.detailIdx] +=
-              ` <small style="color:#888">| 📊 KI: ${zeitStr} (${quellLabel})</small>`;
+            // Richtzeit vorhanden → KI ersetzt Zeitverwaltungs-Beitrag; Richtzeit als Referenz
+            gesamtMinuten -= gefundenEintrag.zeitverwaltungMinuten;
+            gesamtMinuten += minuten;
+            const zvM = gefundenEintrag.zeitverwaltungMinuten;
+            const zvStd = Math.floor(zvM / 60);
+            const zvRest = zvM % 60;
+            const zvStr = zvStd > 0 ? `${zvStd} h${zvRest > 0 ? ` ${zvRest} min` : ''}` : `${zvRest} min`;
+            details[gefundenEintrag.detailIdx] =
+              `📊 ${arbeit}${gefundenEintrag.hinweis}: <strong>${zeitStr}</strong> <small style="color:#888">(${quellLabel}) | ✓ Richtzeit: ${zvStr}</small>`;
           } else {
             // Keine Richtzeit → KI-Wert für Gesamtzeit übernehmen
             gesamtMinuten += minuten;
