@@ -2513,9 +2513,10 @@ class App {
       }
     });
 
-    // 📊 KI-Zeitvorschlag für ALLE Arbeiten:
-    //   - Gefundene: KI-Wert übernimmt die Gesamtzeit (Richtzeit als Referenz)
-    //   - Nicht-Gefundene: KI-Wert für Gesamtzeit übernehmen
+    // Speichere Richtzeit-Basis (Zeitverwaltungs-Summe) vor KI-Override
+    let richtzeitBasis = gesamtMinuten;
+
+    // 📊 KI-Zeitvorschlag für ALLE Arbeiten (KI = primäre Basis):
     const alleArbeiten = [...gefundenArbeiten.map(g => g.arbeit), ...nichtGefundenEdit];
     if (alleArbeiten.length > 0) {
       try {
@@ -2535,18 +2536,15 @@ class App {
 
           const gefundenEintrag = gefundenArbeiten.find(g => g.arbeit === arbeit);
           if (gefundenEintrag) {
-            // Richtzeit vorhanden → KI ersetzt Zeitverwaltungs-Beitrag; Richtzeit als Referenz
+            // Richtzeit vorhanden → KI ersetzt Zeitverwaltungs-Beitrag
             gesamtMinuten -= gefundenEintrag.zeitverwaltungMinuten;
             gesamtMinuten += minuten;
-            const zvM = gefundenEintrag.zeitverwaltungMinuten;
-            const zvStd = Math.floor(zvM / 60);
-            const zvRest = zvM % 60;
-            const zvStr = zvStd > 0 ? `${zvStd} h${zvRest > 0 ? ` ${zvRest} min` : ''}` : `${zvRest} min`;
             details[gefundenEintrag.detailIdx] =
-              `📊 ${arbeit}${gefundenEintrag.hinweis}: <strong>${zeitStr}</strong> <small style="color:#888">(${quellLabel}) | ✓ Richtzeit: ${zvStr}</small>`;
+              `📊 ${arbeit}${gefundenEintrag.hinweis}: <strong>${zeitStr}</strong> <small style="color:#888">(${quellLabel})</small>`;
           } else {
-            // Keine Richtzeit → KI-Wert für Gesamtzeit übernehmen
+            // Keine Richtzeit → KI-Wert für Gesamtzeit + Richtzeit-Basis übernehmen
             gesamtMinuten += minuten;
+            richtzeitBasis += minuten;
             const idx = details.findIndex(d => d.startsWith(`⚠️ ${arbeit}:`));
             if (idx !== -1) {
               details[idx] = `📊 ${arbeit}: <strong>${zeitStr}</strong> <small style="color:#888">(${quellLabel})</small>`;
@@ -2590,7 +2588,14 @@ class App {
     wertEl.textContent = gesamtZeitStr;
     
     if (detailsEl) {
-      detailsEl.innerHTML = details.join(' | ');
+      let richtzeitHtml = '';
+      if (richtzeitBasis > 0 && richtzeitBasis !== gesamtMinuten) {
+        const rzStd = Math.floor(richtzeitBasis / 60);
+        const rzMin = richtzeitBasis % 60;
+        const rzStr = rzStd > 0 ? `${rzStd} h${rzMin > 0 ? ` ${rzMin} min` : ''}` : `${rzMin} min`;
+        richtzeitHtml = `<div style="margin-top:6px;"><button type="button" onclick="app.setZeitkorrektur('edit_geschaetzte_zeit','edit_geschaetzte_zeit_auto','editZeitschaetzungDelta',${richtzeitBasis})" style="font-size:0.82em;padding:3px 10px;border:1px solid #b0c8e8;border-radius:10px;background:#e8f4fd;color:#2c6fad;cursor:pointer;">✓ Richtzeit übernehmen: ${rzStr}</button></div>`;
+      }
+      detailsEl.innerHTML = details.join(' | ') + richtzeitHtml;
     }
 
     // Hidden input für geschaetzte_zeit befüllen (wird beim Edit-Submit gelesen)
@@ -4222,9 +4227,10 @@ class App {
       }
     });
 
-    // 📊 KI-Zeitvorschlag für ALLE Arbeiten:
-    //   - Gefundene: KI-Wert übernimmt die Gesamtzeit (Richtzeit als Referenz)
-    //   - Nicht-Gefundene: KI-Wert für Gesamtzeit übernehmen
+    // Speichere Richtzeit-Basis (Zeitverwaltungs-Summe) vor KI-Override
+    let richtzeitBasis = gesamtMinuten;
+
+    // 📊 KI-Zeitvorschlag für ALLE Arbeiten (KI = primäre Basis):
     const alleArbeiten = [...gefundenArbeiten.map(g => g.arbeit), ...nichtGefunden];
     if (alleArbeiten.length > 0) {
       try {
@@ -4244,18 +4250,15 @@ class App {
 
           const gefundenEintrag = gefundenArbeiten.find(g => g.arbeit === arbeit);
           if (gefundenEintrag) {
-            // Richtzeit vorhanden → KI ersetzt Zeitverwaltungs-Beitrag; Richtzeit als Referenz
+            // Richtzeit vorhanden → KI ersetzt Zeitverwaltungs-Beitrag
             gesamtMinuten -= gefundenEintrag.zeitverwaltungMinuten;
             gesamtMinuten += minuten;
-            const zvM = gefundenEintrag.zeitverwaltungMinuten;
-            const zvStd = Math.floor(zvM / 60);
-            const zvRest = zvM % 60;
-            const zvStr = zvStd > 0 ? `${zvStd} h${zvRest > 0 ? ` ${zvRest} min` : ''}` : `${zvRest} min`;
             details[gefundenEintrag.detailIdx] =
-              `📊 ${arbeit}${gefundenEintrag.hinweis}: <strong>${zeitStr}</strong> <small style="color:#888">(${quellLabel}) | ✓ Richtzeit: ${zvStr}</small>`;
+              `📊 ${arbeit}${gefundenEintrag.hinweis}: <strong>${zeitStr}</strong> <small style="color:#888">(${quellLabel})</small>`;
           } else {
-            // Keine Richtzeit → KI-Wert für Gesamtzeit übernehmen
+            // Keine Richtzeit → KI-Wert für Gesamtzeit + Richtzeit-Basis übernehmen
             gesamtMinuten += minuten;
+            richtzeitBasis += minuten;
             const idx = details.findIndex(d => d.startsWith(`⚠️ ${arbeit}:`));
             if (idx !== -1) {
               details[idx] = `📊 ${arbeit}: <strong>${zeitStr}</strong> <small style="color:#888">(${quellLabel})</small>`;
@@ -4302,7 +4305,15 @@ class App {
     // Aktualisiere die Anzeige
     zeitschaetzungAnzeige.style.display = 'block';
     zeitschaetzungWert.textContent = gesamtZeitStr;
-    zeitschaetzungDetails.innerHTML = details.join('<br>');
+    // Richtzeit-Button anzeigen falls vorhanden und abweichend von KI
+    let richtzeitHtml = '';
+    if (richtzeitBasis > 0 && richtzeitBasis !== gesamtMinuten) {
+      const rzStd = Math.floor(richtzeitBasis / 60);
+      const rzMin = richtzeitBasis % 60;
+      const rzStr = rzStd > 0 ? `${rzStd} h${rzMin > 0 ? ` ${rzMin} min` : ''}` : `${rzMin} min`;
+      richtzeitHtml = `<div style="margin-top:6px;"><button type="button" onclick="app.setZeitkorrektur('geschaetzte_zeit','geschaetzte_zeit_auto','zeitschaetzungDelta',${richtzeitBasis})" style="font-size:0.82em;padding:3px 10px;border:1px solid #b0c8e8;border-radius:10px;background:#e8f4fd;color:#2c6fad;cursor:pointer;">✓ Richtzeit übernehmen: ${rzStr}</button></div>`;
+    }
+    zeitschaetzungDetails.innerHTML = details.join('<br>') + richtzeitHtml;
     
     // Färbe die Gesamtzeit je nach Dauer
     if (gesamtMitPuffer === 0) {
@@ -17009,6 +17020,13 @@ class App {
     const base = parseInt(document.getElementById(autoId)?.value || '0', 10);
     const next = Number.isFinite(current) ? Math.max(5, current + step) : Math.max(5, (base || 30) + step);
     input.value = String(next);
+    this.updateZeitKorrekturDelta(inputId, autoId, deltaId);
+  }
+
+  setZeitkorrektur(inputId, autoId, deltaId, minuten) {
+    const input = document.getElementById(inputId);
+    if (!input) return;
+    input.value = String(minuten);
     this.updateZeitKorrekturDelta(inputId, autoId, deltaId);
   }
 
