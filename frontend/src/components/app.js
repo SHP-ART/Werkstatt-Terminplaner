@@ -2454,11 +2454,17 @@ class App {
     const wertEl = document.getElementById('editZeitschaetzungWert');
     const detailsEl = document.getElementById('editZeitschaetzungDetails');
     
-    if (!arbeitText || !anzeige || !wertEl) return;
+    if (!arbeitText || !anzeige || !wertEl) {
+      const editAutoInput = document.getElementById('edit_geschaetzte_zeit_auto');
+      if (editAutoInput) editAutoInput.value = '0';
+      return;
+    }
     
     const arbeiten = this.parseArbeiten(arbeitText);
     if (arbeiten.length === 0) {
       anzeige.style.display = 'none';
+      const editAutoInput = document.getElementById('edit_geschaetzte_zeit_auto');
+      if (editAutoInput) editAutoInput.value = '0';
       return;
     }
     
@@ -4113,6 +4119,8 @@ class App {
     // Wenn keine Eingabe, verstecke die Anzeige
     if (!eingabe) {
       zeitschaetzungAnzeige.style.display = 'none';
+      const autoInput = document.getElementById('geschaetzte_zeit_auto');
+      if (autoInput) autoInput.value = '0';
       return;
     }
     
@@ -4124,6 +4132,8 @@ class App {
     
     if (arbeiten.length === 0) {
       zeitschaetzungAnzeige.style.display = 'none';
+      const autoInput = document.getElementById('geschaetzte_zeit_auto');
+      if (autoInput) autoInput.value = '0';
       return;
     }
     
