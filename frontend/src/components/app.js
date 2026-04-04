@@ -2603,7 +2603,8 @@ class App {
     if (editAutoZeitInput) editAutoZeitInput.value = String(gesamtMitPuffer > 0 ? gesamtMitPuffer : 0);
     const editManualZeitFeld = document.getElementById('edit_geschaetzte_zeit');
     if (editManualZeitFeld && gesamtMitPuffer > 0) {
-      editManualZeitFeld.value = String(gesamtMitPuffer);
+      // Stunden mit 0.25-Präzision
+      editManualZeitFeld.value = String(Math.round(gesamtMitPuffer / 15) * 0.25);
     }
     this.updateZeitKorrekturDelta('edit_geschaetzte_zeit', 'edit_geschaetzte_zeit_auto', 'editZeitschaetzungDelta');
   }
@@ -4314,7 +4315,8 @@ class App {
     if (autoZeitInput) autoZeitInput.value = String(gesamtMitPuffer > 0 ? gesamtMitPuffer : 0);
     const manualZeitFeld = document.getElementById('geschaetzte_zeit');
     if (manualZeitFeld && gesamtMitPuffer > 0) {
-      manualZeitFeld.value = String(gesamtMitPuffer);
+      // Stunden mit 0.25-Präzision
+      manualZeitFeld.value = String(Math.round(gesamtMitPuffer / 15) * 0.25);
     }
     this.updateZeitKorrekturDelta('geschaetzte_zeit', 'geschaetzte_zeit_auto', 'zeitschaetzungDelta');
   }
@@ -16997,9 +16999,11 @@ class App {
   stepZeitKorrektur(inputId, autoId, deltaId, step) {
     const input = document.getElementById(inputId);
     if (!input) return;
-    const current = parseInt(input.value, 10);
-    const base = parseInt(document.getElementById(autoId)?.value || '0', 10);
-    const next = Number.isFinite(current) ? Math.max(5, current + step) : Math.max(5, (base || 30) + step);
+    const current = parseFloat(input.value);
+    const baseMin = parseInt(document.getElementById(autoId)?.value || '0', 10);
+    const baseH = Number.isFinite(baseMin) ? Math.round(baseMin / 15) * 0.25 : 0.5;
+    const cur = Number.isFinite(current) && current > 0 ? current : baseH;
+    const next = Math.max(0.25, Math.round((cur + step) * 4) / 4);
     input.value = String(next);
     this.updateZeitKorrekturDelta(inputId, autoId, deltaId);
   }
@@ -17007,44 +17011,45 @@ class App {
   setZeitkorrektur(inputId, autoId, deltaId, minuten) {
     const input = document.getElementById(inputId);
     if (!input) return;
-    input.value = String(minuten);
+    // Minuten → Stunden, auf 0.25 gerundet
+    input.value = String(Math.round(minuten / 15) * 0.25);
     this.updateZeitKorrekturDelta(inputId, autoId, deltaId);
   }
 
   updateZeitKorrekturDelta(inputId, autoId, deltaId) {
     const input = document.getElementById(inputId);
     if (!input) return;
-    const val = parseInt(input.value, 10);
-    if (!Number.isFinite(val) || val <= 0) return;
+    const valH = parseFloat(input.value);
+    if (!Number.isFinite(valH) || valH <= 0) return;
+    const valMin = Math.round(valH * 60);
 
-    // Header (zeitschaetzungWert / editZeitschaetzungWert) immer auf Stepper-Wert setzen
+    // Header immer auf Stepper-Wert setzen
     const wertId = deltaId.replace('Delta', 'Wert');
     const wertEl = document.getElementById(wertId);
     if (wertEl) {
-      const std = Math.floor(val / 60);
-      const min = val % 60;
+      const std = Math.floor(valMin / 60);
+      const min = valMin % 60;
       let zeitStr = std > 0 ? `${std} h${min > 0 ? ` ${min} min` : ''}` : `${min} min`;
       wertEl.textContent = zeitStr;
-      if (val <= 60) wertEl.style.color = '#27ae60';
-      else if (val <= 180) wertEl.style.color = '#4a90e2';
+      if (valMin <= 60) wertEl.style.color = '#27ae60';
+      else if (valMin <= 180) wertEl.style.color = '#4a90e2';
       else wertEl.style.color = '#e67e22';
     }
   }
 
   getGeschaetzteZeit(arbeitenListe) {
+    // Sichtbares Feld speichert STUNDEN (z.B. 1.5) → in Minuten umrechnen
     const zeitFeld = document.getElementById('geschaetzte_zeit');
-    const input = zeitFeld ? zeitFeld.value : null;
-    const inputMinuten = input ? parseInt(input, 10) : null;
-    if (Number.isFinite(inputMinuten) && inputMinuten > 0) {
-      return inputMinuten;
+    const input = zeitFeld ? parseFloat(zeitFeld.value) : null;
+    if (Number.isFinite(input) && input > 0) {
+      return Math.round(input * 60);
     }
 
-    // Edit-Modal manuelles Override-Feld
+    // Edit-Modal manuelles Override-Feld (ebenfalls Stunden)
     const editZeitFeld = document.getElementById('edit_geschaetzte_zeit');
-    const editInput = editZeitFeld ? editZeitFeld.value : null;
-    const editInputMinuten = editInput ? parseInt(editInput, 10) : null;
-    if (Number.isFinite(editInputMinuten) && editInputMinuten > 0) {
-      return editInputMinuten;
+    const editInput = editZeitFeld ? parseFloat(editZeitFeld.value) : null;
+    if (Number.isFinite(editInput) && editInput > 0) {
+      return Math.round(editInput * 60);
     }
 
     // KI-Vorschlag aus Zeitschätzungs-Anzeige (Neu-Formular)
