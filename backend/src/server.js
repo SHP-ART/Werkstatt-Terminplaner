@@ -190,6 +190,9 @@ async function startServer(clientCountCallback, requestLogCallback) {
             // Requests ohne Origin erlauben (curl, Electron, mobile Apps)
             if (!origin) return callback(null, true);
 
+            // Wildcard: alle Origins erlauben
+            if (corsOrigin === '*') return callback(null, true);
+
             // Whitelist erstellen
             const whitelist = ['http://localhost:3000', 'http://127.0.0.1:3000'];
 
@@ -199,6 +202,11 @@ async function startServer(clientCountCallback, requestLogCallback) {
 
             // Lokale Netzwerk-IPs erlauben (192.168.x.x, 10.x.x.x, 172.16-31.x.x)
             if (/^https?:\/\/(192\.168\.\d+\.\d+|10\.\d+\.\d+\.\d+|172\.(1[6-9]|2\d|3[01])\.\d+\.\d+)(:\d+)?$/.test(origin)) {
+                return callback(null, true);
+            }
+
+            // Lokale Hostnamen erlauben (.local, .fritz.box, .home.arpa)
+            if (/^https?:\/\/[^.]+\.(local|fritz\.box|home\.arpa)(:\d+)?$/.test(origin)) {
                 return callback(null, true);
             }
 
