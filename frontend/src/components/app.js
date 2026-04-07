@@ -25012,7 +25012,10 @@ class App {
             }
           } catch (error) {
             console.error('[DROP] Fehler beim Zuweisen:', error);
-            this.showToast('❌ Fehler beim Zuweisen: ' + (error.message || 'Unbekannter Fehler'), 'error');
+            const terminInfo = terminDaten
+              ? ` [${terminDaten.kunde_name || 'Intern'} – ${terminDaten.kennzeichen || ''}]`
+              : '';
+            this.showToast(`❌ Fehler beim Zuweisen${terminInfo}: ${error.message || 'Unbekannter Fehler'}`, 'error');
           }
         }
       }
@@ -35832,7 +35835,8 @@ App.prototype.showVerschiebeWarnung = async function(person, termin, kapazitaetW
         this.showToast('⚠️ Termin trotz Überlastung zugewiesen!', 'warning');
         this.loadAuslastungDragDrop();
       } catch (err) {
-        this.showToast('❌ Fehler beim Zuweisen: ' + (err.message || 'Unbekannt'), 'error');
+        const terminInfo = termin ? ` [${termin.kunde_name || 'Intern'} – ${termin.kennzeichen || ''}]` : '';
+        this.showToast(`❌ Fehler beim Zuweisen${terminInfo}: ${err.message || 'Unbekannt'}`, 'error');
       }
       resolve('trotzdem');
     });
