@@ -404,6 +404,7 @@ async function startServer(clientCountCallback, requestLogCallback) {
         // Statische Dateien aus dem Frontend-Ordner (ohne Cache für Entwicklung)
         app.use(express.static(frontendPath, {
             etag: false,
+            lastModified: false,
             maxAge: 0,
             setHeaders: (res) => {
                 res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
