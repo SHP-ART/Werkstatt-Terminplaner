@@ -5267,7 +5267,8 @@ class App {
       this.pendingTerminData = null;
     } catch (error) {
       console.error('Fehler beim Erstellen des Termins:', error);
-      alert('Fehler beim Erstellen des Termins: ' + (error.message || 'Unbekannter Fehler'));
+      const kundeInfo = resolvedKundeName ? ` (Kunde: ${resolvedKundeName})` : '';
+      alert(`Fehler beim Erstellen des Kundentermins${kundeInfo}:\n${error.message || 'Unbekannter Fehler'}`);
       this.pendingTerminData = null;
     }
   }
@@ -5363,7 +5364,8 @@ class App {
       this.loadTermineZeiten();
     } catch (error) {
       console.error('Fehler beim Erstellen des internen Termins:', error);
-      alert('Fehler beim Erstellen des internen Termins: ' + (error.message || 'Unbekannter Fehler'));
+      const auftragInfo = interneAuftragsnummer ? ` (Auftrag: ${interneAuftragsnummer})` : '';
+      alert(`Fehler beim Erstellen des internen Auftrags${auftragInfo}:\n${error.message || 'Unbekannter Fehler'}`);
     }
   }
 
@@ -5456,7 +5458,9 @@ class App {
       this.loadTermineZeiten();
     } catch (error) {
       console.error('Fehler beim Erstellen des schnellen Termins:', error);
-      alert('Fehler beim Erstellen: ' + (error.message || 'Unbekannter Fehler'));
+      const schnellKunde = document.getElementById('schnell_name')?.value?.trim();
+      const schnellKundeInfo = schnellKunde ? ` (Kunde: ${schnellKunde})` : '';
+      alert(`Fehler beim Erstellen des Schnelltermins${schnellKundeInfo}:\n${error.message || 'Unbekannter Fehler'}`);
     }
   }
 
