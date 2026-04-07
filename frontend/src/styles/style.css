@@ -13470,9 +13470,136 @@ mark.highlight {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 18px 20px;
+    padding: 12px 16px;
     background: linear-gradient(135deg, var(--steel) 0%, #1a3a5c 100%);
     color: white;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.intern-person-header-left {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex: 1;
+    min-width: 0;
+}
+
+/* Tablet-Style Aktions-Buttons im Kachel-Header */
+.intern-kachel-tab-buttons {
+    display: flex;
+    gap: 6px;
+    flex-shrink: 0;
+}
+
+.intern-tab-btn {
+    flex: 0 0 auto;
+    min-width: 80px;
+    padding: 7px 12px;
+    border: none;
+    border-radius: 8px;
+    font-size: 0.78rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+    position: relative;
+    overflow: hidden;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+    user-select: none;
+    white-space: nowrap;
+}
+
+.intern-tab-btn-icon {
+    font-size: 1em;
+}
+
+.intern-tab-btn::before {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 0;
+    height: 0;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.4);
+    transform: translate(-50%, -50%);
+    transition: width 0.5s, height 0.5s;
+}
+
+.intern-tab-btn:active::before {
+    width: 250px;
+    height: 250px;
+}
+
+.intern-tab-btn-confirm {
+    background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+    color: white;
+}
+
+.intern-tab-btn-confirm:not(:disabled):hover {
+    background: linear-gradient(135deg, #218838 0%, #1ba87e 100%);
+    transform: translateY(-2px);
+    box-shadow: 0 5px 14px rgba(40, 167, 69, 0.45);
+}
+
+.intern-tab-btn-complete {
+    background: linear-gradient(135deg, #1976d2 0%, #42a5f5 100%);
+    color: white;
+}
+
+.intern-tab-btn-complete:not(:disabled):hover {
+    background: linear-gradient(135deg, #1565c0 0%, #1e88e5 100%);
+    transform: translateY(-2px);
+    box-shadow: 0 5px 14px rgba(25, 118, 210, 0.45);
+}
+
+.intern-tab-btn-pause {
+    background: linear-gradient(135deg, #ffc107 0%, #ffeb3b 100%);
+    color: #333;
+}
+
+.intern-tab-btn-pause:not(:disabled):hover {
+    background: linear-gradient(135deg, #e0a800 0%, #fdd835 100%);
+    transform: translateY(-2px);
+    box-shadow: 0 5px 14px rgba(255, 193, 7, 0.45);
+}
+
+.intern-tab-btn-pause.ausserhalb {
+    background: linear-gradient(135deg, #fff3cd 0%, #ffe69c 100%);
+    border: 2px solid #ffc107;
+    animation: internPausePulse 2s ease-in-out infinite;
+}
+
+.intern-tab-btn-pause.aktiv {
+    background: linear-gradient(135deg, #fdcb6e 0%, #fab1a0 100%);
+    cursor: not-allowed;
+    opacity: 0.85;
+    animation: internPausePulse 1.5s ease-in-out infinite;
+}
+
+@keyframes internPausePulse {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.02); }
+}
+
+.intern-tab-btn:disabled {
+    cursor: not-allowed;
+    opacity: 0.4;
+    transform: none !important;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1) !important;
+    filter: grayscale(50%);
+    background: linear-gradient(135deg, #dde1e7 0%, #b0bec5 100%) !important;
+    color: #607d8b !important;
+}
+
+.intern-tab-btn:disabled .intern-tab-btn-icon {
+    opacity: 0.6;
 }
 
 .intern-person-name {
@@ -14235,8 +14362,19 @@ mark.highlight {
 }
 
 .intern-tablet-mode .intern-person-header {
-    padding: 10px 12px;
+    padding: 8px 10px;
     flex-shrink: 0;
+    flex-wrap: nowrap;
+}
+
+.intern-tablet-mode .intern-kachel-tab-buttons {
+    gap: 4px;
+}
+
+.intern-tablet-mode .intern-tab-btn {
+    min-width: 68px;
+    padding: 6px 9px;
+    font-size: 0.72rem;
 }
 
 .intern-tablet-mode .intern-person-name {

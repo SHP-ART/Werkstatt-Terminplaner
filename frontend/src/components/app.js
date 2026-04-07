@@ -30450,14 +30450,7 @@ class App {
 
         ${this.internRenderArbeitenListe(aktuellerAuftrag, person.id, typ)}
 
-        <div class="intern-kachel-buttons">
-          ${aktuellerAuftrag.status === 'geplant' ?
-            `<button class="intern-btn-starten" onclick="app.internStarten(${aktuellerAuftrag.id}, ${JSON.stringify(aktuellerAuftrag.kunde_name || '')})">▶ Starten</button>` : ''}
-          ${aktuellerAuftrag.status === 'in_arbeit' && !manuellePauseAktiv ?
-            `<button class="intern-btn-fertig" onclick="app.internBeenden(${aktuellerAuftrag.id}, ${JSON.stringify(aktuellerAuftrag.kunde_name || '')})">✓ Fertig</button>` : ''}
-          ${aktuellerAuftrag.status === 'in_arbeit' && !manuellePauseAktiv ?
-            `<button class="intern-btn-mittagspause" onclick="app.internPauseStarten(${person.id}, '${typ}', '${today}', true)">☕ Pause</button>` : ''}
-        </div>
+
 
         <div class="intern-person-zeit">
           <div class="intern-person-zeit-item">
@@ -30554,14 +30547,66 @@ class App {
     // Arbeitszeit nur anzeigen, wenn Person nicht abwesend ist (nicht in Pause, nicht in Berufsschule, nicht abwesend)
     const zeigeArbeitszeit = !inPause && !inBerufsschule && !istAbwesend;
 
+    // === TABLET-STYLE ACTION BUTTONS (immer sichtbar im Header) ===
+    const terminMitButtons = aktuellerAuftrag || naechsterAuftrag;
+    const terminArbeiten = terminMitButtons ? this.internGetArbeitenFromTermin(terminMitButtons) : [];
+    const kachelHatMehrereArbeiten = terminArbeiten.length > 1;
+    const alleArbeitenAbgeschlossen = terminArbeiten.length > 0 && terminArbeiten.every(a => a.abgeschlossen);
+
+    const kannStarten = terminMitButtons && !manuellePauseAktiv && !inBerufsschule && !istAbwesend && !inPause &&
+                       (terminMitButtons.status === 'geplant' || terminMitButtons.status === 'offen' || terminMitButtons.status === 'wartend');
+    const kannBeenden = terminMitButtons && !manuellePauseAktiv && !inBerufsschule && !istAbwesend && !inPause &&
+                       terminMitButtons.status === 'in_arbeit' && (!kachelHatMehrereArbeiten || alleArbeitenAbgeschlossen);
+    const kannAlleBeenden = kachelHatMehrereArbeiten && terminMitButtons && terminMitButtons.status === 'in_arbeit' && !manuellePauseAktiv;
+
+    const _kn = this.escapeHtml(terminMitButtons ? (terminMitButtons.kunde_name || '') : '').replace(/'/g, '&#39;');
+    let toggleButtonHtml = '';
+    if (kannStarten) {
+      toggleButtonHtml = `<button class="intern-tab-btn intern-tab-btn-confirm" onclick="app.internStarten(${terminMitButtons.id}, '${_kn}', ${personId}, '${typ}')"><span class="intern-tab-btn-icon">▶️</span> Starten</button>`;
+    } else if (kannBeenden) {
+      const btnText = (kachelHatMehrereArbeiten && alleArbeitenAbgeschlossen) ? 'Alle Fertig ✓' : 'Fertig';
+      toggleButtonHtml = `<button class="intern-tab-btn intern-tab-btn-complete" onclick="app.internBeenden(${terminMitButtons.id}, '${_kn}')"><span class="intern-tab-btn-icon">✓</span> ${btnText}</button>`;
+    } else if (kannAlleBeenden) {
+      toggleButtonHtml = `<button class="intern-tab-btn intern-tab-btn-complete" onclick="app.internBeenden(${terminMitButtons.id}, '${_kn}')"><span class="intern-tab-btn-icon">✓</span> Fertig</button>`;
+    } else {
+      toggleButtonHtml = `<button class="intern-tab-btn intern-tab-btn-confirm" disabled><span class="intern-tab-btn-icon">▶️</span> Starten</button>`;
+    }
+
+    // Mittagspause-Button (immer sichtbar, disabled wenn nicht im Zeitfenster)
+    const jetztNow = new Date();
+    const jetztMinNow = jetztNow.getHours() * 60 + jetztNow.getMinutes();
+    const [pHNow, pMNow] = (person.mittagspause_start || '12:00').split(':').map(Number);
+    const pausenStartMinNow = pHNow * 60 + pMNow;
+    const pausenEndeMinNow = pausenStartMinNow + (person.pausenzeit_minuten || 30);
+    const pauseFensterMin = pausenStartMinNow - 60;
+    const pauseFensterMax = pausenEndeMinNow + 60;
+    const imIdealPauseFenster = jetztMinNow >= pauseFensterMin && jetztMinNow <= pausenStartMinNow;
+    const imAnzeigePauseFenster = jetztMinNow >= pauseFensterMin && jetztMinNow <= pauseFensterMax;
+    let pauseMahlzeitButtonHtml = '';
+    if (person.pause_tracking_aktiv) {
+      const verblMin = person.pause_verbleibende_minuten || 0;
+      pauseMahlzeitButtonHtml = `<button class="intern-tab-btn intern-tab-btn-pause aktiv" disabled><span class="intern-tab-btn-icon">⏸️</span> Pause (${verblMin} Min)</button>`;
+    } else if (person.pause_bereits_gemacht) {
+      pauseMahlzeitButtonHtml = `<button class="intern-tab-btn intern-tab-btn-pause" disabled title="Pause wurde heute bereits gemacht"><span class="intern-tab-btn-icon">✅</span> Pause erledigt</button>`;
+    } else if (imAnzeigePauseFenster && !inBerufsschule && !istAbwesend) {
+      const pIcon = imIdealPauseFenster ? '🍽️' : '⚠️';
+      const pText = imIdealPauseFenster ? 'Pause' : 'Pause (spät)';
+      pauseMahlzeitButtonHtml = `<button class="intern-tab-btn intern-tab-btn-pause ${imIdealPauseFenster ? '' : 'ausserhalb'}" onclick="app.internPauseStarten(${personId}, '${typ}', '${today}', ${imIdealPauseFenster})"><span class="intern-tab-btn-icon">${pIcon}</span> ${pText}</button>`;
+    } else {
+      pauseMahlzeitButtonHtml = `<button class="intern-tab-btn intern-tab-btn-pause" disabled><span class="intern-tab-btn-icon">🍽️</span> Pause</button>`;
+    }
+
     return `
       <div class="intern-person-kachel ${isLehrling ? 'lehrling' : ''} ${istArbeitPausiert ? 'arbeit-pausiert' : ''}">
         <div class="intern-person-header">
-          <div class="intern-person-name">
-            <span class="person-icon">${isLehrling ? '🎓' : '👷'}</span>
-            <span>${this.escapeHtml(personName)}</span>
+          <div class="intern-person-header-left">
+            <div class="intern-person-name">
+              <span class="person-icon">${isLehrling ? '🎓' : '👷'}</span>
+              <span>${this.escapeHtml(personName)}</span>
+            </div>
+            <div class="intern-person-badge ${badgeClass}">${badgeText}</div>
           </div>
-          <div class="intern-person-badge ${badgeClass}">${badgeText}</div>
+          <div class="intern-kachel-tab-buttons">${toggleButtonHtml}${pauseMahlzeitButtonHtml}</div>
         </div>
         ${zeigeArbeitszeit && arbeitszeit && !arbeitszeit.ist_frei && arbeitszeit.arbeitszeit_start && arbeitszeit.arbeitszeit_ende && arbeitszeit.arbeitszeit_start !== arbeitszeit.arbeitszeit_ende ? `
         <div class="intern-person-arbeitszeit">
@@ -30656,10 +30701,19 @@ class App {
     }
   }
 
-  async internStarten(terminId, kundeName) {
+  async internStarten(terminId, kundeName, personId = null, personTyp = null) {
     if (!confirm(`Termin für ${kundeName} starten?`)) return;
     try {
-      await ApiService.post(`/termine/${terminId}/starten`, {});
+      const jetzt = new Date();
+      const startzeit = `${String(jetzt.getHours()).padStart(2, '0')}:${String(jetzt.getMinutes()).padStart(2, '0')}`;
+      await ApiService.put(`/termine/${terminId}`, { status: 'in_arbeit', startzeit });
+      // Folgezeiten neu berechnen wenn Personzuordnung bekannt
+      if (personId && personTyp) {
+        const heute = this.formatDateLocal(this.getToday());
+        await ApiService.post('/termine/berechne-zeiten-neu', {
+          personId, personTyp, datum: heute, startTerminId: terminId
+        }).catch(() => {}); // Fehler ignorieren – Hauptaktion war erfolgreich
+      }
       this.loadInternTeamUebersicht();
     } catch (err) {
       console.error('internStarten Fehler:', err);
@@ -30670,7 +30724,10 @@ class App {
   async internBeenden(terminId, kundeName) {
     if (!confirm(`Termin für ${kundeName} als fertig markieren?`)) return;
     try {
-      await ApiService.post(`/termine/${terminId}/beenden`, {});
+      await ApiService.put(`/termine/${terminId}`, {
+        status: 'abgeschlossen',
+        fertigstellung_zeit: new Date().toISOString()
+      });
       this.loadInternTeamUebersicht();
     } catch (err) {
       console.error('internBeenden Fehler:', err);
@@ -30696,7 +30753,7 @@ class App {
       if (!confirm('Mittagspause außerhalb des üblichen Zeitfensters starten?')) return;
     }
     try {
-      await ApiService.post('/pause/starten', { person_id: personId, person_typ: personTyp, datum });
+      await ApiService.post('/pause/starten', { personId, personTyp, datum });
       this.loadInternTeamUebersicht();
     } catch (err) {
       console.error('internPauseStarten Fehler:', err);
