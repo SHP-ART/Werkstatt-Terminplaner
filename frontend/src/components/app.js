@@ -33506,6 +33506,14 @@ class App {
       }
     }
 
+    // Mitarbeiter-Karten laden und rendern
+    try {
+      const auslastung = await AuslastungService.getByDatum(datumStr);
+      this.renderKalenderTagMitarbeiterKarten(auslastung, datumStr);
+    } catch (e) {
+      console.warn('Mitarbeiter-Karten: Fehler beim Laden der Auslastung', e);
+    }
+
     // Zeitleiste oder Liste rendern
     const zeitleisteEl = document.getElementById('kalenderTagZeitleiste');
     const listeEl = document.getElementById('kalenderTagListe');
@@ -33519,6 +33527,64 @@ class App {
       if (listeEl) { listeEl.style.display = 'block'; }
       this.renderKalenderTagListe(termine, listeEl, datumStr);
     }
+  }
+
+  renderKalenderTagMitarbeiterKarten(data, datumStr) {
+    const container = document.getElementById('kalenderTagMitarbeiterKarten');
+    if (!container) return;
+
+    const personen = [
+      ...(data.mitarbeiter_auslastung || []).map(ma => ({ ...ma, _typ: 'mitarbeiter' })),
+      ...(data.lehrlinge_auslastung || []).map(la => ({ ...la, _typ: 'lehrling' }))
+    ];
+
+    if (personen.length === 0) {
+      container.innerHTML = '';
+      return;
+    }
+
+    const karten = personen.map(p => {
+      const istAbwesend = p.ist_abwesend === true;
+      const abwesenheitsTyp = p.abwesenheits_typ || '';
+      const prozent = istAbwesend ? 0 : (p.auslastung_prozent || 0);
+      const name = p.mitarbeiter_name || p.lehrling_name || p.name || '–';
+
+      const abwesendIcons = { urlaub: '🏖️', krank: '🤒', berufsschule: '🏫', lehrgang: '📚' };
+      const abwIcon = abwesendIcons[abwesenheitsTyp] || '🏥';
+
+      const farbe = prozent > 100 ? '#c62828' : prozent > 80 ? '#e65100' : prozent > 50 ? '#f9a825' : '#2e7d32';
+      const balkenBreite = Math.min(prozent, 100);
+
+      const lehrlingBadge = p._typ === 'lehrling'
+        ? '<span class="ktma-badge ktma-badge-lehrling">Lehrling</span>'
+        : '';
+
+      if (istAbwesend) {
+        return `
+          <div class="ktma-karte ktma-abwesend">
+            <div class="ktma-name">${this.escapeHtml(name)}${lehrlingBadge}</div>
+            <div class="ktma-abw-icon">${abwIcon}</div>
+          </div>`;
+      }
+
+      const belegtMin = p.belegt_minuten || 0;
+      const verfuegbarMin = p.verfuegbar_minuten || 0;
+      const terminAnzahl = p.termin_anzahl || 0;
+
+      return `
+        <div class="ktma-karte">
+          <div class="ktma-name">${this.escapeHtml(name)}${lehrlingBadge}</div>
+          <div class="ktma-balken-wrap">
+            <div class="ktma-balken">
+              <div class="ktma-balken-fill" style="width:${balkenBreite}%;background:${farbe};"></div>
+            </div>
+            <span class="ktma-prozent" style="color:${farbe}">${prozent}%</span>
+          </div>
+          <div class="ktma-details">${this.formatMinutesToHours(belegtMin)} / ${this.formatMinutesToHours(verfuegbarMin)} · ${terminAnzahl} Termin${terminAnzahl !== 1 ? 'e' : ''}</div>
+        </div>`;
+    });
+
+    container.innerHTML = `<div class="ktma-grid">${karten.join('')}</div>`;
   }
 
   /**

@@ -14,7 +14,13 @@
       "Bash(npx jest:*)",
       "Bash(rm -rf /c/Users/Sven/Documents/Github/Terminplaner/Werkstatt-Terminplaner/.worktrees/feature-arbeitspause/backend/node_modules)",
       "Bash(cmd //c mklink //J \"C:\\\\Users\\\\Sven\\\\Documents\\\\Github\\\\Terminplaner\\\\Werkstatt-Terminplaner\\\\.worktrees\\\\feature-arbeitspause\\\\backend\\\\node_modules\" \"C:\\\\Users\\\\Sven\\\\Documents\\\\Github\\\\Terminplaner\\\\Werkstatt-Terminplaner\\\\backend\\\\node_modules\")",
-      "Bash(ssh -o BatchMode=yes root@100.124.168.108 ':*)"
+      "Bash(ssh -o BatchMode=yes root@100.124.168.108 ':*)",
+      "Bash(du -sh c:/Users/Sven/Documents/Github/Terminplaner/Werkstatt-Terminplaner/*/)",
+      "Bash(find . -maxdepth 1 -type d ! -name '.' -exec du -sh {} \\\\;)",
+      "Bash(du -sh electron-intern-tablet/*/)",
+      "Bash(du -sh frontend/*/)",
+      "Bash(ls -la release/*.exe)",
+      "Bash(du -sh release/*.exe)"
     ]
   }
 }
