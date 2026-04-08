@@ -11031,7 +11031,7 @@ class App {
 
     // Rendere offene Termine
     if (offeneTermine.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="9" class="loading">Keine offenen Termine für heute 🎉</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="11" class="loading">Keine offenen Termine für heute 🎉</td></tr>';
     } else {
       offeneTermine.forEach(termin => {
         this.renderHeuteTerminRow(tbody, termin, true);
@@ -11094,6 +11094,11 @@ class App {
       ? `<td class="batch-check-cell" style="width:30px;text-align:center;"><input type="checkbox" class="termin-batch-check" data-termin-id="${termin.id}"></td>`
       : '';
 
+    // Anruf-Spalte: Kunde anrufen wenn fertig
+    const anrufCell = termin.kontakt_option && termin.kontakt_option.includes('Kunde anrufen')
+      ? `<td style="text-align:center;" title="Kunde anrufen wenn fertig!"><span style="color:#28a745;font-size:1.2em;font-weight:bold;">📞</span></td>`
+      : `<td style="text-align:center;color:#ccc;">-</td>`;
+
     // Quick-Action-Buttons (C1): direkte Status-Schnelltasten
     const quickAktionen = showWartet ? `
       ${aktuellerStatus !== 'in_arbeit' && aktuellerStatus !== 'abgeschlossen' ? `<button class="btn-quick-action" title="In Arbeit setzen" onclick="app.quickStatusChange(${termin.id},'in_arbeit')">▶</button>` : ''}
@@ -11106,6 +11111,7 @@ class App {
       <td>${termin.kunde_telefon || '-'}</td>
       <td>${termin.kennzeichen || '-'}</td>
       ${wartetCell}
+      ${anrufCell}
       <td style="max-width: 150px; overflow: hidden; text-overflow: ellipsis;" title="${termin.arbeit || ''}">${arbeitAnzeige}</td>
       <td>${this.formatZeit(zeitAnzeige)}</td>
       <td>
