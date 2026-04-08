@@ -33552,7 +33552,7 @@ class App {
       const abwesendIcons = { urlaub: '🏖️', krank: '🤒', berufsschule: '🏫', lehrgang: '📚' };
       const abwIcon = abwesendIcons[abwesenheitsTyp] || '🏥';
 
-      const farbe = prozent > 100 ? '#c62828' : prozent > 80 ? '#e65100' : prozent > 50 ? '#f9a825' : '#2e7d32';
+      const farbe = prozent > 100 ? '#f44336' : prozent > 80 ? '#ff9800' : prozent > 50 ? '#ffc107' : '#4caf50';
       const balkenBreite = Math.min(prozent, 100);
 
       const lehrlingBadge = p._typ === 'lehrling'
