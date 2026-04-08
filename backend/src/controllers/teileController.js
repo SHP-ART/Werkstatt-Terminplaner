@@ -49,11 +49,13 @@ const getFaellige = async (req, res) => {
       TeileBestellung.getTerminMarkierungen(['bestellt'], 'bestellt'),
       TeileBestellung.getArbeitenMarkierungen('bestellt', 'bestellt'),
       // Eingetroffen-Markierungen (teile_status = 'eingetroffen' auf Termin / arbeiten)
-      TeileBestellung.getTerminMarkierungen(['eingetroffen'], 'geliefert'),
-      TeileBestellung.getArbeitenMarkierungen('eingetroffen', 'geliefert')
+      TeileBestellung.getTerminMarkierungen(['eingetroffen', 'vorraetig'], 'geliefert'),
+      TeileBestellung.getArbeitenMarkierungen('eingetroffen', 'geliefert'),
+      // Vorrätig-Markierungen (teile_status = 'vorraetig' in arbeitszeiten_details – wird vom "Eingetroffen"-Button gesetzt)
+      TeileBestellung.getArbeitenMarkierungen('vorraetig', 'geliefert')
     ]);
 
-    const [r0, r1, r2, r3, r4, r5, r6, r7, r8] = results;
+    const [r0, r1, r2, r3, r4, r5, r6, r7, r8, r9] = results;
     if (r0.status === 'rejected') console.error('[Teile] getFaellige Fehler:', r0.reason?.message);
     if (r1.status === 'rejected') console.error('[Teile] getSchwebende Fehler:', r1.reason?.message);
     if (r2.status === 'rejected') console.error('[Teile] getTermineMitTeileStatusBestellen Fehler:', r2.reason?.message);
@@ -61,6 +63,7 @@ const getFaellige = async (req, res) => {
     if (r4.status === 'rejected') console.error('[Teile] getTermineMitArbeitenTeileStatusBestellen Fehler:', r4.reason?.message);
     if (r7.status === 'rejected') console.error('[Teile] getTerminMarkierungen eingetroffen Fehler:', r7.reason?.message);
     if (r8.status === 'rejected') console.error('[Teile] getArbeitenMarkierungen eingetroffen Fehler:', r8.reason?.message);
+    if (r9.status === 'rejected') console.error('[Teile] getArbeitenMarkierungen vorraetig Fehler:', r9.reason?.message);
 
     const bestellungen               = r0.status === 'fulfilled' ? r0.value : [];
     const schwebende                 = r1.status === 'fulfilled' ? r1.value : [];
@@ -71,6 +74,7 @@ const getFaellige = async (req, res) => {
     const bestelltMarkierungenArbeiten    = r6.status === 'fulfilled' ? r6.value : [];
     const eingetroffenMarkierungenTermin  = r7.status === 'fulfilled' ? r7.value : [];
     const eingetroffenMarkierungenArbeiten = r8.status === 'fulfilled' ? r8.value : [];
+    const vorraetigMarkierungenArbeiten   = r9.status === 'fulfilled' ? r9.value : [];
     
     // Gruppiere nach Dringlichkeit
     const heute = new Date();
@@ -148,6 +152,7 @@ const getFaellige = async (req, res) => {
     // Eingetroffen-Markierungen (Status = 'geliefert') gruppieren
     eingetroffenMarkierungenTermin.forEach(gruppiereNachDringlichkeit);
     eingetroffenMarkierungenArbeiten.forEach(gruppiereNachDringlichkeit);
+    vorraetigMarkierungenArbeiten.forEach(gruppiereNachDringlichkeit);
     
     const alleBestellungen = [
       ...schwebende, 
@@ -158,7 +163,8 @@ const getFaellige = async (req, res) => {
       ...bestelltMarkierungenTermin,
       ...bestelltMarkierungenArbeiten,
       ...eingetroffenMarkierungenTermin,
-      ...eingetroffenMarkierungenArbeiten
+      ...eingetroffenMarkierungenArbeiten,
+      ...vorraetigMarkierungenArbeiten
     ];
     
     // Zähle Bestellungen für die Statistik
