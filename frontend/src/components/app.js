@@ -35853,12 +35853,7 @@ App.prototype.showVerschiebeWarnung = async function(person, termin, kapazitaetW
           document.getElementById('verschiebeOptionVerschieben')?.addEventListener('click', async () => {
             cleanup();
             try {
-              await TermineService.update(termin.id, {
-                datum_termin: naechsterTag.datum,
-                mitarbeiter_id: targetType === 'mitarbeiter' ? mitarbeiterId : null,
-                lehrling_id: targetType === 'lehrling' ? lehrlingId : null,
-                startzeit: startzeit
-              });
+              await this._assignTerminDirectToPersonInDB(termin.id, targetType, mitarbeiterId, lehrlingId, startzeit, naechsterTag.datum);
               this.showToast(`📅 Termin auf ${this.formatDatum(naechsterTag.datum)} verschoben!`, 'success');
               this.loadAuslastungDragDrop();
             } catch (err) {

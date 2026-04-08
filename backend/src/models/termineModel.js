@@ -400,7 +400,7 @@ class TermineModel {
   static async update(id, data) {
     const { 
       tatsaechliche_zeit, status, geschaetzte_zeit, arbeit, arbeitszeiten_details, 
-      mitarbeiter_id, dringlichkeit, kennzeichen, umfang, datum, abholung_typ,
+      mitarbeiter_id, lehrling_id, dringlichkeit, kennzeichen, umfang, datum, abholung_typ,
       abholung_details, abholung_zeit, abholung_datum, bring_zeit, kontakt_option,
       kilometerstand, ersatzauto, ersatzauto_tage, ersatzauto_bis_datum, ersatzauto_bis_zeit,
       vin, fahrzeugtyp, muss_bearbeitet_werden, nacharbeit_start_zeit, ist_schwebend,
@@ -447,6 +447,11 @@ class TermineModel {
       console.log('[DEBUG] TermineModel.update - mitarbeiter_id wird aktualisiert:', mitarbeiter_id);
       updates.push('mitarbeiter_id = ?');
       values.push(mitarbeiter_id || null);
+    }
+    if (lehrling_id !== undefined) {
+      console.log('[DEBUG] TermineModel.update - lehrling_id wird aktualisiert:', lehrling_id);
+      updates.push('lehrling_id = ?');
+      values.push(lehrling_id || null);
     }
     if (dringlichkeit !== undefined) {
       updates.push('dringlichkeit = ?');
