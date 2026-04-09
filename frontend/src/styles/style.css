@@ -16591,3 +16591,13 @@ body.intern-tablet-mode-active #intern {
 tr.wiederholung-row {
     border-left: 3px solid #dc3545;
 }
+
+/* ===== NEUER KUNDE MODAL ===== */
+#neuerKundeModal .modal-content {
+  max-width: 520px;
+}
+
+#nkSpeichernBtn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
