@@ -1102,6 +1102,34 @@ class App {
     const fahrzeugAuswahlZurueck = document.getElementById('fahrzeugAuswahlZurueck');
     this.bindEventListenerOnce(fahrzeugAuswahlZurueck, 'click', () => this.closeFahrzeugAuswahlModal(), 'FahrzeugAuswahlZurueck');
 
+    const closeNeuerKundeModal = document.getElementById('closeNeuerKundeModal');
+    this.bindEventListenerOnce(closeNeuerKundeModal, 'click', () => this.closeNeuerKundeModal(), 'CloseNeuerKundeModal');
+    const nkAbbrechenBtn = document.getElementById('nkAbbrechenBtn');
+    this.bindEventListenerOnce(nkAbbrechenBtn, 'click', () => this.closeNeuerKundeModal(), 'NkAbbrechen');
+    const nkSpeichernBtn = document.getElementById('nkSpeichernBtn');
+    this.bindEventListenerOnce(nkSpeichernBtn, 'click', () => this.saveNeuerKunde(), 'NkSpeichern');
+
+    const neuerKundeModal = document.getElementById('neuerKundeModal');
+    this.bindEventListenerOnce(neuerKundeModal, 'click', (e) => {
+      if (e.target === neuerKundeModal) this.closeNeuerKundeModal();
+    }, 'NeuerKundeModalBackdrop');
+
+    // Kennzeichen-Auto-Advance im Neuer-Kunde-Modal
+    const nkKzBezirk = document.getElementById('nkKzBezirk');
+    this.bindEventListenerOnce(nkKzBezirk, 'input', (e) => {
+      e.target.value = e.target.value.toUpperCase();
+      if (e.target.value.length >= 3) document.getElementById('nkKzBuchstaben')?.focus();
+    }, 'NkKzBezirkInput');
+    const nkKzBuchstaben = document.getElementById('nkKzBuchstaben');
+    this.bindEventListenerOnce(nkKzBuchstaben, 'input', (e) => {
+      e.target.value = e.target.value.toUpperCase();
+      if (e.target.value.length >= 2) document.getElementById('nkKzNummer')?.focus();
+    }, 'NkKzBuchstabenInput');
+    const nkKzNummer = document.getElementById('nkKzNummer');
+    this.bindEventListenerOnce(nkKzNummer, 'input', (e) => {
+      e.target.value = e.target.value.toUpperCase();
+    }, 'NkKzNummerInput');
+
     const closeFahrzeugVerwaltung = document.getElementById('closeFahrzeugVerwaltung');
     this.bindEventListenerOnce(closeFahrzeugVerwaltung, 'click', () => this.closeFahrzeugVerwaltungModal(), 'CloseFahrzeugVerwaltung');
     const fahrzeugVerwaltungSchliessen = document.getElementById('fahrzeugVerwaltungSchliessen');
