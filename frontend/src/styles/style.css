@@ -15408,7 +15408,7 @@ body.intern-tablet-mode-active #intern {
 
 .kalender-wochen-grid {
     display: grid;
-    grid-template-columns: repeat(6, 1fr);
+    grid-template-columns: repeat(7, 1fr);
     min-height: 500px;
 }
 
