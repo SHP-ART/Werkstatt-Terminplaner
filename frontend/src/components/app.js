@@ -34262,13 +34262,6 @@ class App {
       const auslastungProzent = Math.min(Math.round((gesamtMinuten / 480) * 100), 100);
       const auslastungFarbe = auslastungProzent < 50 ? '#4caf50' : auslastungProzent < 75 ? '#ffc107' : auslastungProzent < 90 ? '#ff9800' : '#f44336';
 
-      // Mini-Termine (max 3)
-      const miniTermine = tageTermine.slice(0, 3).map(t => {
-        const statusClass = this.kalenderGetStatusCSS(t.status);
-        return `<div class="mz-termin-mini ${statusClass}">${t.kennzeichen || ''} ${(t.arbeit || '').split('\n')[0] || ''}</div>`;
-      }).join('');
-      const mehrAnzahl = tageTermine.length > 3 ? `<div class="mz-mehr">+${tageTermine.length - 3} weitere</div>` : '';
-
       const istVergangen = datumStr < new Date().toISOString().split('T')[0] && !istHeute;
 
       // Abwesenheiten für diesen Tag
@@ -34284,6 +34277,9 @@ class App {
         abwHtml = `<div class="mz-abwesenheiten">${abwKurz}</div>`;
       }
 
+      // Auslastung + Terminzahl kompakt
+      const terminInfo = tageTermine.length > 0 ? `<div class="mz-info">${tageTermine.length} Termin${tageTermine.length !== 1 ? 'e' : ''} · ${auslastungProzent}%</div>` : '';
+
       html += `
         <div class="kalender-monat-zelle${istHeute ? ' ist-heute' : ''}${!istAktuellerMonat ? ' anderer-monat' : ''}${istVergangen ? ' ist-vergangen' : ''}" data-datum="${datumStr}">
           <div class="mz-datum">
@@ -34292,7 +34288,7 @@ class App {
           </div>
           ${abwHtml}
           ${tageTermine.length > 0 ? `<div class="mz-auslastung"><div class="mz-auslastung-bar" style="width:${auslastungProzent}%;background:${auslastungFarbe}"></div></div>` : ''}
-          <div class="mz-termine">${miniTermine}${mehrAnzahl}</div>
+          ${terminInfo}
         </div>
       `;
       cursor.setDate(cursor.getDate() + 1);

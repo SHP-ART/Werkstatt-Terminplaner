@@ -15822,8 +15822,8 @@ body.intern-tablet-mode-active #intern {
 }
 
 .kalender-monat-zelle .mz-auslastung {
-    height: 4px;
-    border-radius: 2px;
+    height: 8px;
+    border-radius: 4px;
     margin-bottom: 4px;
     background: #e5e7eb;
     overflow: hidden;
@@ -15831,7 +15831,7 @@ body.intern-tablet-mode-active #intern {
 
 .kalender-monat-zelle .mz-auslastung-bar {
     height: 100%;
-    border-radius: 2px;
+    border-radius: 4px;
     transition: width 0.3s;
 }
 
@@ -15853,6 +15853,13 @@ body.intern-tablet-mode-active #intern {
 .kalender-monat-zelle .mz-termine {
     font-size: 0.72em;
     line-height: 1.35;
+}
+
+.kalender-monat-zelle .mz-info {
+    font-size: 0.7em;
+    color: #666;
+    margin-top: 2px;
+    text-align: center;
 }
 
 .kalender-monat-zelle .mz-termin-mini {
