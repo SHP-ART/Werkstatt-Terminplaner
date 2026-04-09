@@ -12221,7 +12221,10 @@ class App {
     ).slice(0, 10); // Max 10 Ergebnisse
     
     if (treffer.length === 0) {
-      vorschlaegeDiv.innerHTML = '<div class="keine-vorschlaege">Kein Kunde gefunden - wird als neuer Kunde angelegt</div>';
+      vorschlaegeDiv.innerHTML = `<div class="keine-vorschlaege" style="display:flex;align-items:center;justify-content:space-between;gap:10px;">
+        <span>Kein Kunde gefunden</span>
+        <button type="button" class="btn btn-primary" style="padding:4px 12px;font-size:0.85em;white-space:nowrap;" onmousedown="event.preventDefault()" onclick="app.openNeuerKundeModal()">➕ Jetzt anlegen</button>
+      </div>`;
       vorschlaegeDiv.classList.add('aktiv');
       return;
     }
@@ -12281,6 +12284,8 @@ class App {
       statusBadge.textContent = '✓ Kunde ausgewählt';
       statusBadge.className = 'kunde-status-badge gefunden';
       statusBadge.style.display = 'inline-block';
+      statusBadge.style.cursor = 'default';
+      statusBadge.onclick = null;
       // Kennzeichen ist nicht mehr Pflicht bei existierendem Kunden
       this.setKennzeichenPflicht(false, kennzeichenField, kennzeichenLabel);
       return;
@@ -12295,12 +12300,17 @@ class App {
       statusBadge.textContent = '✓ Bekannter Kunde';
       statusBadge.className = 'kunde-status-badge gefunden';
       statusBadge.style.display = 'inline-block';
+      statusBadge.style.cursor = 'default';
+      statusBadge.onclick = null;
       // Kennzeichen ist nicht mehr Pflicht bei existierendem Kunden
       this.setKennzeichenPflicht(false, kennzeichenField, kennzeichenLabel);
     } else {
       statusBadge.textContent = '+ Neuer Kunde';
       statusBadge.className = 'kunde-status-badge neuer-kunde';
       statusBadge.style.display = 'inline-block';
+      statusBadge.style.cursor = 'pointer';
+      statusBadge.title = 'Klicken zum schnellen Anlegen';
+      statusBadge.onclick = () => this.openNeuerKundeModal();
       // Kennzeichen ist Pflicht bei Neukunden!
       this.setKennzeichenPflicht(true, kennzeichenField, kennzeichenLabel);
     }
