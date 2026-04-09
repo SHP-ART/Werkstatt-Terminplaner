@@ -14737,6 +14737,178 @@ body.intern-tablet-mode-active #intern {
     color: #e65100;
 }
 
+/* ---- TAGESANSICHT: MITARBEITER-SPALTEN ---- */
+.kalender-tag-ma-grid {
+    display: flex;
+    min-height: 550px;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+.kalender-tag-ma-zeit-spalte {
+    width: 50px;
+    min-width: 50px;
+    background: #f8f9fa;
+    border-right: 1px solid #e5e7eb;
+}
+
+.kalender-tag-ma-zeit-spalte .ma-zeit-header {
+    height: 56px;
+    border-bottom: 1px solid #e5e7eb;
+}
+
+.kalender-tag-ma-zeit-spalte .ma-zeit-label {
+    height: 50px;
+    padding: 2px 6px;
+    font-size: 0.7em;
+    color: #999;
+    border-bottom: 1px solid #f0f0f0;
+}
+
+.kalender-tag-ma-spalte {
+    flex: 1;
+    border-right: 1px solid #e5e7eb;
+    position: relative;
+}
+
+.kalender-tag-ma-spalte:last-child {
+    border-right: none;
+}
+
+.kalender-tag-ma-spalte-header {
+    height: 56px;
+    background: var(--steel);
+    color: white;
+    text-align: center;
+    padding: 6px 8px;
+    font-size: 0.82em;
+    border-bottom: 1px solid #e5e7eb;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+}
+
+.kalender-tag-ma-spalte-header .ma-name {
+    font-weight: 700;
+    font-size: 1em;
+}
+
+.kalender-tag-ma-spalte-header .ma-auslastung {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    margin-top: 2px;
+}
+
+.kalender-tag-ma-spalte-header .ma-auslastung-track {
+    width: 50px;
+    height: 4px;
+    border-radius: 2px;
+    background: rgba(255, 255, 255, 0.25);
+    overflow: hidden;
+}
+
+.kalender-tag-ma-spalte-header .ma-auslastung-fill {
+    height: 100%;
+    border-radius: 2px;
+}
+
+.kalender-tag-ma-spalte-header .ma-auslastung-pct {
+    font-size: 0.8em;
+    opacity: 0.9;
+}
+
+.kalender-tag-ma-spalte-header.abwesend {
+    background: #95a5a6;
+}
+
+.kalender-tag-ma-spalte-header.nicht-zugewiesen {
+    background: #7f8c8d;
+}
+
+.kalender-tag-ma-spalte-body {
+    position: relative;
+}
+
+.kalender-tag-ma-spalte-body .ma-zeit-row {
+    height: 50px;
+    border-bottom: 1px solid #f0f0f0;
+}
+
+.kalender-tag-ma-termin {
+    position: absolute;
+    left: 3px;
+    right: 3px;
+    border-radius: 6px;
+    padding: 4px 6px;
+    font-size: 0.75em;
+    color: white;
+    cursor: pointer;
+    overflow: hidden;
+    z-index: 2;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.15);
+    transition: transform 0.1s, box-shadow 0.1s;
+    line-height: 1.25;
+}
+
+.kalender-tag-ma-termin:hover {
+    transform: scale(1.03);
+    box-shadow: 0 3px 10px rgba(0,0,0,0.22);
+    z-index: 10;
+}
+
+.kalender-tag-ma-termin .mat-titel {
+    font-weight: 600;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.kalender-tag-ma-termin .mat-arbeit {
+    opacity: 0.85;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.kalender-tag-ma-termin .mat-zeit {
+    font-size: 0.9em;
+    opacity: 0.75;
+}
+
+/* Reuse existing status colors */
+.kalender-tag-ma-termin.status-geplant { background: linear-gradient(135deg, #ffc107, #e6ac00); color: #333; }
+.kalender-tag-ma-termin.status-in_bearbeitung,
+.kalender-tag-ma-termin.status-in-bearbeitung { background: linear-gradient(135deg, #17a2b8, #138496); }
+.kalender-tag-ma-termin.status-abgeschlossen { background: linear-gradient(135deg, #28a745, #1f8a3a); }
+.kalender-tag-ma-termin.status-offen { background: linear-gradient(135deg, #ffc107, #e0a800); color: #333; }
+.kalender-tag-ma-termin.status-storniert { background: linear-gradient(135deg, #dc3545, #c82333); }
+.kalender-tag-ma-termin.schwebend { border: 2px dashed #ff9800; background: #fff3e0; color: #e65100; }
+
+/* Jetzt-Linie über alle Spalten */
+.kalender-tag-ma-jetzt-linie {
+    position: absolute;
+    left: 0;
+    right: 0;
+    height: 2px;
+    background: #f44336;
+    z-index: 5;
+    pointer-events: none;
+}
+
+.kalender-tag-ma-jetzt-linie::before {
+    content: '';
+    position: absolute;
+    left: -4px;
+    top: -3px;
+    width: 8px;
+    height: 8px;
+    background: #f44336;
+    border-radius: 50%;
+}
+
 /* ===== Ohne-Uhrzeit Sektion (wie "Ganztägig" in Google Calendar) ===== */
 .kalender-ohne-zeit-section {
     background: #f8f9fa;
