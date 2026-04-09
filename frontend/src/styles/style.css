@@ -15471,6 +15471,47 @@ body.intern-tablet-mode-active #intern {
     margin-top: 2px;
 }
 
+/* Woche: Auslastungsbalken im Header */
+.kwt-auslastung {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    margin-top: 4px;
+    padding: 0 8px;
+}
+
+.kwt-auslastung-track {
+    flex: 1;
+    height: 4px;
+    border-radius: 2px;
+    background: rgba(255, 255, 255, 0.25);
+    overflow: hidden;
+}
+
+.kwt-auslastung-fill {
+    height: 100%;
+    border-radius: 2px;
+    transition: width 0.3s;
+}
+
+.kwt-auslastung-pct {
+    font-size: 0.7em;
+    opacity: 0.9;
+    min-width: 28px;
+    text-align: right;
+}
+
+/* Woche: Abwesenheiten im Header */
+.kwt-abw {
+    font-size: 0.68em;
+    opacity: 0.85;
+    padding: 2px 8px 4px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    text-align: center;
+}
+
 .kalender-wochen-tag-body {
     flex: 1;
     padding: 6px;
