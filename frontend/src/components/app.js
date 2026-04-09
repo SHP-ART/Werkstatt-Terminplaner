@@ -34033,8 +34033,18 @@ class App {
     const datumVon = this.kalenderFormatDatum(startGrid);
     const datumBis = this.kalenderFormatDatum(endGrid);
 
-    const termine = await this.kalenderLadeTermine(datumVon, datumBis);
-    
+    const [termine, abwesenheiten] = await Promise.all([
+      this.kalenderLadeTermine(datumVon, datumBis),
+      this.kalenderLadeAbwesenheiten(datumVon, datumBis)
+    ]);
+
+    // Abwesenheiten nach Datum gruppieren
+    const abwProTag = {};
+    abwesenheiten.forEach(a => {
+      if (!abwProTag[a.datum]) abwProTag[a.datum] = [];
+      abwProTag[a.datum].push(a);
+    });
+
     // Termine nach Datum gruppieren
     const terminePropTag = {};
     termine.forEach(t => {
@@ -34056,7 +34066,7 @@ class App {
       // Auslastung berechnen (vereinfacht: Minuten / 480 * 100)
       const gesamtMinuten = tageTermine.reduce((sum, t) => sum + (t.geschaetzte_zeit || 0), 0);
       const auslastungProzent = Math.min(Math.round((gesamtMinuten / 480) * 100), 100);
-      const auslastungFarbe = auslastungProzent < 50 ? '#28a745' : auslastungProzent < 75 ? '#ffc107' : auslastungProzent < 90 ? '#ff9800' : '#dc3545';
+      const auslastungFarbe = auslastungProzent < 50 ? '#4caf50' : auslastungProzent < 75 ? '#ffc107' : auslastungProzent < 90 ? '#ff9800' : '#f44336';
 
       // Mini-Termine (max 3)
       const miniTermine = tageTermine.slice(0, 3).map(t => {
@@ -34067,12 +34077,26 @@ class App {
 
       const istVergangen = datumStr < new Date().toISOString().split('T')[0] && !istHeute;
 
+      // Abwesenheiten für diesen Tag
+      const tageAbw = abwProTag[datumStr] || [];
+      const abwesendIcons = { Urlaub: '🏖️', Krank: '🤒', Berufsschule: '🏫', Lehrgang: '📚' };
+      let abwHtml = '';
+      if (tageAbw.length > 0) {
+        const abwKurz = tageAbw.map(a => {
+          const icon = abwesendIcons[a.grund] || '📋';
+          const kuerzel = (a.person_name || '').split(' ').map(w => w[0]).join('');
+          return `${icon}${kuerzel}`;
+        }).join(' ');
+        abwHtml = `<div class="mz-abwesenheiten">${abwKurz}</div>`;
+      }
+
       html += `
         <div class="kalender-monat-zelle${istHeute ? ' ist-heute' : ''}${!istAktuellerMonat ? ' anderer-monat' : ''}${istVergangen ? ' ist-vergangen' : ''}" data-datum="${datumStr}">
           <div class="mz-datum">
             <span class="mz-tag">${cursor.getDate()}</span>
             <button class="mz-neu-btn" data-datum="${datumStr}" title="Neuer Termin">+</button>
           </div>
+          ${abwHtml}
           ${tageTermine.length > 0 ? `<div class="mz-auslastung"><div class="mz-auslastung-bar" style="width:${auslastungProzent}%;background:${auslastungFarbe}"></div></div>` : ''}
           <div class="mz-termine">${miniTermine}${mehrAnzahl}</div>
         </div>
