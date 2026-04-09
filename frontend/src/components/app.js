@@ -4012,6 +4012,162 @@ class App {
     this.fahrzeugVerwaltungKundeName = null;
   }
 
+  // ================================================
+  // NEUER KUNDE MODAL
+  // ================================================
+
+  openNeuerKundeModal() {
+    const modal = document.getElementById('neuerKundeModal');
+    if (!modal) return;
+
+    // Nachname aus Suchfeld vorausfüllen
+    const suchtext = document.getElementById('terminNameSuche')?.value.trim() || '';
+    const nkNachname = document.getElementById('nkNachname');
+    if (nkNachname) nkNachname.value = suchtext;
+
+    // Fehlermeldung zurücksetzen
+    const fehler = document.getElementById('nkFehler');
+    if (fehler) fehler.style.display = 'none';
+
+    // Andere Felder leeren
+    ['nkVorname', 'nkTelefon', 'nkFahrzeugtyp', 'nkKilometerstand'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.value = '';
+    });
+
+    // Kennzeichen-Felder leeren und ggf. aus der KZ-Suche vorbelegen
+    const bezirk = document.getElementById('kzSucheBezirk')?.value.trim().toUpperCase() || '';
+    const buchstaben = document.getElementById('kzSucheBuchstaben')?.value.trim().toUpperCase() || '';
+    const nummer = document.getElementById('kzSucheNummer')?.value.trim().toUpperCase() || '';
+    const nkKzBezirk = document.getElementById('nkKzBezirk');
+    const nkKzBuchstaben = document.getElementById('nkKzBuchstaben');
+    const nkKzNummer = document.getElementById('nkKzNummer');
+    if (nkKzBezirk) nkKzBezirk.value = bezirk;
+    if (nkKzBuchstaben) nkKzBuchstaben.value = buchstaben;
+    if (nkKzNummer) nkKzNummer.value = nummer;
+
+    modal.style.display = 'block';
+
+    // Fokus auf Nachname-Feld
+    setTimeout(() => nkNachname?.focus(), 50);
+  }
+
+  closeNeuerKundeModal() {
+    const modal = document.getElementById('neuerKundeModal');
+    if (modal) modal.style.display = 'none';
+  }
+
+  async saveNeuerKunde() {
+    const nachname = document.getElementById('nkNachname')?.value.trim() || '';
+    const vorname = document.getElementById('nkVorname')?.value.trim() || '';
+    const telefon = document.getElementById('nkTelefon')?.value.trim() || '';
+    const kzBezirk = document.getElementById('nkKzBezirk')?.value.trim().toUpperCase() || '';
+    const kzBuchstaben = document.getElementById('nkKzBuchstaben')?.value.trim().toUpperCase() || '';
+    const kzNummer = document.getElementById('nkKzNummer')?.value.trim().toUpperCase() || '';
+    const fahrzeugtyp = document.getElementById('nkFahrzeugtyp')?.value.trim() || '';
+    const kilometerstand = document.getElementById('nkKilometerstand')?.value.trim() || '';
+
+    const fehlerEl = document.getElementById('nkFehler');
+
+    const zeigeFehlermeldung = (msg) => {
+      if (fehlerEl) {
+        fehlerEl.textContent = msg;
+        fehlerEl.style.display = 'block';
+      }
+    };
+
+    // Validierung
+    if (!nachname) {
+      zeigeFehlermeldung('Bitte Nachname eingeben.');
+      document.getElementById('nkNachname')?.focus();
+      return;
+    }
+    if (!kzBezirk) {
+      zeigeFehlermeldung('Bitte Kennzeichen (Bezirk) eingeben.');
+      document.getElementById('nkKzBezirk')?.focus();
+      return;
+    }
+
+    // Namen zusammensetzen
+    const name = vorname ? `${nachname}, ${vorname}` : nachname;
+
+    // Kennzeichen zusammensetzen
+    const kennzeichen = [kzBezirk, kzBuchstaben, kzNummer].filter(Boolean).join('-');
+
+    // Button deaktivieren während des Speicherns
+    const btn = document.getElementById('nkSpeichernBtn');
+    if (btn) btn.disabled = true;
+    if (fehlerEl) fehlerEl.style.display = 'none';
+
+    try {
+      const created = await KundenService.create({
+        name,
+        telefon: telefon || null,
+        kennzeichen: kennzeichen || null,
+        fahrzeugtyp: fahrzeugtyp || null
+      });
+
+      const kundeId = created.id;
+
+      // Modal schließen
+      this.closeNeuerKundeModal();
+
+      // Terminformular: Kunden-ID setzen
+      const kundeIdInput = document.getElementById('kunde_id');
+      if (kundeIdInput) kundeIdInput.value = kundeId;
+
+      // Suchfeld befüllen
+      const terminNameSuche = document.getElementById('terminNameSuche');
+      if (terminNameSuche) terminNameSuche.value = name;
+
+      // Status-Badge aktualisieren
+      const statusBadge = document.getElementById('kundeStatusAnzeige');
+      if (statusBadge) {
+        statusBadge.textContent = '✓ Kunde angelegt';
+        statusBadge.className = 'kunde-status-badge gefunden';
+        statusBadge.style.display = 'inline-block';
+        statusBadge.style.cursor = 'default';
+        statusBadge.onclick = null;
+      }
+
+      // Gefundener-Kunde-Box anzeigen
+      const gefundenerBox = document.getElementById('gefundenerKundeAnzeige');
+      const gefundenerName = document.getElementById('gefundenerKundeName');
+      const gefundenerTelefon = document.getElementById('gefundenerKundeTelefon');
+      if (gefundenerBox) gefundenerBox.style.display = 'block';
+      if (gefundenerName) gefundenerName.textContent = name;
+      if (gefundenerTelefon) gefundenerTelefon.textContent = telefon ? `📞 ${telefon}` : '';
+
+      // Kennzeichen ins Terminformular übertragen
+      const kennzeichenInput = document.getElementById('kennzeichen');
+      if (kennzeichenInput && kennzeichen) kennzeichenInput.value = kennzeichen;
+
+      const fahrzeugtypInput = document.getElementById('fahrzeugtyp');
+      if (fahrzeugtypInput && fahrzeugtyp) fahrzeugtypInput.value = fahrzeugtyp;
+
+      const kmInput = document.getElementById('kilometerstand');
+      if (kmInput && kilometerstand) kmInput.value = kilometerstand;
+
+      // Vorschläge schließen
+      this.hideVorschlaege('name');
+      this.hideVorschlaege('kennzeichen');
+
+      // Kennzeichen-Pflichtmarkierung zurücksetzen
+      const kennzeichenField = document.getElementById('kennzeichen');
+      const kennzeichenLabel = kennzeichenField?.parentElement?.querySelector('label');
+      this.setKennzeichenPflicht(false, kennzeichenField, kennzeichenLabel);
+
+      // Kunden-Cache auffrischen
+      this.loadKunden();
+
+    } catch (err) {
+      console.error('Fehler beim Anlegen des Kunden:', err);
+      zeigeFehlermeldung('Fehler beim Anlegen: ' + (err.message || 'Unbekannter Fehler'));
+    } finally {
+      if (btn) btn.disabled = false;
+    }
+  }
+
   async loadArbeitszeiten() {
     try {
       const arbeitszeiten = await ArbeitszeitenService.getAll();
