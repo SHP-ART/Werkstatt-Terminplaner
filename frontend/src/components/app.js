@@ -33141,6 +33141,215 @@ class App {
     });
   }
 
+  /**
+   * Tagesansicht: Mitarbeiter-Spalten mit Zeitleiste
+   */
+  renderKalenderTagMitarbeiter(termine, container, datumStr, auslastung, abwesenheiten) {
+    if (!container) return;
+    const startStunde = 7;
+    const endStunde = 18;
+    const slotHoehe = 50;
+
+    // Spalten aus Auslastungsdaten aufbauen
+    const spalten = [];
+    if (auslastung) {
+      (auslastung.mitarbeiter_auslastung || []).forEach(ma => {
+        spalten.push({
+          typ: 'mitarbeiter',
+          id: ma.mitarbeiter_id || ma.id,
+          name: ma.mitarbeiter_name || ma.name || '–',
+          prozent: ma.ist_abwesend ? 0 : (ma.auslastung_prozent || 0),
+          istAbwesend: ma.ist_abwesend === true,
+          abwesenheitsTyp: ma.abwesenheits_typ || ''
+        });
+      });
+      (auslastung.lehrlinge_auslastung || []).forEach(la => {
+        spalten.push({
+          typ: 'lehrling',
+          id: la.lehrling_id || la.id,
+          name: la.lehrling_name || la.name || '–',
+          prozent: la.ist_abwesend ? 0 : (la.auslastung_prozent || 0),
+          istAbwesend: la.ist_abwesend === true,
+          abwesenheitsTyp: la.abwesenheits_typ || ''
+        });
+      });
+    }
+
+    // Termine den Spalten zuordnen
+    const termineSpalte = {};
+    const nichtZugewiesen = [];
+
+    termine.forEach(t => {
+      let zuordnung = null;
+
+      // 1. arbeitszeiten_details._gesamt_mitarbeiter_id
+      if (t.arbeitszeiten_details) {
+        try {
+          const details = typeof t.arbeitszeiten_details === 'string'
+            ? JSON.parse(t.arbeitszeiten_details)
+            : t.arbeitszeiten_details;
+          if (details._gesamt_mitarbeiter_id) {
+            zuordnung = {
+              typ: details._gesamt_mitarbeiter_id.type,
+              id: details._gesamt_mitarbeiter_id.id
+            };
+          }
+        } catch (e) { /* ignore parse errors */ }
+      }
+
+      // 2. Fallback: mitarbeiter_id vom Termin
+      if (!zuordnung && t.mitarbeiter_id) {
+        zuordnung = { typ: 'mitarbeiter', id: t.mitarbeiter_id };
+      }
+
+      if (zuordnung) {
+        const key = `${zuordnung.typ}_${zuordnung.id}`;
+        if (!termineSpalte[key]) termineSpalte[key] = [];
+        termineSpalte[key].push(t);
+      } else {
+        nichtZugewiesen.push(t);
+      }
+    });
+
+    // "Nicht zugewiesen"-Spalte hinzufügen wenn nötig
+    if (nichtZugewiesen.length > 0) {
+      spalten.push({
+        typ: 'nicht_zugewiesen',
+        id: 0,
+        name: 'Nicht zugew.',
+        prozent: 0,
+        istAbwesend: false,
+        abwesenheitsTyp: ''
+      });
+      termineSpalte['nicht_zugewiesen_0'] = nichtZugewiesen;
+    }
+
+    // Keine Spalten? Fallback
+    if (spalten.length === 0) {
+      container.innerHTML = '<div style="text-align:center;color:#999;padding:40px;">Keine Mitarbeiter für diesen Tag gefunden</div>';
+      return;
+    }
+
+    // Grid HTML aufbauen
+    const abwIcons = { urlaub: '🏖️', krank: '🤒', berufsschule: '🏫', lehrgang: '📚' };
+
+    let html = '<div class="kalender-tag-ma-grid">';
+
+    // Zeitspalte links
+    html += '<div class="kalender-tag-ma-zeit-spalte">';
+    html += '<div class="ma-zeit-header"></div>';
+    for (let h = startStunde; h <= endStunde; h++) {
+      html += `<div class="ma-zeit-label">${String(h).padStart(2, '0')}:00</div>`;
+    }
+    html += '</div>';
+
+    // MA-Spalten
+    spalten.forEach(sp => {
+      const key = `${sp.typ}_${sp.id}`;
+      const spTermine = termineSpalte[key] || [];
+      const farbe = sp.prozent > 100 ? '#f44336' : sp.prozent > 80 ? '#ff9800' : sp.prozent > 50 ? '#ffc107' : '#4caf50';
+      const headerClass = sp.istAbwesend ? ' abwesend' : (sp.typ === 'nicht_zugewiesen' ? ' nicht-zugewiesen' : '');
+      const abwIcon = sp.istAbwesend ? (abwIcons[sp.abwesenheitsTyp] || '🥼') : '';
+
+      html += `<div class="kalender-tag-ma-spalte">`;
+
+      // Header
+      html += `<div class="kalender-tag-ma-spalte-header${headerClass}">`;
+      html += `<span class="ma-name">${this.escapeHtml(sp.name)}</span>`;
+      if (sp.istAbwesend) {
+        html += `<span>${abwIcon} ${sp.abwesenheitsTyp}</span>`;
+      } else if (sp.typ !== 'nicht_zugewiesen') {
+        html += `<div class="ma-auslastung">
+          <div class="ma-auslastung-track"><div class="ma-auslastung-fill" style="width:${Math.min(sp.prozent, 100)}%;background:${farbe};"></div></div>
+          <span class="ma-auslastung-pct">${sp.prozent}%</span>
+        </div>`;
+      }
+      html += '</div>';
+
+      // Body mit Zeitreihen
+      html += '<div class="kalender-tag-ma-spalte-body">';
+      for (let h = startStunde; h <= endStunde; h++) {
+        html += `<div class="ma-zeit-row"></div>`;
+      }
+
+      // Termin-Blöcke positionieren
+      spTermine.forEach(t => {
+        let startzeit = null;
+        if (t.arbeitszeiten_details) {
+          try {
+            const details = typeof t.arbeitszeiten_details === 'string'
+              ? JSON.parse(t.arbeitszeiten_details)
+              : t.arbeitszeiten_details;
+            if (details._startzeit) startzeit = details._startzeit;
+          } catch (e) { /* ignore */ }
+        }
+        if (!startzeit) startzeit = t.startzeit || t.bring_zeit;
+        if (!startzeit) return;
+
+        const istAbgeschlossen = t.status === 'abgeschlossen' && t.tatsaechliche_zeit > 0;
+        const dauer = istAbgeschlossen ? t.tatsaechliche_zeit : (t.geschaetzte_zeit || 60);
+        const [sh, sm] = startzeit.split(':').map(Number);
+        if (isNaN(sh)) return;
+
+        const top = (sh - startStunde + (sm || 0) / 60) * slotHoehe;
+        const height = Math.max((dauer / 60) * slotHoehe, 25);
+        const statusClass = this.kalenderGetStatusCSS(t.status);
+        const schwebendClass = t.ist_schwebend ? ' schwebend' : '';
+
+        const endMinuten = (sh * 60 + (sm || 0)) + dauer;
+        const endH = Math.floor(endMinuten / 60);
+        const endM = endMinuten % 60;
+        const endStr = `${String(endH).padStart(2, '0')}:${String(endM).padStart(2, '0')}`;
+        const zeitInfo = istAbgeschlossen
+          ? `${startzeit} – ${endStr} (${dauer}m ✓)`
+          : t.status === 'in_bearbeitung' || t.status === 'in-bearbeitung'
+            ? `${startzeit} – läuft...`
+            : `${startzeit} (~${dauer}m)`;
+
+        const arbeiten = (t.arbeit || '').split('\n').filter(Boolean);
+
+        html += `<div class="kalender-tag-ma-termin ${statusClass}${schwebendClass}" data-termin-id="${t.id}" style="top:${top}px;height:${height}px;">
+          <div class="mat-titel">${this.escapeHtml(t.kennzeichen || t.kunde_name || '?')}</div>
+          <div class="mat-arbeit">${this.escapeHtml(arbeiten[0] || '')}</div>
+          <div class="mat-zeit">${zeitInfo}</div>
+        </div>`;
+      });
+
+      html += '</div>'; // spalte-body
+      html += '</div>'; // spalte
+    });
+
+    html += '</div>'; // grid
+
+    container.innerHTML = html;
+
+    // Jetzt-Linie
+    if (this.kalenderIstHeute(this.kalenderState.datum)) {
+      const jetzt = new Date();
+      const jetztH = jetzt.getHours();
+      const jetztM = jetzt.getMinutes();
+      if (jetztH >= startStunde && jetztH <= endStunde) {
+        const topOffset = (jetztH - startStunde + jetztM / 60) * slotHoehe;
+        const gridEl = container.querySelector('.kalender-tag-ma-grid');
+        if (gridEl) {
+          gridEl.querySelectorAll('.kalender-tag-ma-spalte-body').forEach(body => {
+            const linie = document.createElement('div');
+            linie.className = 'kalender-tag-ma-jetzt-linie';
+            linie.style.top = `${topOffset}px`;
+            body.appendChild(linie);
+          });
+        }
+      }
+    }
+
+    // Termin-Klick-Handler
+    container.querySelectorAll('[data-termin-id]').forEach(el => {
+      el.addEventListener('click', () => {
+        this.kalenderTerminClick(parseInt(el.dataset.terminId));
+      });
+    });
+  }
+
   // =====================================================
   // ========== WOCHENANSICHT ============================
   // =====================================================
