@@ -32940,18 +32940,30 @@ class App {
       }
     }
 
-    // Zeitleiste oder Liste rendern
+    // Auslastungsdaten laden (für Mitarbeiter-Ansicht)
+    let auslastung = null;
+    try {
+      auslastung = await AuslastungService.getByDatum(datumStr);
+    } catch (e) {
+      console.warn('Tagesansicht: Fehler beim Laden der Auslastung', e);
+    }
+
+    // Zeitleiste, Liste oder Mitarbeiter rendern
     const zeitleisteEl = document.getElementById('kalenderTagZeitleiste');
     const listeEl = document.getElementById('kalenderTagListe');
+    const maEl = document.getElementById('kalenderTagMitarbeiter');
 
-    if (this.kalenderState.ansicht === 'zeitleiste') {
-      if (zeitleisteEl) { zeitleisteEl.style.display = 'block'; }
-      if (listeEl) { listeEl.style.display = 'none'; }
+    const ansicht = this.kalenderState.ansicht;
+    if (zeitleisteEl) zeitleisteEl.style.display = ansicht === 'zeitleiste' ? 'block' : 'none';
+    if (listeEl) listeEl.style.display = ansicht === 'liste' ? 'block' : 'none';
+    if (maEl) maEl.style.display = ansicht === 'mitarbeiter' ? 'block' : 'none';
+
+    if (ansicht === 'zeitleiste') {
       this.renderKalenderTagZeitleiste(termine, zeitleisteEl);
-    } else {
-      if (zeitleisteEl) { zeitleisteEl.style.display = 'none'; }
-      if (listeEl) { listeEl.style.display = 'block'; }
+    } else if (ansicht === 'liste') {
       this.renderKalenderTagListe(termine, listeEl, datumStr);
+    } else if (ansicht === 'mitarbeiter') {
+      this.renderKalenderTagMitarbeiter(termine, maEl, datumStr, auslastung, abwesenheiten);
     }
   }
 
