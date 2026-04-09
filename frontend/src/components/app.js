@@ -33824,10 +33824,21 @@ class App {
         bodyContent = this.renderKalenderWocheListe(tageTermine, datumStr);
       }
 
-      // Abwesenheiten-Anzeige
-      let abwHtml = '';
+      // Auslastung für diesen Tag
+      const tageAuslastung = auslastungProTag[datumStr];
+      const auslastungProzent = tageAuslastung?.auslastung_prozent || 0;
+      const auslastungFarbe = auslastungProzent < 50 ? '#4caf50' : auslastungProzent < 75 ? '#ffc107' : auslastungProzent < 90 ? '#ff9800' : '#f44336';
+
+      // Abwesenheiten kompakt für Header
+      const abwesendIcons = { Urlaub: '🏖️', Krank: '🤒', Berufsschule: '🏫', Lehrgang: '📚' };
+      let abwHeaderHtml = '';
       if (tageAbw.length > 0) {
-        abwHtml = tageAbw.map(a => `<div class="kalender-abwesenheit-bar" style="padding:4px 8px;font-size:0.72em;">${a.grund === 'Urlaub' ? '🏖️' : a.grund === 'Krank' ? '🤒' : '📋'} ${a.person_name || ''}</div>`).join('');
+        const abwKurz = tageAbw.map(a => {
+          const icon = abwesendIcons[a.grund] || '📋';
+          const kuerzel = (a.person_name || '').split(' ').map(w => w[0]).join('');
+          return `${icon}${kuerzel}`;
+        }).join(' ');
+        abwHeaderHtml = `<div class="kwt-abw">${abwKurz}</div>`;
       }
 
       const istVergangen = datumStr < new Date().toISOString().split('T')[0] && !istHeute;
@@ -33838,8 +33849,14 @@ class App {
             <span class="wt-name">${wt[i]}</span>
             <span class="wt-datum">${tag.getDate()}.${tag.getMonth()+1}.</span>
             <span class="wt-count">${tageTermine.length} Termin${tageTermine.length !== 1 ? 'e' : ''}</span>
+            <div class="kwt-auslastung">
+              <div class="kwt-auslastung-track">
+                <div class="kwt-auslastung-fill" style="width:${Math.min(auslastungProzent, 100)}%;background:${auslastungFarbe};"></div>
+              </div>
+              <span class="kwt-auslastung-pct">${auslastungProzent}%</span>
+            </div>
+            ${abwHeaderHtml}
           </div>
-          ${abwHtml}
           <div class="kalender-wochen-tag-body ${isZeitleiste ? 'zeitleiste-modus' : 'listen-modus'}">
             ${bodyContent}
           </div>
