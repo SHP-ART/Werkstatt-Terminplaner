@@ -33777,10 +33777,17 @@ class App {
     const datumVon = this.kalenderFormatDatum(tage[0]);
     const datumBis = this.kalenderFormatDatum(tage[6]);
     
-    const [termine, abwesenheiten] = await Promise.all([
+    const [termine, abwesenheiten, ...auslastungen] = await Promise.all([
       this.kalenderLadeTermine(datumVon, datumBis),
-      this.kalenderLadeAbwesenheiten(datumVon, datumBis)
+      this.kalenderLadeAbwesenheiten(datumVon, datumBis),
+      ...tage.map(d => AuslastungService.getByDatum(this.kalenderFormatDatum(d)).catch(() => null))
     ]);
+
+    // Auslastungen nach Datum mappen
+    const auslastungProTag = {};
+    tage.forEach((d, i) => {
+      auslastungProTag[this.kalenderFormatDatum(d)] = auslastungen[i];
+    });
 
     // Termine nach Datum gruppieren
     const terminePropTag = {};
