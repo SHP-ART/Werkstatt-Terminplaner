@@ -21574,15 +21574,16 @@ class App {
       const tooltip = `${arbeit.terminNr || ''}${schwebendBadge}&#10;${arbeit.kunde || '-'}&#10;${arbeit.kennzeichen || '-'}&#10;${arbeit.arbeit}&#10;⏱️ Dauer: ${zeitMinuten} Min. (${(zeitMinuten/60).toFixed(1)} h)${arbeit.bringZeit ? '&#10;🚗↓ Bringzeit: ' + arbeit.bringZeit : ''}${arbeit.abholungZeit ? '&#10;🚗↑ Abholzeit: ' + arbeit.abholungZeit : ''}${arbeit.erweiterungAnzahl > 0 ? '&#10;🔗 ' + arbeit.erweiterungAnzahl + ' Erweiterung(en)' : ''}${arbeit.istErweiterung ? '&#10;🔗 ERWEITERUNG' : ''}`;
       
       // Inhalt mit Bring/Abholzeit und Arbeitszeit
+      const internInlineClass = arbeit.istIntern ? 'intern-termin' : '';
       const content = `
         <div class="zeitleiste-block-nummer">${arbeit.terminNr || '-'}${schwebendBadge}${erweiterungBadge}</div>
         <div class="zeitleiste-block-text">${arbeit.arbeit}</div>
         <div class="zeitleiste-block-zeit">⏱️ ${(zeitMinuten/60).toFixed(1)}h</div>
         ${zeitInfo ? `<div class="zeitleiste-block-zeiten">${zeitInfo}</div>` : ''}
       `;
-      
+
       bloeckeHtml += `
-        <div class="zeitleiste-block-inline ${statusClass} ${schwebendClass} ${erweiterungClass}" 
+        <div class="zeitleiste-block-inline ${statusClass} ${schwebendClass} ${erweiterungClass} ${internInlineClass}"
              style="flex: 0 0 ${widthPercent}%; min-width: 80px;"
              title="${tooltip}"
              onclick="app.showTerminDetails(${arbeit.terminId})">
@@ -21745,9 +21746,15 @@ class App {
         arbeitKurzText = `${arbeit.arbeitenListe[0]} +${arbeit.arbeitenListe.length - 1}`;
       }
       
-      // Kennzeichen oben, Arbeit darunter
-      const blockHaupt = arbeit.kennzeichen || (arbeit.istIntern ? '🔧 ' + arbeit.kunde : arbeit.kunde);
-      const blockArbeit = `<span class="zeitleiste-block-arbeit">${this.escapeHtml(arbeitKurzText)}</span>`;
+      // Kennzeichen oben, Arbeit darunter; bei internen Terminen: Arbeit als primäres Anzeigefeld
+      const blockHaupt = arbeit.istIntern
+        ? arbeitKurzText
+        : (arbeit.kennzeichen || arbeit.kunde);
+      const blockArbeit = arbeit.istIntern
+        ? (arbeit.kennzeichen && arbeit.kennzeichen !== 'INTERN'
+            ? `<span class="zeitleiste-block-arbeit">🔧 ${this.escapeHtml(arbeit.kennzeichen)}</span>`
+            : '')
+        : `<span class="zeitleiste-block-arbeit">${this.escapeHtml(arbeitKurzText)}</span>`;
 
       // Nacharbeit-Badge und Style
       const nacharbeitClass = arbeit.istNacharbeit ? 'nacharbeit-block' : '';
@@ -23721,10 +23728,15 @@ class App {
       ? `<span class="bar-uebertrag-badge" style="background:#1565c0;" title="Termin von morgen – wird bei Zuweisung auf heute verschoben">📅 ${this.formatDatum(termin.datum)}</span>`
       : '';
     
+    // Intern-Termin-Erkennung und Arbeit-Text
+    const istInternTermin = termin.abholung_details === 'Interner Termin';
+    const arbeitText = this.getTerminArbeitenText(termin);
+
     // Inhalt des Balkens
     bar.innerHTML = `
-      <div class="bar-header">${prioritaetBadge} ${termin.termin_nr || 'Neu'} • ${termin.kennzeichen || ''} ${uebertragBadge}${vorschauBadge}</div>
-      <div class="bar-details">${termin.kunde_name || 'Unbekannt'}</div>
+      <div class="bar-header">${prioritaetBadge} ${termin.termin_nr || 'Neu'} • ${istInternTermin ? '🔧 Intern' : (termin.kennzeichen || '')} ${uebertragBadge}${vorschauBadge}</div>
+      <div class="bar-details">${istInternTermin ? this.escapeHtml(arbeitText) : (termin.kunde_name || 'Unbekannt')}</div>
+      ${istInternTermin && termin.kennzeichen && termin.kennzeichen !== 'INTERN' ? `<div class="bar-details" style="font-size:0.8em;opacity:0.8;">📋 ${this.escapeHtml(termin.kennzeichen)}</div>` : ''}
       <div class="bar-zeit">⏱️ ${dauerText}</div>
       ${zeitenInfo ? `<div class="bar-zeiten">${zeitenInfo}</div>` : ''}
       ${istUebertrag ? `<div class="bar-abholung-deadline">🏁 Abholung: ${this.formatDatum(termin.abholung_datum)}</div>` : ''}
