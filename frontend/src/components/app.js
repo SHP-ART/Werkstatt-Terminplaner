@@ -18896,7 +18896,7 @@ class App {
       gesamtzeitMinuten = Math.round(gesamtStunden * 60);
     }
 
-    let status = document.getElementById('modalTerminStatus').value;
+    let status = document.getElementById('modalTerminStatus').value || null;
 
     // Bestimme Mitarbeiter für Termin (Gesamt-Zuordnung hat Vorrang, sonst Termin-Mitarbeiter)
     // Nur Mitarbeiter können dem Termin direkt zugeordnet werden, nicht Lehrlinge
