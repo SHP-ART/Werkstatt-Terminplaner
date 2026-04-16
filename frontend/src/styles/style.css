@@ -5822,6 +5822,64 @@ mark.highlight {
     border-radius: 12px;
 }
 
+.nz-section-header--weitere {
+    color: #4e342e;
+    background: #fbe9e7;
+    border: 1px solid #ffab91;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.nz-weitere-title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.nz-weitere-filter {
+    display: flex;
+    gap: 4px;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+.nz-filter-btn {
+    background: rgba(255,255,255,0.7);
+    border: 1px solid #ffab91;
+    border-radius: 10px;
+    padding: 2px 8px;
+    font-size: 0.78em;
+    font-weight: 600;
+    color: #4e342e;
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s;
+    line-height: 1.4;
+}
+
+.nz-filter-btn:hover {
+    background: #ff8a65;
+    color: #fff;
+    border-color: #ff8a65;
+}
+
+.nz-filter-btn.active {
+    background: #bf360c;
+    color: #fff;
+    border-color: #bf360c;
+}
+
+.nz-date-sub-header {
+    font-size: 0.78em;
+    font-weight: 700;
+    color: #6d4c41;
+    background: #fff3e0;
+    border: 1px solid #ffe0b2;
+    border-radius: 6px;
+    padding: 3px 10px;
+    margin: 8px 0 3px 0;
+    letter-spacing: 0.02em;
+}
+
 .nz-info {
     display: flex;
     gap: 15px;

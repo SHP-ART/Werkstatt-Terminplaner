@@ -33,6 +33,7 @@ class App {
     // Planungs-Drag&Drop: Lokaler Änderungspuffer
     this.planungAenderungen = new Map(); // terminId -> { startzeit, mitarbeiter_id, lehrling_id, type, originalData }
     this.planungRaster = 15; // Standard-Raster: 15 Minuten (muss mit HTML-Select übereinstimmen)
+    this.weitereTermineFilter = 7; // Filter für "Weitere" Termine (1, 2, 3 oder 7 Tage)
 
     // === Performance-Optimierung: Tab-Element-Caching ===
     // Cache für häufig verwendete DOM-Elemente
@@ -22849,7 +22850,7 @@ class App {
       Object.values(lehrlingeMap).forEach(track => this.resolveTimelineOverlaps(track));
 
       // Nicht-zugeordnete Karten nach Gestern / Heute / Morgen gruppieren
-      (function groupNichtZugeordnet(container, heute, datum) {
+      (function groupNichtZugeordnet(container, heute, datum, self) {
         const karten = Array.from(container.children);
         if (karten.length === 0) return;
         const [hy, hm, hd] = datum.split('-').map(Number);
@@ -22882,16 +22883,66 @@ class App {
           container.appendChild(header);
           liste.forEach(k => container.appendChild(k));
         });
-        // Datum die keiner Gruppe entsprechen
-        const sonstige = Object.entries(byDatum).filter(([d]) => !gruppen.find(g => g.key === d));
+        // Datum die keiner Gruppe entsprechen – sortiert nach Datum, gefiltert nach N Tagen
+        const sonstige = Object.entries(byDatum)
+          .filter(([d]) => !gruppen.find(g => g.key === d))
+          .sort(([a], [b]) => a.localeCompare(b));
+
         if (sonstige.length > 0) {
-          const header = document.createElement('div');
-          header.className = 'nz-section-header nz-section-header--heute';
-          header.innerHTML = `<span>📋 Weitere</span>`;
-          container.appendChild(header);
-          sonstige.forEach(([, liste]) => liste.forEach(k => container.appendChild(k)));
+          const aktivFilter = self.weitereTermineFilter || 7;
+          const baseDatum = new Date(`${datum}T12:00:00`);
+          const filterOptionen = [1, 2, 3, 7];
+
+          // Berechne welche sonstigen Termine im Filter liegen
+          const sonstigeImFilter = sonstige.filter(([d]) => {
+            const tDiff = Math.round((new Date(d + 'T12:00:00') - baseDatum) / 86400000);
+            return tDiff >= -1 && tDiff <= aktivFilter;
+          });
+          const sonstigeSumMe = sonstigeImFilter.reduce((s, [, l]) => s + l.reduce((ss, k) => ss + (parseInt(k.dataset.dauer) || 0), 0), 0);
+          const sonstAAnzahl = sonstigeImFilter.reduce((s, [, l]) => s + l.length, 0);
+
+          // Header mit Anzahl + Filter-Buttons
+          const weitereHeader = document.createElement('div');
+          weitereHeader.className = 'nz-section-header nz-section-header--weitere';
+
+          const titleSpan = document.createElement('span');
+          titleSpan.className = 'nz-weitere-title';
+          const daurText = sonstigeSumMe >= 60 ? `${Math.floor(sonstigeSumMe/60)}h${sonstigeSumMe%60>0?' '+(sonstigeSumMe%60)+'min':''}` : `${sonstigeSumMe}min`;
+          titleSpan.innerHTML = `📋 Weitere <span class="nz-section-count">${sonstAAnzahl} ${sonstAAnzahl===1?'Termin':'Termine'} · ${daurText}</span>`;
+
+          const filterSpan = document.createElement('span');
+          filterSpan.className = 'nz-weitere-filter';
+          filterOptionen.forEach(n => {
+            const btn = document.createElement('button');
+            btn.className = 'nz-filter-btn' + (n === aktivFilter ? ' active' : '');
+            btn.textContent = n === 7 ? '7 Tage' : `+${n}T`;
+            btn.title = `Nächste ${n} Tag${n > 1 ? 'e' : ''} anzeigen`;
+            btn.onclick = (e) => {
+              e.stopPropagation();
+              self.weitereTermineFilter = n;
+              self.loadAuslastungDragDrop();
+            };
+            filterSpan.appendChild(btn);
+          });
+
+          weitereHeader.appendChild(titleSpan);
+          weitereHeader.appendChild(filterSpan);
+          container.appendChild(weitereHeader);
+
+          // Pro Tag eine Untergruppe rendern (nur Tage im Filter)
+          sonstige.forEach(([d, liste]) => {
+            const tDatum = new Date(d + 'T12:00:00');
+            const tDiff = Math.round((tDatum - baseDatum) / 86400000);
+            if (tDiff < -1 || tDiff > aktivFilter) return;
+
+            const subHeader = document.createElement('div');
+            subHeader.className = 'nz-date-sub-header';
+            subHeader.textContent = tDatum.toLocaleDateString('de-DE', { weekday: 'short', day: '2-digit', month: '2-digit', year: '2-digit' });
+            container.appendChild(subHeader);
+            liste.forEach(k => container.appendChild(k));
+          });
         }
-      })(sourceContainer, this.formatDateLocal(new Date()), datum);
+      })(sourceContainer, this.formatDateLocal(new Date()), datum, this);
 
       // Drop-Zone für "Nicht zugeordnet"
       this.setupDropZone(sourceContainer);
