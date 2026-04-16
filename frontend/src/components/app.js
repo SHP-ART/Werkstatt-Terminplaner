@@ -24697,7 +24697,10 @@ class App {
     // Termine vor startHour werden am linken Rand angezeigt (geklammert)
     const startMinutesFromDayStart = Math.max(0, (startH - startHour) * 60 + startM);
     const leftPx = startMinutesFromDayStart * pixelPerMinute;
-    const widthPx = Math.max(displayDauer * pixelPerMinute, 40); // Mindestbreite 40px
+    // Breite auf Feierabend clippen: nicht über endHour hinausragen
+    const endMinutesOfDay = endHour * 60;
+    const clippedDisplayDauer = Math.min(displayDauer, endMinutesOfDay - startAbsMinutes);
+    const widthPx = Math.max(clippedDisplayDauer * pixelPerMinute, 40); // Mindestbreite 40px
     
     // Außerhalb des sichtbaren Bereichs? (nur rechts ausblenden)
     if (startH >= endHour) {
@@ -25694,7 +25697,9 @@ class App {
           const teil2StartH = Math.floor(pauseEndMinutes / 60);
           const teil2StartM = pauseEndMinutes % 60;
           const teil2LeftPx = (teil2StartH - startHour) * pixelPerHour + teil2StartM * pixelPerMinute;
-          const teil2WidthPx = Math.max(teil2Dauer * pixelPerMinute, 40);
+          const endMinutesOfDay = endHour * 60;
+          const clippedTeil2Dauer = Math.min(teil2Dauer, endMinutesOfDay - pauseEndMinutes);
+          const teil2WidthPx = Math.max(clippedTeil2Dauer * pixelPerMinute, 40);
           
           const teil2Div = document.createElement('div');
           teil2Div.className = 'timeline-termin arbeit-block fortsetzung geaendert';
@@ -25725,9 +25730,11 @@ class App {
           targetTrack.appendChild(teil2Div);
         }
       } else {
-        // Keine Pause-Überschneidung
+        // Keine Pause-Überschneidung - Breite auf Feierabend clippen
         const leftPx = (startH - startHour) * pixelPerHour + startM * pixelPerMinute;
-        const widthPx = Math.max(dauer * pixelPerMinute, 40);
+        const endMinutesOfDay = endHour * 60;
+        const clippedDauer = Math.min(dauer, endMinutesOfDay - startMinutes);
+        const widthPx = Math.max(clippedDauer * pixelPerMinute, 40);
         blockEl.style.left = `${leftPx}px`;
         blockEl.style.width = `${widthPx}px`;
         blockEl.classList.add('geaendert');
@@ -25803,7 +25810,9 @@ class App {
           const teil2StartH = Math.floor(pauseEndMinutes / 60);
           const teil2StartM = pauseEndMinutes % 60;
           const teil2LeftPx = (teil2StartH - startHour) * pixelPerHour + teil2StartM * pixelPerMinute;
-          const teil2WidthPx = Math.max(teil2Dauer * pixelPerMinute, 40);
+          const endMinutesOfDay = endHour * 60;
+          const clippedTeil2Dauer = Math.min(teil2Dauer, endMinutesOfDay - pauseEndMinutes);
+          const teil2WidthPx = Math.max(clippedTeil2Dauer * pixelPerMinute, 40);
           
           const teil2Div = document.createElement('div');
           teil2Div.className = 'timeline-termin arbeit-block fortsetzung geaendert';
@@ -25830,9 +25839,11 @@ class App {
           targetTrack.appendChild(teil2Div);
         }
       } else {
-        // Keine Pause-Überschneidung
+        // Keine Pause-Überschneidung - Breite auf Feierabend clippen
         const leftPx = (startH - startHour) * pixelPerHour + startM * pixelPerMinute;
-        const widthPx = Math.max(dauer * pixelPerMinute, 40);
+        const endMinutesOfDay = endHour * 60;
+        const clippedDauer = Math.min(dauer, endMinutesOfDay - startMinutes);
+        const widthPx = Math.max(clippedDauer * pixelPerMinute, 40);
         newBlock.style.left = `${leftPx}px`;
         newBlock.style.width = `${widthPx}px`;
         
@@ -26132,6 +26143,8 @@ class App {
       pauseEndMinutes = pauseStartMinutes + pauseDauer;
     }
     
+    const endMinutesOfDay = endHour * 60;
+    
     // Prüfe ob Termin über die Mittagspause geht und gesplittet werden muss
     if (pauseStartMinutes !== null && startMinutes < pauseStartMinutes && endMinutes > pauseStartMinutes) {
       // Teil 1: Vor der Pause
@@ -26146,11 +26159,13 @@ class App {
       // Teil 2: Nach der Pause (Fortsetzung erstellen) - verbleibende Arbeitszeit
       const gesamtDauer = endMinutes - startMinutes;
       const teil2Dauer = gesamtDauer - teil1Dauer; // Verbleibende Arbeitszeit
-      if (teil2Dauer > 0) {
+      if (teil2Dauer > 0 && pauseEndMinutes < endMinutesOfDay) {
         const teil2StartH = Math.floor(pauseEndMinutes / 60);
         const teil2StartM = pauseEndMinutes % 60;
         const teil2LeftPx = (teil2StartH - startHour) * pixelPerHour + teil2StartM * pixelPerMinute;
-        const teil2WidthPx = Math.max(teil2Dauer * pixelPerMinute, 40);
+        // Feierabend-Clipping für Teil 2
+        const clippedTeil2Dauer = Math.min(teil2Dauer, endMinutesOfDay - pauseEndMinutes);
+        const teil2WidthPx = Math.max(clippedTeil2Dauer * pixelPerMinute, 40);
         
         // Hole Termin-Infos aus dem Hauptelement
         const terminNr = terminEl.querySelector('.termin-title')?.textContent.split(' - ')[0] || '';
@@ -26172,9 +26187,10 @@ class App {
         targetTrack.appendChild(teil2Div);
       }
     } else {
-      // Keine Aufteilung nötig - normaler Termin
+      // Keine Aufteilung nötig - Breite auf Feierabend clippen
       const leftPx = (startH - startHour) * pixelPerHour + startM * pixelPerMinute;
-      const widthPx = Math.max(dauer * pixelPerMinute, 40);
+      const clippedDauer = Math.min(dauer, endMinutesOfDay - startMinutes);
+      const widthPx = Math.max(clippedDauer * pixelPerMinute, 40);
       
       terminEl.style.left = `${leftPx}px`;
       terminEl.style.width = `${widthPx}px`;
