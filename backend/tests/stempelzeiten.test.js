@@ -5,8 +5,9 @@ describe('Stempelzeiten', () => {
 
   beforeEach(async () => {
     db = await createTestDb();
-    await dbRun(db, `ALTER TABLE termine_arbeiten ADD COLUMN stempel_start TEXT`).catch(() => {});
-    await dbRun(db, `ALTER TABLE termine_arbeiten ADD COLUMN stempel_ende TEXT`).catch(() => {});
+    // Stempel-Spalten für Tests hinzufügen (in Produktions-DB durch Migration 032 vorhanden)
+    try { await dbRun(db, `ALTER TABLE termine_arbeiten ADD COLUMN stempel_start TEXT`); } catch (e) { /* bereits vorhanden */ }
+    try { await dbRun(db, `ALTER TABLE termine_arbeiten ADD COLUMN stempel_ende TEXT`); } catch (e) { /* bereits vorhanden */ }
     await dbRun(db, `INSERT OR IGNORE INTO mitarbeiter (id, name, aktiv) VALUES (1, 'Max Mustermann', 1)`);
     await dbRun(db, `
       INSERT INTO termine (termin_nr, kunde_name, kennzeichen, datum, arbeit, status, mitarbeiter_id, geschaetzte_zeit)
