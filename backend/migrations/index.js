@@ -46,7 +46,8 @@ const migrations = [
   require('./028_nacharbeit_tracking'), // Version 28 - Nacharbeit-Tracking: nacharbeit_start_zeit
   require('./029_wiederholung'),        // Version 29 - Wiederholungstermin-Flag
   require('./030_arbeitspausen'),        // Version 30 - Arbeitspausen-Tabelle
-  require('./031_add_lehrling_id_to_termine') // Version 31 - lehrling_id in termine
+  require('./031_add_lehrling_id_to_termine'), // Version 31 - lehrling_id in termine
+  require('./032_stempel_felder')               // Version 32 - Stempel-Felder in termine_arbeiten
 ];
 
 /**
