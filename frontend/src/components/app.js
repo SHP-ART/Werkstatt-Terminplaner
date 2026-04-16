@@ -7963,9 +7963,15 @@ class App {
       }
       const morgenStr = (() => { const d=new Date(); d.setDate(d.getDate()+1); while(d.getDay()===0||d.getDay()===6) d.setDate(d.getDate()+1); return d.toLocaleDateString('de-DE',{weekday:'short',day:'2-digit',month:'2-digit'}); })();
       if (restMin <= 0) {
-        prev.innerHTML = `<span style="color:#2e7d32;">✅ Termin passt vollständig bis ${feier} Uhr (${heuteMin} Min.).</span>`;
+        prev.innerHTML = `<span style="color:#2e7d32;">✅ Termin passt vollständig bis ${feier} Uhr (${heuteMin} Min.) – keine Aufteilung nötig.</span>`;
+        document.getElementById('einplanenBestaetigen').disabled = true;
+        document.getElementById('einplanenBestaetigen').style.opacity = '0.5';
+        document.getElementById('einplanenBestaetigen').style.cursor = 'not-allowed';
       } else {
         prev.innerHTML = `<strong>Heute:</strong> ${heuteMin} Min. (${start}–${feier})<br><strong>Morgen (${morgenStr}):</strong> ${restMin} Min. ab 08:00`;
+        document.getElementById('einplanenBestaetigen').disabled = false;
+        document.getElementById('einplanenBestaetigen').style.opacity = '';
+        document.getElementById('einplanenBestaetigen').style.cursor = '';
       }
     };
     updateVorschau();
@@ -7984,6 +7990,10 @@ class App {
       const heuteMin = (fh*60+fm) - (sh*60+sm);
       if (heuteMin <= 0) {
         this.showToast('⚠️ Feierabend liegt vor der Startzeit!', 'error');
+        return;
+      }
+      if (heuteMin >= gesamtMin) {
+        this.showToast('ℹ️ Der Termin passt vollständig bis zum Feierabend – keine Aufteilung nötig.', 'info');
         return;
       }
       overlay.remove();
