@@ -22771,6 +22771,10 @@ class App {
             if (termin.startzeit && (termin.status === 'in_arbeit' || termin.status === 'abgeschlossen')) {
               effektiveStartzeit = termin.startzeit;
             }
+            // Fallback für geplante Termine (z.B. interne Termine): nutze termin.startzeit
+            if (!effektiveStartzeit && termin.startzeit) {
+              effektiveStartzeit = termin.startzeit;
+            }
             
             // Priorität 2: Erste Arbeit mit eigener Zuordnung
             if (!zuordnungsTyp && arbeiten.length === 1) {
@@ -22809,8 +22813,8 @@ class App {
             terminFuerTimeline.startzeit = effektiveStartzeit;
           }
           
-          // Termin auf Timeline platzieren
-          if (zuordnungsTyp === 'lehrling' && lehrlingId && lehrlingeMap[lehrlingId]) {
+          // Termin auf Timeline platzieren – nur wenn Startzeit bekannt
+          if (zuordnungsTyp === 'lehrling' && lehrlingId && lehrlingeMap[lehrlingId] && effektiveStartzeit) {
             console.log('[DEBUG] Termin', termin.termin_nr, '- Platziere auf Lehrling-Timeline:', lehrlingId);
             const pauseStart = lehrlingePauseMap[lehrlingId];
             const timelineElements = this.createTimelineTerminWithPause(terminFuerTimeline, startHour, endHour, pauseStart, 'lehrling');
@@ -22818,7 +22822,7 @@ class App {
               if (el) lehrlingeMap[lehrlingId].appendChild(el);
             });
             console.log('[DEBUG] Termin', termin.termin_nr, '- Timeline-Elemente erstellt:', timelineElements.length);
-          } else if (mitarbeiterId && mitarbeiterMap[mitarbeiterId]) {
+          } else if (mitarbeiterId && mitarbeiterMap[mitarbeiterId] && effektiveStartzeit) {
             console.log('[DEBUG] Termin', termin.termin_nr, '- Platziere auf Mitarbeiter-Timeline:', mitarbeiterId);
             const pauseStart = mitarbeiterPauseMap[mitarbeiterId];
             const timelineElements = this.createTimelineTerminWithPause(terminFuerTimeline, startHour, endHour, pauseStart);
