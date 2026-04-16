@@ -45,7 +45,8 @@ const migrations = [
   require('./027_fix_tablet_einstellungen_schema'), // Version 27 - Repariert altes tablet_einstellungen-Schema
   require('./028_nacharbeit_tracking'), // Version 28 - Nacharbeit-Tracking: nacharbeit_start_zeit
   require('./029_wiederholung'),        // Version 29 - Wiederholungstermin-Flag
-  require('./030_arbeitspausen')        // Version 30 - Arbeitspausen-Tabelle
+  require('./030_arbeitspausen'),        // Version 30 - Arbeitspausen-Tabelle
+  require('./031_add_lehrling_id_to_termine') // Version 31 - lehrling_id in termine
 ];
 
 /**
