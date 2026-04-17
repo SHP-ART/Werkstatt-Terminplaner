@@ -29,6 +29,7 @@ const { requireAuth } = require('../middleware/auth');
 const { aiLimiter, systemLimiter } = require('../middleware/rateLimiter');
 const sucheRoutes = require('./sucheRoutes');
 const wiederkehrendeTermineRoutes = require('./wiederkehrendeTermineRoutes');
+const stempelzeitenRoutes = require('./stempelzeitenRoutes');
 
 router.use('/kunden', kundenRoutes);
 router.use('/termine', termineRoutes);
@@ -61,6 +62,7 @@ router.use('/system', requireAuth, systemLimiter, systemRoutes);
 router.use('/reports', reportingRoutes);
 router.use('/suche', sucheRoutes);
 router.use('/wiederkehrende-termine', wiederkehrendeTermineRoutes);
+router.use('/stempelzeiten', stempelzeitenRoutes);
 
 router.get('/health', (req, res) => {
   res.json({ status: 'OK', timestamp: new Date().toISOString() });
