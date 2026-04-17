@@ -30,6 +30,7 @@ const { aiLimiter, systemLimiter } = require('../middleware/rateLimiter');
 const sucheRoutes = require('./sucheRoutes');
 const wiederkehrendeTermineRoutes = require('./wiederkehrendeTermineRoutes');
 const stempelzeitenRoutes = require('./stempelzeitenRoutes');
+const tagesstempelRoutes = require('./tagesstempelRoutes');
 
 router.use('/kunden', kundenRoutes);
 router.use('/termine', termineRoutes);
@@ -63,6 +64,7 @@ router.use('/reports', reportingRoutes);
 router.use('/suche', sucheRoutes);
 router.use('/wiederkehrende-termine', wiederkehrendeTermineRoutes);
 router.use('/stempelzeiten', stempelzeitenRoutes);
+router.use('/tagesstempel', tagesstempelRoutes);
 
 router.get('/health', (req, res) => {
   res.json({ status: 'OK', timestamp: new Date().toISOString() });

@@ -48,7 +48,8 @@ const migrations = [
   require('./030_arbeitspausen'),       // Version 30 - Arbeitspausen-Tabelle
   require('./031_add_lehrling_id_to_termine'), // Version 31 - lehrling_id in termine
   require('./032_stempel_felder'),             // Version 32 - Stempel-Felder in termine_arbeiten
-  require('./033_relax_termine_arbeiten_person_constraint') // Version 33 - Person-Constraint entfernt
+  require('./033_relax_termine_arbeiten_person_constraint'), // Version 33 - Person-Constraint entfernt
+  require('./034_tagesstempel'),               // Version 34 - Tagesstempel + Arbeitsunterbrechungen
 ];
 
 /**
