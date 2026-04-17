@@ -30789,6 +30789,7 @@ class App {
       return `
         <tr>
           <td>${this.escapeHtml(a.termin_nr || '')}</td>
+          <td>${this.escapeHtml(a.kunde_name || '—')}</td>
           <td>${this.escapeHtml(a.kennzeichen || '')}</td>
           <td>${this.escapeHtml(a.arbeit)}</td>
           <td class="text-success">${a.stempel_start || '<span class="text-muted">—</span>'}</td>
@@ -30813,6 +30814,7 @@ class App {
             <thead>
               <tr>
                 <th>Auftrag</th>
+                <th>Kundenname</th>
                 <th>Kennzeichen</th>
                 <th>Arbeit</th>
                 <th class="text-success">Start ▶</th>
