@@ -17,10 +17,11 @@ class StempelzeitenController {
           t.id           AS termin_id,
           t.termin_nr,
           t.kennzeichen,
-          t.kunde_name,
+          COALESCE(NULLIF(t.kunde_name,''), k.name, '') AS kunde_name,
           t.arbeit       AS termin_arbeit,
           t.geschaetzte_zeit
         FROM termine t
+        LEFT JOIN kunden k ON t.kunde_id = k.id
         WHERE t.datum = ?
           AND t.geloescht_am IS NULL
           AND t.status NOT IN ('storniert')
