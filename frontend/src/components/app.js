@@ -23046,6 +23046,9 @@ class App {
       if (this.inArbeitBarInterval) clearInterval(this.inArbeitBarInterval);
       this.inArbeitBarInterval = setInterval(() => this.updateInArbeitBars(), 60000);
 
+      // Stempel-Panel aktualisieren
+      await this.renderPlanungStempelPanel(datum).catch(() => {});
+
     } catch (error) {
       console.error('Fehler beim Laden der Drag & Drop Auslastung:', error);
       alert('Fehler beim Laden der Daten: ' + (error.message || 'Unbekannter Fehler'));
@@ -30552,6 +30555,59 @@ class App {
     } catch (err) {
       console.error('[Stempel manuell] Fehler:', err);
       alert('Fehler beim Speichern der Zeit.');
+    }
+  }
+
+  async renderPlanungStempelPanel(datum) {
+    const container = document.getElementById('planungStempelPanel');
+    if (!container) return;
+
+    try {
+      const gruppen = await ApiService.get(`/stempelzeiten?datum=${datum}`);
+      if (!gruppen || gruppen.length === 0) {
+        container.innerHTML = '<p class="text-muted" style="padding:12px;">Keine Arbeiten für diesen Tag.</p>';
+        return;
+      }
+
+      const rows = gruppen.flatMap(g => g.arbeiten.map(a => {
+        const icon = g.person_typ === 'lehrling' ? '🎓' : '👷';
+        const safeArbeit = a.arbeit.replace(/'/g, "\\'").replace(/"/g, '&quot;');
+        return `
+          <tr>
+            <td>${icon} ${this.escapeHtml(g.person_name)}</td>
+            <td>${this.escapeHtml(a.termin_nr || '')}</td>
+            <td>${this.escapeHtml(a.kennzeichen || '')}</td>
+            <td>${this.escapeHtml(a.arbeit)}</td>
+            <td><input type="time" class="form-control form-control-sm"
+              value="${a.stempel_start || ''}"
+              onchange="app.stempelManuellSetzen(${a.termin_id}, '${safeArbeit}', 'start', this.value)"></td>
+            <td><input type="time" class="form-control form-control-sm"
+              value="${a.stempel_ende || ''}"
+              onchange="app.stempelManuellSetzen(${a.termin_id}, '${safeArbeit}', 'ende', this.value)"></td>
+            <td class="text-warning">${a.geschaetzte_min ? a.geschaetzte_min + ' Min' : '—'}</td>
+          </tr>
+        `;
+      })).join('');
+
+      container.innerHTML = `
+        <table class="table table-striped" style="margin:0;">
+          <thead>
+            <tr>
+              <th>Mitarbeiter</th>
+              <th>Auftrag</th>
+              <th>Kennzeichen</th>
+              <th>Arbeit</th>
+              <th class="text-success">Start ▶</th>
+              <th class="text-danger">Ende ■</th>
+              <th class="text-warning">Geschätzt</th>
+            </tr>
+          </thead>
+          <tbody>${rows}</tbody>
+        </table>
+      `;
+    } catch (err) {
+      console.error('[PlanungStempel] Fehler:', err);
+      container.innerHTML = '<p class="text-muted" style="padding:12px;">Fehler beim Laden.</p>';
     }
   }
 

@@ -3618,6 +3618,17 @@
                     </div>
                 </div>
             </div>
+
+            <!-- Stempelzeiten manuell nachtragen -->
+            <div class="card" style="margin-top: 20px;">
+                <div class="card-header" style="cursor:pointer;" onclick="this.nextElementSibling.style.display = this.nextElementSibling.style.display === 'none' ? '' : 'none'">
+                    <strong>🕐 Stempelzeiten manuell nachtragen</strong>
+                    <span class="text-muted" style="font-size:12px;margin-left:8px;">(klicken zum Ein-/Ausblenden)</span>
+                </div>
+                <div id="planungStempelPanel" style="display:none;">
+                    <p class="loading-text" style="padding:12px;">Lade…</p>
+                </div>
+            </div>
         </template>
 
         <!-- ============================================================== -->
