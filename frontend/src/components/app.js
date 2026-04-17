@@ -835,6 +835,12 @@ class App {
     if (eventName.startsWith('termin.')) {
       this.handleRealtimeTerminEvent(eventName, data);
     }
+
+    if (eventName === 'stempel.updated') {
+      if (document.getElementById('zeitstempelung')?.classList.contains('active')) {
+        this.loadZeitstempelung();
+      }
+    }
   }
 
   handleRealtimeKundenEvent(eventName, data) {
@@ -910,6 +916,37 @@ class App {
       this.updatePlanungWocheInfo();
       this.loadAuslastungDragDrop();
     }, 'PlanungDatumChange');
+
+    const zeitstempelungDatum = document.getElementById('zeitstempelungDatum');
+    this.bindEventListenerOnce(zeitstempelungDatum, 'change', () => this.loadZeitstempelung(), 'ZeitstempelungDatumChange');
+
+    const ztPrev = document.getElementById('zeitstempelungPrevTag');
+    this.bindEventListenerOnce(ztPrev, 'click', () => {
+      const inp = document.getElementById('zeitstempelungDatum');
+      if (!inp) return;
+      const d = new Date(inp.value + 'T00:00:00');
+      d.setDate(d.getDate() - 1);
+      inp.value = this.formatDateLocal(d);
+      this.loadZeitstempelung();
+    }, 'ZeitstempelungPrevTag');
+
+    const ztNext = document.getElementById('zeitstempelungNextTag');
+    this.bindEventListenerOnce(ztNext, 'click', () => {
+      const inp = document.getElementById('zeitstempelungDatum');
+      if (!inp) return;
+      const d = new Date(inp.value + 'T00:00:00');
+      d.setDate(d.getDate() + 1);
+      inp.value = this.formatDateLocal(d);
+      this.loadZeitstempelung();
+    }, 'ZeitstempelungNextTag');
+
+    const ztHeute = document.getElementById('zeitstempelungHeuteBtn');
+    this.bindEventListenerOnce(ztHeute, 'click', () => {
+      const inp = document.getElementById('zeitstempelungDatum');
+      if (!inp) return;
+      inp.value = this.formatDateLocal(this.getToday());
+      this.loadZeitstempelung();
+    }, 'ZeitstempelungHeute');
 
     const planungPrevTag = document.getElementById('planungPrevTag');
     const planungNextTag = document.getElementById('planungNextTag');
@@ -3089,6 +3126,12 @@ class App {
       }
       this.updatePlanungWocheInfo();
       this.loadAuslastungDragDrop();
+    } else if (tabName === 'zeitstempelung') {
+      const datumInput = document.getElementById('zeitstempelungDatum');
+      if (datumInput && !datumInput.value) {
+        datumInput.value = this.formatDateLocal(this.getToday());
+      }
+      this.loadZeitstempelung();
     } else if (tabName === 'dashboard') {
       this.loadDashboard();
     } else if (tabName === 'heute') {
@@ -30400,6 +30443,115 @@ class App {
           </div>
         `;
       }
+    }
+  }
+
+  async loadZeitstempelung() {
+    const container = document.getElementById('zeitstempelungContainer');
+    const datumInput = document.getElementById('zeitstempelungDatum');
+    if (!container || !datumInput) return;
+
+    const datum = datumInput.value || this.formatDateLocal(this.getToday());
+    container.innerHTML = '<p class="loading-text">Lade Stempelzeiten…</p>';
+
+    try {
+      const gruppen = await ApiService.get(`/stempelzeiten?datum=${datum}`);
+
+      if (!gruppen || gruppen.length === 0) {
+        container.innerHTML = '<div class="empty-state"><p>Keine Arbeiten für diesen Tag.</p></div>';
+        return;
+      }
+
+      container.innerHTML = gruppen.map(g => this.renderZeitstempelungGruppe(g)).join('');
+    } catch (err) {
+      console.error('[Zeitstempelung] Ladefehler:', err);
+      container.innerHTML = '<div class="error-state"><p>Fehler beim Laden der Stempelzeiten.</p></div>';
+    }
+  }
+
+  renderZeitstempelungGruppe(gruppe) {
+    const gesamtGeschaetzt = gruppe.arbeiten.reduce((s, a) => s + (a.geschaetzte_min || 0), 0);
+    const gesamtIst = gruppe.arbeiten.reduce((s, a) => s + (a.ist_min || 0), 0);
+    const icon = gruppe.person_typ === 'lehrling' ? '🎓' : '👷';
+
+    const rows = gruppe.arbeiten.map(a => {
+      const istMin = a.ist_min;
+      const geschMin = a.geschaetzte_min || 0;
+      const ueberschritten = istMin !== null && geschMin > 0 && istMin > geschMin * 1.1;
+      const istText = a.stempel_start && !a.stempel_ende
+        ? '<span class="badge badge-info">laufend…</span>'
+        : istMin !== null
+          ? `<span class="${ueberschritten ? 'text-warning' : 'text-success'}">${istMin} Min${ueberschritten ? ' ⚠️' : ''}</span>`
+          : '<span class="text-muted">—</span>';
+
+      return `
+        <tr>
+          <td>${this.escapeHtml(a.termin_nr || '')}</td>
+          <td>${this.escapeHtml(a.kennzeichen || '')}</td>
+          <td>${this.escapeHtml(a.arbeit)}</td>
+          <td class="text-success">${a.stempel_start || '<span class="text-muted">—</span>'}</td>
+          <td class="text-danger">${a.stempel_ende || '<span class="text-muted">—</span>'}</td>
+          <td class="text-warning">${geschMin ? geschMin + ' Min' : '—'}</td>
+          <td>${istText}</td>
+        </tr>
+      `;
+    }).join('');
+
+    return `
+      <div class="card" style="margin-bottom: 16px;">
+        <div class="card-header" style="display:flex;justify-content:space-between;align-items:center;">
+          <strong>${icon} ${this.escapeHtml(gruppe.person_name)}</strong>
+          <span class="text-muted" style="font-size:13px;">
+            Geschätzt: ${gesamtGeschaetzt} Min
+            ${gesamtIst ? '· Gestempelt: ' + gesamtIst + ' Min' : ''}
+          </span>
+        </div>
+        <div class="card-body" style="padding:0;">
+          <table class="table table-striped" style="margin:0;">
+            <thead>
+              <tr>
+                <th>Auftrag</th>
+                <th>Kennzeichen</th>
+                <th>Arbeit</th>
+                <th class="text-success">Start ▶</th>
+                <th class="text-danger">Ende ■</th>
+                <th class="text-warning">Geschätzt</th>
+                <th>Ist-Zeit</th>
+              </tr>
+            </thead>
+            <tbody>${rows}</tbody>
+          </table>
+        </div>
+      </div>
+    `;
+  }
+
+  async stempelSetzen(terminId, arbeitName, typ) {
+    const jetzt = new Date();
+    const zeit = `${String(jetzt.getHours()).padStart(2,'0')}:${String(jetzt.getMinutes()).padStart(2,'0')}`;
+    const body = { termin_id: terminId, arbeit_name: arbeitName };
+    if (typ === 'start') body.stempel_start = zeit;
+    else body.stempel_ende = zeit;
+
+    try {
+      await ApiService.put('/stempelzeiten/stempel', body);
+    } catch (err) {
+      console.error('[Stempel] Fehler:', err);
+      alert('Fehler beim Stempeln.');
+    }
+  }
+
+  async stempelManuellSetzen(terminId, arbeitName, typ, zeitWert) {
+    if (!zeitWert) return;
+    const body = { termin_id: terminId, arbeit_name: arbeitName };
+    if (typ === 'start') body.stempel_start = zeitWert;
+    else body.stempel_ende = zeitWert;
+
+    try {
+      await ApiService.put('/stempelzeiten/stempel', body);
+    } catch (err) {
+      console.error('[Stempel manuell] Fehler:', err);
+      alert('Fehler beim Speichern der Zeit.');
     }
   }
 
