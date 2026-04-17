@@ -54,6 +54,26 @@ class StempelzeitenController {
       `, [datum]);
 
       // Personen-Map: alle bekannten Mitarbeiter und Lehrlinge laden
+      // Richtwerte aus Zeitverwaltung (Herstellervorgabe) — in-memory Fuzzy-Match
+      const alleArbeitszeiten = await allAsync(`SELECT bezeichnung, standard_minuten, aliase FROM arbeitszeiten`, []);
+      const _norm = s => s.toLowerCase().replace(/[\/\-_\.]+/g, ' ').replace(/\s+/g, ' ').trim();
+      const _getRichtwert = (arbeitName) => {
+        if (!arbeitName) return null;
+        const suche = _norm(arbeitName);
+        // 1. Exakter Treffer
+        let match = alleArbeitszeiten.find(a => _norm(a.bezeichnung) === suche);
+        // 2. Teilwort
+        if (!match) match = alleArbeitszeiten.find(a => {
+          const b = _norm(a.bezeichnung);
+          return b.includes(suche) || suche.includes(b);
+        });
+        // 3. Alias
+        if (!match) match = alleArbeitszeiten.find(a =>
+          (a.aliase || '').split(',').map(x => _norm(x)).some(al => al && (al === suche || al.includes(suche) || suche.includes(al)))
+        );
+        return match ? match.standard_minuten : null;
+      };
+
       const mitarbeiterRows = await allAsync(`SELECT id, name FROM mitarbeiter WHERE aktiv = 1`, []);
       const lehrlingeRows   = await allAsync(`SELECT id, name FROM lehrlinge WHERE aktiv = 1`, []);
       const personenMap = {};
@@ -119,6 +139,7 @@ class StempelzeitenController {
           arbeit_id: s.arbeit_id, termin_id: s.termin_id,
           termin_nr: t.termin_nr || '', interne_auftragsnummer: t.interne_auftragsnummer || '', kennzeichen: t.kennzeichen || '', kunde_name: t.kunde_name || '',
           arbeit: s.arbeit || t.termin_arbeit || '',
+          richtwert_min: _getRichtwert(s.arbeit || t.termin_arbeit),
           geschaetzte_min: s.geschaetzte_min, stempel_start: s.stempel_start, stempel_ende: s.stempel_ende, ist_min: istMin
         });
       }
@@ -133,7 +154,8 @@ class StempelzeitenController {
           _addArbeit(grupKey, person, t, {
             arbeit_id: null, termin_id: t.termin_id,
             termin_nr: t.termin_nr || '', interne_auftragsnummer: t.interne_auftragsnummer || '', kennzeichen: t.kennzeichen || '', kunde_name: t.kunde_name || '',
-            arbeit: t.termin_arbeit || '', geschaetzte_min: t.geschaetzte_zeit,
+            arbeit: t.termin_arbeit || '', richtwert_min: _getRichtwert(t.termin_arbeit),
+            geschaetzte_min: t.geschaetzte_zeit,
             stempel_start: null, stempel_ende: null, ist_min: null
           });
         }
@@ -148,7 +170,8 @@ class StempelzeitenController {
           arbeiten: ohnePersonOhneStempel.map(t => ({
             arbeit_id: null, termin_id: t.termin_id,
             termin_nr: t.termin_nr || '', interne_auftragsnummer: t.interne_auftragsnummer || '', kennzeichen: t.kennzeichen || '', kunde_name: t.kunde_name || '',
-            arbeit: t.termin_arbeit || '', geschaetzte_min: t.geschaetzte_zeit,
+            arbeit: t.termin_arbeit || '', richtwert_min: _getRichtwert(t.termin_arbeit),
+            geschaetzte_min: t.geschaetzte_zeit,
             stempel_start: null, stempel_ende: null, ist_min: null
           }))
         });

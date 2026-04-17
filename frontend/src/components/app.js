@@ -30772,14 +30772,14 @@ class App {
   }
 
   renderZeitstempelungGruppe(gruppe) {
-    const gesamtGeschaetzt = gruppe.arbeiten.reduce((s, a) => s + (a.geschaetzte_min || 0), 0);
+    const gesamtGeschaetzt = gruppe.arbeiten.reduce((s, a) => s + (a.richtwert_min || 0), 0);
     const gesamtIst = gruppe.arbeiten.reduce((s, a) => s + (a.ist_min || 0), 0);
     const icon = gruppe.person_typ === 'lehrling' ? '🎓' : '👷';
 
     const rows = gruppe.arbeiten.map(a => {
       const istMin = a.ist_min;
-      const geschMin = a.geschaetzte_min || 0;
-      const ueberschritten = istMin !== null && geschMin > 0 && istMin > geschMin * 1.1;
+      const richtMin = a.richtwert_min || 0;
+      const ueberschritten = istMin !== null && richtMin > 0 && istMin > richtMin * 1.1;
       const istText = a.stempel_start && !a.stempel_ende
         ? '<span class="badge badge-info">laufend…</span>'
         : istMin !== null
@@ -30795,7 +30795,7 @@ class App {
           <td>${this.escapeHtml(a.arbeit)}</td>
           <td class="text-success">${a.stempel_start || '<span class="text-muted">—</span>'}</td>
           <td class="text-danger">${a.stempel_ende || '<span class="text-muted">—</span>'}</td>
-          <td class="text-warning">${geschMin ? geschMin + ' Min' : '—'}</td>
+          <td class="text-warning">${richtMin ? richtMin + ' Min' : '—'}</td>
           <td>${istText}</td>
         </tr>
       `;
