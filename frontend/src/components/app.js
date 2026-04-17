@@ -30477,11 +30477,11 @@ class App {
           const safeArbeit = this.escapeHtml(a.name).replace(/'/g, "\\'");
           const startBtn = hatStart
             ? `<span class="intern-stempel-zeit" style="color:var(--success,#28a745);font-size:12px;">▶ ${stempel.stempel_start}</span>`
-            : `<button class="intern-btn intern-btn-sm intern-btn-stempel-start"
+            : `<button class="intern-btn-stempel-start"
                 onclick="app.stempelSetzen(${termin.id}, '${safeArbeit}', 'start').then(() => app.loadInternTeamUebersicht())">▶ Start</button>`;
           const endeBtn = hatEnde
             ? `<span class="intern-stempel-zeit" style="color:var(--danger,#dc3545);font-size:12px;">■ ${stempel.stempel_ende}</span>`
-            : `<button class="intern-btn intern-btn-sm intern-btn-stempel-ende" ${!hatStart ? 'disabled' : ''}
+            : `<button class="intern-btn-stempel-ende" ${!hatStart ? 'disabled' : ''}
                 onclick="app.stempelSetzen(${termin.id}, '${safeArbeit}', 'ende').then(() => app.loadInternTeamUebersicht())">■ Ende</button>`;
           return `
             <div class="intern-arbeit-item ${a.abgeschlossen ? 'abgeschlossen' : ''}">
