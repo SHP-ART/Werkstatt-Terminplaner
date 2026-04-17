@@ -257,6 +257,7 @@ Vollständige Beschreibungen in [.claude/PROJEKT.md](.claude/PROJEKT.md) Abschni
 | `mitarbeiterRoutes.js` | Mitarbeiter CRUD |
 | `abwesenheitenRoutes.js` | Abwesenheiten (Urlaub, Krank, …) |
 | `arbeitszeitenRoutes.js` | Stempelzeiten, Ist-Zeiten |
+| `stempelzeitenRoutes.js` | Tagesübersicht Stempelzeiten, Stempel setzen (GET /stempelzeiten, PUT /stempelzeiten/stempel) |
 | `arbeitszeitenPlanRoutes.js` | Soll-Arbeitszeiten Planung |
 | `arbeitspausen.js` | Pausenzeitenbuchung |
 | `schichtTemplateRoutes.js` | Schicht-Templates |
