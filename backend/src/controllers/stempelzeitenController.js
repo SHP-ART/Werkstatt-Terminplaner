@@ -14,12 +14,15 @@ class StempelzeitenController {
       // Termine MIT Stempel erscheinen unter dem jeweiligen Mitarbeiter/Lehrling
       const alleTermine = await allAsync(`
         SELECT
-          t.id           AS termin_id,
+          t.id                     AS termin_id,
           t.termin_nr,
           t.kennzeichen,
           COALESCE(NULLIF(t.kunde_name,''), k.name, '') AS kunde_name,
-          t.arbeit       AS termin_arbeit,
-          t.geschaetzte_zeit
+          t.arbeit                 AS termin_arbeit,
+          t.geschaetzte_zeit,
+          t.lehrling_id,
+          t.mitarbeiter_id,
+          t.arbeitszeiten_details
         FROM termine t
         LEFT JOIN kunden k ON t.kunde_id = k.id
         WHERE t.datum = ?
@@ -49,6 +52,31 @@ class StempelzeitenController {
         ORDER BY person_name, ta.termin_id, ta.reihenfolge
       `, [datum]);
 
+      // Personen-Map: alle bekannten Mitarbeiter und Lehrlinge laden
+      const mitarbeiterRows = await allAsync(`SELECT id, name FROM mitarbeiter WHERE aktiv = 1`, []);
+      const lehrlingeRows   = await allAsync(`SELECT id, name FROM lehrlinge WHERE aktiv = 1`, []);
+      const personenMap = {};
+      for (const m of mitarbeiterRows) personenMap[`mitarbeiter_${m.id}`] = { person_typ: 'mitarbeiter', person_id: m.id, person_name: m.name };
+      for (const l of lehrlingeRows)   personenMap[`lehrling_${l.id}`]    = { person_typ: 'lehrling',    person_id: l.id, person_name: l.name };
+
+      // Zuweisung je Termin bestimmen: arbeitszeiten_details > termine.lehrling/mitarbeiter_id
+      const terminPersonMap = {};
+      for (const t of alleTermine) {
+        let typ = null, pid = null;
+        try {
+          const az = typeof t.arbeitszeiten_details === 'string'
+            ? JSON.parse(t.arbeitszeiten_details)
+            : t.arbeitszeiten_details;
+          if (az && az._gesamt_mitarbeiter_id) {
+            typ = az._gesamt_mitarbeiter_id.type || 'mitarbeiter';
+            pid = az._gesamt_mitarbeiter_id.id;
+          }
+        } catch(e) {}
+        if (!pid && t.lehrling_id)    { typ = 'lehrling';    pid = t.lehrling_id; }
+        if (!pid && t.mitarbeiter_id) { typ = 'mitarbeiter'; pid = t.mitarbeiter_id; }
+        if (pid) terminPersonMap[t.termin_id] = { person_typ: typ, person_id: pid };
+      }
+
       // Stempel nach termin_id indexieren
       const stempelByTermin = {};
       for (const s of stempelRows) {
@@ -56,52 +84,71 @@ class StempelzeitenController {
         stempelByTermin[s.termin_id].push(s);
       }
 
-      // Gruppen aufbauen: Mitarbeiter die gestempelt haben + "Alle Aufträge" für den Rest
       const gruppenMap = new Map();
 
-      // Erst: Termine mit Stempel → unter jeweiligem Mitarbeiter
-      for (const s of stempelRows) {
-        const key = `${s.person_typ}_${s.person_id}`;
-        if (!gruppenMap.has(key)) {
-          gruppenMap.set(key, { person_typ: s.person_typ, person_id: s.person_id, person_name: s.person_name || '—', arbeiten: [] });
+      const _getPerson = (person_typ, person_id, fallbackName) => {
+        const key = `${person_typ}_${person_id}`;
+        return personenMap[key] || { person_typ, person_id, person_name: fallbackName || '—' };
+      };
+
+      const _addArbeit = (grupKey, person, terminData, arbeitData) => {
+        if (!gruppenMap.has(grupKey)) {
+          gruppenMap.set(grupKey, { person_typ: person.person_typ, person_id: person.person_id, person_name: person.person_name, arbeiten: [] });
         }
+        gruppenMap.get(grupKey).arbeiten.push(arbeitData);
+      };
+
+      // 1. Termine MIT Stempel in termine_arbeiten
+      const gestempelteTerminIds = new Set();
+      for (const s of stempelRows) {
+        gestempelteTerminIds.add(s.termin_id);
+        // Person: aus stempel-Zeile, oder aus Termin-Zuweisung
+        let personTyp = s.person_typ, personId = s.person_id, personName = s.person_name;
+        if (!personId) {
+          const tp = terminPersonMap[s.termin_id];
+          if (tp) { personTyp = tp.person_typ; personId = tp.person_id; }
+          const p = personId ? _getPerson(personTyp, personId) : null;
+          personName = p ? p.person_name : '—';
+        }
+        const grupKey = personId ? `${personTyp}_${personId}` : `unbekannt_${s.termin_id}`;
         const t = alleTermine.find(x => x.termin_id === s.termin_id) || {};
         const istMin = s.stempel_start && s.stempel_ende
-          ? StempelzeitenController._diffMinuten(s.stempel_start, s.stempel_ende)
-          : null;
-        gruppenMap.get(key).arbeiten.push({
-          arbeit_id:       s.arbeit_id,
-          termin_id:       s.termin_id,
-          termin_nr:       t.termin_nr || '',
-          kennzeichen:     t.kennzeichen || '',
-          kunde_name:      t.kunde_name  || '',
-          arbeit:          s.arbeit || t.termin_arbeit || '',
-          geschaetzte_min: s.geschaetzte_min,
-          stempel_start:   s.stempel_start,
-          stempel_ende:    s.stempel_ende,
-          ist_min:         istMin
+          ? StempelzeitenController._diffMinuten(s.stempel_start, s.stempel_ende) : null;
+        _addArbeit(grupKey, { person_typ: personTyp, person_id: personId, person_name: personName }, t, {
+          arbeit_id: s.arbeit_id, termin_id: s.termin_id,
+          termin_nr: t.termin_nr || '', kennzeichen: t.kennzeichen || '', kunde_name: t.kunde_name || '',
+          arbeit: s.arbeit || t.termin_arbeit || '',
+          geschaetzte_min: s.geschaetzte_min, stempel_start: s.stempel_start, stempel_ende: s.stempel_ende, ist_min: istMin
         });
       }
 
-      // Dann: Alle übrigen Termine (noch kein Stempel) unter "Alle Aufträge"
-      const gestempelteTerminIds = new Set(stempelRows.map(s => s.termin_id));
+      // 2. Termine OHNE Stempel, aber mit Personzuweisung → unter jeweiliger Person
       const ohneStempel = alleTermine.filter(t => !gestempelteTerminIds.has(t.termin_id));
-      if (ohneStempel.length > 0) {
+      for (const t of ohneStempel) {
+        const tp = terminPersonMap[t.termin_id];
+        if (tp) {
+          const person = _getPerson(tp.person_typ, tp.person_id);
+          const grupKey = `${tp.person_typ}_${tp.person_id}`;
+          _addArbeit(grupKey, person, t, {
+            arbeit_id: null, termin_id: t.termin_id,
+            termin_nr: t.termin_nr || '', kennzeichen: t.kennzeichen || '', kunde_name: t.kunde_name || '',
+            arbeit: t.termin_arbeit || '', geschaetzte_min: t.geschaetzte_zeit,
+            stempel_start: null, stempel_ende: null, ist_min: null
+          });
+        }
+      }
+
+      // 3. Termine ohne Person und ohne Stempel → Sammelgruppe
+      const ohnePersonOhneStempel = ohneStempel.filter(t => !terminPersonMap[t.termin_id]);
+      if (ohnePersonOhneStempel.length > 0) {
         gruppenMap.set('alle_auftraege', {
-          person_typ: 'alle',
-          person_id:  0,
+          person_typ: 'alle', person_id: 0,
           person_name: '📋 Alle Aufträge (noch nicht gestempelt)',
-          arbeiten: ohneStempel.map(t => ({
-            arbeit_id:       null,
-            termin_id:       t.termin_id,
-            termin_nr:       t.termin_nr || '',
-            kennzeichen:     t.kennzeichen || '',
-            kunde_name:      t.kunde_name  || '',
-            arbeit:          t.termin_arbeit || '',
-            geschaetzte_min: t.geschaetzte_zeit,
-            stempel_start:   null,
-            stempel_ende:    null,
-            ist_min:         null
+          arbeiten: ohnePersonOhneStempel.map(t => ({
+            arbeit_id: null, termin_id: t.termin_id,
+            termin_nr: t.termin_nr || '', kennzeichen: t.kennzeichen || '', kunde_name: t.kunde_name || '',
+            arbeit: t.termin_arbeit || '', geschaetzte_min: t.geschaetzte_zeit,
+            stempel_start: null, stempel_ende: null, ist_min: null
           }))
         });
       }
