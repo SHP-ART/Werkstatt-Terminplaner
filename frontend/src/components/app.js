@@ -15301,6 +15301,7 @@ class App {
               if (det) stempelArbeitName = Object.keys(det).find(k => !k.startsWith('_')) || null;
             } catch(e) {}
           }
+          if (!stempelArbeitName) stempelArbeitName = termin.arbeit || null;
           if (!stempelArbeitName) { this.showToast('❌ Kein Arbeitsname gefunden', 'error'); return; }
           await this.stempelManuellSetzen(terminId, stempelArbeitName, 'start', zeitWert);
           this.showToast('✅ Stempel-Startzeit gespeichert', 'success');
@@ -15316,6 +15317,7 @@ class App {
               if (det) stempelArbeitName = Object.keys(det).find(k => !k.startsWith('_')) || null;
             } catch(e) {}
           }
+          if (!stempelArbeitName) stempelArbeitName = termin.arbeit || null;
           if (!stempelArbeitName) { this.showToast('❌ Kein Arbeitsname gefunden', 'error'); return; }
           await this.stempelManuellSetzen(terminId, stempelArbeitName, 'ende', zeitWert);
           this.showToast('✅ Stempel-Endzeit gespeichert', 'success');
