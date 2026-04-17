@@ -114,7 +114,7 @@ class StempelzeitenController {
 
   static async setStempel(req, res) {
     try {
-      const { termin_id, arbeit_name, stempel_start, stempel_ende } = req.body;
+      const { termin_id, arbeit_name, stempel_start, stempel_ende, person_id, person_typ } = req.body;
 
       if (!termin_id || !arbeit_name) {
         return res.status(400).json({ error: 'termin_id und arbeit_name sind Pflichtfelder' });
@@ -151,10 +151,16 @@ class StempelzeitenController {
         if (!termin) {
           return res.status(404).json({ error: 'Termin nicht gefunden' });
         }
+        // Person-ID aus Request bevorzugen (Intern Tab kennt den Kontext)
+        // Fallback auf termin.mitarbeiter_id / lehrling_id
+        const mitarbeiterId = (person_typ === 'mitarbeiter' && person_id) ? person_id
+          : (person_typ !== 'lehrling' ? termin.mitarbeiter_id || null : null);
+        const lehrlingId = (person_typ === 'lehrling' && person_id) ? person_id
+          : (!person_typ ? termin.lehrling_id || null : null);
         await runAsync(
           `INSERT OR IGNORE INTO termine_arbeiten (termin_id, arbeit, zeit, mitarbeiter_id, lehrling_id, reihenfolge)
            VALUES (?, ?, ?, ?, ?, 0)`,
-          [termin_id, arbeit_name, termin.geschaetzte_zeit || 0, termin.mitarbeiter_id || null, termin.lehrling_id || null]
+          [termin_id, arbeit_name, termin.geschaetzte_zeit || 0, mitarbeiterId, lehrlingId]
         );
         result = await runAsync(
           `UPDATE termine_arbeiten SET ${updates.join(', ')} WHERE termin_id = ? AND arbeit = ?`,
