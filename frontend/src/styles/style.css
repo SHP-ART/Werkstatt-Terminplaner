@@ -7143,6 +7143,74 @@ mark.highlight {
     margin: 4px 0;
 }
 
+.zeitleiste-kontextmenu-zeitfelder {
+    border-top: 2px solid #e8ecf4;
+    padding: 12px 16px 14px;
+    background: #f8f9ff;
+}
+
+.zeitleiste-kontextmenu-zeitfelder-title {
+    font-size: 11px;
+    font-weight: 700;
+    color: #667eea;
+    text-transform: uppercase;
+    letter-spacing: 0.7px;
+    margin-bottom: 10px;
+}
+
+.zeitleiste-zeitfeld-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    margin-bottom: 8px;
+}
+
+.zeitleiste-zeitfeld-label {
+    font-size: 12px;
+    color: #374151;
+    flex: 1;
+    white-space: nowrap;
+}
+
+.zeitleiste-zeitfeld-input {
+    width: 68px;
+    padding: 4px 8px;
+    border: 1px solid #c9d3e8;
+    border-radius: 6px;
+    font-size: 13px;
+    font-family: monospace;
+    text-align: center;
+    background: #fff;
+    color: #1e293b;
+    transition: border-color 0.15s;
+    flex-shrink: 0;
+}
+
+.zeitleiste-zeitfeld-input:focus {
+    outline: none;
+    border-color: #667eea;
+    box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.2);
+}
+
+.zeitleiste-zeitfeld-save-btn {
+    width: 100%;
+    margin-top: 4px;
+    padding: 7px 0;
+    border: none;
+    border-radius: 7px;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: opacity 0.15s;
+}
+
+.zeitleiste-zeitfeld-save-btn:hover {
+    opacity: 0.88;
+}
+
 /* ================================================
    TERMIN VORSCHAU MODAL MIT COUNTDOWN
    ================================================ */

@@ -20,7 +20,19 @@
       "Bash(du -sh electron-intern-tablet/*/)",
       "Bash(du -sh frontend/*/)",
       "Bash(ls -la release/*.exe)",
-      "Bash(du -sh release/*.exe)"
+      "Bash(du -sh release/*.exe)",
+      "Bash(bash \"C:\\\\Users\\\\Sven\\\\.claude\\\\plugins\\\\cache\\\\claude-plugins-official\\\\superpowers\\\\5.0.7\\\\skills\\\\brainstorming\\\\scripts\\\\start-server.sh\" --project-dir \"c:\\\\Users\\\\Sven\\\\Documents\\\\Github\\\\Terminplaner\\\\Werkstatt-Terminplaner\")",
+      "Read(//c/Users/Sven/.claude/plugins/cache/claude-plugins-official/superpowers/5.0.7/skills/subagent-driven-development/**)",
+      "Bash(scp \"frontend/dist/assets/main-Dgvsldmw.css\" root@100.124.168.108:/opt/werkstatt-terminplaner/frontend/dist/assets/)",
+      "Bash(scp \"frontend/dist/index.html\" root@100.124.168.108:/opt/werkstatt-terminplaner/frontend/dist/)",
+      "Bash(ssh root@100.124.168.108 \"mkdir -p /var/lib/werkstatt-terminplaner/backups && cp /var/lib/werkstatt-terminplaner/database/werkstatt.db /var/lib/werkstatt-terminplaner/backups/pre-update_$\\(date +%Y%m%d_%H%M%S\\).db && echo 'BACKUP OK'\")",
+      "Bash(ssh root@100.124.168.108 \"cd /opt/werkstatt-terminplaner && git stash && git pull && systemctl restart werkstatt-terminplaner && echo 'DEPLOY OK'\")",
+      "Bash(ssh root@100.124.168.108 \"systemctl is-active werkstatt-terminplaner && cd /opt/werkstatt-terminplaner && git log --oneline -3\")",
+      "Bash(ssh root@100.124.168.108 \"grep -c 'kwt-auslastung' /opt/werkstatt-terminplaner/frontend/dist/assets/main-Dgvsldmw.css && grep -c 'auslastungProTag' /opt/werkstatt-terminplaner/frontend/dist/assets/main-DZvDpPaF.js && cat /opt/werkstatt-terminplaner/frontend/dist/index.html | grep 'main-'\")",
+      "Bash(ssh root@100.124.168.108 \"grep -c 'kwt-auslastung-fill' /opt/werkstatt-terminplaner/frontend/dist/assets/main-DZvDpPaF.js && grep -c 'mz-abwesenheiten' /opt/werkstatt-terminplaner/frontend/dist/assets/main-DZvDpPaF.js && grep -c 'repeat\\(7' /opt/werkstatt-terminplaner/frontend/dist/assets/main-Dgvsldmw.css\")",
+      "Bash(scp \"frontend/dist/assets/main-uCY01bcQ.js\" root@100.124.168.108:/opt/werkstatt-terminplaner/frontend/dist/assets/)",
+      "Bash(scp \"frontend/dist/assets/main-CTeHO_0T.css\" root@100.124.168.108:/opt/werkstatt-terminplaner/frontend/dist/assets/)",
+      "Read(//c/Users/Sven/.claude/plugins/cache/claude-plugins-official/superpowers/5.0.7/skills/brainstorming/**)"
     ]
   }
 }

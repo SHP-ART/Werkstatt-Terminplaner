@@ -1910,9 +1910,7 @@ class TermineController {
         return res.status(404).json({ error: 'Termin nicht gefunden' });
       }
 
-      const istSchwebend = termin.ist_schwebend === 1 || termin.ist_schwebend === true;
-      const erlaubterStatus = termin.status === null || ['geplant', 'in_arbeit'].includes(termin.status);
-      if (!erlaubterStatus && !istSchwebend) {
+      if (!['geplant', 'in_arbeit'].includes(termin.status)) {
         return res.status(400).json({ error: 'Nur geplante oder in Arbeit befindliche Termine können weitergeführt werden' });
       }
 
@@ -1942,7 +1940,6 @@ class TermineController {
         startzeit: null,
         bring_zeit: '08:00',
         tatsaechliche_zeit: null,
-        ist_schwebend: 0,
         ...(updatedDetails !== undefined ? { arbeitszeiten_details: updatedDetails } : {})
       });
 

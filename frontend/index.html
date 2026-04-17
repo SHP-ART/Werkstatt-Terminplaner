@@ -57,7 +57,6 @@
             <button class="tab-button" data-tab="auslastung"><span>📈 Auslastung</span></button>
             <button class="tab-button" data-tab="auslastung-dragdrop"><span>🏗️ Planung (Beta)</span></button>
             <button class="tab-button" data-tab="intern"><span>👷 Intern</span></button>
-            <button class="tab-button" data-tab="zeitstempelung"><span>🕐 Zeitstempelung</span></button>
             <button class="tab-button" data-tab="papierkorb"><span>🗑️ Papierkorb</span></button>
             <button class="tab-button" data-tab="einstellungen"><span>⚙️ Einstellungen</span></button>
         </div>
@@ -3618,17 +3617,6 @@
                     </div>
                 </div>
             </div>
-
-            <!-- Stempelzeiten manuell nachtragen -->
-            <div class="card" style="margin-top: 20px;">
-                <div class="card-header" style="cursor:pointer;" onclick="this.nextElementSibling.style.display = this.nextElementSibling.style.display === 'none' ? '' : 'none'">
-                    <strong>🕐 Stempelzeiten manuell nachtragen</strong>
-                    <span class="text-muted" style="font-size:12px;margin-left:8px;">(klicken zum Ein-/Ausblenden)</span>
-                </div>
-                <div id="planungStempelPanel" style="display:none;">
-                    <p class="loading-text" style="padding:12px;">Lade…</p>
-                </div>
-            </div>
         </template>
 
         <!-- ============================================================== -->
@@ -3808,30 +3796,6 @@
             </div>
 
             <!-- Interne Termine Übersicht wurde entfernt - Termine werden bei Terminplanung → Intern verwaltet -->
-        </template>
-
-        <div id="zeitstempelung" class="tab-content" data-template-id="tab-template-zeitstempelung"></div>
-
-        <template id="tab-template-zeitstempelung">
-            <div class="page-header">
-                <h2>🕐 Zeitstempelung</h2>
-                <p class="page-subtitle">Tagesübersicht aller Stempelzeiten nach Mitarbeiter</p>
-            </div>
-
-            <div class="auslastung-navigation">
-                <div class="nav-row">
-                    <button type="button" id="zeitstempelungPrevTag" class="btn btn-nav" title="Vorheriger Tag">◀ Tag</button>
-                    <div class="form-group" style="margin: 0;">
-                        <input type="date" id="zeitstempelungDatum">
-                    </div>
-                    <button type="button" id="zeitstempelungNextTag" class="btn btn-nav" title="Nächster Tag">Tag ▶</button>
-                    <button type="button" id="zeitstempelungHeuteBtn" class="btn btn-today" title="Heute">Heute</button>
-                </div>
-            </div>
-
-            <div id="zeitstempelungContainer" style="margin-top: 20px;">
-                <p class="loading-text">Lade Stempelzeiten…</p>
-            </div>
         </template>
 
         <div id="papierkorb" class="tab-content" data-template-id="tab-template-papierkorb"></div>
@@ -4345,6 +4309,26 @@
             <button class="zeitleiste-kontextmenu-item zeitleiste-kontextmenu-item-danger" onclick="app.zeitleisteKontextLoeschen()">
                 <span class="icon">🗑️</span>
                 <span>Löschen</span>
+            </button>
+        </div>
+        <!-- Schnell-Zeiteingabe -->
+        <div class="zeitleiste-kontextmenu-zeitfelder">
+            <div class="zeitleiste-kontextmenu-zeitfelder-title">⏱️ Zeiten direkt eintragen</div>
+            <div class="zeitleiste-zeitfeld-row">
+                <label class="zeitleiste-zeitfeld-label">🟢 Startzeit-Stempelung</label>
+                <input type="text" id="kontextmenuStartzeit" class="zeitleiste-zeitfeld-input"
+                       placeholder="HH:MM" maxlength="5" autocomplete="off"
+                       onkeydown="if(event.key==='Enter') app.saveZeitleisteKontextZeitenSchnell()" />
+            </div>
+            <div class="zeitleiste-zeitfeld-row">
+                <label class="zeitleiste-zeitfeld-label">🏁 Fertigstellungszeit</label>
+                <input type="text" id="kontextmenuFertigstellung" class="zeitleiste-zeitfeld-input"
+                       placeholder="HH:MM" maxlength="5" autocomplete="off"
+                       onkeydown="if(event.key==='Enter') app.saveZeitleisteKontextZeitenSchnell()" />
+            </div>
+            <button class="zeitleiste-zeitfeld-save-btn" id="kontextmenuZeitenSpeichernBtn"
+                    onclick="app.saveZeitleisteKontextZeitenSchnell()">
+                💾 Zeiten speichern
             </button>
         </div>
     </div>
