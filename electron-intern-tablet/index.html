@@ -1346,6 +1346,17 @@
       return div.innerHTML;
     }
 
+    function stempelSetzen(terminId, arbeitName, typ) {
+      const jetzt = new Date();
+      const zeit = String(jetzt.getHours()).padStart(2, '0') + ':' + String(jetzt.getMinutes()).padStart(2, '0');
+      const body = { termin_id: terminId, arbeit_name: arbeitName };
+      if (typ === 'start') body.stempel_start = zeit;
+      else body.stempel_ende = zeit;
+      return ApiService.put('/stempelzeiten/stempel', body).catch(e => {
+        console.warn('[Stempel] Fehler:', e);
+      });
+    }
+
     function formatDateLocal(date) {
       const d = date instanceof Date ? date : new Date();
       const year = d.getFullYear();
@@ -1750,6 +1761,16 @@
         // 1. Status auf in_arbeit setzen + tatsächliche Startzeit speichern
         await ApiService.put(`/termine/${terminId}`, { status: 'in_arbeit', startzeit: aktuelleZeit });
         
+        // Stempel-Start für alle Arbeiten dieses Auftrags setzen
+        ApiService.get(`/termine/${terminId}`).then(termin => {
+          const arbeiten = getArbeitenFromTermin(termin);
+          if (arbeiten.length > 0) {
+            Promise.all(arbeiten.map(a => stempelSetzen(terminId, a.name, 'start')));
+          } else if (termin.arbeit) {
+            stempelSetzen(terminId, termin.arbeit, 'start');
+          }
+        }).catch(e => console.warn('[Stempel] Start-Stempel Fehler:', e));
+
         // 2. Termine neu berechnen
         await ApiService.post('/termine/berechne-zeiten-neu', {
           personId,
@@ -1800,6 +1821,8 @@
         );
         
         console.log('[DEBUG] Arbeit abgeschlossen:', response);
+        // Stempel-Ende für diese Arbeit setzen
+        stempelSetzen(terminId, arbeitName, 'ende').catch(e => console.warn('[Stempel] Ende-Stempel Fehler:', e));
         await loadTeamUebersicht();
         showToast(response.message || `Arbeit "${arbeitName}" abgeschlossen`, 'success');
       } catch (error) {
@@ -1822,6 +1845,15 @@
         });
         
         console.log('[DEBUG] Termin erfolgreich abgeschlossen');
+        // Stempel-Ende für alle Arbeiten setzen
+        ApiService.get(`/termine/${terminId}`).then(termin => {
+          const arbeiten = getArbeitenFromTermin(termin);
+          if (arbeiten.length > 0) {
+            Promise.all(arbeiten.map(a => stempelSetzen(terminId, a.name, 'ende')));
+          } else if (termin.arbeit) {
+            stempelSetzen(terminId, termin.arbeit, 'ende');
+          }
+        }).catch(e => console.warn('[Stempel] Ende-Stempel Fehler:', e));
         await loadTeamUebersicht();
         showToast(`Auftrag abgeschlossen: ${kundeName}`, 'success');
       } catch (error) {
