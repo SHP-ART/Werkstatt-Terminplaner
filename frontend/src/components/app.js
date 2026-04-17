@@ -21991,6 +21991,29 @@ class App {
       <small>${arbeit}</small>
       ${auftragsnrHtml}
     `;
+
+    // Schnell-Zeitfelder mit aktuellen Werten vorbefüllen
+    const termin = this.termineById[terminId];
+    const startzeitInput = document.getElementById('kontextmenuStartzeit');
+    const fertigInput = document.getElementById('kontextmenuFertigstellung');
+    if (startzeitInput) {
+      startzeitInput.value = (termin && termin.startzeit) ? String(termin.startzeit).substring(0, 5) : '';
+      startzeitInput.style.borderColor = '';
+    }
+    if (fertigInput) {
+      let fertig = '';
+      if (termin && termin.fertigstellung_zeit) {
+        const fz = termin.fertigstellung_zeit;
+        if (fz.includes('T') || fz.includes('Z')) {
+          const d = new Date(fz);
+          if (!isNaN(d)) fertig = String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+        } else {
+          fertig = String(fz).substring(0, 5);
+        }
+      }
+      fertigInput.value = fertig;
+      fertigInput.style.borderColor = '';
+    }
     
     // Position berechnen
     let x = event.clientX;
@@ -22042,6 +22065,61 @@ class App {
     this.closeZeitleisteKontextmenu();
     if (this.zeitleisteKontextTerminId) {
       this.openArbeitszeitenModal(this.zeitleisteKontextTerminId);
+    }
+  }
+
+  async saveZeitleisteKontextZeitenSchnell() {
+    const terminId = this.zeitleisteKontextTerminId;
+    if (!terminId) return;
+
+    const startzeitInput = document.getElementById('kontextmenuStartzeit');
+    const fertigInput = document.getElementById('kontextmenuFertigstellung');
+    const zeitRegex = /^([01]\d|2[0-3]):[0-5]\d$/;
+
+    const startzeitVal = startzeitInput ? startzeitInput.value.trim() : '';
+    const fertigVal = fertigInput ? fertigInput.value.trim() : '';
+
+    // Validierung
+    if (startzeitVal && !zeitRegex.test(startzeitVal)) {
+      if (startzeitInput) startzeitInput.style.borderColor = '#cc4444';
+      this.showToast('Startzeit-Stempelung: Bitte HH:MM eingeben', 'error');
+      return;
+    }
+    if (fertigVal && !zeitRegex.test(fertigVal)) {
+      if (fertigInput) fertigInput.style.borderColor = '#cc4444';
+      this.showToast('Fertigstellungszeit: Bitte HH:MM eingeben', 'error');
+      return;
+    }
+    if (!startzeitVal && !fertigVal) {
+      this.showToast('Keine Zeiten eingegeben', 'warning');
+      return;
+    }
+
+    const termin = this.termineById[terminId];
+    const datum = termin ? termin.datum : new Date().toISOString().slice(0, 10);
+    const updatePayload = {};
+
+    if (startzeitVal) {
+      updatePayload.startzeit = startzeitVal;
+    }
+    if (fertigVal) {
+      const iso = new Date(`${datum}T${fertigVal}:00`);
+      updatePayload.fertigstellung_zeit = isNaN(iso.getTime()) ? fertigVal : iso.toISOString();
+    }
+
+    try {
+      await TermineService.update(terminId, updatePayload);
+      // Cache aktualisieren
+      if (this.termineById[terminId]) {
+        if (updatePayload.startzeit) this.termineById[terminId].startzeit = updatePayload.startzeit;
+        if (updatePayload.fertigstellung_zeit) this.termineById[terminId].fertigstellung_zeit = updatePayload.fertigstellung_zeit;
+      }
+      this.showToast('✅ Zeiten gespeichert', 'success');
+      this.closeZeitleisteKontextmenu();
+      this.updateTimelineBlockStatus(terminId, termin ? termin.status : null);
+    } catch (e) {
+      console.error('[saveZeitleisteKontextZeitenSchnell] Fehler:', e);
+      this.showToast('Fehler beim Speichern der Zeiten', 'error');
     }
   }
 
@@ -36288,8 +36366,8 @@ class App {
 }
 
 
+ApiService.loadClientConfig();
 const app = new App();
-// App global verfügbar machen für onclick-Handler und Vite-Kompatibilität
 window.App = App;
 window.app = app;
 

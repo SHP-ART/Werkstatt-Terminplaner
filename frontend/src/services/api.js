@@ -1,13 +1,25 @@
 class ApiService {
-  /**
-   * Retry-Konfiguration für Backend-Verfügbarkeit
-   */
   static RETRY_CONFIG = {
     maxRetries: 3,
-    initialDelay: 500,    // 500ms
-    maxDelay: 4000,       // 4s
+    initialDelay: 500,
+    maxDelay: 4000,
     backoffMultiplier: 2
   };
+
+  static _apiKey = null;
+
+  static async loadClientConfig() {
+    try {
+      const baseUrl = CONFIG.API_URL.endsWith('/') ? CONFIG.API_URL.slice(0, -1) : CONFIG.API_URL;
+      const res = await fetch(`${baseUrl}/client-config`);
+      if (res.ok) {
+        const data = await res.json();
+        ApiService._apiKey = data.apiKey || null;
+      }
+    } catch (e) {
+      // nicht kritisch – läuft ohne Key im Entwicklungsmodus
+    }
+  }
 
   /**
    * Prüft ob Backend bereit ist (Health-Check)
@@ -97,6 +109,7 @@ class ApiService {
     const config = {
       headers: {
         'Content-Type': 'application/json',
+        ...(ApiService._apiKey ? { 'x-api-key': ApiService._apiKey } : {}),
         ...options.headers
       },
       ...options

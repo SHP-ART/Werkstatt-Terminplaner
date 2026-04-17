@@ -29,7 +29,6 @@ const { requireAuth } = require('../middleware/auth');
 const { aiLimiter, systemLimiter } = require('../middleware/rateLimiter');
 const sucheRoutes = require('./sucheRoutes');
 const wiederkehrendeTermineRoutes = require('./wiederkehrendeTermineRoutes');
-const stempelzeitenRoutes = require('./stempelzeitenRoutes');
 
 router.use('/kunden', kundenRoutes);
 router.use('/termine', termineRoutes);
@@ -62,10 +61,14 @@ router.use('/system', requireAuth, systemLimiter, systemRoutes);
 router.use('/reports', reportingRoutes);
 router.use('/suche', sucheRoutes);
 router.use('/wiederkehrende-termine', wiederkehrendeTermineRoutes);
-router.use('/stempelzeiten', stempelzeitenRoutes);
 
 router.get('/health', (req, res) => {
   res.json({ status: 'OK', timestamp: new Date().toISOString() });
+});
+
+// Öffentlicher Endpunkt: gibt dem Frontend den API-Key für geschützte Endpunkte
+router.get('/client-config', (req, res) => {
+  res.json({ apiKey: process.env.API_KEY || null });
 });
 
 // Server-Info Endpoint für automatische API-Erkennung
