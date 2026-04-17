@@ -740,6 +740,77 @@
       }
     }
 
+    /* ========== TAGESSTEMPEL BUTTONS ========== */
+    .tablet-btn-kommen {
+      background: linear-gradient(135deg, #2e7d32 0%, #66bb6a 100%);
+      color: white;
+      min-width: 130px;
+    }
+    .tablet-btn-kommen:hover {
+      background: linear-gradient(135deg, #1b5e20 0%, #43a047 100%);
+      transform: translateY(-3px) scale(1.02);
+      box-shadow: 0 6px 16px rgba(46, 125, 50, 0.4);
+    }
+    .tablet-btn-kommen:active {
+      transform: translateY(-1px) scale(0.98);
+    }
+
+    .tablet-btn-gehen {
+      background: linear-gradient(135deg, #c62828 0%, #ef5350 100%);
+      color: white;
+      min-width: 130px;
+    }
+    .tablet-btn-gehen:hover {
+      background: linear-gradient(135deg, #b71c1c 0%, #e53935 100%);
+      transform: translateY(-3px) scale(1.02);
+      box-shadow: 0 6px 16px rgba(198, 40, 40, 0.4);
+    }
+    .tablet-btn-gehen:active {
+      transform: translateY(-1px) scale(0.98);
+    }
+
+    .tablet-btn-unterbrechung {
+      background: linear-gradient(135deg, #e65100 0%, #ff9800 100%);
+      color: white;
+      min-width: 90px;
+    }
+    .tablet-btn-unterbrechung:hover {
+      background: linear-gradient(135deg, #bf360c 0%, #fb8c00 100%);
+      transform: translateY(-3px) scale(1.02);
+      box-shadow: 0 6px 16px rgba(230, 81, 0, 0.4);
+    }
+    .tablet-btn-unterbrechung:active {
+      transform: translateY(-1px) scale(0.98);
+    }
+    .tablet-btn-unterbrechung.aktiv {
+      background: linear-gradient(135deg, #1565c0 0%, #42a5f5 100%);
+      animation: pulse-pause 1.5s ease-in-out infinite;
+    }
+
+    .tagesstempel-zeile {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 12px 6px;
+      background: rgba(0,0,0,0.04);
+      border-top: 1px solid rgba(0,0,0,0.08);
+      flex-wrap: wrap;
+    }
+    .tagesstempel-zeile .tagesstempel-info {
+      font-size: 0.8em;
+      font-weight: 600;
+      color: #555;
+      white-space: nowrap;
+    }
+    .tagesstempel-zeile.fertig .tagesstempel-info {
+      color: #2e7d32;
+    }
+    .tagesstempel-zeile .tagesstempel-btn-gruppe {
+      display: flex;
+      gap: 6px;
+      margin-left: auto;
+    }
+
     /* ========== ARBEITEN-LISTE ========== */
     .arbeiten-liste {
       margin: 15px 0;
@@ -1346,17 +1417,6 @@
       return div.innerHTML;
     }
 
-    function stempelSetzen(terminId, arbeitName, typ) {
-      const jetzt = new Date();
-      const zeit = String(jetzt.getHours()).padStart(2, '0') + ':' + String(jetzt.getMinutes()).padStart(2, '0');
-      const body = { termin_id: terminId, arbeit_name: arbeitName };
-      if (typ === 'start') body.stempel_start = zeit;
-      else body.stempel_ende = zeit;
-      return ApiService.put('/stempelzeiten/stempel', body).catch(e => {
-        console.warn('[Stempel] Fehler:', e);
-      });
-    }
-
     function formatDateLocal(date) {
       const d = date instanceof Date ? date : new Date();
       const year = d.getFullYear();
@@ -1761,16 +1821,6 @@
         // 1. Status auf in_arbeit setzen + tatsächliche Startzeit speichern
         await ApiService.put(`/termine/${terminId}`, { status: 'in_arbeit', startzeit: aktuelleZeit });
         
-        // Stempel-Start für alle Arbeiten dieses Auftrags setzen
-        ApiService.get(`/termine/${terminId}`).then(termin => {
-          const arbeiten = getArbeitenFromTermin(termin);
-          if (arbeiten.length > 0) {
-            Promise.all(arbeiten.map(a => stempelSetzen(terminId, a.name, 'start')));
-          } else if (termin.arbeit) {
-            stempelSetzen(terminId, termin.arbeit, 'start');
-          }
-        }).catch(e => console.warn('[Stempel] Start-Stempel Fehler:', e));
-
         // 2. Termine neu berechnen
         await ApiService.post('/termine/berechne-zeiten-neu', {
           personId,
@@ -1821,8 +1871,6 @@
         );
         
         console.log('[DEBUG] Arbeit abgeschlossen:', response);
-        // Stempel-Ende für diese Arbeit setzen
-        stempelSetzen(terminId, arbeitName, 'ende').catch(e => console.warn('[Stempel] Ende-Stempel Fehler:', e));
         await loadTeamUebersicht();
         showToast(response.message || `Arbeit "${arbeitName}" abgeschlossen`, 'success');
       } catch (error) {
@@ -1845,15 +1893,6 @@
         });
         
         console.log('[DEBUG] Termin erfolgreich abgeschlossen');
-        // Stempel-Ende für alle Arbeiten setzen
-        ApiService.get(`/termine/${terminId}`).then(termin => {
-          const arbeiten = getArbeitenFromTermin(termin);
-          if (arbeiten.length > 0) {
-            Promise.all(arbeiten.map(a => stempelSetzen(terminId, a.name, 'ende')));
-          } else if (termin.arbeit) {
-            stempelSetzen(terminId, termin.arbeit, 'ende');
-          }
-        }).catch(e => console.warn('[Stempel] Ende-Stempel Fehler:', e));
         await loadTeamUebersicht();
         showToast(`Auftrag abgeschlossen: ${kundeName}`, 'success');
       } catch (error) {
@@ -1946,7 +1985,7 @@
     }
 
     // ========== KACHEL RENDERN ==========
-    function renderPersonKachel(person, alleTermine, typ, globaleNebenzeit, arbeitszeit, aktiveArbeitspausen = []) {
+    function renderPersonKachel(person, alleTermine, typ, globaleNebenzeit, arbeitszeit, aktiveArbeitspausen = [], tagesstempel = null, unterbrechungen = []) {
       const personId = person.id;
       const personName = person.name;
       const isLehrling = typ === 'lehrling';
@@ -2330,6 +2369,7 @@
             </div>
             ${buttonsHtml ? `<div class="tablet-buttons in-header">${buttonsHtml}</div>` : ''}
           </div>
+          ${renderTagesstempelZeile(tagesstempel, unterbrechungen, personId, typ, istAbwesend)}
           ${zeigeArbeitszeit && arbeitszeit && arbeitszeit.arbeitszeit_start && arbeitszeit.arbeitszeit_ende ? `
           <div class="person-arbeitszeit">
             <span class="arbeitszeit-label">⏰ Arbeitszeit:</span>
@@ -2339,6 +2379,49 @@
           <div class="person-body">
             ${bodyContent}
           </div>
+        </div>
+      `;
+    }
+
+    function renderTagesstempelZeile(tagesstempel, unterbrechungen, personId, typ, istAbwesend) {
+      if (istAbwesend) return '';
+      const hatKommen = tagesstempel && tagesstempel.kommen_zeit;
+      const hatGehen  = tagesstempel && tagesstempel.gehen_zeit;
+      const aktiveUnterbrechung = (unterbrechungen || []).find(u => !u.ende_zeit);
+
+      if (!hatKommen) {
+        return `
+          <div class="tagesstempel-zeile">
+            <div class="tagesstempel-btn-gruppe">
+              <button class="tablet-btn tablet-btn-kommen" onclick="tagesstempelKommen(${personId}, '${typ}')">
+                <span class="btn-icon">🟢</span> Arbeitsbeginn
+              </button>
+            </div>
+          </div>
+        `;
+      }
+      if (!hatGehen) {
+        const kommenZeit = tagesstempel.kommen_zeit.substring(0, 5);
+        const unterbrechungBtn = aktiveUnterbrechung
+          ? `<button class="tablet-btn tablet-btn-unterbrechung aktiv" onclick="unterbrechungEnde(${personId}, '${typ}')"><span class="btn-icon">▶️</span> Weiter</button>`
+          : `<button class="tablet-btn tablet-btn-unterbrechung" onclick="unterbrechungStart(${personId}, '${typ}')"><span class="btn-icon">⏸️</span> Unterbrechung</button>`;
+        return `
+          <div class="tagesstempel-zeile">
+            <span class="tagesstempel-info">🕐 Seit ${kommenZeit} Uhr</span>
+            <div class="tagesstempel-btn-gruppe">
+              ${unterbrechungBtn}
+              <button class="tablet-btn tablet-btn-gehen" onclick="tagesstempelGehen(${personId}, '${typ}')">
+                <span class="btn-icon">🔴</span> Arbeitsende
+              </button>
+            </div>
+          </div>
+        `;
+      }
+      const kommenZeit = tagesstempel.kommen_zeit.substring(0, 5);
+      const gehenZeit  = tagesstempel.gehen_zeit.substring(0, 5);
+      return `
+        <div class="tagesstempel-zeile fertig">
+          <span class="tagesstempel-info">✅ ${kommenZeit} – ${gehenZeit} Uhr</span>
         </div>
       `;
     }
@@ -2364,7 +2447,7 @@
 
       try {
         const heute = formatDateLocal(new Date());
-        const [mitarbeiterRaw, lehrlingeRaw, termineRaw, einstellungen, aktivePausen, abwesenheiten, heutigePausen, aktiveArbeitspausen] = await Promise.all([
+        const [mitarbeiterRaw, lehrlingeRaw, termineRaw, einstellungen, aktivePausen, abwesenheiten, heutigePausen, aktiveArbeitspausen, tagesstempelDaten] = await Promise.all([
           ApiService.get('/mitarbeiter'),
           ApiService.get('/lehrlinge'),
           ApiService.get(`/termine?datum=${heute}`),
@@ -2372,7 +2455,8 @@
           ApiService.get('/pause/aktive'),
           ApiService.get(`/abwesenheiten/datum/${heute}`),
           ApiService.get('/pause/heute'),
-          ApiService.get('/arbeitspausen/aktive').catch(() => [])
+          ApiService.get('/arbeitspausen/aktive').catch(() => []),
+          ApiService.get(`/tagesstempel?datum=${heute}`).catch(() => ({ stempel: [], unterbrechungen: [] }))
         ]);
 
         // Normalisieren: /termine kann {termine, aktivePausen} oder reines Array zurückgeben
@@ -2495,16 +2579,33 @@
         let allKacheln = [];
         const normAktiveArbeitspausen = Array.isArray(aktiveArbeitspausen) ? aktiveArbeitspausen : [];
 
+        // Tagesstempel-Maps aufbauen
+        const tagesstempelMap = {};
+        ((tagesstempelDaten && tagesstempelDaten.stempel) || []).forEach(s => {
+          const key = s.mitarbeiter_id ? `mitarbeiter_${s.mitarbeiter_id}` : `lehrling_${s.lehrling_id}`;
+          tagesstempelMap[key] = s;
+        });
+        const unterbrechungenMap = {};
+        ((tagesstempelDaten && tagesstempelDaten.unterbrechungen) || []).forEach(u => {
+          const key = u.mitarbeiter_id ? `mitarbeiter_${u.mitarbeiter_id}` : `lehrling_${u.lehrling_id}`;
+          if (!unterbrechungenMap[key]) unterbrechungenMap[key] = [];
+          unterbrechungenMap[key].push(u);
+        });
+
         // Mitarbeiter Kacheln
         aktiveMitarbeiter.forEach(m => {
           const arbeitszeit = arbeitszeitenMap[`mitarbeiter_${m.id}`];
-          allKacheln.push(renderPersonKachel(m, relevanteTermine, 'mitarbeiter', globaleNebenzeit, arbeitszeit, normAktiveArbeitspausen));
+          const ts = tagesstempelMap[`mitarbeiter_${m.id}`] || null;
+          const ub = unterbrechungenMap[`mitarbeiter_${m.id}`] || [];
+          allKacheln.push(renderPersonKachel(m, relevanteTermine, 'mitarbeiter', globaleNebenzeit, arbeitszeit, normAktiveArbeitspausen, ts, ub));
         });
 
         // Lehrlinge Kacheln
         aktiveLehrlinge.forEach(l => {
           const arbeitszeit = arbeitszeitenMap[`lehrling_${l.id}`];
-          allKacheln.push(renderPersonKachel(l, relevanteTermine, 'lehrling', globaleNebenzeit, arbeitszeit, normAktiveArbeitspausen));
+          const ts = tagesstempelMap[`lehrling_${l.id}`] || null;
+          const ub = unterbrechungenMap[`lehrling_${l.id}`] || [];
+          allKacheln.push(renderPersonKachel(l, relevanteTermine, 'lehrling', globaleNebenzeit, arbeitszeit, normAktiveArbeitspausen, ts, ub));
         });
 
         if (allKacheln.length > 0) {
@@ -2723,6 +2824,60 @@
         console.error('[Tablet-Fortsetzen] Fehler:', e);
         if (btn) btn.disabled = false;
         alert('Fehler beim Fortsetzen der Arbeit.');
+      }
+    }
+
+    // ========== TAGESSTEMPEL ==========
+    async function tagesstempelKommen(personId, typ) {
+      try {
+        const body = typ === 'lehrling' ? { lehrling_id: personId } : { mitarbeiter_id: personId };
+        await ApiService.post('/tagesstempel/kommen', body);
+        await loadTeamUebersicht();
+      } catch (e) {
+        console.error('[Tagesstempel-Kommen] Fehler:', e);
+        showToast('Fehler beim Erfassen des Arbeitsbeginns', 'error');
+      }
+    }
+
+    async function tagesstempelGehen(personId, typ) {
+      try {
+        const body = typ === 'lehrling' ? { lehrling_id: personId } : { mitarbeiter_id: personId };
+        const resp = await ApiService.post('/tagesstempel/gehen', body);
+        if (resp && resp.bestaetigung_erforderlich) {
+          const anzahl = resp.laufende_termine ? resp.laufende_termine.length : 1;
+          const ok = confirm(`Es ${anzahl === 1 ? 'läuft noch 1 Auftrag' : `laufen noch ${anzahl} Aufträge`}. Trotzdem Arbeitsende buchen?\n\nDie laufenden Aufträge werden auf morgen verschoben.`);
+          if (ok) {
+            await ApiService.post('/tagesstempel/gehen/bestaetigen', { ...body, termine_verschieben: true });
+            await loadTeamUebersicht();
+          }
+        } else {
+          await loadTeamUebersicht();
+        }
+      } catch (e) {
+        console.error('[Tagesstempel-Gehen] Fehler:', e);
+        showToast('Fehler beim Erfassen des Arbeitsendes', 'error');
+      }
+    }
+
+    async function unterbrechungStart(personId, typ) {
+      try {
+        const body = typ === 'lehrling' ? { lehrling_id: personId } : { mitarbeiter_id: personId };
+        await ApiService.post('/tagesstempel/unterbrechung/start', body);
+        await loadTeamUebersicht();
+      } catch (e) {
+        console.error('[Unterbrechung-Start] Fehler:', e);
+        showToast('Fehler beim Starten der Unterbrechung', 'error');
+      }
+    }
+
+    async function unterbrechungEnde(personId, typ) {
+      try {
+        const body = typ === 'lehrling' ? { lehrling_id: personId } : { mitarbeiter_id: personId };
+        await ApiService.post('/tagesstempel/unterbrechung/ende', body);
+        await loadTeamUebersicht();
+      } catch (e) {
+        console.error('[Unterbrechung-Ende] Fehler:', e);
+        showToast('Fehler beim Beenden der Unterbrechung', 'error');
       }
     }
 
