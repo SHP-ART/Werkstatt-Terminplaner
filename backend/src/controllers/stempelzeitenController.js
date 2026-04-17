@@ -52,8 +52,31 @@ class StempelzeitenController {
         WHERE t.datum = ?
           AND ta.lehrling_id IS NOT NULL
 
+        UNION ALL
+
+        SELECT
+          ta.id        AS arbeit_id,
+          ta.termin_id,
+          ta.arbeit,
+          ta.zeit      AS geschaetzte_min,
+          ta.stempel_start,
+          ta.stempel_ende,
+          ta.reihenfolge,
+          t.termin_nr,
+          t.kennzeichen,
+          t.kunde_name,
+          'unbekannt'  AS person_typ,
+          0            AS person_id,
+          '— Nicht zugeordnet —' AS person_name
+        FROM termine_arbeiten ta
+        JOIN termine t ON ta.termin_id = t.id
+        WHERE t.datum = ?
+          AND ta.mitarbeiter_id IS NULL
+          AND ta.lehrling_id IS NULL
+          AND (ta.stempel_start IS NOT NULL OR ta.stempel_ende IS NOT NULL)
+
         ORDER BY person_name, termin_id, reihenfolge
-      `, [datum, datum]);
+      `, [datum, datum, datum]);
 
       const gruppenMap = new Map();
       for (const row of rows) {
@@ -113,10 +136,31 @@ class StempelzeitenController {
       }
 
       values.push(termin_id, arbeit_name);
-      const result = await runAsync(
+      let result = await runAsync(
         `UPDATE termine_arbeiten SET ${updates.join(', ')} WHERE termin_id = ? AND arbeit = ?`,
         values
       );
+
+      // Kein Treffer: Termin existiert aber hat noch keine termine_arbeiten-Zeile
+      // → auto-anlegen aus termine-Daten, dann erneut updaten
+      if (result.changes === 0) {
+        const termin = await getAsync(
+          `SELECT id, arbeit, mitarbeiter_id, lehrling_id, geschaetzte_zeit FROM termine WHERE id = ?`,
+          [termin_id]
+        );
+        if (!termin) {
+          return res.status(404).json({ error: 'Termin nicht gefunden' });
+        }
+        await runAsync(
+          `INSERT OR IGNORE INTO termine_arbeiten (termin_id, arbeit, zeit, mitarbeiter_id, lehrling_id, reihenfolge)
+           VALUES (?, ?, ?, ?, ?, 0)`,
+          [termin_id, arbeit_name, termin.geschaetzte_zeit || 0, termin.mitarbeiter_id || null, termin.lehrling_id || null]
+        );
+        result = await runAsync(
+          `UPDATE termine_arbeiten SET ${updates.join(', ')} WHERE termin_id = ? AND arbeit = ?`,
+          values
+        );
+      }
 
       if (result.changes === 0) {
         return res.status(404).json({ error: 'Arbeit nicht gefunden' });
