@@ -15293,33 +15293,51 @@ class App {
           const zeitWert = document.getElementById('schnellStempelStartInput')?.value;
           if (!zeitWert) return;
           let stempelArbeitName = arbeitName;
-          if (!stempelArbeitName) {
-            try {
-              const det = typeof termin.arbeitszeiten_details === 'string'
-                ? JSON.parse(termin.arbeitszeiten_details)
-                : termin.arbeitszeiten_details;
-              if (det) stempelArbeitName = Object.keys(det).find(k => !k.startsWith('_')) || null;
-            } catch(e) {}
-          }
+          let stempelPersonTyp = null, stempelPersonId = null;
+          try {
+            const det = typeof termin.arbeitszeiten_details === 'string'
+              ? JSON.parse(termin.arbeitszeiten_details)
+              : termin.arbeitszeiten_details;
+            if (det) {
+              if (!stempelArbeitName) stempelArbeitName = Object.keys(det).find(k => !k.startsWith('_')) || null;
+              if (det._gesamt_mitarbeiter_id) {
+                stempelPersonTyp = det._gesamt_mitarbeiter_id.type || 'mitarbeiter';
+                stempelPersonId = det._gesamt_mitarbeiter_id.id;
+              }
+            }
+          } catch(e) {}
           if (!stempelArbeitName) stempelArbeitName = termin.arbeit || null;
+          if (!stempelPersonId) {
+            if (termin.lehrling_id) { stempelPersonTyp = 'lehrling'; stempelPersonId = termin.lehrling_id; }
+            else if (termin.mitarbeiter_id) { stempelPersonTyp = 'mitarbeiter'; stempelPersonId = termin.mitarbeiter_id; }
+          }
           if (!stempelArbeitName) { this.showToast('❌ Kein Arbeitsname gefunden', 'error'); return; }
-          await this.stempelManuellSetzen(terminId, stempelArbeitName, 'start', zeitWert);
+          await this.stempelManuellSetzen(terminId, stempelArbeitName, 'start', zeitWert, stempelPersonTyp, stempelPersonId);
           this.showToast('✅ Stempel-Startzeit gespeichert', 'success');
         } else if (action === 'stempel-ende-setzen') {
           const zeitWert = document.getElementById('schnellStempelEndeInput')?.value;
           if (!zeitWert) return;
           let stempelArbeitName = arbeitName;
-          if (!stempelArbeitName) {
-            try {
-              const det = typeof termin.arbeitszeiten_details === 'string'
-                ? JSON.parse(termin.arbeitszeiten_details)
-                : termin.arbeitszeiten_details;
-              if (det) stempelArbeitName = Object.keys(det).find(k => !k.startsWith('_')) || null;
-            } catch(e) {}
-          }
+          let stempelPersonTyp = null, stempelPersonId = null;
+          try {
+            const det = typeof termin.arbeitszeiten_details === 'string'
+              ? JSON.parse(termin.arbeitszeiten_details)
+              : termin.arbeitszeiten_details;
+            if (det) {
+              if (!stempelArbeitName) stempelArbeitName = Object.keys(det).find(k => !k.startsWith('_')) || null;
+              if (det._gesamt_mitarbeiter_id) {
+                stempelPersonTyp = det._gesamt_mitarbeiter_id.type || 'mitarbeiter';
+                stempelPersonId = det._gesamt_mitarbeiter_id.id;
+              }
+            }
+          } catch(e) {}
           if (!stempelArbeitName) stempelArbeitName = termin.arbeit || null;
+          if (!stempelPersonId) {
+            if (termin.lehrling_id) { stempelPersonTyp = 'lehrling'; stempelPersonId = termin.lehrling_id; }
+            else if (termin.mitarbeiter_id) { stempelPersonTyp = 'mitarbeiter'; stempelPersonId = termin.mitarbeiter_id; }
+          }
           if (!stempelArbeitName) { this.showToast('❌ Kein Arbeitsname gefunden', 'error'); return; }
-          await this.stempelManuellSetzen(terminId, stempelArbeitName, 'ende', zeitWert);
+          await this.stempelManuellSetzen(terminId, stempelArbeitName, 'ende', zeitWert, stempelPersonTyp, stempelPersonId);
           this.showToast('✅ Stempel-Endzeit gespeichert', 'success');
         } else if (action === 'abgeschlossen') {
           const zeit = parseInt(btn.dataset.zeit) || null;
@@ -30708,11 +30726,13 @@ class App {
     }
   }
 
-  async stempelManuellSetzen(terminId, arbeitName, typ, zeitWert) {
+  async stempelManuellSetzen(terminId, arbeitName, typ, zeitWert, personTyp = null, personId = null) {
     if (!zeitWert) return;
     const body = { termin_id: terminId, arbeit_name: arbeitName };
     if (typ === 'start') body.stempel_start = zeitWert;
     else body.stempel_ende = zeitWert;
+    if (personTyp) body.person_typ = personTyp;
+    if (personId) body.person_id = personId;
     try {
       await ApiService.put('/stempelzeiten/stempel', body);
     } catch (err) {

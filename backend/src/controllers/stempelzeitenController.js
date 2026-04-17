@@ -160,7 +160,7 @@ class StempelzeitenController {
         await runAsync(
           `INSERT OR IGNORE INTO termine_arbeiten (termin_id, arbeit, zeit, mitarbeiter_id, lehrling_id, reihenfolge)
            VALUES (?, ?, ?, ?, ?, 0)`,
-          [termin_id, arbeit_name, termin.geschaetzte_zeit || 0, mitarbeiterId, lehrlingId]
+          [termin_id, arbeit_name, termin.geschaetzte_zeit || 1, mitarbeiterId, lehrlingId]
         );
         result = await runAsync(
           `UPDATE termine_arbeiten SET ${updates.join(', ')} WHERE termin_id = ? AND arbeit = ?`,
