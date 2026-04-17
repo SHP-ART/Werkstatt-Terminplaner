@@ -14981,7 +14981,24 @@ class App {
     const dauerText = geplanteDauer >= 60 
       ? `${Math.floor(geplanteDauer/60)}h ${geplanteDauer%60 > 0 ? (geplanteDauer%60) + 'min' : ''}`.trim()
       : `${geplanteDauer} min`;
-    
+
+    // Stempel-Vorgabewerte für manuelle Eingabe
+    let stempelStartVorgabe = '';
+    let stempelEndeVorgabe = '';
+    try {
+      const det = typeof termin.arbeitszeiten_details === 'string'
+        ? JSON.parse(termin.arbeitszeiten_details)
+        : termin.arbeitszeiten_details;
+      if (det && det._startzeit) stempelStartVorgabe = String(det._startzeit).substring(0, 5);
+    } catch(e) {}
+    if (!stempelStartVorgabe && termin.startzeit) stempelStartVorgabe = String(termin.startzeit).substring(0, 5);
+    if (termin.fertigstellung_zeit) {
+      const fDate = new Date(termin.fertigstellung_zeit);
+      if (!isNaN(fDate)) {
+        stempelEndeVorgabe = String(fDate.getHours()).padStart(2, '0') + ':' + String(fDate.getMinutes()).padStart(2, '0');
+      }
+    }
+
     // Dialog erstellen
     const dialog = document.createElement('div');
     dialog.id = 'schnellStatusDialog';
@@ -15183,6 +15200,26 @@ class App {
             </button>
             <span id="schnellStartzeitHinweis" style="font-size: 0.78em; color: #16a34a; display: none;">✅ Geändert – Speichern nicht vergessen!</span>
           </div>
+          <div class="detail-row" style="align-items: center; gap: 6px; flex-wrap: wrap; margin-top: 4px;">
+            <span class="detail-label">⏱️</span>
+            <span style="font-size: 0.85em; color: #555;">Stempel Start:</span>
+            <input type="time" id="schnellStempelStartInput" value="${stempelStartVorgabe}"
+              style="border: 1px solid #ccc; border-radius: 6px; padding: 3px 7px; font-size: 0.9em; width: 90px;">
+            <button data-action="stempel-start-setzen"
+              style="padding: 3px 10px; font-size: 0.82em; border-radius: 6px; border: none; background: #0891b2; color: #fff; cursor: pointer; white-space: nowrap;">
+              ✓ Speichern
+            </button>
+          </div>
+          <div class="detail-row" style="align-items: center; gap: 6px; flex-wrap: wrap; margin-top: 4px;">
+            <span class="detail-label">🏁</span>
+            <span style="font-size: 0.85em; color: #555;">Stempel Ende:</span>
+            <input type="time" id="schnellStempelEndeInput" value="${stempelEndeVorgabe}"
+              style="border: 1px solid #ccc; border-radius: 6px; padding: 3px 7px; font-size: 0.9em; width: 90px;">
+            <button data-action="stempel-ende-setzen"
+              style="padding: 3px 10px; font-size: 0.82em; border-radius: 6px; border: none; background: #16a34a; color: #fff; cursor: pointer; white-space: nowrap;">
+              ✓ Speichern
+            </button>
+          </div>
         </div>
         
         ${statusAktionen}
@@ -15252,6 +15289,36 @@ class App {
           await this.moveTerminToMitarbeiterWithTime(terminId, mitarbeiterId, lehrlingId, type, neueStartzeit);
           const hinweis = document.getElementById('schnellStartzeitHinweis');
           if (hinweis) hinweis.style.display = 'inline';
+        } else if (action === 'stempel-start-setzen') {
+          const zeitWert = document.getElementById('schnellStempelStartInput')?.value;
+          if (!zeitWert) return;
+          let stempelArbeitName = arbeitName;
+          if (!stempelArbeitName) {
+            try {
+              const det = typeof termin.arbeitszeiten_details === 'string'
+                ? JSON.parse(termin.arbeitszeiten_details)
+                : termin.arbeitszeiten_details;
+              if (det) stempelArbeitName = Object.keys(det).find(k => !k.startsWith('_')) || null;
+            } catch(e) {}
+          }
+          if (!stempelArbeitName) { this.showToast('❌ Kein Arbeitsname gefunden', 'error'); return; }
+          await this.stempelManuellSetzen(terminId, stempelArbeitName, 'start', zeitWert);
+          this.showToast('✅ Stempel-Startzeit gespeichert', 'success');
+        } else if (action === 'stempel-ende-setzen') {
+          const zeitWert = document.getElementById('schnellStempelEndeInput')?.value;
+          if (!zeitWert) return;
+          let stempelArbeitName = arbeitName;
+          if (!stempelArbeitName) {
+            try {
+              const det = typeof termin.arbeitszeiten_details === 'string'
+                ? JSON.parse(termin.arbeitszeiten_details)
+                : termin.arbeitszeiten_details;
+              if (det) stempelArbeitName = Object.keys(det).find(k => !k.startsWith('_')) || null;
+            } catch(e) {}
+          }
+          if (!stempelArbeitName) { this.showToast('❌ Kein Arbeitsname gefunden', 'error'); return; }
+          await this.stempelManuellSetzen(terminId, stempelArbeitName, 'ende', zeitWert);
+          this.showToast('✅ Stempel-Endzeit gespeichert', 'success');
         } else if (action === 'abgeschlossen') {
           const zeit = parseInt(btn.dataset.zeit) || null;
           this.setzeSchnellStatus(terminId, 'abgeschlossen', zeit);
@@ -30603,11 +30670,11 @@ class App {
           const startBtn = hatStart
             ? `<span class="intern-stempel-zeit" style="color:var(--success,#28a745);font-size:12px;">▶ ${stempel.stempel_start}</span>`
             : `<button class="intern-btn-stempel-start"
-                onclick="app.stempelSetzen(${termin.id}, '${safeArbeit}', 'start').then(() => app.loadInternTeamUebersicht())">▶ Start</button>`;
+                onclick="app.stempelSetzen(${termin.id}, '${safeArbeit}', 'start', ${personId}, '${typ}').then(() => app.loadInternTeamUebersicht())">▶ Start</button>`;
           const endeBtn = hatEnde
             ? `<span class="intern-stempel-zeit" style="color:var(--danger,#dc3545);font-size:12px;">■ ${stempel.stempel_ende}</span>`
             : `<button class="intern-btn-stempel-ende" ${!hatStart ? 'disabled' : ''}
-                onclick="app.stempelSetzen(${termin.id}, '${safeArbeit}', 'ende').then(() => app.loadInternTeamUebersicht())">■ Ende</button>`;
+                onclick="app.stempelSetzen(${termin.id}, '${safeArbeit}', 'ende', ${personId}, '${typ}').then(() => app.loadInternTeamUebersicht())">■ Ende</button>`;
           return `
             <div class="intern-arbeit-item ${a.abgeschlossen ? 'abgeschlossen' : ''}">
               <span class="arbeit-name">${a.abgeschlossen ? '✅' : '○'} ${this.escapeHtml(a.name)}</span>
@@ -30624,12 +30691,13 @@ class App {
     `;
   }
 
-  async stempelSetzen(terminId, arbeitName, typ) {
+  async stempelSetzen(terminId, arbeitName, typ, personId = null, personTyp = null) {
     const jetzt = new Date();
     const zeit = `${String(jetzt.getHours()).padStart(2,'0')}:${String(jetzt.getMinutes()).padStart(2,'0')}`;
     const body = { termin_id: terminId, arbeit_name: arbeitName };
     if (typ === 'start') body.stempel_start = zeit;
     else body.stempel_ende = zeit;
+    if (personId) { body.person_id = personId; body.person_typ = personTyp || 'mitarbeiter'; }
     try {
       await ApiService.put('/stempelzeiten/stempel', body);
     } catch (err) {
