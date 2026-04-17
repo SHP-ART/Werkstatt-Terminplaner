@@ -22,7 +22,8 @@ class StempelzeitenController {
           t.geschaetzte_zeit,
           t.lehrling_id,
           t.mitarbeiter_id,
-          t.arbeitszeiten_details
+          t.arbeitszeiten_details,
+          t.interne_auftragsnummer
         FROM termine t
         LEFT JOIN kunden k ON t.kunde_id = k.id
         WHERE t.datum = ?
@@ -116,7 +117,7 @@ class StempelzeitenController {
           ? StempelzeitenController._diffMinuten(s.stempel_start, s.stempel_ende) : null;
         _addArbeit(grupKey, { person_typ: personTyp, person_id: personId, person_name: personName }, t, {
           arbeit_id: s.arbeit_id, termin_id: s.termin_id,
-          termin_nr: t.termin_nr || '', kennzeichen: t.kennzeichen || '', kunde_name: t.kunde_name || '',
+          termin_nr: t.termin_nr || '', interne_auftragsnummer: t.interne_auftragsnummer || '', kennzeichen: t.kennzeichen || '', kunde_name: t.kunde_name || '',
           arbeit: s.arbeit || t.termin_arbeit || '',
           geschaetzte_min: s.geschaetzte_min, stempel_start: s.stempel_start, stempel_ende: s.stempel_ende, ist_min: istMin
         });
@@ -131,7 +132,7 @@ class StempelzeitenController {
           const grupKey = `${tp.person_typ}_${tp.person_id}`;
           _addArbeit(grupKey, person, t, {
             arbeit_id: null, termin_id: t.termin_id,
-            termin_nr: t.termin_nr || '', kennzeichen: t.kennzeichen || '', kunde_name: t.kunde_name || '',
+            termin_nr: t.termin_nr || '', interne_auftragsnummer: t.interne_auftragsnummer || '', kennzeichen: t.kennzeichen || '', kunde_name: t.kunde_name || '',
             arbeit: t.termin_arbeit || '', geschaetzte_min: t.geschaetzte_zeit,
             stempel_start: null, stempel_ende: null, ist_min: null
           });
@@ -146,7 +147,7 @@ class StempelzeitenController {
           person_name: '📋 Alle Aufträge (noch nicht gestempelt)',
           arbeiten: ohnePersonOhneStempel.map(t => ({
             arbeit_id: null, termin_id: t.termin_id,
-            termin_nr: t.termin_nr || '', kennzeichen: t.kennzeichen || '', kunde_name: t.kunde_name || '',
+            termin_nr: t.termin_nr || '', interne_auftragsnummer: t.interne_auftragsnummer || '', kennzeichen: t.kennzeichen || '', kunde_name: t.kunde_name || '',
             arbeit: t.termin_arbeit || '', geschaetzte_min: t.geschaetzte_zeit,
             stempel_start: null, stempel_ende: null, ist_min: null
           }))

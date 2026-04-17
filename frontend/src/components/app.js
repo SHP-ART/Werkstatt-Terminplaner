@@ -30789,6 +30789,7 @@ class App {
       return `
         <tr>
           <td>${this.escapeHtml(a.termin_nr || '')}</td>
+          <td>${this.escapeHtml(a.interne_auftragsnummer || '—')}</td>
           <td>${this.escapeHtml(a.kunde_name || '—')}</td>
           <td>${this.escapeHtml(a.kennzeichen || '')}</td>
           <td>${this.escapeHtml(a.arbeit)}</td>
@@ -30814,6 +30815,7 @@ class App {
             <thead>
               <tr>
                 <th>Auftrag</th>
+                <th>Locosoft-Nr.</th>
                 <th>Kundenname</th>
                 <th>Kennzeichen</th>
                 <th>Arbeit</th>
