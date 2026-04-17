@@ -9,96 +9,90 @@ class StempelzeitenController {
     try {
       const datum = req.query.datum || new Date().toISOString().slice(0, 10);
 
+      // Alle Termine des Tages mit zugeordneter Person (Mitarbeiter oder Lehrling)
+      // LEFT JOIN termine_arbeiten: zeigt auch Termine ohne Stempel-Zeilen
+      // COALESCE: nimmt termine_arbeiten.arbeit wenn vorhanden, sonst termin.arbeit
       const rows = await allAsync(`
         SELECT
-          ta.id        AS arbeit_id,
-          ta.termin_id,
-          ta.arbeit,
-          ta.zeit      AS geschaetzte_min,
-          ta.stempel_start,
-          ta.stempel_ende,
-          ta.reihenfolge,
+          t.id           AS termin_id,
           t.termin_nr,
           t.kennzeichen,
           t.kunde_name,
-          'mitarbeiter' AS person_typ,
-          m.id          AS person_id,
-          m.name        AS person_name
-        FROM termine_arbeiten ta
-        JOIN termine t ON ta.termin_id = t.id
-        JOIN mitarbeiter m ON ta.mitarbeiter_id = m.id
+          t.geschaetzte_zeit,
+          'mitarbeiter'  AS person_typ,
+          m.id           AS person_id,
+          m.name         AS person_name,
+          ta.id          AS arbeit_id,
+          COALESCE(ta.arbeit, t.arbeit) AS arbeit,
+          COALESCE(ta.zeit, t.geschaetzte_zeit) AS geschaetzte_min,
+          ta.stempel_start,
+          ta.stempel_ende,
+          COALESCE(ta.reihenfolge, 0) AS reihenfolge
+        FROM termine t
+        JOIN mitarbeiter m ON t.mitarbeiter_id = m.id
+        LEFT JOIN termine_arbeiten ta ON ta.termin_id = t.id
         WHERE t.datum = ?
-          AND ta.mitarbeiter_id IS NOT NULL
+          AND t.status NOT IN ('storniert')
+          AND t.geloescht_am IS NULL
 
         UNION ALL
 
         SELECT
-          ta.id        AS arbeit_id,
-          ta.termin_id,
-          ta.arbeit,
-          ta.zeit      AS geschaetzte_min,
-          ta.stempel_start,
-          ta.stempel_ende,
-          ta.reihenfolge,
+          t.id           AS termin_id,
           t.termin_nr,
           t.kennzeichen,
           t.kunde_name,
-          'lehrling'   AS person_typ,
-          l.id         AS person_id,
-          l.name        AS person_name
-        FROM termine_arbeiten ta
-        JOIN termine t ON ta.termin_id = t.id
-        JOIN lehrlinge l ON ta.lehrling_id = l.id
-        WHERE t.datum = ?
-          AND ta.lehrling_id IS NOT NULL
-
-        UNION ALL
-
-        SELECT
-          ta.id        AS arbeit_id,
-          ta.termin_id,
-          ta.arbeit,
-          ta.zeit      AS geschaetzte_min,
+          t.geschaetzte_zeit,
+          'lehrling'     AS person_typ,
+          l.id           AS person_id,
+          l.name         AS person_name,
+          ta.id          AS arbeit_id,
+          COALESCE(ta.arbeit, t.arbeit) AS arbeit,
+          COALESCE(ta.zeit, t.geschaetzte_zeit) AS geschaetzte_min,
           ta.stempel_start,
           ta.stempel_ende,
-          ta.reihenfolge,
-          t.termin_nr,
-          t.kennzeichen,
-          t.kunde_name,
-          'unbekannt'  AS person_typ,
-          0            AS person_id,
-          '— Nicht zugeordnet —' AS person_name
-        FROM termine_arbeiten ta
-        JOIN termine t ON ta.termin_id = t.id
+          COALESCE(ta.reihenfolge, 0) AS reihenfolge
+        FROM termine t
+        JOIN lehrlinge l ON t.lehrling_id = l.id
+        LEFT JOIN termine_arbeiten ta ON ta.termin_id = t.id
         WHERE t.datum = ?
-          AND ta.mitarbeiter_id IS NULL
-          AND ta.lehrling_id IS NULL
-          AND (ta.stempel_start IS NOT NULL OR ta.stempel_ende IS NOT NULL)
+          AND t.status NOT IN ('storniert')
+          AND t.geloescht_am IS NULL
 
         ORDER BY person_name, termin_id, reihenfolge
-      `, [datum, datum, datum]);
+      `, [datum, datum]);
 
+      // Gruppieren nach Person, deduplizieren (LEFT JOIN kann mehrere Zeilen pro Termin liefern)
       const gruppenMap = new Map();
+      const seenArbeiten = new Set(); // verhindert Doppeleinträge
+
       for (const row of rows) {
         const key = `${row.person_typ}_${row.person_id}`;
         if (!gruppenMap.has(key)) {
           gruppenMap.set(key, {
             person_typ: row.person_typ,
-            person_id: row.person_id,
+            person_id:  row.person_id,
             person_name: row.person_name,
             arbeiten: []
           });
         }
+
+        // Dedup-Key: pro termin + arbeit-Name nur eine Zeile
+        const dedupKey = `${row.termin_id}_${row.arbeit}_${row.person_id}`;
+        if (seenArbeiten.has(dedupKey)) continue;
+        seenArbeiten.add(dedupKey);
+
         const istMin = row.stempel_start && row.stempel_ende
           ? StempelzeitenController._diffMinuten(row.stempel_start, row.stempel_ende)
           : null;
+
         gruppenMap.get(key).arbeiten.push({
           arbeit_id:       row.arbeit_id,
           termin_id:       row.termin_id,
           termin_nr:       row.termin_nr,
-          kennzeichen:     row.kennzeichen,
-          kunde_name:      row.kunde_name,
-          arbeit:          row.arbeit,
+          kennzeichen:     row.kennzeichen || '',
+          kunde_name:      row.kunde_name  || '',
+          arbeit:          row.arbeit      || '',
           geschaetzte_min: row.geschaetzte_min,
           stempel_start:   row.stempel_start,
           stempel_ende:    row.stempel_ende,
