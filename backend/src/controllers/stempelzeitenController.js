@@ -1,5 +1,6 @@
-const { allAsync, runAsync } = require('../utils/dbHelper');
+const { allAsync, getAsync, runAsync } = require('../utils/dbHelper');
 const { broadcastEvent } = require('../utils/websocket');
+const ArbeitszeitenModel = require('../models/arbeitszeitenModel');
 
 const ZEIT_REGEX = /^([01]\d|2[0-3]):([0-5]\d)$/;
 
@@ -122,6 +123,48 @@ class StempelzeitenController {
       }
 
       broadcastEvent('stempel.updated', { termin_id, arbeit_name });
+
+      // Wenn stempel_ende gesetzt wurde: Lernlogik triggern
+      if (stempel_ende !== undefined) {
+        const row = await getAsync(
+          `SELECT ta.stempel_start, ta.stempel_ende, ta.zeit AS geschaetzte_min,
+                  t.datum, t.mitarbeiter_id
+           FROM termine_arbeiten ta
+           JOIN termine t ON ta.termin_id = t.id
+           WHERE ta.termin_id = ? AND ta.arbeit = ?`,
+          [termin_id, arbeit_name]
+        );
+        if (row && row.stempel_start && row.stempel_ende) {
+          const istMin = StempelzeitenController._diffMinuten(row.stempel_start, row.stempel_ende);
+          if (istMin > 0) {
+            // 1. arbeitszeiten: Standardzeit gewichtet aktualisieren
+            try {
+              await ArbeitszeitenModel.updateByBezeichnung(arbeit_name, istMin);
+            } catch (e) {
+              console.warn('[Stempel-Lernen] arbeitszeiten update fehlgeschlagen:', e.message);
+            }
+            // 2. ki_zeitlern_daten: Lernpunkt eintragen
+            try {
+              const EinstellungenModel = require('../models/einstellungenModel');
+              const einst = await EinstellungenModel.getWerkstatt();
+              const kiAktiv = einst ? (einst.ki_zeitlern_enabled === 0 ? false : true) : true;
+              if (kiAktiv) {
+                const { kategorisiereArbeit } = require('../services/localAiService');
+                const { runAsync: dbRun } = require('../config/database');
+                const kat = kategorisiereArbeit(arbeit_name);
+                await dbRun(
+                  `INSERT INTO ki_zeitlern_daten (termin_id, arbeit, kategorie, geschaetzte_min, tatsaechliche_min, mitarbeiter_id, datum)
+                   VALUES (?, ?, ?, ?, ?, ?, ?)`,
+                  [termin_id, arbeit_name, kat, row.geschaetzte_min || istMin, istMin, row.mitarbeiter_id || null, row.datum]
+                );
+              }
+            } catch (e) {
+              console.warn('[Stempel-Lernen] ki_zeitlern_daten insert fehlgeschlagen:', e.message);
+            }
+          }
+        }
+      }
+
       res.json({ changes: result.changes, message: 'Stempel gesetzt' });
     } catch (err) {
       res.status(500).json({ error: err.message });
