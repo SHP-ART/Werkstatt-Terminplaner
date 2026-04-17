@@ -30806,7 +30806,7 @@ class App {
         <div class="card-header" style="display:flex;justify-content:space-between;align-items:center;">
           <strong>${icon} ${this.escapeHtml(gruppe.person_name)}</strong>
           <span class="text-muted" style="font-size:13px;">
-            Geschätzt: ${gesamtGeschaetzt} Min
+            Richtwert: ${gesamtGeschaetzt} Min
             ${gesamtIst ? '· Gestempelt: ' + gesamtIst + ' Min' : ''}
           </span>
         </div>
@@ -30821,7 +30821,7 @@ class App {
                 <th>Arbeit</th>
                 <th class="text-success">Start ▶</th>
                 <th class="text-danger">Ende ■</th>
-                <th class="text-warning">Geschätzt</th>
+                <th class="text-warning">Richtwert</th>
                 <th>Ist-Zeit</th>
               </tr>
             </thead>
