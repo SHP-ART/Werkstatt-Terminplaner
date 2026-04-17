@@ -9,58 +9,106 @@ class StempelzeitenController {
     try {
       const datum = req.query.datum || new Date().toISOString().slice(0, 10);
 
-      // Alle Termine des Tages mit zugeordneter Person (Mitarbeiter oder Lehrling)
-      // LEFT JOIN termine_arbeiten: zeigt auch Termine ohne Stempel-Zeilen
-      // COALESCE: nimmt termine_arbeiten.arbeit wenn vorhanden, sonst termin.arbeit
+      // 1. Termine mit Stempel (termine_arbeiten.mitarbeiter_id / lehrling_id gesetzt)
+      // 2. Termine ohne Stempel aber via termine.mitarbeiter_id zugeordnet
+      // → zusammengeführt, dedupliziert, sortiert nach Person + Termin
       const rows = await allAsync(`
         SELECT
-          t.id           AS termin_id,
+          ta.id          AS arbeit_id,
+          ta.termin_id,
           t.termin_nr,
           t.kennzeichen,
           t.kunde_name,
-          t.geschaetzte_zeit,
-          'mitarbeiter'  AS person_typ,
-          m.id           AS person_id,
-          m.name         AS person_name,
-          ta.id          AS arbeit_id,
           COALESCE(ta.arbeit, t.arbeit) AS arbeit,
           COALESCE(ta.zeit, t.geschaetzte_zeit) AS geschaetzte_min,
           ta.stempel_start,
           ta.stempel_ende,
-          COALESCE(ta.reihenfolge, 0) AS reihenfolge
-        FROM termine t
-        JOIN mitarbeiter m ON t.mitarbeiter_id = m.id
-        LEFT JOIN termine_arbeiten ta ON ta.termin_id = t.id
+          COALESCE(ta.reihenfolge, 0) AS reihenfolge,
+          'mitarbeiter'  AS person_typ,
+          m.id           AS person_id,
+          m.name         AS person_name
+        FROM termine_arbeiten ta
+        JOIN termine t ON ta.termin_id = t.id
+        JOIN mitarbeiter m ON ta.mitarbeiter_id = m.id
         WHERE t.datum = ?
-          AND t.status NOT IN ('storniert')
           AND t.geloescht_am IS NULL
 
         UNION ALL
 
         SELECT
-          t.id           AS termin_id,
+          ta.id          AS arbeit_id,
+          ta.termin_id,
           t.termin_nr,
           t.kennzeichen,
           t.kunde_name,
-          t.geschaetzte_zeit,
-          'lehrling'     AS person_typ,
-          l.id           AS person_id,
-          l.name         AS person_name,
-          ta.id          AS arbeit_id,
           COALESCE(ta.arbeit, t.arbeit) AS arbeit,
           COALESCE(ta.zeit, t.geschaetzte_zeit) AS geschaetzte_min,
           ta.stempel_start,
           ta.stempel_ende,
-          COALESCE(ta.reihenfolge, 0) AS reihenfolge
-        FROM termine t
-        JOIN lehrlinge l ON t.lehrling_id = l.id
-        LEFT JOIN termine_arbeiten ta ON ta.termin_id = t.id
+          COALESCE(ta.reihenfolge, 0) AS reihenfolge,
+          'lehrling'     AS person_typ,
+          l.id           AS person_id,
+          l.name         AS person_name
+        FROM termine_arbeiten ta
+        JOIN termine t ON ta.termin_id = t.id
+        JOIN lehrlinge l ON ta.lehrling_id = l.id
         WHERE t.datum = ?
-          AND t.status NOT IN ('storniert')
           AND t.geloescht_am IS NULL
 
+        UNION ALL
+
+        SELECT
+          NULL           AS arbeit_id,
+          t.id           AS termin_id,
+          t.termin_nr,
+          t.kennzeichen,
+          t.kunde_name,
+          t.arbeit       AS arbeit,
+          t.geschaetzte_zeit AS geschaetzte_min,
+          NULL           AS stempel_start,
+          NULL           AS stempel_ende,
+          0              AS reihenfolge,
+          'mitarbeiter'  AS person_typ,
+          m.id           AS person_id,
+          m.name         AS person_name
+        FROM termine t
+        JOIN mitarbeiter m ON t.mitarbeiter_id = m.id
+        WHERE t.datum = ?
+          AND t.geloescht_am IS NULL
+          AND t.status NOT IN ('storniert')
+          AND NOT EXISTS (
+            SELECT 1 FROM termine_arbeiten ta2
+            WHERE ta2.termin_id = t.id AND ta2.mitarbeiter_id = m.id
+          )
+
+        UNION ALL
+
+        SELECT
+          NULL           AS arbeit_id,
+          t.id           AS termin_id,
+          t.termin_nr,
+          t.kennzeichen,
+          t.kunde_name,
+          t.arbeit       AS arbeit,
+          t.geschaetzte_zeit AS geschaetzte_min,
+          NULL           AS stempel_start,
+          NULL           AS stempel_ende,
+          0              AS reihenfolge,
+          'lehrling'     AS person_typ,
+          l.id           AS person_id,
+          l.name         AS person_name
+        FROM termine t
+        JOIN lehrlinge l ON t.lehrling_id = l.id
+        WHERE t.datum = ?
+          AND t.geloescht_am IS NULL
+          AND t.status NOT IN ('storniert')
+          AND NOT EXISTS (
+            SELECT 1 FROM termine_arbeiten ta2
+            WHERE ta2.termin_id = t.id AND ta2.lehrling_id = l.id
+          )
+
         ORDER BY person_name, termin_id, reihenfolge
-      `, [datum, datum]);
+      `, [datum, datum, datum, datum]);
 
       // Gruppieren nach Person, deduplizieren (LEFT JOIN kann mehrere Zeilen pro Termin liefern)
       const gruppenMap = new Map();
