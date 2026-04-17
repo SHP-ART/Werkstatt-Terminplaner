@@ -31152,6 +31152,22 @@ class App {
       const jetzt = new Date();
       const startzeit = `${String(jetzt.getHours()).padStart(2, '0')}:${String(jetzt.getMinutes()).padStart(2, '0')}`;
       await ApiService.put(`/termine/${terminId}`, { status: 'in_arbeit', startzeit });
+      // Stempel-Start für alle Arbeiten dieses Auftrags setzen
+      try {
+        const terminData = await ApiService.get(`/termine/${terminId}`);
+        const arbeiten = this.internGetArbeitenFromTermin(terminData);
+        if (arbeiten.length > 0) {
+          await Promise.all(arbeiten.map(a => this.stempelSetzen(terminId, a.name, 'start')));
+        } else {
+          // Einfacher Auftrag ohne Einzelarbeiten: Auftragsbezeichnung als Arbeit verwenden
+          if (terminData.arbeit) {
+            await this.stempelSetzen(terminId, terminData.arbeit, 'start');
+          }
+        }
+      } catch (stempelErr) {
+        console.warn('[Stempel] Start-Stempel konnte nicht gesetzt werden:', stempelErr);
+        // Nicht kritisch – Hauptaktion (Status setzen) war erfolgreich
+      }
       // Folgezeiten neu berechnen wenn Personzuordnung bekannt
       if (personId && personTyp) {
         const heute = this.formatDateLocal(this.getToday());
@@ -31173,6 +31189,20 @@ class App {
         status: 'abgeschlossen',
         fertigstellung_zeit: new Date().toISOString()
       });
+      // Stempel-Ende für alle noch nicht gestempelten Arbeiten setzen
+      try {
+        const terminData = await ApiService.get(`/termine/${terminId}`);
+        const arbeiten = this.internGetArbeitenFromTermin(terminData);
+        if (arbeiten.length > 0) {
+          await Promise.all(arbeiten.map(a => this.stempelSetzen(terminId, a.name, 'ende')));
+        } else {
+          if (terminData.arbeit) {
+            await this.stempelSetzen(terminId, terminData.arbeit, 'ende');
+          }
+        }
+      } catch (stempelErr) {
+        console.warn('[Stempel] Ende-Stempel konnte nicht gesetzt werden:', stempelErr);
+      }
       this.loadInternTeamUebersicht();
     } catch (err) {
       console.error('internBeenden Fehler:', err);
@@ -31185,6 +31215,17 @@ class App {
     if (btn) btn.disabled = true;
     try {
       await ApiService.post(`/termine/${terminId}/arbeit-beenden`, { arbeit_index: arbeitIndex });
+      // Stempel-Ende für diese Einzelarbeit setzen
+      try {
+        const terminData = await ApiService.get(`/termine/${terminId}`);
+        const arbeiten = this.internGetArbeitenFromTermin(terminData);
+        const arbeit = arbeiten[arbeitIndex];
+        if (arbeit) {
+          await this.stempelSetzen(terminId, arbeit.name, 'ende');
+        }
+      } catch (stempelErr) {
+        console.warn('[Stempel] Einzelarbeit-Ende-Stempel konnte nicht gesetzt werden:', stempelErr);
+      }
       this.loadInternTeamUebersicht();
     } catch (err) {
       console.error('internBeendenEinzelarbeit Fehler:', err);
