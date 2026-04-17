@@ -2139,11 +2139,8 @@ class TermineController {
         return res.status(400).json({ error: 'Feierabend-Zeit liegt vor oder auf der Start-Zeit des Termins' });
       }
 
-      if (heuteMinuten >= termin.geschaetzte_zeit) {
-        return res.status(400).json({
-          error: `Termin kann bis ${feierabend} Uhr vollständig abgeschlossen werden – keine Folgearbeit nötig.`
-        });
-      }
+      // Kein Block mehr wenn heuteMinuten >= geschaetzte_zeit:
+      // User kann explizit splitten auch wenn Termin "passen würde"
 
       // Falls neue Startzeit angegeben: bring_zeit und startzeit des Termins aktualisieren
       if (neueStartzeit) {
