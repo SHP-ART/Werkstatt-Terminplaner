@@ -54,4 +54,25 @@ async function down(db) {
 migration.up = up;
 migration.down = down;
 
+module.exports = migration     CHECK (mitarbeiter_id IS NOT NULL OR lehrling_id IS NOT NULL)
+    )
+  `);
+
+  await safeRun(db, `CREATE INDEX IF NOT EXISTS idx_arbeitsunterb_datum ON arbeitsunterbrechungen(datum)`);
+
+  console.log('✓ Migration 034 abgeschlossen');
+}
+
+async function down(db) {
+  await safeRun(db, `DROP INDEX IF EXISTS idx_arbeitsunterb_datum`);
+  await safeRun(db, `DROP TABLE IF EXISTS arbeitsunterbrechungen`);
+  await safeRun(db, `DROP INDEX IF EXISTS idx_tagesstempel_ll_datum`);
+  await safeRun(db, `DROP INDEX IF EXISTS idx_tagesstempel_ma_datum`);
+  await safeRun(db, `DROP TABLE IF EXISTS tagesstempel`);
+  console.log('✓ Migration 034 rückgängig gemacht');
+}
+
+migration.up = up;
+migration.down = down;
+
 module.exports = migration;

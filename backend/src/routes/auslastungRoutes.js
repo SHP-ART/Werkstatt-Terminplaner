@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
-const TermineController = require('../controllers/termineController');
+const AuslastungController = require('../controllers/auslastungController');
 
-router.get('/:datum', TermineController.getAuslastung);
+router.get('/:datum', AuslastungController.getAuslastung);
 
 module.exports = router;

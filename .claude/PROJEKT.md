@@ -143,6 +143,7 @@ Enthält Geschäftslogik zwischen Route und Model. Jeder Controller ist verantwo
 | `kiPlanungController.js` | KI-gestützte Terminoptimierung |
 | `wiederkehrendeTermineController.js` | Wiederkehrende Terminserien |
 | `fahrzeugeController.js` | Fahrzeuge CRUD |
+| `tagesstempelController.js` | Arbeitsbeginn/Arbeitsende/Unterbrechungen je Person (Tagesstempel + Arbeitsunterbrechungen) |
 
 #### Models (`models/`)
 Reine Datenbankschicht. Keine Geschäftslogik. Nutzen `dbHelper.js` für Promise-basierte Queries.
@@ -197,6 +198,7 @@ Wichtige Migrations:
 - `019_add_pause_tracking_and_verschoben.js` – Pause-Tracking
 - `029_wiederholung.js` – Wiederkehrende Termine
 - `030_arbeitspausen.js` – Detaillierte Pausenzeiten
+- `034_tagesstempel.js` – Tagesstempel- und Arbeitsunterbrechungen-Tabellen
 
 ---
 
@@ -284,6 +286,8 @@ Backend
 | `wiederholende_termine` | Definitionen für Terminserien |
 | `arbeitspausen` | Granulare Pausen-Einträge |
 | `pause_tracking` | Aktive Pausen je Mitarbeiter/Tag |
+| `tagesstempel` | Arbeitsbeginn/Arbeitsende je Mitarbeiter/Lehrling pro Tag; Felder: `mitarbeiter_id`, `lehrling_id`, `datum`, `kommen_zeit`, `gehen_zeit` |
+| `arbeitsunterbrechungen` | Unterbrechungen (Pausen) je Person/Tag; Felder: `mitarbeiter_id`, `lehrling_id`, `datum`, `start_zeit`, `ende_zeit` |
 | `schema_migrations` | Migrations-Zustand |
 | `automation_log` | Log für automatisierte Aktionen |
 

@@ -251,13 +251,12 @@ Vollständige Beschreibungen in [.claude/PROJEKT.md](.claude/PROJEKT.md) Abschni
 |---|---|
 | `termineRoutes.js` | Termine CRUD, Split-Termine, Phasen-Zuordnung |
 | `phasenRoutes.js` | Arbeits-Phasen verwalten |
-| `auslastungRoutes.js` | Auslastungsberechnung (→ TermineController) |
+| `auslastungRoutes.js` | Auslastungsberechnung (→ AuslastungController) |
 | `kundenRoutes.js` | Kunden CRUD, Locosoft-Import |
 | `fahrzeuge.js` | Fahrzeuge CRUD |
 | `mitarbeiterRoutes.js` | Mitarbeiter CRUD |
 | `abwesenheitenRoutes.js` | Abwesenheiten (Urlaub, Krank, …) |
 | `arbeitszeitenRoutes.js` | Stempelzeiten, Ist-Zeiten |
-| `stempelzeitenRoutes.js` | Tagesübersicht Stempelzeiten, Stempel setzen (GET /stempelzeiten, PUT /stempelzeiten/stempel) |
 | `arbeitszeitenPlanRoutes.js` | Soll-Arbeitszeiten Planung |
 | `arbeitspausen.js` | Pausenzeitenbuchung |
 | `schichtTemplateRoutes.js` | Schicht-Templates |
@@ -270,6 +269,7 @@ Vollständige Beschreibungen in [.claude/PROJEKT.md](.claude/PROJEKT.md) Abschni
 | `einstellungenRoutes.js` | App-Einstellungen |
 | `tabletRoutes.js` | Tablet-spezifische Endpunkte |
 | `tabletUpdateRoutes.js` | Auto-Update-System für Tablet-App |
+| `tagesstempelRoutes.js` | Arbeitsbeginn/Arbeitsende/Unterbrechungen je Person (→ tagesstempelController) |
 | `sucheRoutes.js` | Globale Suche |
 | `systemRoutes.js` | Systeminfos, Health-Check |
 | `aiRoutes.js` / `kiPlanungRoutes.js` | KI-gestützte Terminoptimierung |

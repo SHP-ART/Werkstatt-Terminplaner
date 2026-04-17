@@ -89,11 +89,11 @@ class KIPlanungController {
             const kiAntwort = await ollamaService.planungRequest(prompt);
             const vorschlag = KIPlanungController.parseKIAntwort(kiAntwort, { mitarbeiter, lehrlinge, termine, schwebendeTermine });
             _kiJobs.set(jobId, { status: 'done', created: Date.now(), result: { success: true, datum, vorschlag, mode: 'ollama' } });
-            broadcastEvent('ki_planung_done', { jobId, type: 'tages' });
+            broadcastEvent('ki.planung.done', { jobId, type: 'tages' });
           } catch (err) {
             console.error('KI-Planung Hintergrundfehler:', err);
             _kiJobs.set(jobId, { status: 'error', created: Date.now(), error: err.message });
-            broadcastEvent('ki_planung_done', { jobId, type: 'tages', error: err.message });
+            broadcastEvent('ki.planung.done', { jobId, type: 'tages', error: err.message });
           }
         })();
         return;
@@ -220,11 +220,11 @@ class KIPlanungController {
             const kiAntwort = await ollamaService.planungRequest(prompt);
             const vorschlag = KIPlanungController.parseWochenAntwort(kiAntwort, { wochentage, schwebendeTermine, mitarbeiter, lehrlinge });
             _kiJobs.set(jobId, { status: 'done', created: Date.now(), result: { success: true, wochentage, vorschlag, mode: 'ollama' } });
-            broadcastEvent('ki_planung_done', { jobId, type: 'wochen' });
+            broadcastEvent('ki.planung.done', { jobId, type: 'wochen' });
           } catch (err) {
             console.error('KI-Wochenplanung Hintergrundfehler:', err);
             _kiJobs.set(jobId, { status: 'error', created: Date.now(), error: err.message });
-            broadcastEvent('ki_planung_done', { jobId, type: 'wochen', error: err.message });
+            broadcastEvent('ki.planung.done', { jobId, type: 'wochen', error: err.message });
           }
         })();
         return;

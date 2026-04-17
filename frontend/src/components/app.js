@@ -8007,7 +8007,7 @@ class App {
       }
       const morgenStr = (() => { const d=new Date(); d.setDate(d.getDate()+1); while(d.getDay()===0||d.getDay()===6) d.setDate(d.getDate()+1); return d.toLocaleDateString('de-DE',{weekday:'short',day:'2-digit',month:'2-digit'}); })();
       if (restMin <= 0) {
-        prev.innerHTML = `<span style="color:#2e7d32;">✅ Termin passt vollständig bis ${feier} Uhr (${heuteMin} Min.) — trotzdem einplanbar.</span>`;
+        prev.innerHTML = `<span style="color:#2e7d32;">✅ Termin passt vollständig bis ${feier} Uhr (${heuteMin} Min.).</span>`;
       } else {
         prev.innerHTML = `<strong>Heute:</strong> ${heuteMin} Min. (${start}–${feier})<br><strong>Morgen (${morgenStr}):</strong> ${restMin} Min. ab 08:00`;
       }
@@ -14981,24 +14981,7 @@ class App {
     const dauerText = geplanteDauer >= 60 
       ? `${Math.floor(geplanteDauer/60)}h ${geplanteDauer%60 > 0 ? (geplanteDauer%60) + 'min' : ''}`.trim()
       : `${geplanteDauer} min`;
-
-    // Stempel-Vorgabewerte für manuelle Eingabe
-    let stempelStartVorgabe = '';
-    let stempelEndeVorgabe = '';
-    try {
-      const det = typeof termin.arbeitszeiten_details === 'string'
-        ? JSON.parse(termin.arbeitszeiten_details)
-        : termin.arbeitszeiten_details;
-      if (det && det._startzeit) stempelStartVorgabe = String(det._startzeit).substring(0, 5);
-    } catch(e) {}
-    if (!stempelStartVorgabe && termin.startzeit) stempelStartVorgabe = String(termin.startzeit).substring(0, 5);
-    if (termin.fertigstellung_zeit) {
-      const fDate = new Date(termin.fertigstellung_zeit);
-      if (!isNaN(fDate)) {
-        stempelEndeVorgabe = String(fDate.getHours()).padStart(2, '0') + ':' + String(fDate.getMinutes()).padStart(2, '0');
-      }
-    }
-
+    
     // Dialog erstellen
     const dialog = document.createElement('div');
     dialog.id = 'schnellStatusDialog';
@@ -15200,26 +15183,6 @@ class App {
             </button>
             <span id="schnellStartzeitHinweis" style="font-size: 0.78em; color: #16a34a; display: none;">✅ Geändert – Speichern nicht vergessen!</span>
           </div>
-          <div class="detail-row" style="align-items: center; gap: 6px; flex-wrap: wrap; margin-top: 4px;">
-            <span class="detail-label">⏱️</span>
-            <span style="font-size: 0.85em; color: #555;">Stempel Start:</span>
-            <input type="time" id="schnellStempelStartInput" value="${stempelStartVorgabe}"
-              style="border: 1px solid #ccc; border-radius: 6px; padding: 3px 7px; font-size: 0.9em; width: 90px;">
-            <button data-action="stempel-start-setzen"
-              style="padding: 3px 10px; font-size: 0.82em; border-radius: 6px; border: none; background: #0891b2; color: #fff; cursor: pointer; white-space: nowrap;">
-              ✓ Speichern
-            </button>
-          </div>
-          <div class="detail-row" style="align-items: center; gap: 6px; flex-wrap: wrap; margin-top: 4px;">
-            <span class="detail-label">🏁</span>
-            <span style="font-size: 0.85em; color: #555;">Stempel Ende:</span>
-            <input type="time" id="schnellStempelEndeInput" value="${stempelEndeVorgabe}"
-              style="border: 1px solid #ccc; border-radius: 6px; padding: 3px 7px; font-size: 0.9em; width: 90px;">
-            <button data-action="stempel-ende-setzen"
-              style="padding: 3px 10px; font-size: 0.82em; border-radius: 6px; border: none; background: #16a34a; color: #fff; cursor: pointer; white-space: nowrap;">
-              ✓ Speichern
-            </button>
-          </div>
         </div>
         
         ${statusAktionen}
@@ -15289,56 +15252,6 @@ class App {
           await this.moveTerminToMitarbeiterWithTime(terminId, mitarbeiterId, lehrlingId, type, neueStartzeit);
           const hinweis = document.getElementById('schnellStartzeitHinweis');
           if (hinweis) hinweis.style.display = 'inline';
-        } else if (action === 'stempel-start-setzen') {
-          const zeitWert = document.getElementById('schnellStempelStartInput')?.value;
-          if (!zeitWert) return;
-          let stempelArbeitName = arbeitName;
-          let stempelPersonTyp = null, stempelPersonId = null;
-          try {
-            const det = typeof termin.arbeitszeiten_details === 'string'
-              ? JSON.parse(termin.arbeitszeiten_details)
-              : termin.arbeitszeiten_details;
-            if (det) {
-              if (!stempelArbeitName) stempelArbeitName = Object.keys(det).find(k => !k.startsWith('_')) || null;
-              if (det._gesamt_mitarbeiter_id) {
-                stempelPersonTyp = det._gesamt_mitarbeiter_id.type || 'mitarbeiter';
-                stempelPersonId = det._gesamt_mitarbeiter_id.id;
-              }
-            }
-          } catch(e) {}
-          if (!stempelArbeitName) stempelArbeitName = termin.arbeit || null;
-          if (!stempelPersonId) {
-            if (termin.lehrling_id) { stempelPersonTyp = 'lehrling'; stempelPersonId = termin.lehrling_id; }
-            else if (termin.mitarbeiter_id) { stempelPersonTyp = 'mitarbeiter'; stempelPersonId = termin.mitarbeiter_id; }
-          }
-          if (!stempelArbeitName) { this.showToast('❌ Kein Arbeitsname gefunden', 'error'); return; }
-          await this.stempelManuellSetzen(terminId, stempelArbeitName, 'start', zeitWert, stempelPersonTyp, stempelPersonId);
-          this.showToast('✅ Stempel-Startzeit gespeichert', 'success');
-        } else if (action === 'stempel-ende-setzen') {
-          const zeitWert = document.getElementById('schnellStempelEndeInput')?.value;
-          if (!zeitWert) return;
-          let stempelArbeitName = arbeitName;
-          let stempelPersonTyp = null, stempelPersonId = null;
-          try {
-            const det = typeof termin.arbeitszeiten_details === 'string'
-              ? JSON.parse(termin.arbeitszeiten_details)
-              : termin.arbeitszeiten_details;
-            if (det) {
-              if (!stempelArbeitName) stempelArbeitName = Object.keys(det).find(k => !k.startsWith('_')) || null;
-              if (det._gesamt_mitarbeiter_id) {
-                stempelPersonTyp = det._gesamt_mitarbeiter_id.type || 'mitarbeiter';
-                stempelPersonId = det._gesamt_mitarbeiter_id.id;
-              }
-            }
-          } catch(e) {}
-          if (!stempelArbeitName) stempelArbeitName = termin.arbeit || null;
-          if (!stempelPersonId) {
-            if (termin.lehrling_id) { stempelPersonTyp = 'lehrling'; stempelPersonId = termin.lehrling_id; }
-            else if (termin.mitarbeiter_id) { stempelPersonTyp = 'mitarbeiter'; stempelPersonId = termin.mitarbeiter_id; }
-          }
-          if (!stempelArbeitName) { this.showToast('❌ Kein Arbeitsname gefunden', 'error'); return; }
-          await this.stempelManuellSetzen(terminId, stempelArbeitName, 'ende', zeitWert, stempelPersonTyp, stempelPersonId);
-          this.showToast('✅ Stempel-Endzeit gespeichert', 'success');
         } else if (action === 'abgeschlossen') {
           const zeit = parseInt(btn.dataset.zeit) || null;
           this.setzeSchnellStatus(terminId, 'abgeschlossen', zeit);
@@ -30670,16 +30583,7 @@ class App {
   }
 
   internRenderArbeitenListe(termin, personId, typ) {
-    let arbeiten = this.internGetArbeitenFromTermin(termin);
-
-    // Fallback: kein arbeitszeiten_details → arbeit-Textfeld aufteilen
-    if (!arbeiten.length && termin.arbeit) {
-      arbeiten = termin.arbeit
-        .split(/[|\n,]+/)
-        .map(s => s.trim())
-        .filter(Boolean)
-        .map((name, idx) => ({ name, zeit: 0, abgeschlossen: false, index: idx }));
-    }
+    const arbeiten = this.internGetArbeitenFromTermin(termin);
     if (!arbeiten.length) return '';
 
     const stempelMap = {};
@@ -30699,11 +30603,11 @@ class App {
           const startBtn = hatStart
             ? `<span class="intern-stempel-zeit" style="color:var(--success,#28a745);font-size:12px;">▶ ${stempel.stempel_start}</span>`
             : `<button class="intern-btn-stempel-start"
-                onclick="app.stempelSetzen(${termin.id}, '${safeArbeit}', 'start', ${personId}, '${typ}').then(() => app.loadInternTeamUebersicht())">▶ Start</button>`;
+                onclick="app.stempelSetzen(${termin.id}, '${safeArbeit}', 'start').then(() => app.loadInternTeamUebersicht())">▶ Start</button>`;
           const endeBtn = hatEnde
             ? `<span class="intern-stempel-zeit" style="color:var(--danger,#dc3545);font-size:12px;">■ ${stempel.stempel_ende}</span>`
             : `<button class="intern-btn-stempel-ende" ${!hatStart ? 'disabled' : ''}
-                onclick="app.stempelSetzen(${termin.id}, '${safeArbeit}', 'ende', ${personId}, '${typ}').then(() => app.loadInternTeamUebersicht())">■ Ende</button>`;
+                onclick="app.stempelSetzen(${termin.id}, '${safeArbeit}', 'ende').then(() => app.loadInternTeamUebersicht())">■ Ende</button>`;
           return `
             <div class="intern-arbeit-item ${a.abgeschlossen ? 'abgeschlossen' : ''}">
               <span class="arbeit-name">${a.abgeschlossen ? '✅' : '○'} ${this.escapeHtml(a.name)}</span>
@@ -30720,13 +30624,12 @@ class App {
     `;
   }
 
-  async stempelSetzen(terminId, arbeitName, typ, personId = null, personTyp = null) {
+  async stempelSetzen(terminId, arbeitName, typ) {
     const jetzt = new Date();
     const zeit = `${String(jetzt.getHours()).padStart(2,'0')}:${String(jetzt.getMinutes()).padStart(2,'0')}`;
     const body = { termin_id: terminId, arbeit_name: arbeitName };
     if (typ === 'start') body.stempel_start = zeit;
     else body.stempel_ende = zeit;
-    if (personId) { body.person_id = personId; body.person_typ = personTyp || 'mitarbeiter'; }
     try {
       await ApiService.put('/stempelzeiten/stempel', body);
     } catch (err) {
@@ -30735,13 +30638,11 @@ class App {
     }
   }
 
-  async stempelManuellSetzen(terminId, arbeitName, typ, zeitWert, personTyp = null, personId = null) {
+  async stempelManuellSetzen(terminId, arbeitName, typ, zeitWert) {
     if (!zeitWert) return;
     const body = { termin_id: terminId, arbeit_name: arbeitName };
     if (typ === 'start') body.stempel_start = zeitWert;
     else body.stempel_ende = zeitWert;
-    if (personTyp) body.person_typ = personTyp;
-    if (personId) body.person_id = personId;
     try {
       await ApiService.put('/stempelzeiten/stempel', body);
     } catch (err) {
@@ -30756,30 +30657,52 @@ class App {
     if (!container || !datumInput) return;
 
     const datum = datumInput.value || this.formatDateLocal(this.getToday());
+    const istHeute = datum === this.formatDateLocal(this.getToday());
     container.innerHTML = '<p class="loading-text">Lade Stempelzeiten…</p>';
 
     try {
-      const gruppen = await ApiService.get(`/stempelzeiten?datum=${datum}`);
+      const [gruppen, tagesstempelRaw] = await Promise.all([
+        ApiService.get(`/stempelzeiten?datum=${datum}`),
+        ApiService.get(`/tagesstempel?datum=${datum}`).catch(() => [])
+      ]);
+
       if (!gruppen || gruppen.length === 0) {
         container.innerHTML = '<div class="empty-state"><p>Keine Arbeiten für diesen Tag.</p></div>';
         return;
       }
-      container.innerHTML = gruppen.map(g => this.renderZeitstempelungGruppe(g)).join('');
+
+      // Maps aufbauen: key = "m_<id>" oder "l_<id>"
+      const tagesstempelMap = {};
+      const unterbrechungenMap = {};
+      (tagesstempelRaw || []).forEach(eintrag => {
+        const key = eintrag.mitarbeiter_id ? `m_${eintrag.mitarbeiter_id}` : `l_${eintrag.lehrling_id}`;
+        tagesstempelMap[key] = eintrag.stempel || null;
+        unterbrechungenMap[key] = eintrag.unterbrechungen || [];
+      });
+
+      container.innerHTML = gruppen.map(g => {
+        const key = g.person_typ === 'lehrling' ? `l_${g.person_id}` : `m_${g.person_id}`;
+        return this.renderZeitstempelungGruppe(g, tagesstempelMap[key] || null, unterbrechungenMap[key] || [], istHeute);
+      }).join('');
     } catch (err) {
       console.error('[Zeitstempelung] Ladefehler:', err);
       container.innerHTML = '<div class="error-state"><p>Fehler beim Laden der Stempelzeiten.</p></div>';
     }
   }
 
-  renderZeitstempelungGruppe(gruppe) {
-    const gesamtGeschaetzt = gruppe.arbeiten.reduce((s, a) => s + (a.richtwert_min || 0), 0);
+  renderZeitstempelungGruppe(gruppe, tagesstempel = null, unterbrechungen = [], istHeute = false) {
+    const gesamtGeschaetzt = gruppe.arbeiten.reduce((s, a) => s + (a.geschaetzte_min || 0), 0);
     const gesamtIst = gruppe.arbeiten.reduce((s, a) => s + (a.ist_min || 0), 0);
     const icon = gruppe.person_typ === 'lehrling' ? '🎓' : '👷';
+    const mid = gruppe.person_typ === 'lehrling' ? null : gruppe.person_id;
+    const lid = gruppe.person_typ === 'lehrling' ? gruppe.person_id : null;
+    const midArg = mid !== null ? mid : 'null';
+    const lidArg = lid !== null ? lid : 'null';
 
     const rows = gruppe.arbeiten.map(a => {
       const istMin = a.ist_min;
-      const richtMin = a.richtwert_min || 0;
-      const ueberschritten = istMin !== null && richtMin > 0 && istMin > richtMin * 1.1;
+      const geschMin = a.geschaetzte_min || 0;
+      const ueberschritten = istMin !== null && geschMin > 0 && istMin > geschMin * 1.1;
       const istText = a.stempel_start && !a.stempel_ende
         ? '<span class="badge badge-info">laufend…</span>'
         : istMin !== null
@@ -30789,39 +30712,93 @@ class App {
       return `
         <tr>
           <td>${this.escapeHtml(a.termin_nr || '')}</td>
-          <td>${this.escapeHtml(a.interne_auftragsnummer || '—')}</td>
-          <td>${this.escapeHtml(a.kunde_name || '—')}</td>
           <td>${this.escapeHtml(a.kennzeichen || '')}</td>
           <td>${this.escapeHtml(a.arbeit)}</td>
           <td class="text-success">${a.stempel_start || '<span class="text-muted">—</span>'}</td>
           <td class="text-danger">${a.stempel_ende || '<span class="text-muted">—</span>'}</td>
-          <td class="text-warning">${richtMin ? richtMin + ' Min' : '—'}</td>
+          <td class="text-warning">${geschMin ? geschMin + ' Min' : '—'}</td>
           <td>${istText}</td>
         </tr>
       `;
     }).join('');
+
+    // Tagesstempel-Anzeige
+    const _z2m = z => { const [h, m] = z.substring(0, 5).split(':').map(Number); return h * 60 + m; };
+    const hatKommen = tagesstempel && tagesstempel.kommen_zeit;
+    const hatGehen  = tagesstempel && tagesstempel.gehen_zeit;
+    const aktiveUnterbrechung = (unterbrechungen || []).find(u => !u.ende_zeit);
+
+    let tagesstempelHtml = '';
+    if (hatKommen) {
+      const kommenZeit = tagesstempel.kommen_zeit.substring(0, 5);
+      let nettoHtml = '';
+      if (hatGehen) {
+        const gehenZeit = tagesstempel.gehen_zeit.substring(0, 5);
+        const unterbrechungenMin = (unterbrechungen || [])
+          .filter(u => u.ende_zeit)
+          .reduce((sum, u) => sum + (_z2m(u.ende_zeit) - _z2m(u.start_zeit)), 0);
+        const nettoMin = _z2m(gehenZeit) - _z2m(kommenZeit) - unterbrechungenMin;
+        const nettoH = Math.floor(nettoMin / 60);
+        const nettoM = nettoMin % 60;
+        nettoHtml = `<span style="margin-left:8px;color:#555;font-size:12px;">⏱ ${nettoH > 0 ? nettoH + 'h ' : ''}${nettoM}min</span>`;
+      }
+      const abgeschlosseneUnterbrechungen = (unterbrechungen || []).filter(u => u.ende_zeit);
+      const ubListHtml = abgeschlosseneUnterbrechungen.length
+        ? `<span style="color:#888;font-size:12px;margin-left:8px;">⏸ ${abgeschlosseneUnterbrechungen.map(u => u.start_zeit.substring(0,5) + '–' + u.ende_zeit.substring(0,5)).join(', ')}</span>`
+        : '';
+      const gehenText = hatGehen
+        ? `<span style="color:#dc3545;font-weight:600;">■ ${tagesstempel.gehen_zeit.substring(0, 5)}</span>`
+        : '';
+      tagesstempelHtml = `
+        <div style="padding:6px 16px;background:#f8f9fa;border-bottom:1px solid #dee2e6;display:flex;align-items:center;flex-wrap:wrap;gap:8px;">
+          <span style="color:#198754;font-weight:600;">▶ ${kommenZeit}</span>
+          ${gehenText}
+          ${nettoHtml}
+          ${ubListHtml}
+        </div>`;
+    }
+
+    // Tagesstempel-Buttons (nur heute)
+    let tagesstempelBtnsHtml = '';
+    if (istHeute) {
+      if (!hatKommen) {
+        tagesstempelBtnsHtml = `
+          <div style="padding:6px 16px;background:#f0fff4;border-bottom:1px solid #dee2e6;">
+            <button class="btn btn-sm btn-success" onclick="window.app.webTagesstempelKommen(${midArg}, ${lidArg})">▶ Arbeitsbeginn</button>
+          </div>`;
+      } else if (!hatGehen) {
+        const unterbrechungBtn = aktiveUnterbrechung
+          ? `<button class="btn btn-sm btn-warning" style="margin-left:6px;" onclick="window.app.webUnterbrechungEnde(${midArg}, ${lidArg})">▶ Weiter</button>`
+          : `<button class="btn btn-sm btn-secondary" style="margin-left:6px;" onclick="window.app.webUnterbrechungStart(${midArg}, ${lidArg})">⏸ Unterbrechung</button>`;
+        tagesstempelBtnsHtml = `
+          <div style="padding:6px 16px;background:#fff8f8;border-bottom:1px solid #dee2e6;">
+            <button class="btn btn-sm btn-danger" onclick="window.app.webTagesstempelGehen(${midArg}, ${lidArg})">■ Arbeitsende</button>
+            ${unterbrechungBtn}
+          </div>`;
+      }
+    }
 
     return `
       <div class="card" style="margin-bottom: 16px;">
         <div class="card-header" style="display:flex;justify-content:space-between;align-items:center;">
           <strong>${icon} ${this.escapeHtml(gruppe.person_name)}</strong>
           <span class="text-muted" style="font-size:13px;">
-            Richtwert: ${gesamtGeschaetzt} Min
+            Geschätzt: ${gesamtGeschaetzt} Min
             ${gesamtIst ? '· Gestempelt: ' + gesamtIst + ' Min' : ''}
           </span>
         </div>
+        ${tagesstempelHtml}
+        ${tagesstempelBtnsHtml}
         <div class="card-body" style="padding:0;">
           <table class="table table-striped" style="margin:0;">
             <thead>
               <tr>
                 <th>Auftrag</th>
-                <th>Locosoft-Nr.</th>
-                <th>Kundenname</th>
                 <th>Kennzeichen</th>
                 <th>Arbeit</th>
                 <th class="text-success">Start ▶</th>
                 <th class="text-danger">Ende ■</th>
-                <th class="text-warning">Richtwert</th>
+                <th class="text-warning">Geschätzt</th>
                 <th>Ist-Zeit</th>
               </tr>
             </thead>
@@ -36463,6 +36440,52 @@ class App {
       this.loadWiederkehrendeTermine();
     } catch (e) {
       this.showToast('Fehler beim Löschen', 'error');
+    }
+  }
+
+  async webTagesstempelKommen(mitarbeiter_id, lehrling_id) {
+    try {
+      await ApiService.post('/tagesstempel/kommen', { mitarbeiter_id, lehrling_id });
+      this.showToast('▶ Arbeitsbeginn gestempelt', 'success');
+      this.loadZeitstempelung();
+    } catch (err) {
+      this.showToast('Fehler: ' + (err.message || 'Unbekannt'), 'error');
+    }
+  }
+
+  async webTagesstempelGehen(mitarbeiter_id, lehrling_id) {
+    try {
+      const result = await ApiService.post('/tagesstempel/gehen', { mitarbeiter_id, lehrling_id });
+      if (result && result.bestaetigung_erforderlich) {
+        const names = (result.laufende_termine || []).map(t => t.termin_nr || t.id).join(', ');
+        const ok = confirm(`Noch laufende Aufträge: ${names}\nTrotzdem Arbeitsende stempeln?`);
+        if (!ok) return;
+        await ApiService.post('/tagesstempel/gehen/bestaetigen', { mitarbeiter_id, lehrling_id });
+      }
+      this.showToast('■ Arbeitsende gestempelt', 'success');
+      this.loadZeitstempelung();
+    } catch (err) {
+      this.showToast('Fehler: ' + (err.message || 'Unbekannt'), 'error');
+    }
+  }
+
+  async webUnterbrechungStart(mitarbeiter_id, lehrling_id) {
+    try {
+      await ApiService.post('/tagesstempel/unterbrechung/start', { mitarbeiter_id, lehrling_id });
+      this.showToast('⏸ Unterbrechung gestartet', 'success');
+      this.loadZeitstempelung();
+    } catch (err) {
+      this.showToast('Fehler: ' + (err.message || 'Unbekannt'), 'error');
+    }
+  }
+
+  async webUnterbrechungEnde(mitarbeiter_id, lehrling_id) {
+    try {
+      await ApiService.post('/tagesstempel/unterbrechung/ende', { mitarbeiter_id, lehrling_id });
+      this.showToast('▶ Unterbrechung beendet', 'success');
+      this.loadZeitstempelung();
+    } catch (err) {
+      this.showToast('Fehler: ' + (err.message || 'Unbekannt'), 'error');
     }
   }
 

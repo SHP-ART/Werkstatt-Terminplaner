@@ -1,0 +1,26 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "Frontend Build",
+			"type": "shell",
+			"command": "cd frontend && npm run build",
+			"isBackground": false,
+			"group": "build"
+		},
+		{
+			"label": "1 - Frontend Build",
+			"type": "shell",
+			"command": "cd frontend && npm run build",
+			"isBackground": false,
+			"problemMatcher": []
+		},
+		{
+			"label": "Git Commit & Push",
+			"type": "shell",
+			"command": "git add -A && git status && git commit -m \"feat: tagesstempel/arbeitsunterbrechungen - vollst. Integration (backend+tablet+web)\" && git push && echo PUSH_OK",
+			"isBackground": false,
+			"problemMatcher": []
+		}
+	]
+}

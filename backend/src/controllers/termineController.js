@@ -2663,7 +2663,7 @@ class TermineController {
       });
 
       // WebSocket-Broadcast für Aktualisierungen
-      broadcastEvent('termine_updated', { datum });
+      broadcastEvent('termin.updated', { datum });
 
       res.json({
         success: true,
@@ -2704,7 +2704,7 @@ class TermineController {
       invalidateAuslastungCache(aktualisierterTermin.datum);
 
       // WebSocket-Broadcast
-      broadcastEvent('termin_updated', { 
+      broadcastEvent('termin.updated', { 
         terminId: id,
         datum: aktualisierterTermin.datum
       });
@@ -2738,7 +2738,7 @@ class TermineController {
       invalidateTermineCache();
       invalidateAuslastungCache(aktualisierterTermin.datum);
 
-      broadcastEvent('termin_updated', {
+      broadcastEvent('termin.updated', {
         terminId: id,
         datum: aktualisierterTermin.datum
       });
@@ -2968,7 +2968,7 @@ class TermineController {
 
       invalidateTermineCache();
       datumSet.forEach(datum => invalidateAuslastungCache(datum));
-      broadcastEvent('termine_batch_updated', { count: aktualisiert });
+      broadcastEvent('termin.updated', { count: aktualisiert });
 
       res.json({ success: true, aktualisiert, fehler });
     } catch (err) {
