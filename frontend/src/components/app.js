@@ -30670,7 +30670,16 @@ class App {
   }
 
   internRenderArbeitenListe(termin, personId, typ) {
-    const arbeiten = this.internGetArbeitenFromTermin(termin);
+    let arbeiten = this.internGetArbeitenFromTermin(termin);
+
+    // Fallback: kein arbeitszeiten_details → arbeit-Textfeld aufteilen
+    if (!arbeiten.length && termin.arbeit) {
+      arbeiten = termin.arbeit
+        .split(/[|\n,]+/)
+        .map(s => s.trim())
+        .filter(Boolean)
+        .map((name, idx) => ({ name, zeit: 0, abgeschlossen: false, index: idx }));
+    }
     if (!arbeiten.length) return '';
 
     const stempelMap = {};
