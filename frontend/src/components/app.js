@@ -33,7 +33,6 @@ class App {
     // Planungs-Drag&Drop: Lokaler Änderungspuffer
     this.planungAenderungen = new Map(); // terminId -> { startzeit, mitarbeiter_id, lehrling_id, type, originalData }
     this.planungRaster = 15; // Standard-Raster: 15 Minuten (muss mit HTML-Select übereinstimmen)
-    this.weitereTermineFilter = 7; // Filter für "Weitere" Termine (1, 2, 3 oder 7 Tage)
 
     // === Performance-Optimierung: Tab-Element-Caching ===
     // Cache für häufig verwendete DOM-Elemente
@@ -8007,15 +8006,9 @@ class App {
       }
       const morgenStr = (() => { const d=new Date(); d.setDate(d.getDate()+1); while(d.getDay()===0||d.getDay()===6) d.setDate(d.getDate()+1); return d.toLocaleDateString('de-DE',{weekday:'short',day:'2-digit',month:'2-digit'}); })();
       if (restMin <= 0) {
-        prev.innerHTML = `<span style="color:#2e7d32;">✅ Termin passt vollständig bis ${feier} Uhr (${heuteMin} Min.) – keine Aufteilung nötig.</span>`;
-        document.getElementById('einplanenBestaetigen').disabled = true;
-        document.getElementById('einplanenBestaetigen').style.opacity = '0.5';
-        document.getElementById('einplanenBestaetigen').style.cursor = 'not-allowed';
+        prev.innerHTML = `<span style="color:#2e7d32;">✅ Termin passt vollständig bis ${feier} Uhr (${heuteMin} Min.).</span>`;
       } else {
         prev.innerHTML = `<strong>Heute:</strong> ${heuteMin} Min. (${start}–${feier})<br><strong>Morgen (${morgenStr}):</strong> ${restMin} Min. ab 08:00`;
-        document.getElementById('einplanenBestaetigen').disabled = false;
-        document.getElementById('einplanenBestaetigen').style.opacity = '';
-        document.getElementById('einplanenBestaetigen').style.cursor = '';
       }
     };
     updateVorschau();
@@ -8034,10 +8027,6 @@ class App {
       const heuteMin = (fh*60+fm) - (sh*60+sm);
       if (heuteMin <= 0) {
         this.showToast('⚠️ Feierabend liegt vor der Startzeit!', 'error');
-        return;
-      }
-      if (heuteMin >= gesamtMin) {
-        this.showToast('ℹ️ Der Termin passt vollständig bis zum Feierabend – keine Aufteilung nötig.', 'info');
         return;
       }
       overlay.remove();
@@ -18940,7 +18929,7 @@ class App {
       gesamtzeitMinuten = Math.round(gesamtStunden * 60);
     }
 
-    let status = document.getElementById('modalTerminStatus').value || null;
+    let status = document.getElementById('modalTerminStatus').value;
 
     // Bestimme Mitarbeiter für Termin (Gesamt-Zuordnung hat Vorrang, sonst Termin-Mitarbeiter)
     // Nur Mitarbeiter können dem Termin direkt zugeordnet werden, nicht Lehrlinge
@@ -22815,10 +22804,6 @@ class App {
             if (termin.startzeit && (termin.status === 'in_arbeit' || termin.status === 'abgeschlossen')) {
               effektiveStartzeit = termin.startzeit;
             }
-            // Fallback für geplante Termine (z.B. interne Termine): nutze termin.startzeit
-            if (!effektiveStartzeit && termin.startzeit) {
-              effektiveStartzeit = termin.startzeit;
-            }
             
             // Priorität 2: Erste Arbeit mit eigener Zuordnung
             if (!zuordnungsTyp && arbeiten.length === 1) {
@@ -22857,8 +22842,8 @@ class App {
             terminFuerTimeline.startzeit = effektiveStartzeit;
           }
           
-          // Termin auf Timeline platzieren – nur wenn Startzeit bekannt
-          if (zuordnungsTyp === 'lehrling' && lehrlingId && lehrlingeMap[lehrlingId] && effektiveStartzeit) {
+          // Termin auf Timeline platzieren
+          if (zuordnungsTyp === 'lehrling' && lehrlingId && lehrlingeMap[lehrlingId]) {
             console.log('[DEBUG] Termin', termin.termin_nr, '- Platziere auf Lehrling-Timeline:', lehrlingId);
             const pauseStart = lehrlingePauseMap[lehrlingId];
             const timelineElements = this.createTimelineTerminWithPause(terminFuerTimeline, startHour, endHour, pauseStart, 'lehrling');
@@ -22866,7 +22851,7 @@ class App {
               if (el) lehrlingeMap[lehrlingId].appendChild(el);
             });
             console.log('[DEBUG] Termin', termin.termin_nr, '- Timeline-Elemente erstellt:', timelineElements.length);
-          } else if (mitarbeiterId && mitarbeiterMap[mitarbeiterId] && effektiveStartzeit) {
+          } else if (mitarbeiterId && mitarbeiterMap[mitarbeiterId]) {
             console.log('[DEBUG] Termin', termin.termin_nr, '- Platziere auf Mitarbeiter-Timeline:', mitarbeiterId);
             const pauseStart = mitarbeiterPauseMap[mitarbeiterId];
             const timelineElements = this.createTimelineTerminWithPause(terminFuerTimeline, startHour, endHour, pauseStart);
@@ -22893,7 +22878,7 @@ class App {
       Object.values(lehrlingeMap).forEach(track => this.resolveTimelineOverlaps(track));
 
       // Nicht-zugeordnete Karten nach Gestern / Heute / Morgen gruppieren
-      (function groupNichtZugeordnet(container, heute, datum, self) {
+      (function groupNichtZugeordnet(container, heute, datum) {
         const karten = Array.from(container.children);
         if (karten.length === 0) return;
         const [hy, hm, hd] = datum.split('-').map(Number);
@@ -22926,66 +22911,16 @@ class App {
           container.appendChild(header);
           liste.forEach(k => container.appendChild(k));
         });
-        // Datum die keiner Gruppe entsprechen – sortiert nach Datum, gefiltert nach N Tagen
-        const sonstige = Object.entries(byDatum)
-          .filter(([d]) => !gruppen.find(g => g.key === d))
-          .sort(([a], [b]) => a.localeCompare(b));
-
+        // Datum die keiner Gruppe entsprechen
+        const sonstige = Object.entries(byDatum).filter(([d]) => !gruppen.find(g => g.key === d));
         if (sonstige.length > 0) {
-          const aktivFilter = self.weitereTermineFilter || 7;
-          const baseDatum = new Date(`${datum}T12:00:00`);
-          const filterOptionen = [1, 2, 3, 7];
-
-          // Berechne welche sonstigen Termine im Filter liegen
-          const sonstigeImFilter = sonstige.filter(([d]) => {
-            const tDiff = Math.round((new Date(d + 'T12:00:00') - baseDatum) / 86400000);
-            return tDiff >= -1 && tDiff <= aktivFilter;
-          });
-          const sonstigeSumMe = sonstigeImFilter.reduce((s, [, l]) => s + l.reduce((ss, k) => ss + (parseInt(k.dataset.dauer) || 0), 0), 0);
-          const sonstAAnzahl = sonstigeImFilter.reduce((s, [, l]) => s + l.length, 0);
-
-          // Header mit Anzahl + Filter-Buttons
-          const weitereHeader = document.createElement('div');
-          weitereHeader.className = 'nz-section-header nz-section-header--weitere';
-
-          const titleSpan = document.createElement('span');
-          titleSpan.className = 'nz-weitere-title';
-          const daurText = sonstigeSumMe >= 60 ? `${Math.floor(sonstigeSumMe/60)}h${sonstigeSumMe%60>0?' '+(sonstigeSumMe%60)+'min':''}` : `${sonstigeSumMe}min`;
-          titleSpan.innerHTML = `📋 Weitere <span class="nz-section-count">${sonstAAnzahl} ${sonstAAnzahl===1?'Termin':'Termine'} · ${daurText}</span>`;
-
-          const filterSpan = document.createElement('span');
-          filterSpan.className = 'nz-weitere-filter';
-          filterOptionen.forEach(n => {
-            const btn = document.createElement('button');
-            btn.className = 'nz-filter-btn' + (n === aktivFilter ? ' active' : '');
-            btn.textContent = n === 7 ? '7 Tage' : `+${n}T`;
-            btn.title = `Nächste ${n} Tag${n > 1 ? 'e' : ''} anzeigen`;
-            btn.onclick = (e) => {
-              e.stopPropagation();
-              self.weitereTermineFilter = n;
-              self.loadAuslastungDragDrop();
-            };
-            filterSpan.appendChild(btn);
-          });
-
-          weitereHeader.appendChild(titleSpan);
-          weitereHeader.appendChild(filterSpan);
-          container.appendChild(weitereHeader);
-
-          // Pro Tag eine Untergruppe rendern (nur Tage im Filter)
-          sonstige.forEach(([d, liste]) => {
-            const tDatum = new Date(d + 'T12:00:00');
-            const tDiff = Math.round((tDatum - baseDatum) / 86400000);
-            if (tDiff < -1 || tDiff > aktivFilter) return;
-
-            const subHeader = document.createElement('div');
-            subHeader.className = 'nz-date-sub-header';
-            subHeader.textContent = tDatum.toLocaleDateString('de-DE', { weekday: 'short', day: '2-digit', month: '2-digit', year: '2-digit' });
-            container.appendChild(subHeader);
-            liste.forEach(k => container.appendChild(k));
-          });
+          const header = document.createElement('div');
+          header.className = 'nz-section-header nz-section-header--heute';
+          header.innerHTML = `<span>📋 Weitere</span>`;
+          container.appendChild(header);
+          sonstige.forEach(([, liste]) => liste.forEach(k => container.appendChild(k)));
         }
-      })(sourceContainer, this.formatDateLocal(new Date()), datum, this);
+      })(sourceContainer, this.formatDateLocal(new Date()), datum);
 
       // Drop-Zone für "Nicht zugeordnet"
       this.setupDropZone(sourceContainer);
@@ -23045,9 +22980,6 @@ class App {
       // Live-Balken für laufende Termine (in_arbeit): Breite jede Minute aktualisieren
       if (this.inArbeitBarInterval) clearInterval(this.inArbeitBarInterval);
       this.inArbeitBarInterval = setInterval(() => this.updateInArbeitBars(), 60000);
-
-      // Stempel-Panel aktualisieren
-      await this.renderPlanungStempelPanel(datum).catch(() => {});
 
     } catch (error) {
       console.error('Fehler beim Laden der Drag & Drop Auslastung:', error);
@@ -24808,10 +24740,7 @@ class App {
     // Termine vor startHour werden am linken Rand angezeigt (geklammert)
     const startMinutesFromDayStart = Math.max(0, (startH - startHour) * 60 + startM);
     const leftPx = startMinutesFromDayStart * pixelPerMinute;
-    // Breite auf Feierabend clippen: nicht über endHour hinausragen
-    const endMinutesOfDay = endHour * 60;
-    const clippedDisplayDauer = Math.min(displayDauer, endMinutesOfDay - startAbsMinutes);
-    const widthPx = Math.max(clippedDisplayDauer * pixelPerMinute, 40); // Mindestbreite 40px
+    const widthPx = Math.max(displayDauer * pixelPerMinute, 40); // Mindestbreite 40px
     
     // Außerhalb des sichtbaren Bereichs? (nur rechts ausblenden)
     if (startH >= endHour) {
@@ -25808,9 +25737,7 @@ class App {
           const teil2StartH = Math.floor(pauseEndMinutes / 60);
           const teil2StartM = pauseEndMinutes % 60;
           const teil2LeftPx = (teil2StartH - startHour) * pixelPerHour + teil2StartM * pixelPerMinute;
-          const endMinutesOfDay = endHour * 60;
-          const clippedTeil2Dauer = Math.min(teil2Dauer, endMinutesOfDay - pauseEndMinutes);
-          const teil2WidthPx = Math.max(clippedTeil2Dauer * pixelPerMinute, 40);
+          const teil2WidthPx = Math.max(teil2Dauer * pixelPerMinute, 40);
           
           const teil2Div = document.createElement('div');
           teil2Div.className = 'timeline-termin arbeit-block fortsetzung geaendert';
@@ -25841,11 +25768,9 @@ class App {
           targetTrack.appendChild(teil2Div);
         }
       } else {
-        // Keine Pause-Überschneidung - Breite auf Feierabend clippen
+        // Keine Pause-Überschneidung
         const leftPx = (startH - startHour) * pixelPerHour + startM * pixelPerMinute;
-        const endMinutesOfDay = endHour * 60;
-        const clippedDauer = Math.min(dauer, endMinutesOfDay - startMinutes);
-        const widthPx = Math.max(clippedDauer * pixelPerMinute, 40);
+        const widthPx = Math.max(dauer * pixelPerMinute, 40);
         blockEl.style.left = `${leftPx}px`;
         blockEl.style.width = `${widthPx}px`;
         blockEl.classList.add('geaendert');
@@ -25921,9 +25846,7 @@ class App {
           const teil2StartH = Math.floor(pauseEndMinutes / 60);
           const teil2StartM = pauseEndMinutes % 60;
           const teil2LeftPx = (teil2StartH - startHour) * pixelPerHour + teil2StartM * pixelPerMinute;
-          const endMinutesOfDay = endHour * 60;
-          const clippedTeil2Dauer = Math.min(teil2Dauer, endMinutesOfDay - pauseEndMinutes);
-          const teil2WidthPx = Math.max(clippedTeil2Dauer * pixelPerMinute, 40);
+          const teil2WidthPx = Math.max(teil2Dauer * pixelPerMinute, 40);
           
           const teil2Div = document.createElement('div');
           teil2Div.className = 'timeline-termin arbeit-block fortsetzung geaendert';
@@ -25950,11 +25873,9 @@ class App {
           targetTrack.appendChild(teil2Div);
         }
       } else {
-        // Keine Pause-Überschneidung - Breite auf Feierabend clippen
+        // Keine Pause-Überschneidung
         const leftPx = (startH - startHour) * pixelPerHour + startM * pixelPerMinute;
-        const endMinutesOfDay = endHour * 60;
-        const clippedDauer = Math.min(dauer, endMinutesOfDay - startMinutes);
-        const widthPx = Math.max(clippedDauer * pixelPerMinute, 40);
+        const widthPx = Math.max(dauer * pixelPerMinute, 40);
         newBlock.style.left = `${leftPx}px`;
         newBlock.style.width = `${widthPx}px`;
         
@@ -26254,8 +26175,6 @@ class App {
       pauseEndMinutes = pauseStartMinutes + pauseDauer;
     }
     
-    const endMinutesOfDay = endHour * 60;
-    
     // Prüfe ob Termin über die Mittagspause geht und gesplittet werden muss
     if (pauseStartMinutes !== null && startMinutes < pauseStartMinutes && endMinutes > pauseStartMinutes) {
       // Teil 1: Vor der Pause
@@ -26270,13 +26189,11 @@ class App {
       // Teil 2: Nach der Pause (Fortsetzung erstellen) - verbleibende Arbeitszeit
       const gesamtDauer = endMinutes - startMinutes;
       const teil2Dauer = gesamtDauer - teil1Dauer; // Verbleibende Arbeitszeit
-      if (teil2Dauer > 0 && pauseEndMinutes < endMinutesOfDay) {
+      if (teil2Dauer > 0) {
         const teil2StartH = Math.floor(pauseEndMinutes / 60);
         const teil2StartM = pauseEndMinutes % 60;
         const teil2LeftPx = (teil2StartH - startHour) * pixelPerHour + teil2StartM * pixelPerMinute;
-        // Feierabend-Clipping für Teil 2
-        const clippedTeil2Dauer = Math.min(teil2Dauer, endMinutesOfDay - pauseEndMinutes);
-        const teil2WidthPx = Math.max(clippedTeil2Dauer * pixelPerMinute, 40);
+        const teil2WidthPx = Math.max(teil2Dauer * pixelPerMinute, 40);
         
         // Hole Termin-Infos aus dem Hauptelement
         const terminNr = terminEl.querySelector('.termin-title')?.textContent.split(' - ')[0] || '';
@@ -26298,10 +26215,9 @@ class App {
         targetTrack.appendChild(teil2Div);
       }
     } else {
-      // Keine Aufteilung nötig - Breite auf Feierabend clippen
+      // Keine Aufteilung nötig - normaler Termin
       const leftPx = (startH - startHour) * pixelPerHour + startM * pixelPerMinute;
-      const clippedDauer = Math.min(dauer, endMinutesOfDay - startMinutes);
-      const widthPx = Math.max(clippedDauer * pixelPerMinute, 40);
+      const widthPx = Math.max(dauer * pixelPerMinute, 40);
       
       terminEl.style.left = `${leftPx}px`;
       terminEl.style.width = `${widthPx}px`;
@@ -30414,6 +30330,23 @@ class App {
         }
       });
 
+      // Stempel-Daten laden und an Termine hängen
+      try {
+        const stempelGruppen = await ApiService.get(`/stempelzeiten?datum=${heute}`);
+        const stempelByTermin = {};
+        for (const gruppe of stempelGruppen) {
+          for (const a of gruppe.arbeiten) {
+            if (!stempelByTermin[a.termin_id]) stempelByTermin[a.termin_id] = [];
+            stempelByTermin[a.termin_id].push(a);
+          }
+        }
+        for (const t of relevanteTermine) {
+          t.termine_arbeiten_stempel = stempelByTermin[t.id] || [];
+        }
+      } catch (e) {
+        console.warn('[Stempel] Stempel-Daten konnten nicht geladen werden:', e);
+      }
+
       // Render Mitarbeiter-Kacheln
       if (mitarbeiterContainer) {
         mitarbeiterContainer.innerHTML = aktiveMitarbeiter.map(m =>
@@ -30446,168 +30379,6 @@ class App {
           </div>
         `;
       }
-    }
-  }
-
-  async loadZeitstempelung() {
-    const container = document.getElementById('zeitstempelungContainer');
-    const datumInput = document.getElementById('zeitstempelungDatum');
-    if (!container || !datumInput) return;
-
-    const datum = datumInput.value || this.formatDateLocal(this.getToday());
-    container.innerHTML = '<p class="loading-text">Lade Stempelzeiten…</p>';
-
-    try {
-      const gruppen = await ApiService.get(`/stempelzeiten?datum=${datum}`);
-
-      if (!gruppen || gruppen.length === 0) {
-        container.innerHTML = '<div class="empty-state"><p>Keine Arbeiten für diesen Tag.</p></div>';
-        return;
-      }
-
-      container.innerHTML = gruppen.map(g => this.renderZeitstempelungGruppe(g)).join('');
-    } catch (err) {
-      console.error('[Zeitstempelung] Ladefehler:', err);
-      container.innerHTML = '<div class="error-state"><p>Fehler beim Laden der Stempelzeiten.</p></div>';
-    }
-  }
-
-  renderZeitstempelungGruppe(gruppe) {
-    const gesamtGeschaetzt = gruppe.arbeiten.reduce((s, a) => s + (a.geschaetzte_min || 0), 0);
-    const gesamtIst = gruppe.arbeiten.reduce((s, a) => s + (a.ist_min || 0), 0);
-    const icon = gruppe.person_typ === 'lehrling' ? '🎓' : '👷';
-
-    const rows = gruppe.arbeiten.map(a => {
-      const istMin = a.ist_min;
-      const geschMin = a.geschaetzte_min || 0;
-      const ueberschritten = istMin !== null && geschMin > 0 && istMin > geschMin * 1.1;
-      const istText = a.stempel_start && !a.stempel_ende
-        ? '<span class="badge badge-info">laufend…</span>'
-        : istMin !== null
-          ? `<span class="${ueberschritten ? 'text-warning' : 'text-success'}">${istMin} Min${ueberschritten ? ' ⚠️' : ''}</span>`
-          : '<span class="text-muted">—</span>';
-
-      return `
-        <tr>
-          <td>${this.escapeHtml(a.termin_nr || '')}</td>
-          <td>${this.escapeHtml(a.kennzeichen || '')}</td>
-          <td>${this.escapeHtml(a.arbeit)}</td>
-          <td class="text-success">${a.stempel_start || '<span class="text-muted">—</span>'}</td>
-          <td class="text-danger">${a.stempel_ende || '<span class="text-muted">—</span>'}</td>
-          <td class="text-warning">${geschMin ? geschMin + ' Min' : '—'}</td>
-          <td>${istText}</td>
-        </tr>
-      `;
-    }).join('');
-
-    return `
-      <div class="card" style="margin-bottom: 16px;">
-        <div class="card-header" style="display:flex;justify-content:space-between;align-items:center;">
-          <strong>${icon} ${this.escapeHtml(gruppe.person_name)}</strong>
-          <span class="text-muted" style="font-size:13px;">
-            Geschätzt: ${gesamtGeschaetzt} Min
-            ${gesamtIst ? '· Gestempelt: ' + gesamtIst + ' Min' : ''}
-          </span>
-        </div>
-        <div class="card-body" style="padding:0;">
-          <table class="table table-striped" style="margin:0;">
-            <thead>
-              <tr>
-                <th>Auftrag</th>
-                <th>Kennzeichen</th>
-                <th>Arbeit</th>
-                <th class="text-success">Start ▶</th>
-                <th class="text-danger">Ende ■</th>
-                <th class="text-warning">Geschätzt</th>
-                <th>Ist-Zeit</th>
-              </tr>
-            </thead>
-            <tbody>${rows}</tbody>
-          </table>
-        </div>
-      </div>
-    `;
-  }
-
-  async stempelSetzen(terminId, arbeitName, typ) {
-    const jetzt = new Date();
-    const zeit = `${String(jetzt.getHours()).padStart(2,'0')}:${String(jetzt.getMinutes()).padStart(2,'0')}`;
-    const body = { termin_id: terminId, arbeit_name: arbeitName };
-    if (typ === 'start') body.stempel_start = zeit;
-    else body.stempel_ende = zeit;
-
-    try {
-      await ApiService.put('/stempelzeiten/stempel', body);
-    } catch (err) {
-      console.error('[Stempel] Fehler:', err);
-      alert('Fehler beim Stempeln.');
-    }
-  }
-
-  async stempelManuellSetzen(terminId, arbeitName, typ, zeitWert) {
-    if (!zeitWert) return;
-    const body = { termin_id: terminId, arbeit_name: arbeitName };
-    if (typ === 'start') body.stempel_start = zeitWert;
-    else body.stempel_ende = zeitWert;
-
-    try {
-      await ApiService.put('/stempelzeiten/stempel', body);
-    } catch (err) {
-      console.error('[Stempel manuell] Fehler:', err);
-      alert('Fehler beim Speichern der Zeit.');
-    }
-  }
-
-  async renderPlanungStempelPanel(datum) {
-    const container = document.getElementById('planungStempelPanel');
-    if (!container) return;
-
-    try {
-      const gruppen = await ApiService.get(`/stempelzeiten?datum=${datum}`);
-      if (!gruppen || gruppen.length === 0) {
-        container.innerHTML = '<p class="text-muted" style="padding:12px;">Keine Arbeiten für diesen Tag.</p>';
-        return;
-      }
-
-      const rows = gruppen.flatMap(g => g.arbeiten.map(a => {
-        const icon = g.person_typ === 'lehrling' ? '🎓' : '👷';
-        const safeArbeit = a.arbeit.replace(/'/g, "\\'").replace(/"/g, '&quot;');
-        return `
-          <tr>
-            <td>${icon} ${this.escapeHtml(g.person_name)}</td>
-            <td>${this.escapeHtml(a.termin_nr || '')}</td>
-            <td>${this.escapeHtml(a.kennzeichen || '')}</td>
-            <td>${this.escapeHtml(a.arbeit)}</td>
-            <td><input type="time" class="form-control form-control-sm"
-              value="${a.stempel_start || ''}"
-              onchange="app.stempelManuellSetzen(${a.termin_id}, '${safeArbeit}', 'start', this.value)"></td>
-            <td><input type="time" class="form-control form-control-sm"
-              value="${a.stempel_ende || ''}"
-              onchange="app.stempelManuellSetzen(${a.termin_id}, '${safeArbeit}', 'ende', this.value)"></td>
-            <td class="text-warning">${a.geschaetzte_min ? a.geschaetzte_min + ' Min' : '—'}</td>
-          </tr>
-        `;
-      })).join('');
-
-      container.innerHTML = `
-        <table class="table table-striped" style="margin:0;">
-          <thead>
-            <tr>
-              <th>Mitarbeiter</th>
-              <th>Auftrag</th>
-              <th>Kennzeichen</th>
-              <th>Arbeit</th>
-              <th class="text-success">Start ▶</th>
-              <th class="text-danger">Ende ■</th>
-              <th class="text-warning">Geschätzt</th>
-            </tr>
-          </thead>
-          <tbody>${rows}</tbody>
-        </table>
-      `;
-    } catch (err) {
-      console.error('[PlanungStempel] Fehler:', err);
-      container.innerHTML = '<p class="text-muted" style="padding:12px;">Fehler beim Laden.</p>';
     }
   }
 
@@ -30689,15 +30460,146 @@ class App {
   internRenderArbeitenListe(termin, personId, typ) {
     const arbeiten = this.internGetArbeitenFromTermin(termin);
     if (!arbeiten.length) return '';
+
+    const stempelMap = {};
+    if (Array.isArray(termin.termine_arbeiten_stempel)) {
+      for (const s of termin.termine_arbeiten_stempel) {
+        stempelMap[s.arbeit] = s;
+      }
+    }
+
     return `
       <div class="intern-arbeiten-liste">
-        ${arbeiten.map(a => `
-          <div class="intern-arbeit-item ${a.abgeschlossen ? 'abgeschlossen' : ''}">
-            <span class="arbeit-name">${a.abgeschlossen ? '✅' : '○'} ${this.escapeHtml(a.name)}</span>
-            ${!a.abgeschlossen ? `<button class="intern-btn-einzelarbeit-fertig"
-              onclick="app.internBeendenEinzelarbeit(${termin.id}, ${a.index}, this)">✓ Fertig</button>` : ''}
-          </div>
-        `).join('')}
+        ${arbeiten.map(a => {
+          const stempel = stempelMap[a.name] || {};
+          const hatStart = !!stempel.stempel_start;
+          const hatEnde  = !!stempel.stempel_ende;
+          const safeArbeit = this.escapeHtml(a.name).replace(/'/g, "\\'");
+          const startBtn = hatStart
+            ? `<span class="intern-stempel-zeit" style="color:var(--success,#28a745);font-size:12px;">▶ ${stempel.stempel_start}</span>`
+            : `<button class="intern-btn intern-btn-sm intern-btn-stempel-start"
+                onclick="app.stempelSetzen(${termin.id}, '${safeArbeit}', 'start').then(() => app.loadInternTeamUebersicht())">▶ Start</button>`;
+          const endeBtn = hatEnde
+            ? `<span class="intern-stempel-zeit" style="color:var(--danger,#dc3545);font-size:12px;">■ ${stempel.stempel_ende}</span>`
+            : `<button class="intern-btn intern-btn-sm intern-btn-stempel-ende" ${!hatStart ? 'disabled' : ''}
+                onclick="app.stempelSetzen(${termin.id}, '${safeArbeit}', 'ende').then(() => app.loadInternTeamUebersicht())">■ Ende</button>`;
+          return `
+            <div class="intern-arbeit-item ${a.abgeschlossen ? 'abgeschlossen' : ''}">
+              <span class="arbeit-name">${a.abgeschlossen ? '✅' : '○'} ${this.escapeHtml(a.name)}</span>
+              <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
+                ${startBtn}
+                ${endeBtn}
+                ${!a.abgeschlossen ? `<button class="intern-btn-einzelarbeit-fertig"
+                  onclick="app.internBeendenEinzelarbeit(${termin.id}, ${a.index}, this)">✓ Fertig</button>` : ''}
+              </div>
+            </div>
+          `;
+        }).join('')}
+      </div>
+    `;
+  }
+
+  async stempelSetzen(terminId, arbeitName, typ) {
+    const jetzt = new Date();
+    const zeit = `${String(jetzt.getHours()).padStart(2,'0')}:${String(jetzt.getMinutes()).padStart(2,'0')}`;
+    const body = { termin_id: terminId, arbeit_name: arbeitName };
+    if (typ === 'start') body.stempel_start = zeit;
+    else body.stempel_ende = zeit;
+    try {
+      await ApiService.put('/stempelzeiten/stempel', body);
+    } catch (err) {
+      console.error('[Stempel] Fehler:', err);
+      alert('Fehler beim Stempeln.');
+    }
+  }
+
+  async stempelManuellSetzen(terminId, arbeitName, typ, zeitWert) {
+    if (!zeitWert) return;
+    const body = { termin_id: terminId, arbeit_name: arbeitName };
+    if (typ === 'start') body.stempel_start = zeitWert;
+    else body.stempel_ende = zeitWert;
+    try {
+      await ApiService.put('/stempelzeiten/stempel', body);
+    } catch (err) {
+      console.error('[Stempel manuell] Fehler:', err);
+      alert('Fehler beim Speichern der Zeit.');
+    }
+  }
+
+  async loadZeitstempelung() {
+    const container = document.getElementById('zeitstempelungContainer');
+    const datumInput = document.getElementById('zeitstempelungDatum');
+    if (!container || !datumInput) return;
+
+    const datum = datumInput.value || this.formatDateLocal(this.getToday());
+    container.innerHTML = '<p class="loading-text">Lade Stempelzeiten…</p>';
+
+    try {
+      const gruppen = await ApiService.get(`/stempelzeiten?datum=${datum}`);
+      if (!gruppen || gruppen.length === 0) {
+        container.innerHTML = '<div class="empty-state"><p>Keine Arbeiten für diesen Tag.</p></div>';
+        return;
+      }
+      container.innerHTML = gruppen.map(g => this.renderZeitstempelungGruppe(g)).join('');
+    } catch (err) {
+      console.error('[Zeitstempelung] Ladefehler:', err);
+      container.innerHTML = '<div class="error-state"><p>Fehler beim Laden der Stempelzeiten.</p></div>';
+    }
+  }
+
+  renderZeitstempelungGruppe(gruppe) {
+    const gesamtGeschaetzt = gruppe.arbeiten.reduce((s, a) => s + (a.geschaetzte_min || 0), 0);
+    const gesamtIst = gruppe.arbeiten.reduce((s, a) => s + (a.ist_min || 0), 0);
+    const icon = gruppe.person_typ === 'lehrling' ? '🎓' : '👷';
+
+    const rows = gruppe.arbeiten.map(a => {
+      const istMin = a.ist_min;
+      const geschMin = a.geschaetzte_min || 0;
+      const ueberschritten = istMin !== null && geschMin > 0 && istMin > geschMin * 1.1;
+      const istText = a.stempel_start && !a.stempel_ende
+        ? '<span class="badge badge-info">laufend…</span>'
+        : istMin !== null
+          ? `<span class="${ueberschritten ? 'text-warning' : 'text-success'}">${istMin} Min${ueberschritten ? ' ⚠️' : ''}</span>`
+          : '<span class="text-muted">—</span>';
+
+      return `
+        <tr>
+          <td>${this.escapeHtml(a.termin_nr || '')}</td>
+          <td>${this.escapeHtml(a.kennzeichen || '')}</td>
+          <td>${this.escapeHtml(a.arbeit)}</td>
+          <td class="text-success">${a.stempel_start || '<span class="text-muted">—</span>'}</td>
+          <td class="text-danger">${a.stempel_ende || '<span class="text-muted">—</span>'}</td>
+          <td class="text-warning">${geschMin ? geschMin + ' Min' : '—'}</td>
+          <td>${istText}</td>
+        </tr>
+      `;
+    }).join('');
+
+    return `
+      <div class="card" style="margin-bottom: 16px;">
+        <div class="card-header" style="display:flex;justify-content:space-between;align-items:center;">
+          <strong>${icon} ${this.escapeHtml(gruppe.person_name)}</strong>
+          <span class="text-muted" style="font-size:13px;">
+            Geschätzt: ${gesamtGeschaetzt} Min
+            ${gesamtIst ? '· Gestempelt: ' + gesamtIst + ' Min' : ''}
+          </span>
+        </div>
+        <div class="card-body" style="padding:0;">
+          <table class="table table-striped" style="margin:0;">
+            <thead>
+              <tr>
+                <th>Auftrag</th>
+                <th>Kennzeichen</th>
+                <th>Arbeit</th>
+                <th class="text-success">Start ▶</th>
+                <th class="text-danger">Ende ■</th>
+                <th class="text-warning">Geschätzt</th>
+                <th>Ist-Zeit</th>
+              </tr>
+            </thead>
+            <tbody>${rows}</tbody>
+          </table>
+        </div>
       </div>
     `;
   }
@@ -31208,22 +31110,6 @@ class App {
       const jetzt = new Date();
       const startzeit = `${String(jetzt.getHours()).padStart(2, '0')}:${String(jetzt.getMinutes()).padStart(2, '0')}`;
       await ApiService.put(`/termine/${terminId}`, { status: 'in_arbeit', startzeit });
-      // Stempel-Start für alle Arbeiten dieses Auftrags setzen
-      try {
-        const terminData = await ApiService.get(`/termine/${terminId}`);
-        const arbeiten = this.internGetArbeitenFromTermin(terminData);
-        if (arbeiten.length > 0) {
-          await Promise.all(arbeiten.map(a => this.stempelSetzen(terminId, a.name, 'start')));
-        } else {
-          // Einfacher Auftrag ohne Einzelarbeiten: Auftragsbezeichnung als Arbeit verwenden
-          if (terminData.arbeit) {
-            await this.stempelSetzen(terminId, terminData.arbeit, 'start');
-          }
-        }
-      } catch (stempelErr) {
-        console.warn('[Stempel] Start-Stempel konnte nicht gesetzt werden:', stempelErr);
-        // Nicht kritisch – Hauptaktion (Status setzen) war erfolgreich
-      }
       // Folgezeiten neu berechnen wenn Personzuordnung bekannt
       if (personId && personTyp) {
         const heute = this.formatDateLocal(this.getToday());
@@ -31245,20 +31131,6 @@ class App {
         status: 'abgeschlossen',
         fertigstellung_zeit: new Date().toISOString()
       });
-      // Stempel-Ende für alle noch nicht gestempelten Arbeiten setzen
-      try {
-        const terminData = await ApiService.get(`/termine/${terminId}`);
-        const arbeiten = this.internGetArbeitenFromTermin(terminData);
-        if (arbeiten.length > 0) {
-          await Promise.all(arbeiten.map(a => this.stempelSetzen(terminId, a.name, 'ende')));
-        } else {
-          if (terminData.arbeit) {
-            await this.stempelSetzen(terminId, terminData.arbeit, 'ende');
-          }
-        }
-      } catch (stempelErr) {
-        console.warn('[Stempel] Ende-Stempel konnte nicht gesetzt werden:', stempelErr);
-      }
       this.loadInternTeamUebersicht();
     } catch (err) {
       console.error('internBeenden Fehler:', err);
@@ -31271,17 +31143,6 @@ class App {
     if (btn) btn.disabled = true;
     try {
       await ApiService.post(`/termine/${terminId}/arbeit-beenden`, { arbeit_index: arbeitIndex });
-      // Stempel-Ende für diese Einzelarbeit setzen
-      try {
-        const terminData = await ApiService.get(`/termine/${terminId}`);
-        const arbeiten = this.internGetArbeitenFromTermin(terminData);
-        const arbeit = arbeiten[arbeitIndex];
-        if (arbeit) {
-          await this.stempelSetzen(terminId, arbeit.name, 'ende');
-        }
-      } catch (stempelErr) {
-        console.warn('[Stempel] Einzelarbeit-Ende-Stempel konnte nicht gesetzt werden:', stempelErr);
-      }
       this.loadInternTeamUebersicht();
     } catch (err) {
       console.error('internBeendenEinzelarbeit Fehler:', err);
