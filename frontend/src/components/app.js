@@ -841,6 +841,18 @@ class App {
         this.loadZeitstempelung();
       }
     }
+
+    if (eventName === 'tagesstempel.auto_abstempelung') {
+      if (document.getElementById('zeitstempelung')?.classList.contains('active')) {
+        this.loadZeitstempelung();
+      }
+    }
+
+    if (eventName === 'tagesstempel.kommen' || eventName === 'tagesstempel.gehen') {
+      if (document.getElementById('zeitstempelung')?.classList.contains('active')) {
+        this.loadZeitstempelung();
+      }
+    }
   }
 
   handleRealtimeKundenEvent(eventName, data) {
@@ -987,8 +999,33 @@ class App {
       const letzterTag = new Date(heute2.getFullYear(), heute2.getMonth() + 1, 0);
       vonEl.value = ersterTag.toISOString().substring(0, 10);
       bisEl.value = letzterTag.toISOString().substring(0, 10);
-      this.loadZeitkonto();
     }
+
+    // Sub-Tab-Umschaltung
+    const subTabStempel = document.getElementById('ztSubTabStempel');
+    const subTabZeitkonto = document.getElementById('ztSubTabZeitkonto');
+    const switchZtSubTab = (active) => {
+      const isStempel = active === 'stempel';
+      document.getElementById('ztPanelStempel').style.display = isStempel ? '' : 'none';
+      document.getElementById('ztPanelZeitkonto').style.display = isStempel ? 'none' : '';
+      subTabStempel.style.borderBottomColor = isStempel ? '#3b82f6' : 'transparent';
+      subTabStempel.style.color = isStempel ? '#3b82f6' : '#666';
+      subTabZeitkonto.style.borderBottomColor = isStempel ? 'transparent' : '#3b82f6';
+      subTabZeitkonto.style.color = isStempel ? '#666' : '#3b82f6';
+      if (!isStempel) {
+        // Zeitkonto lazy laden wenn noch kein Inhalt
+        const vonEl2 = document.getElementById('zeitkontoVon');
+        const bisEl2 = document.getElementById('zeitkontoBis');
+        if (vonEl2 && !vonEl2.value) {
+          const h = new Date();
+          vonEl2.value = new Date(h.getFullYear(), h.getMonth(), 1).toISOString().substring(0, 10);
+          bisEl2.value = new Date(h.getFullYear(), h.getMonth() + 1, 0).toISOString().substring(0, 10);
+        }
+        this.loadZeitkonto();
+      }
+    };
+    this.bindEventListenerOnce(subTabStempel, 'click', () => switchZtSubTab('stempel'), 'ZtSubTabStempel');
+    this.bindEventListenerOnce(subTabZeitkonto, 'click', () => switchZtSubTab('zeitkonto'), 'ZtSubTabZeitkonto');
 
     const planungPrevTag = document.getElementById('planungPrevTag');
     const planungNextTag = document.getElementById('planungNextTag');
@@ -30905,6 +30942,26 @@ class App {
           mittagspauseMap[key] || null
         );
       }).join('');
+
+      // Warn-Banner: noch aktiv gestempelte Personen (nur wenn Datum = heute)
+      if (istHeute) {
+        const offenePersonen = alleGruppen.filter(g => {
+          const key = g.person_typ === 'lehrling' ? `l_${g.person_id}` : `m_${g.person_id}`;
+          const ts = tagesstempelMap[key];
+          return ts && ts.kommen_zeit && !ts.gehen_zeit;
+        }).map(g => g.person_name);
+        if (offenePersonen.length > 0) {
+          const banner = `<div style="background:#fff3cd;border:1px solid #ffc107;border-radius:8px;padding:10px 14px;margin-bottom:12px;display:flex;align-items:center;gap:10px;">
+            <span style="font-size:18px;">⚠️</span>
+            <div>
+              <strong style="color:#856404;">Noch aktiv gestempelt:</strong>
+              <span style="color:#856404;margin-left:6px;">${offenePersonen.join(', ')}</span>
+              <span style="color:#a07010;font-size:12px;margin-left:8px;">— Automatische Abstempelung um 18:30 Uhr</span>
+            </div>
+          </div>`;
+          container.innerHTML = banner + container.innerHTML;
+        }
+      }
     } catch (err) {
       console.error('[Zeitstempelung] Ladefehler:', err);
       container.innerHTML = '<div class="error-state"><p>Fehler beim Laden der Stempelzeiten.</p></div>';

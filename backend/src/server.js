@@ -395,6 +395,58 @@ async function startServer(clientCountCallback, requestLogCallback) {
     }, 5 * 60 * 1000); // Alle 5 Minuten
     logStartup('Pause-Cleanup-Job gestartet ✓');
 
+    // Auto-Abstempelung täglich um 18:30 Uhr
+    (function scheduleAutoAbstempelung() {
+        const AUTO_GEHEN_ZEIT = '18:30';
+        const { runAsync, allAsync } = require('./utils/dbHelper');
+        const { broadcastEvent } = require('./utils/websocket');
+
+        async function autoAbstempeln() {
+            try {
+                const heute = new Date().toISOString().split('T')[0];
+                const offene = await allAsync(
+                    `SELECT id, mitarbeiter_id, lehrling_id FROM tagesstempel
+                     WHERE datum = ? AND kommen_zeit IS NOT NULL AND gehen_zeit IS NULL`,
+                    [heute]
+                );
+                if (offene.length === 0) return;
+                for (const s of offene) {
+                    await runAsync(
+                        `UPDATE tagesstempel SET gehen_zeit = ? WHERE id = ?`,
+                        [AUTO_GEHEN_ZEIT, s.id]
+                    );
+                }
+                console.log(`[AutoAbstempelung] ${offene.length} Stempel automatisch auf ${AUTO_GEHEN_ZEIT} gesetzt.`);
+                broadcastEvent('tagesstempel.auto_abstempelung', {
+                    datum: heute,
+                    anzahl: offene.length,
+                    gehen_zeit: AUTO_GEHEN_ZEIT
+                });
+            } catch (err) {
+                console.error('[AutoAbstempelung] Fehler:', err.message);
+            }
+        }
+
+        function msUntilTime(h, m) {
+            const now = new Date();
+            const target = new Date(now);
+            target.setHours(h, m, 0, 0);
+            if (target <= now) target.setDate(target.getDate() + 1);
+            return target - now;
+        }
+
+        function planNext() {
+            const ms = msUntilTime(18, 30);
+            setTimeout(async () => {
+                await autoAbstempeln();
+                planNext();
+            }, ms);
+            logStartup(`Auto-Abstempelung geplant in ${Math.round(ms / 60000)} Minuten ✓`);
+        }
+
+        planNext();
+    })();
+
     // Status-Route registrieren (vor API-Routen für /status und /api/server-status etc.)
     logStartup('Registriere Status-Route...');
     app.use('/', statusRouter);
