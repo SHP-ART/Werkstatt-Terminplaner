@@ -2332,20 +2332,18 @@
           </button>
         `;
       } else if (person.pause_bereits_gemacht) {
-        // Pause heute bereits gemacht → deaktivierter Button mit Info
+        // Pause heute bereits gemacht
         buttonsHtml += `
           <button class="tablet-btn tablet-btn-pause" disabled title="Pause wurde heute bereits gemacht">
             <span class="btn-icon">✅</span> Pause erledigt
           </button>
         `;
-      } else if (imAnzeigeZeitraum && !inBerufsschule && !istAbwesend) {
-        // Pause-Button aktiv (auch wenn automatische Pausenzeit läuft aber noch nicht bestätigt)
-        const pauseIcon = imIdealemZeitfenster ? '🍽️' : '⚠️';
-        const pauseText = imIdealemZeitfenster ? 'Pause' : 'Pause (spät)';
+      } else if (!inBerufsschule && !istAbwesend) {
+        // Pause-Button immer aktiv (kein Zeitfenster)
         buttonsHtml += `
-          <button class="tablet-btn tablet-btn-pause ${imIdealemZeitfenster ? '' : 'außerhalb'}" 
-                  onclick="handlePauseStarten(${personId}, '${typ}', '${heuteDatum}', ${imIdealemZeitfenster})">
-            <span class="btn-icon">${pauseIcon}</span> ${pauseText}
+          <button class="tablet-btn tablet-btn-pause"
+                  onclick="handlePauseStarten(${personId}, '${typ}', '${heuteDatum}', true)">
+            <span class="btn-icon">🍽️</span> Pause
           </button>
         `;
       } else {

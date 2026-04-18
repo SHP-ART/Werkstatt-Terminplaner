@@ -31218,10 +31218,8 @@ class App {
       pauseMahlzeitButtonHtml = `<button class="intern-tab-btn intern-tab-btn-pause aktiv" disabled><span class="intern-tab-btn-icon">⏸️</span> Pause (${verblMin} Min)</button>`;
     } else if (person.pause_bereits_gemacht) {
       pauseMahlzeitButtonHtml = `<button class="intern-tab-btn intern-tab-btn-pause" disabled title="Pause wurde heute bereits gemacht"><span class="intern-tab-btn-icon">✅</span> Pause erledigt</button>`;
-    } else if (imAnzeigePauseFenster && !inBerufsschule && !istAbwesend) {
-      const pIcon = imIdealPauseFenster ? '🍽️' : '⚠️';
-      const pText = imIdealPauseFenster ? 'Pause' : 'Pause (spät)';
-      pauseMahlzeitButtonHtml = `<button class="intern-tab-btn intern-tab-btn-pause ${imIdealPauseFenster ? '' : 'ausserhalb'}" onclick="app.internPauseStarten(${personId}, '${typ}', '${today}', ${imIdealPauseFenster})"><span class="intern-tab-btn-icon">${pIcon}</span> ${pText}</button>`;
+    } else if (!inBerufsschule && !istAbwesend) {
+      pauseMahlzeitButtonHtml = `<button class="intern-tab-btn intern-tab-btn-pause" onclick="app.internPauseStarten(${personId}, '${typ}', '${today}', true)"><span class="intern-tab-btn-icon">🍽️</span> Pause</button>`;
     } else {
       pauseMahlzeitButtonHtml = `<button class="intern-tab-btn intern-tab-btn-pause" disabled><span class="intern-tab-btn-icon">🍽️</span> Pause</button>`;
     }
