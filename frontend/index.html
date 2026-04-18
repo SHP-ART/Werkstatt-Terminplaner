@@ -3805,16 +3805,17 @@
         <div id="zeitstempelung" class="tab-content" data-template-id="tab-template-zeitstempelung"></div>
 
         <template id="tab-template-zeitstempelung">
-            <div class="page-header">
-                <h2>⏱️ Stempelzeiten</h2>
-                <p class="page-subtitle">Tagesstempel und Arbeitszeiten aller Mitarbeiter</p>
-            </div>
-
-            <div class="zeit-nav-panel" style="display:flex;align-items:center;gap:8px;margin-bottom:16px;">
-                <button id="zeitstempelungPrevTag" class="nav-btn" title="Vorheriger Tag">◀ Tag</button>
-                <input type="date" id="zeitstempelungDatum" class="modern-date-input">
-                <button id="zeitstempelungNextTag" class="nav-btn" title="Nächster Tag">Tag ▶</button>
-                <button id="zeitstempelungHeuteBtn" class="action-btn primary" title="Heute">Heute</button>
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:8px;">
+                <div>
+                    <h2 style="margin:0;font-size:18px;">⏱️ Stempelzeiten</h2>
+                    <p class="page-subtitle" style="margin:0;">Tagesstempel und Arbeitszeiten aller Mitarbeiter</p>
+                </div>
+                <div style="display:flex;align-items:center;gap:4px;">
+                    <button id="zeitstempelungPrevTag" class="btn btn-sm btn-outline-secondary" title="Vorheriger Tag" style="padding:2px 8px;">◀</button>
+                    <input type="date" id="zeitstempelungDatum" class="modern-date-input" style="height:28px;font-size:13px;padding:2px 6px;">
+                    <button id="zeitstempelungNextTag" class="btn btn-sm btn-outline-secondary" title="Nächster Tag" style="padding:2px 8px;">▶</button>
+                    <button id="zeitstempelungHeuteBtn" class="btn btn-sm btn-primary" title="Heute" style="padding:2px 10px;margin-left:4px;">Heute</button>
+                </div>
             </div>
 
             <div id="zeitstempelungContainer">
