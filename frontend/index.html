@@ -57,6 +57,7 @@
             <button class="tab-button" data-tab="auslastung"><span>📈 Auslastung</span></button>
             <button class="tab-button" data-tab="auslastung-dragdrop"><span>🏗️ Planung (Beta)</span></button>
             <button class="tab-button" data-tab="intern"><span>👷 Intern</span></button>
+            <button class="tab-button" data-tab="zeitstempelung"><span>⏱️ Stempelzeiten</span></button>
             <button class="tab-button" data-tab="papierkorb"><span>🗑️ Papierkorb</span></button>
             <button class="tab-button" data-tab="einstellungen"><span>⚙️ Einstellungen</span></button>
         </div>
@@ -3796,6 +3797,29 @@
             </div>
 
             <!-- Interne Termine Übersicht wurde entfernt - Termine werden bei Terminplanung → Intern verwaltet -->
+        </template>
+
+        <!-- ================================================
+             STEMPELZEITEN TAB
+             ================================================ -->
+        <div id="zeitstempelung" class="tab-content" data-template-id="tab-template-zeitstempelung"></div>
+
+        <template id="tab-template-zeitstempelung">
+            <div class="page-header">
+                <h2>⏱️ Stempelzeiten</h2>
+                <p class="page-subtitle">Tagesstempel und Arbeitszeiten aller Mitarbeiter</p>
+            </div>
+
+            <div class="zeit-nav-panel" style="display:flex;align-items:center;gap:8px;margin-bottom:16px;">
+                <button id="zeitstempelungPrevTag" class="nav-btn" title="Vorheriger Tag">◀ Tag</button>
+                <input type="date" id="zeitstempelungDatum" class="modern-date-input">
+                <button id="zeitstempelungNextTag" class="nav-btn" title="Nächster Tag">Tag ▶</button>
+                <button id="zeitstempelungHeuteBtn" class="action-btn primary" title="Heute">Heute</button>
+            </div>
+
+            <div id="zeitstempelungContainer">
+                <p class="loading-text">Lade Stempelzeiten…</p>
+            </div>
         </template>
 
         <div id="papierkorb" class="tab-content" data-template-id="tab-template-papierkorb"></div>
