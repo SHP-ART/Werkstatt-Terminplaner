@@ -22453,13 +22453,13 @@ class App {
           if (arbeitszeit && arbeitszeit.arbeitsstunden !== undefined) {
             const istFrei = arbeitszeit.ist_frei === 1;
             if (!istFrei) {
-              // Berechne Arbeitsbeginn: gestempelte Ankunft hat Vorrang, sonst Standard
-              const arbeitsbeginn = tagesstempelMap.get(`ma-${ma.id}`) || '08:00';
+              // Arbeitsbeginn: gestempelte Ankunft hat Vorrang, sonst Standard
+              const plannedBeginn = '08:00';
+              const arbeitsbeginn = tagesstempelMap.get(`ma-${ma.id}`) || plannedBeginn;
               const arbeitsstunden = arbeitszeit.arbeitsstunden || 8;
               const pausenzeit = arbeitszeit.pausenzeit_minuten || 0;
-              const beginnMinuten = this.timeToMinutes(arbeitsbeginn);
-              // Arbeitsende = Beginn + Arbeitsstunden + Pause
-              const endeMinuten = beginnMinuten + (arbeitsstunden * 60) + pausenzeit;
+              // Arbeitsende immer vom geplanten Beginn berechnen (Verspaetung verlaengert den Tag nicht)
+              const endeMinuten = this.timeToMinutes(plannedBeginn) + (arbeitsstunden * 60) + pausenzeit;
               const arbeitsende = this.minutesToTime(endeMinuten);
               
               arbeitszeitenMap.set(`ma-${ma.id}`, {
@@ -22484,13 +22484,13 @@ class App {
           if (arbeitszeit && arbeitszeit.arbeitsstunden !== undefined) {
             const istFrei = arbeitszeit.ist_frei === 1;
             if (!istFrei) {
-              // Berechne Arbeitsbeginn: gestempelte Ankunft hat Vorrang, sonst Standard
-              const arbeitsbeginn = tagesstempelMap.get(`l-${l.id}`) || '08:00';
+              // Arbeitsbeginn: gestempelte Ankunft hat Vorrang, sonst Standard
+              const plannedBeginn = '08:00';
+              const arbeitsbeginn = tagesstempelMap.get(`l-${l.id}`) || plannedBeginn;
               const arbeitsstunden = arbeitszeit.arbeitsstunden || 8;
               const pausenzeit = arbeitszeit.pausenzeit_minuten || 0;
-              const beginnMinuten = this.timeToMinutes(arbeitsbeginn);
-              // Arbeitsende = Beginn + Arbeitsstunden + Pause
-              const endeMinuten = beginnMinuten + (arbeitsstunden * 60) + pausenzeit;
+              // Arbeitsende immer vom geplanten Beginn berechnen (Verspaetung verlaengert den Tag nicht)
+              const endeMinuten = this.timeToMinutes(plannedBeginn) + (arbeitsstunden * 60) + pausenzeit;
               const arbeitsende = this.minutesToTime(endeMinuten);
               
               arbeitszeitenMap.set(`l-${l.id}`, {
