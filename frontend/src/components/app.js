@@ -30723,22 +30723,35 @@ class App {
 
     const rows = gruppe.arbeiten.map(a => {
       const istMin = a.ist_min;
-      const geschMin = a.geschaetzte_min || 0;
-      const ueberschritten = istMin !== null && geschMin > 0 && istMin > geschMin * 1.1;
+      const richtwertMin = a.richtwert_min || a.geschaetzte_min || 0;
+      const ueberschritten = istMin !== null && richtwertMin > 0 && istMin > richtwertMin * 1.1;
       const istText = a.stempel_start && !a.stempel_ende
         ? '<span class="badge badge-info">laufend…</span>'
         : istMin !== null
           ? `<span class="${ueberschritten ? 'text-warning' : 'text-success'}">${istMin} Min${ueberschritten ? ' ⚠️' : ''}</span>`
           : '<span class="text-muted">—</span>';
 
+      const safeArbeit = this.escapeHtml(a.arbeit || '').replace(/'/g, "\\'");
+      const startCell = a.stempel_start
+        ? `<span style="color:var(--success,#28a745);font-weight:600;">▶ ${a.stempel_start}</span>`
+        : istHeute
+          ? `<button class="btn btn-sm btn-outline-success py-0 px-1" style="font-size:11px;" onclick="window.app.stempelSetzen(${a.termin_id},'${safeArbeit}','start').then(()=>window.app.loadZeitstempelung())">▶ Start</button>`
+          : '<span class="text-muted">—</span>';
+      const endeCell = a.stempel_ende
+        ? `<span style="color:var(--danger,#dc3545);font-weight:600;">■ ${a.stempel_ende}</span>`
+        : istHeute
+          ? `<button class="btn btn-sm btn-outline-danger py-0 px-1" style="font-size:11px;" ${!a.stempel_start ? 'disabled' : ''} onclick="window.app.stempelSetzen(${a.termin_id},'${safeArbeit}','ende').then(()=>window.app.loadZeitstempelung())">■ Ende</button>`
+          : '<span class="text-muted">—</span>';
+
       return `
         <tr>
           <td>${this.escapeHtml(a.termin_nr || '')}</td>
+          <td>${this.escapeHtml(a.interne_auftragsnummer || '')}</td>
           <td>${this.escapeHtml(a.kennzeichen || '')}</td>
           <td>${this.escapeHtml(a.arbeit)}</td>
-          <td class="text-success">${a.stempel_start || '<span class="text-muted">—</span>'}</td>
-          <td class="text-danger">${a.stempel_ende || '<span class="text-muted">—</span>'}</td>
-          <td class="text-warning">${geschMin ? geschMin + ' Min' : '—'}</td>
+          <td class="text-success">${startCell}</td>
+          <td class="text-danger">${endeCell}</td>
+          <td class="text-warning">${richtwertMin ? richtwertMin + ' Min' : '—'}</td>
           <td>${istText}</td>
         </tr>
       `;
@@ -30805,7 +30818,7 @@ class App {
         <div class="card-header" style="display:flex;justify-content:space-between;align-items:center;">
           <strong>${icon} ${this.escapeHtml(gruppe.person_name)}</strong>
           <span class="text-muted" style="font-size:13px;">
-            Geschätzt: ${gesamtGeschaetzt} Min
+            Richtzeit: ${gesamtGeschaetzt} Min
             ${gesamtIst ? '· Gestempelt: ' + gesamtIst + ' Min' : ''}
           </span>
         </div>
@@ -30816,11 +30829,12 @@ class App {
             <thead>
               <tr>
                 <th>Auftrag</th>
+                <th>Locosoft-Nr.</th>
                 <th>Kennzeichen</th>
                 <th>Arbeit</th>
                 <th class="text-success">Start ▶</th>
                 <th class="text-danger">Ende ■</th>
-                <th class="text-warning">Geschätzt</th>
+                <th class="text-warning">Richtzeit</th>
                 <th>Ist-Zeit</th>
               </tr>
             </thead>
