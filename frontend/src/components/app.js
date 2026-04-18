@@ -30776,13 +30776,14 @@ class App {
       `;
     }).join('');
 
-    // Tagesstempel-Info kompakt in den Header
+    // Tagesstempel-Info: Zeiten inline hinter dem Namen
     const _z2m = z => { const [h, m] = z.substring(0, 5).split(':').map(Number); return h * 60 + m; };
     const hatKommen = tagesstempel && tagesstempel.kommen_zeit;
     const hatGehen  = tagesstempel && tagesstempel.gehen_zeit;
     const aktiveUnterbrechung = (unterbrechungen || []).find(u => !u.ende_zeit);
 
-    let stempelZeilenHtml = '';
+    // Inline-Stempelzeiten (hinter dem Namen, auf derselben Zeile)
+    let stempelInlineHtml = '';
     if (hatKommen) {
       const kommenZeit = tagesstempel.kommen_zeit.substring(0, 5);
       let gehenPart = '';
@@ -30795,21 +30796,20 @@ class App {
         const nettoMin = _z2m(gehenZeit) - _z2m(kommenZeit) - ubMin;
         const nettoH = Math.floor(nettoMin / 60);
         const nettoM = nettoMin % 60;
-        gehenPart = `<span style="color:#dc3545;font-weight:600;margin-left:10px;">■ ${gehenZeit}</span>`;
-        nettoPart = `<span style="color:#555;margin-left:10px;">⏱ ${nettoH > 0 ? nettoH + 'h ' : ''}${nettoM}min</span>`;
+        gehenPart = `<span style="color:#dc3545;font-weight:600;margin-left:8px;">■ ${gehenZeit}</span>`;
+        nettoPart = `<span style="color:#555;margin-left:8px;">⏱ ${nettoH > 0 ? nettoH + 'h ' : ''}${nettoM}min</span>`;
       }
       const abgeschlosseneUb = (unterbrechungen || []).filter(u => u.ende_zeit);
       if (abgeschlosseneUb.length) {
-        ubPart = `<span style="color:#888;margin-left:10px;">🚬 ${abgeschlosseneUb.map(u => u.start_zeit.substring(0,5) + '–' + u.ende_zeit.substring(0,5)).join(', ')}</span>`;
+        ubPart = `<span style="color:#888;margin-left:8px;">🚬 ${abgeschlosseneUb.map(u => u.start_zeit.substring(0,5) + '–' + u.ende_zeit.substring(0,5)).join(', ')}</span>`;
       }
-      stempelZeilenHtml = `
-        <div style="font-size:13px;margin-top:2px;">
-          <span style="color:#198754;font-weight:600;">▶ ${kommenZeit}</span>
-          ${gehenPart}${nettoPart}${ubPart}
-        </div>`;
+      stempelInlineHtml = `<span style="font-size:13px;font-weight:normal;margin-left:12px;"><span style="color:#198754;font-weight:600;">▶ ${kommenZeit}</span>${gehenPart}${nettoPart}${ubPart}</span>`;
     }
 
-    // Buttons (nur heute, nur wenn noch kein Gehen)
+    // Richtwert-Zeile (zweite Zeile)
+    const richtwertZeile = `<div style="font-size:12px;color:#6c757d;margin-top:2px;">Richtzeit: ${gesamtRichtzeit} Min${gesamtIst ? ' · Gestempelt: ' + gesamtIst + ' Min' : ''}</div>`;
+
+    // Buttons (dritte Zeile, nur heute, nur wenn noch kein Gehen)
     let buttonsHtml = '';
     if (istHeute) {
       if (!hatKommen) {
@@ -30853,17 +30853,9 @@ class App {
     return `
       <div class="card" style="margin-bottom: 16px;">
         <div class="card-header">
-          <div style="display:flex;justify-content:space-between;align-items:flex-start;">
-            <div>
-              <strong style="font-size:15px;">${icon} ${this.escapeHtml(gruppe.person_name)}</strong>
-              ${stempelZeilenHtml}
-              ${buttonsHtml}
-            </div>
-            <span class="text-muted" style="font-size:12px;white-space:nowrap;margin-left:12px;padding-top:2px;">
-              Richtzeit: ${gesamtRichtzeit} Min
-              ${gesamtIst ? '· Gestempelt: ' + gesamtIst + ' Min' : ''}
-            </span>
-          </div>
+          <div><strong style="font-size:15px;">${icon} ${this.escapeHtml(gruppe.person_name)}</strong>${stempelInlineHtml}</div>
+          ${richtwertZeile}
+          ${buttonsHtml}
         </div>
         ${leereTabelle}
       </div>
