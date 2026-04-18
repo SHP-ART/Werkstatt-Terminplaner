@@ -30392,10 +30392,15 @@ class App {
       // Tagesstempel-Maps aufbauen
       const tagesstempelMap = {};
       const unterbrechungenMap = {};
-      (tagesstempelRaw || []).forEach(eintrag => {
-        const key = eintrag.mitarbeiter_id ? `m_${eintrag.mitarbeiter_id}` : `l_${eintrag.lehrling_id}`;
-        tagesstempelMap[key] = eintrag.stempel || null;
-        unterbrechungenMap[key] = eintrag.unterbrechungen || [];
+      const { stempel: tsStempel = [], unterbrechungen: tsUnterbrechungen = [] } = tagesstempelRaw || {};
+      tsStempel.forEach(s => {
+        const key = s.mitarbeiter_id ? `m_${s.mitarbeiter_id}` : `l_${s.lehrling_id}`;
+        tagesstempelMap[key] = s;
+      });
+      tsUnterbrechungen.forEach(u => {
+        const key = u.mitarbeiter_id ? `m_${u.mitarbeiter_id}` : `l_${u.lehrling_id}`;
+        if (!unterbrechungenMap[key]) unterbrechungenMap[key] = [];
+        unterbrechungenMap[key].push(u);
       });
 
       // Erstelle Map für Abwesenheiten (für schnellen Zugriff)
@@ -30686,10 +30691,15 @@ class App {
       // Maps aufbauen: key = "m_<id>" oder "l_<id>"
       const tagesstempelMap = {};
       const unterbrechungenMap = {};
-      (tagesstempelRaw || []).forEach(eintrag => {
-        const key = eintrag.mitarbeiter_id ? `m_${eintrag.mitarbeiter_id}` : `l_${eintrag.lehrling_id}`;
-        tagesstempelMap[key] = eintrag.stempel || null;
-        unterbrechungenMap[key] = eintrag.unterbrechungen || [];
+      const { stempel: tsStempel = [], unterbrechungen: tsUnterbrechungen = [] } = tagesstempelRaw || {};
+      tsStempel.forEach(s => {
+        const key = s.mitarbeiter_id ? `m_${s.mitarbeiter_id}` : `l_${s.lehrling_id}`;
+        tagesstempelMap[key] = s;
+      });
+      tsUnterbrechungen.forEach(u => {
+        const key = u.mitarbeiter_id ? `m_${u.mitarbeiter_id}` : `l_${u.lehrling_id}`;
+        if (!unterbrechungenMap[key]) unterbrechungenMap[key] = [];
+        unterbrechungenMap[key].push(u);
       });
 
       container.innerHTML = gruppen.map(g => {
