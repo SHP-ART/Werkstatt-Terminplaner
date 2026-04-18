@@ -22408,6 +22408,21 @@ class App {
       } catch (error) {
         console.error('Fehler beim Laden der Abwesenheiten:', error);
       }
+
+      // 3a2. Tagesstempel für dieses Datum laden (für echte Ankunftszeiten)
+      let tagesstempelMap = new Map(); // 'ma-{id}' / 'l-{id}' → kommen_zeit
+      try {
+        const stempelData = await fetch(`${CONFIG.API_URL}/tagesstempel?datum=${datum}`)
+          .then(res => res.ok ? res.json() : { stempel: [] });
+        (stempelData.stempel || []).forEach(s => {
+          const kommen = s.kommen_zeit ? s.kommen_zeit.substring(0, 5) : null;
+          if (!kommen) return;
+          if (s.mitarbeiter_id) tagesstempelMap.set(`ma-${s.mitarbeiter_id}`, kommen);
+          if (s.lehrling_id)    tagesstempelMap.set(`l-${s.lehrling_id}`, kommen);
+        });
+      } catch (error) {
+        console.warn('Tagesstempel konnten nicht geladen werden:', error);
+      }
       
       // aktivePausen wurden bereits mit Terminen geladen (siehe oben)
       console.log('Aktive Pausen geladen:', aktivePausen);
@@ -22438,8 +22453,8 @@ class App {
           if (arbeitszeit && arbeitszeit.arbeitsstunden !== undefined) {
             const istFrei = arbeitszeit.ist_frei === 1;
             if (!istFrei) {
-              // Berechne Arbeitsbeginn und -ende (inklusive Pause)
-              const arbeitsbeginn = '08:00'; // Standard
+              // Berechne Arbeitsbeginn: gestempelte Ankunft hat Vorrang, sonst Standard
+              const arbeitsbeginn = tagesstempelMap.get(`ma-${ma.id}`) || '08:00';
               const arbeitsstunden = arbeitszeit.arbeitsstunden || 8;
               const pausenzeit = arbeitszeit.pausenzeit_minuten || 0;
               const beginnMinuten = this.timeToMinutes(arbeitsbeginn);
@@ -22469,8 +22484,8 @@ class App {
           if (arbeitszeit && arbeitszeit.arbeitsstunden !== undefined) {
             const istFrei = arbeitszeit.ist_frei === 1;
             if (!istFrei) {
-              // Berechne Arbeitsbeginn und -ende (inklusive Pause)
-              const arbeitsbeginn = '08:00'; // Standard
+              // Berechne Arbeitsbeginn: gestempelte Ankunft hat Vorrang, sonst Standard
+              const arbeitsbeginn = tagesstempelMap.get(`l-${l.id}`) || '08:00';
               const arbeitsstunden = arbeitszeit.arbeitsstunden || 8;
               const pausenzeit = arbeitszeit.pausenzeit_minuten || 0;
               const beginnMinuten = this.timeToMinutes(arbeitsbeginn);
