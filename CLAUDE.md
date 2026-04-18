@@ -1,7 +1,48 @@
-# CLAUDE.md – Werkstatt-Terminplaner
+# CLAUDE.md
 
-Dieses Dokument steuert das Verhalten des AI-Assistenten bei der Arbeit an diesem Projekt.
-Vollständige Projektdokumentation: siehe [.claude/PROJEKT.md](.claude/PROJEKT.md)
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
+> Vollständige Projektdokumentation: siehe [.claude/PROJEKT.md](.claude/PROJEKT.md)
+
+---
+
+## 0. Wichtige Befehle
+
+```bash
+# Backend (Dev-Server mit Auto-Reload, Port 3001)
+cd backend && npm run dev
+
+# Backend (nur Node, kein Electron)
+cd backend && npm run server
+
+# Frontend (Vite Dev-Server, Port 5173)
+cd frontend && npm run dev
+
+# Frontend Production-Build (erzeugt neue Hash-Dateinamen in dist/assets/)
+cd frontend && npm run build
+
+# Alle Tests
+cd backend && npm test
+
+# Nur Regressionstests (tests/bugs/)
+cd backend && npm run test:bugs
+
+# Einzelne Testdatei (Substring des Dateinamens genügt)
+cd backend && npm test -- termine-crud
+cd backend && npm test -- auth
+```
+
+Die App-Version wird an **einer einzigen Stelle** gepflegt: `backend/src/config/version.js`.
+
+---
+
+## 1. Projektkontext
+
+Werkstatt-Terminplaner ist eine **Self-hosted KFZ-Werkstatt-Management-Software** (v1.6.2).
+Backend: Node.js/Express (Port 3001) + SQLite. Frontend: Vite-Build (Vanilla JS).
+Betrieb primär als **systemd-Dienst auf Linux**, optional als Electron-Desktop-App.
+Mehrere Browser-Clients im LAN greifen gleichzeitig auf eine zentrale SQLite-Datenbank zu.
+Kein Cloud-Backend; alle Daten bleiben lokal. Tablet-App ist eine separate Electron-App (ia32/Windows).
 
 ---
 
@@ -61,11 +102,14 @@ Diese Regeln dürfen **niemals gebrochen** werden:
 
 ### WebSocket
 ```js
-// RICHTIG:
+// RICHTIG – Punkt-Notation, via broadcastEvent:
 const { broadcastEvent } = require('../utils/websocket');
+broadcastEvent('termin.created', { id: termin.id });
+
+// FALSCH – Underscore-Notation (Frontend verarbeitet diese nicht):
 broadcastEvent('termin_created', { id: termin.id });
 
-// FALSCH – niemals direkt:
+// FALSCH – direktes ws.send():
 wss.clients.forEach(c => c.send(...));
 ```
 
@@ -74,8 +118,18 @@ wss.clients.forEach(c => c.send(...));
 2. In `backend/src/routes/index.js` mounten: `router.use('/name', nameRoutes)`
 3. Controller in `backend/src/controllers/<name>Controller.js`
 4. Model in `backend/src/models/<name>Model.js` (falls nötig)
-5. CLAUDE.md → Abschnitt 8 "Routen & Services" aktualisieren
+5. CLAUDE.md → Abschnitt 9 "Routen & Services" aktualisieren
 6. `.claude/PROJEKT.md` → Abschnitt 4 "Kernkomponenten" ergänzen
+
+### Rate-Limiter für neue Routen
+Jede neue Route bekommt den passenden Limiter aus `middleware/rateLimiter.js`:
+| Limiter | Limit | Wann verwenden |
+|---|---|---|
+| `generalLimiter` | 200/min | Standard-CRUD, Leseanfragen |
+| `aiLimiter` | 30/min | KI-Schätzungen, teure Berechnungen |
+| `systemLimiter` | 5/min | Backup, Restore, destruktive Aktionen |
+
+Destruktive/sicherheitsrelevante Routen zusätzlich mit `requireAuth` aus `middleware/auth.js` schützen (prüft `x-api-key`-Header gegen `process.env.API_KEY`; im Dev-Modus ohne gesetztem `API_KEY` erlaubt).
 
 ---
 
@@ -100,7 +154,7 @@ Die Datenbank läuft im WAL-Modus. Das bedeutet:
 - Restore = WAL/SHM-Dateien löschen + neue DB einspielen
 
 ### Migrations-Nummerierung
-Migration-Dateien müssen eindeutige Nummern haben. Lücken sind OK, aber **doppelte Nummern** führen zu Konflikten. Immer den höchsten vorhandenen Stand prüfen (aktuell: 030).
+Migration-Dateien müssen eindeutige Nummern haben. Lücken sind OK, aber **doppelte Nummern** führen zu Konflikten. Immer den höchsten vorhandenen Stand prüfen (aktuell: 034).
 
 ### KI-Verfügbarkeit
 `externalAiService.js` gibt `null` zurück wenn kein KI-Dienst verfügbar ist – alle Aufrufer müssen das abfangen. KI-Features sind immer optional, nie für den Kernbetrieb erforderlich.
@@ -257,15 +311,16 @@ Für Datenbankprobleme liegen diverse Diagnose-Skripte direkt im `backend/`-Verz
    - Neue Routen-Dateien → Abschnitt 8 "Routen & Services" aktualisieren
    - Neue Fallstricke entdeckt → Abschnitt 4 ergänzen
    - Neue kritische Abhängigkeiten → Tabelle in Abschnitt 2 ergänzen
-   - Neue "Do NOT"-Regeln → Abschnitt 9 ergänzen
+   - Neue "Do NOT"-Regeln → Abschnitt 12 ergänzen
 
 ---
 
-## 8. Routen & Services (Kurzübersicht)
+## 9. Routen & Services (Kurzübersicht)
 
 Vollständige Beschreibungen in [.claude/PROJEKT.md](.claude/PROJEKT.md) Abschnitt 4.
 
 ### Backend-Routen (`backend/src/routes/`)
+
 | Datei | Zuständigkeit |
 |---|---|
 | `termineRoutes.js` | Termine CRUD, Split-Termine, Phasen-Zuordnung |
@@ -313,11 +368,11 @@ Vollständige Beschreibungen in [.claude/PROJEKT.md](.claude/PROJEKT.md) Abschni
 - Kleine, thematisch fokussierte Commits bevorzugen
 - PR-Beschreibung: Was/warum, relevante Tickets/Issues, manuelle Testschritte
 - UI-Änderungen mit kurzen Screenshots oder GIFs dokumentieren
-- Prüfe, dass neue Routen/Services in CLAUDE.md (Abschnitt 8) eingetragen sind
+- Prüfe, dass neue Routen/Services in CLAUDE.md (Abschnitt 9) eingetragen sind
 
 ---
 
-## 10. Workflow Guidelines
+## 11. Workflow Guidelines
 
 ### Task Management
 - Vor komplexen Änderungen (3+ Schritte): Plan kurz skizzieren und bestätigen lassen
@@ -338,7 +393,7 @@ Vollständige Beschreibungen in [.claude/PROJEKT.md](.claude/PROJEKT.md) Abschni
 
 ---
 
-## 11. Do NOT
+## 12. Do NOT
 
 - SQLite-Datei (`werkstatt.db`) in PRs oder Commits hochladen
 - Secrets oder API-Keys in `frontend/config.js` oder ins Repo committen
