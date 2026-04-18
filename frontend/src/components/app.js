@@ -30679,14 +30679,9 @@ class App {
 
     try {
       const [gruppen, tagesstempelRaw] = await Promise.all([
-        ApiService.get(`/stempelzeiten?datum=${datum}`),
-        ApiService.get(`/tagesstempel?datum=${datum}`).catch(() => [])
+        ApiService.get(`/stempelzeiten?datum=${datum}`).catch(() => []),
+        ApiService.get(`/tagesstempel?datum=${datum}`).catch(() => null)
       ]);
-
-      if (!gruppen || gruppen.length === 0) {
-        container.innerHTML = '<div class="empty-state"><p>Keine Arbeiten für diesen Tag.</p></div>';
-        return;
-      }
 
       // Maps aufbauen: key = "m_<id>" oder "l_<id>"
       const tagesstempelMap = {};
@@ -30702,7 +30697,30 @@ class App {
         unterbrechungenMap[key].push(u);
       });
 
-      container.innerHTML = gruppen.map(g => {
+      // Mitarbeiter/Lehrlinge die gestempelt haben aber keine Termine haben → als leere Gruppe hinzufügen
+      const gruppenKeys = new Set((gruppen || []).map(g =>
+        g.person_typ === 'lehrling' ? `l_${g.person_id}` : `m_${g.person_id}`
+      ));
+      const extraGruppen = tsStempel
+        .filter(s => {
+          const key = s.mitarbeiter_id ? `m_${s.mitarbeiter_id}` : `l_${s.lehrling_id}`;
+          return !gruppenKeys.has(key);
+        })
+        .map(s => ({
+          person_typ: s.mitarbeiter_id ? 'mitarbeiter' : 'lehrling',
+          person_id: s.mitarbeiter_id || s.lehrling_id,
+          person_name: s.mitarbeiter_name || s.lehrling_name || '—',
+          arbeiten: []
+        }));
+
+      const alleGruppen = [...(gruppen || []), ...extraGruppen];
+
+      if (alleGruppen.length === 0) {
+        container.innerHTML = '<div class="empty-state"><p>Keine Stempelzeiten oder Arbeiten für diesen Tag.</p></div>';
+        return;
+      }
+
+      container.innerHTML = alleGruppen.map(g => {
         const key = g.person_typ === 'lehrling' ? `l_${g.person_id}` : `m_${g.person_id}`;
         return this.renderZeitstempelungGruppe(g, tagesstempelMap[key] || null, unterbrechungenMap[key] || [], istHeute);
       }).join('');
