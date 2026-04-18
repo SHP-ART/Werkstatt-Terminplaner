@@ -50,6 +50,7 @@ const migrations = [
   require('./032_stempel_felder'),             // Version 32 - Stempel-Felder in termine_arbeiten
   require('./033_relax_termine_arbeiten_person_constraint'), // Version 33 - Person-Constraint entfernt
   require('./034_tagesstempel'),               // Version 34 - Tagesstempel + Arbeitsunterbrechungen
+  require('./035_tagesstempel_quelle'),        // Version 35 - kommen_quelle + gehen_quelle
 ];
 
 /**

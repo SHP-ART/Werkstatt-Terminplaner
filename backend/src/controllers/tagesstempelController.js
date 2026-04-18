@@ -36,7 +36,7 @@ class TagesstempelController {
           return res.json({ success: true, message: 'Bereits gestempelt', zeit: existing.kommen_zeit });
         }
         await runAsync(
-          `INSERT INTO tagesstempel (mitarbeiter_id, datum, kommen_zeit, erstellt_am) VALUES (?, ?, ?, datetime('now'))`,
+          `INSERT INTO tagesstempel (mitarbeiter_id, datum, kommen_zeit, kommen_quelle, erstellt_am) VALUES (?, ?, ?, 'stempel', datetime('now'))`,
           [mitarbeiter_id, datum, zeit]
         );
       } else {
@@ -48,7 +48,7 @@ class TagesstempelController {
           return res.json({ success: true, message: 'Bereits gestempelt', zeit: existing.kommen_zeit });
         }
         await runAsync(
-          `INSERT INTO tagesstempel (lehrling_id, datum, kommen_zeit, erstellt_am) VALUES (?, ?, ?, datetime('now'))`,
+          `INSERT INTO tagesstempel (lehrling_id, datum, kommen_zeit, kommen_quelle, erstellt_am) VALUES (?, ?, ?, 'stempel', datetime('now'))`,
           [lehrling_id, datum, zeit]
         );
       }
@@ -167,10 +167,10 @@ class TagesstempelController {
         [mitarbeiter_id, datum]
       );
       if (existing) {
-        await runAsync(`UPDATE tagesstempel SET gehen_zeit = ? WHERE mitarbeiter_id = ? AND datum = ?`, [zeit, mitarbeiter_id, datum]);
+        await runAsync(`UPDATE tagesstempel SET gehen_zeit = ?, gehen_quelle = 'stempel' WHERE mitarbeiter_id = ? AND datum = ?`, [zeit, mitarbeiter_id, datum]);
       } else {
         await runAsync(
-          `INSERT INTO tagesstempel (mitarbeiter_id, datum, kommen_zeit, gehen_zeit, erstellt_am) VALUES (?, ?, ?, ?, datetime('now'))`,
+          `INSERT INTO tagesstempel (mitarbeiter_id, datum, kommen_zeit, gehen_zeit, gehen_quelle, erstellt_am) VALUES (?, ?, ?, ?, 'stempel', datetime('now'))`,
           [mitarbeiter_id, datum, zeit, zeit]
         );
       }
@@ -180,10 +180,10 @@ class TagesstempelController {
         [lehrling_id, datum]
       );
       if (existing) {
-        await runAsync(`UPDATE tagesstempel SET gehen_zeit = ? WHERE lehrling_id = ? AND datum = ?`, [zeit, lehrling_id, datum]);
+        await runAsync(`UPDATE tagesstempel SET gehen_zeit = ?, gehen_quelle = 'stempel' WHERE lehrling_id = ? AND datum = ?`, [zeit, lehrling_id, datum]);
       } else {
         await runAsync(
-          `INSERT INTO tagesstempel (lehrling_id, datum, kommen_zeit, gehen_zeit, erstellt_am) VALUES (?, ?, ?, ?, datetime('now'))`,
+          `INSERT INTO tagesstempel (lehrling_id, datum, kommen_zeit, gehen_zeit, gehen_quelle, erstellt_am) VALUES (?, ?, ?, ?, 'stempel', datetime('now'))`,
           [lehrling_id, datum, zeit, zeit]
         );
       }
@@ -220,7 +220,7 @@ class TagesstempelController {
 
       const stempel = await allAsync(
         `SELECT ts.id, ts.mitarbeiter_id, ts.lehrling_id, ts.datum,
-                ts.kommen_zeit, ts.gehen_zeit,
+                ts.kommen_zeit, ts.kommen_quelle, ts.gehen_zeit, ts.gehen_quelle,
                 m.name AS mitarbeiter_name, l.name AS lehrling_name
          FROM tagesstempel ts
          LEFT JOIN mitarbeiter m ON ts.mitarbeiter_id = m.id
@@ -350,8 +350,8 @@ class TagesstempelController {
       if (existing) {
         const sets = [];
         const params = [];
-        if (kommen_zeit !== undefined) { sets.push('kommen_zeit = ?'); params.push(kommen_zeit); }
-        if (gehen_zeit  !== undefined) { sets.push('gehen_zeit = ?');  params.push(gehen_zeit);  }
+        if (kommen_zeit !== undefined) { sets.push('kommen_zeit = ?'); params.push(kommen_zeit); sets.push("kommen_quelle = 'manuell'"); }
+        if (gehen_zeit  !== undefined) { sets.push('gehen_zeit = ?');  params.push(gehen_zeit);  sets.push("gehen_quelle = 'manuell'");  }
         if (sets.length) {
           params.push(existing.id);
           await runAsync(`UPDATE tagesstempel SET ${sets.join(', ')} WHERE id = ?`, params);
@@ -361,13 +361,13 @@ class TagesstempelController {
         const gz = gehen_zeit  || null;
         if (mitarbeiter_id) {
           await runAsync(
-            `INSERT INTO tagesstempel (mitarbeiter_id, datum, kommen_zeit, gehen_zeit, erstellt_am) VALUES (?, ?, ?, ?, datetime('now'))`,
-            [mitarbeiter_id, datum, kz, gz]
+            `INSERT INTO tagesstempel (mitarbeiter_id, datum, kommen_zeit, kommen_quelle, gehen_zeit, gehen_quelle, erstellt_am) VALUES (?, ?, ?, CASE WHEN ? IS NOT NULL THEN 'manuell' END, ?, CASE WHEN ? IS NOT NULL THEN 'manuell' END, datetime('now'))`,
+            [mitarbeiter_id, datum, kz, kz, gz, gz]
           );
         } else {
           await runAsync(
-            `INSERT INTO tagesstempel (lehrling_id, datum, kommen_zeit, gehen_zeit, erstellt_am) VALUES (?, ?, ?, ?, datetime('now'))`,
-            [lehrling_id, datum, kz, gz]
+            `INSERT INTO tagesstempel (lehrling_id, datum, kommen_zeit, kommen_quelle, gehen_zeit, gehen_quelle, erstellt_am) VALUES (?, ?, ?, CASE WHEN ? IS NOT NULL THEN 'manuell' END, ?, CASE WHEN ? IS NOT NULL THEN 'manuell' END, datetime('now'))`,
+            [lehrling_id, datum, kz, kz, gz, gz]
           );
         }
       }

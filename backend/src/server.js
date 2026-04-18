@@ -412,7 +412,7 @@ async function startServer(clientCountCallback, requestLogCallback) {
                 if (offene.length === 0) return;
                 for (const s of offene) {
                     await runAsync(
-                        `UPDATE tagesstempel SET gehen_zeit = ? WHERE id = ?`,
+                        `UPDATE tagesstempel SET gehen_zeit = ?, gehen_quelle = 'auto' WHERE id = ?`,
                         [AUTO_GEHEN_ZEIT, s.id]
                     );
                 }

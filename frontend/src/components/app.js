@@ -31120,14 +31120,17 @@ class App {
     const resetBtn = (tagesstempel && tagesstempel.id && !tagesstempel.gehen_zeit)
       ? `<button onclick="window.app.tagesstempelReset(${tagesstempel.id})" title="Versehentlich gestarteten Stempel löschen" style="border:none;background:none;cursor:pointer;color:#dc3545;font-size:13px;padding:0 2px;margin-left:4px;" >🗑️</button>`
       : '';
+    const _qi = q => q === 'stempel' ? '<span title="Live gestempelt" style="font-size:10px;">🟢</span>' : q === 'manuell' ? '<span title="Manuell korrigiert" style="font-size:10px;">✏️</span>' : q === 'auto' ? '<span title="Automatisch abgestempelt" style="font-size:10px;">🤖</span>' : '';
     const stempelZeilenHtml = `
       <div style="display:flex;align-items:center;flex-wrap:wrap;gap:6px;font-size:13px;margin-top:4px;">
         <span style="color:#198754;font-weight:600;">▶</span>
         <input type="text" value="${kommenVal}" placeholder="HH:MM" maxlength="5" pattern="([01][0-9]|2[0-3]):[0-5][0-9]" style="${timeInputStyle}"
           onchange="window.app.tagesstempelZeitUpdate(${midArg}, ${lidArg}, ${datumArg}, 'kommen_zeit', this.value)">
+        ${tagesstempel ? _qi(tagesstempel.kommen_quelle) : ''}
         <span style="color:#dc3545;font-weight:600;">■</span>
         <input type="text" value="${gehenVal}" placeholder="HH:MM" maxlength="5" pattern="([01][0-9]|2[0-3]):[0-5][0-9]" style="${timeInputStyle}"
           onchange="window.app.tagesstempelZeitUpdate(${midArg}, ${lidArg}, ${datumArg}, 'gehen_zeit', this.value)">
+        ${tagesstempel ? _qi(tagesstempel.gehen_quelle) : ''}
         ${resetBtn}
         ${nettoHtml}
         ${ubZeilen}
@@ -31601,8 +31604,11 @@ class App {
       const ubList = (unterbrechungen || []).filter(u => u.ende_zeit);
       const ubHtml = ubList.length ? `<span style="color:#888;font-size:12px;">⏸ ${ubList.map(u => u.start_zeit.substring(0,5)+'–'+u.ende_zeit.substring(0,5)).join(', ')}</span>` : '';
       const gehenText = hatGehen ? `<span style="color:#dc3545;font-weight:600;">■ ${tagesstempel.gehen_zeit.substring(0,5)}</span>` : '';
+      const _quelleIcon = q => q === 'stempel' ? '<span title="Live gestempelt" style="font-size:11px;">🟢</span>' : q === 'manuell' ? '<span title="Manuell korrigiert" style="font-size:11px;">✏️</span>' : q === 'auto' ? '<span title="Automatisch abgestempelt" style="font-size:11px;">🤖</span>' : '';
+      const kommenIconHtml = _quelleIcon(tagesstempel.kommen_quelle);
+      const gehenIconHtml  = hatGehen ? _quelleIcon(tagesstempel.gehen_quelle) : '';
       tagesstempelStripHtml = `<div style="padding:5px 12px;background:#f8f9fa;border-top:1px solid #dee2e6;display:flex;align-items:center;flex-wrap:wrap;gap:8px;font-size:13px;">
-        <span style="color:#198754;font-weight:600;">▶ ${kommenZeit}</span>${gehenText}${nettoHtml}${ubHtml}</div>`;
+        <span style="color:#198754;font-weight:600;">▶ ${kommenZeit}</span>${kommenIconHtml}${gehenText ? gehenText + gehenIconHtml : ''}${nettoHtml}${ubHtml}</div>`;
     }
 
     let tagesstempelBtnHtml = '';
