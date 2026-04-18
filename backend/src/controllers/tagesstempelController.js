@@ -191,6 +191,26 @@ class TagesstempelController {
   }
 
   /**
+   * DELETE /api/tagesstempel/:id
+   * Löscht einen versehentlich gestarteten Tagesstempel komplett.
+   * Nur erlaubt wenn noch keine gehen_zeit gesetzt ist (kein abgeschlossener Tag).
+   */
+  static async deleteTagesstempel(req, res) {
+    try {
+      const { id } = req.params;
+      const existing = await getAsync(`SELECT id, gehen_zeit, mitarbeiter_id, lehrling_id, datum FROM tagesstempel WHERE id = ?`, [id]);
+      if (!existing) return res.status(404).json({ error: 'Tagesstempel nicht gefunden' });
+      if (existing.gehen_zeit) return res.status(409).json({ error: 'Tagesstempel hat bereits eine Gehen-Zeit – bitte manuell korrigieren' });
+      await runAsync(`DELETE FROM tagesstempel WHERE id = ?`, [id]);
+      broadcastEvent('tagesstempel.deleted', { id, mitarbeiter_id: existing.mitarbeiter_id, lehrling_id: existing.lehrling_id, datum: existing.datum });
+      res.json({ success: true });
+    } catch (err) {
+      console.error('[Tagesstempel-Delete] Fehler:', err);
+      res.status(500).json({ error: err.message });
+    }
+  }
+
+  /**
    * GET /api/tagesstempel?datum=YYYY-MM-DD
    * Gibt alle Tagesstempel + Arbeitsunterbrechungen für ein Datum zurück.
    */
@@ -222,7 +242,16 @@ class TagesstempelController {
         [datum]
       );
 
-      res.json({ stempel, unterbrechungen });
+      const pausen = await allAsync(
+        `SELECT pt.id, pt.mitarbeiter_id, pt.lehrling_id, pt.datum,
+                pt.pause_start_zeit, pt.pause_ende_zeit, pt.abgeschlossen
+         FROM pause_tracking pt
+         WHERE pt.datum = ?
+         ORDER BY pt.pause_start_zeit`,
+        [datum]
+      );
+
+      res.json({ stempel, unterbrechungen, pausen });
     } catch (err) {
       res.status(500).json({ error: err.message });
     }
@@ -293,6 +322,166 @@ class TagesstempelController {
       res.json({ success: true, ende_zeit: zeit });
     } catch (err) {
       console.error('[Unterbrechung-Ende] Fehler:', err);
+      res.status(500).json({ error: err.message });
+    }
+  }
+
+  /**
+   * PATCH /api/tagesstempel/zeiten
+   * Body: { mitarbeiter_id?, lehrling_id?, datum, kommen_zeit?, gehen_zeit? }
+   * Setzt Kommen/Gehen manuell (Upsert).
+   */
+  static async updateZeiten(req, res) {
+    try {
+      const { mitarbeiter_id, lehrling_id, datum, kommen_zeit, gehen_zeit } = req.body;
+      if (!mitarbeiter_id && !lehrling_id) {
+        return res.status(400).json({ error: 'mitarbeiter_id oder lehrling_id erforderlich' });
+      }
+      if (!datum) return res.status(400).json({ error: 'datum erforderlich' });
+
+      const ZEIT_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
+      if (kommen_zeit && !ZEIT_RE.test(kommen_zeit)) return res.status(400).json({ error: 'Ungültige kommen_zeit' });
+      if (gehen_zeit  && !ZEIT_RE.test(gehen_zeit))  return res.status(400).json({ error: 'Ungültige gehen_zeit' });
+
+      const existing = mitarbeiter_id
+        ? await getAsync(`SELECT id FROM tagesstempel WHERE mitarbeiter_id = ? AND datum = ?`, [mitarbeiter_id, datum])
+        : await getAsync(`SELECT id FROM tagesstempel WHERE lehrling_id = ? AND datum = ?`, [lehrling_id, datum]);
+
+      if (existing) {
+        const sets = [];
+        const params = [];
+        if (kommen_zeit !== undefined) { sets.push('kommen_zeit = ?'); params.push(kommen_zeit); }
+        if (gehen_zeit  !== undefined) { sets.push('gehen_zeit = ?');  params.push(gehen_zeit);  }
+        if (sets.length) {
+          params.push(existing.id);
+          await runAsync(`UPDATE tagesstempel SET ${sets.join(', ')} WHERE id = ?`, params);
+        }
+      } else {
+        const kz = kommen_zeit || null;
+        const gz = gehen_zeit  || null;
+        if (mitarbeiter_id) {
+          await runAsync(
+            `INSERT INTO tagesstempel (mitarbeiter_id, datum, kommen_zeit, gehen_zeit, erstellt_am) VALUES (?, ?, ?, ?, datetime('now'))`,
+            [mitarbeiter_id, datum, kz, gz]
+          );
+        } else {
+          await runAsync(
+            `INSERT INTO tagesstempel (lehrling_id, datum, kommen_zeit, gehen_zeit, erstellt_am) VALUES (?, ?, ?, ?, datetime('now'))`,
+            [lehrling_id, datum, kz, gz]
+          );
+        }
+      }
+
+      broadcastEvent('tagesstempel.updated', { mitarbeiter_id: mitarbeiter_id || null, lehrling_id: lehrling_id || null, datum });
+      res.json({ success: true });
+    } catch (err) {
+      console.error('[Tagesstempel-UpdateZeiten] Fehler:', err);
+      res.status(500).json({ error: err.message });
+    }
+  }
+
+  /**
+   * PATCH /api/tagesstempel/unterbrechung/:id
+   * Body: { start_zeit?, ende_zeit? }
+   * Ändert Start-/Endzeit einer Unterbrechung manuell.
+   */
+  static async updateUnterbrechung(req, res) {
+    try {
+      const { id } = req.params;
+      const { start_zeit, ende_zeit } = req.body;
+      const ZEIT_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
+      if (start_zeit && !ZEIT_RE.test(start_zeit)) return res.status(400).json({ error: 'Ungültige start_zeit' });
+      if (ende_zeit  && !ZEIT_RE.test(ende_zeit))  return res.status(400).json({ error: 'Ungültige ende_zeit' });
+
+      const existing = await getAsync(`SELECT id FROM arbeitsunterbrechungen WHERE id = ?`, [id]);
+      if (!existing) return res.status(404).json({ error: 'Unterbrechung nicht gefunden' });
+
+      const sets = [];
+      const params = [];
+      if (start_zeit !== undefined) { sets.push('start_zeit = ?'); params.push(start_zeit); }
+      if (ende_zeit  !== undefined) { sets.push('ende_zeit = ?');  params.push(ende_zeit === '' ? null : ende_zeit); }
+      if (sets.length) {
+        params.push(id);
+        await runAsync(`UPDATE arbeitsunterbrechungen SET ${sets.join(', ')} WHERE id = ?`, params);
+      }
+
+      broadcastEvent('tagesstempel.unterbrechung.updated', { id: Number(id) });
+      res.json({ success: true });
+    } catch (err) {
+      console.error('[Unterbrechung-Update] Fehler:', err);
+      res.status(500).json({ error: err.message });
+    }
+  }
+
+  /**
+   * POST /api/tagesstempel/pause
+   * Body: { mitarbeiter_id?, lehrling_id?, datum, pause_start_zeit?, pause_ende_zeit? }
+   * Legt einen neuen pause_tracking-Eintrag manuell an (Nachtragen).
+   */
+  static async createPause(req, res) {
+    try {
+      const { mitarbeiter_id, lehrling_id, datum, pause_start_zeit, pause_ende_zeit } = req.body;
+      if (!mitarbeiter_id && !lehrling_id) {
+        return res.status(400).json({ error: 'mitarbeiter_id oder lehrling_id erforderlich' });
+      }
+      if (!datum) return res.status(400).json({ error: 'datum erforderlich' });
+
+      const ZEIT_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
+      if (pause_start_zeit && !ZEIT_RE.test(pause_start_zeit)) return res.status(400).json({ error: 'Ungültige pause_start_zeit' });
+      if (pause_ende_zeit  && !ZEIT_RE.test(pause_ende_zeit))  return res.status(400).json({ error: 'Ungültige pause_ende_zeit' });
+
+      const abgeschlossen = (pause_start_zeit && pause_ende_zeit) ? 1 : 0;
+      const result = await runAsync(
+        `INSERT INTO pause_tracking (mitarbeiter_id, lehrling_id, datum, pause_start_zeit, pause_ende_zeit, abgeschlossen, erstellt_am)
+         VALUES (?, ?, ?, ?, ?, ?, datetime('now'))`,
+        [mitarbeiter_id || null, lehrling_id || null, datum, pause_start_zeit || null, pause_ende_zeit || null, abgeschlossen]
+      );
+
+      broadcastEvent('tagesstempel.pause.created', { id: result.lastID, mitarbeiter_id: mitarbeiter_id || null, lehrling_id: lehrling_id || null, datum });
+      res.json({ success: true, id: result.lastID });
+    } catch (err) {
+      console.error('[Pause-Create] Fehler:', err);
+      res.status(500).json({ error: err.message });
+    }
+  }
+
+  /**
+   * PATCH /api/tagesstempel/pause/:id
+   * Body: { pause_start_zeit?, pause_ende_zeit? }
+   * Aktualisiert einen bestehenden pause_tracking-Eintrag (Nachtragen/Korrigieren).
+   */
+  static async updatePause(req, res) {
+    try {
+      const { id } = req.params;
+      const { pause_start_zeit, pause_ende_zeit } = req.body;
+
+      const ZEIT_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
+      if (pause_start_zeit && !ZEIT_RE.test(pause_start_zeit)) return res.status(400).json({ error: 'Ungültige pause_start_zeit' });
+      if (pause_ende_zeit  && !ZEIT_RE.test(pause_ende_zeit))  return res.status(400).json({ error: 'Ungültige pause_ende_zeit' });
+
+      const existing = await getAsync(`SELECT id, pause_start_zeit, pause_ende_zeit FROM pause_tracking WHERE id = ?`, [id]);
+      if (!existing) return res.status(404).json({ error: 'Pause nicht gefunden' });
+
+      const sets = [];
+      const params = [];
+      if (pause_start_zeit !== undefined) { sets.push('pause_start_zeit = ?'); params.push(pause_start_zeit || null); }
+      if (pause_ende_zeit  !== undefined) { sets.push('pause_ende_zeit = ?');  params.push(pause_ende_zeit  || null); }
+
+      // abgeschlossen aktualisieren
+      const newStart = pause_start_zeit !== undefined ? pause_start_zeit : existing.pause_start_zeit;
+      const newEnde  = pause_ende_zeit  !== undefined ? pause_ende_zeit  : existing.pause_ende_zeit;
+      sets.push('abgeschlossen = ?');
+      params.push((newStart && newEnde) ? 1 : 0);
+
+      if (sets.length) {
+        params.push(id);
+        await runAsync(`UPDATE pause_tracking SET ${sets.join(', ')} WHERE id = ?`, params);
+      }
+
+      broadcastEvent('tagesstempel.pause.updated', { id: Number(id) });
+      res.json({ success: true });
+    } catch (err) {
+      console.error('[Pause-Update] Fehler:', err);
       res.status(500).json({ error: err.message });
     }
   }

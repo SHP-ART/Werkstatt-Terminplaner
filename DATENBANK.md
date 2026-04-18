@@ -30,6 +30,8 @@
 | `automation_log` | Protokoll automatischer Aktionen (Slot-Vorschläge, Duplikat-Erkennung etc.) |
 | `ki_zeitlern_daten` | KI-Trainingsdaten: Vergleich geschätzter vs. tatsächlicher Zeiten für Zeitvorhersage |
 | `arbeitspausen` | Manuelle Arbeitsunterbrechungen (Teil fehlt, Rückfrage, Vorrang) – eingefrierter Fortschritt bis Fortsetzen |
+| `tagesstempel` | Tägliche Arbeitszeitstempel pro Person – Kommen- und Gehen-Zeit je Mitarbeiter/Lehrling pro Tag |
+| `arbeitsunterbrechungen` | Kurzzeitige Arbeitsunterbrechungen (Pausen) innerhalb eines Arbeitstages – mit Start- und Endzeit |
 | `_schema_meta` | Interne Schema-Versionierung – speichert aktuelle Migrations-Version |
 
 **Hinweis:** Die Tabellen `mitarbeiter_abwesenheiten` und `abwesenheiten_legacy` wurden mit Migration 018 entfernt. Alte Daten wurden automatisch migriert.
@@ -831,6 +833,64 @@ Bei jedem Server-Start wird geprüft, ob Migrationen nötig sind. Fehlende Migra
 | 028 | `028_nacharbeit_tracking.js` | nacharbeit_start_zeit in Terminen |
 | 029 | `029_wiederholung.js` | ist_wiederholung in Terminen + partieller Index für Wiederholungstermin-Erkennung |
 | 030 | `030_arbeitspausen.js` | arbeitspausen Tabelle für manuelle Arbeitsunterbrechungen |
+| 031 | `031_add_lehrling_id_to_termine.js` | lehrling_id Spalte in termine-Tabelle |
+| 032 | `032_stempel_felder.js` | stempel_start und stempel_ende in termine_arbeiten |
+| 033 | `033_relax_termine_arbeiten_person_constraint.js` | Constraint-Lockerung in termine_arbeiten |
+| 034 | `034_tagesstempel.js` | tagesstempel + arbeitsunterbrechungen Tabellen für Arbeitszeitverfolgung |
+
+---
+
+### 🕐 `tagesstempel`
+
+Täglich gestempelte Arbeitszeiten pro Mitarbeiter oder Lehrling. Ein Eintrag pro Person und Tag. Wird über die Tablet-App (Kommen/Gehen-Button) oder manuell über das Web-Frontend befüllt.
+
+| Feld | Typ | Beschreibung |
+|------|-----|--------------|
+| `id` | INTEGER | Primärschlüssel (auto) |
+| `mitarbeiter_id` | INTEGER | FK → mitarbeiter.id (NULL wenn Lehrling) |
+| `lehrling_id` | INTEGER | FK → lehrlinge.id (NULL wenn Mitarbeiter) |
+| `datum` | TEXT | Arbeitsdatum im Format YYYY-MM-DD (**Pflicht**) |
+| `kommen_zeit` | TEXT | Arbeitsbeginn-Zeit im Format HH:MM (**Pflicht**) |
+| `gehen_zeit` | TEXT | Arbeitsende-Zeit im Format HH:MM (NULL solange noch nicht gegangen) |
+| `erstellt_am` | TEXT | Erstellungszeitpunkt |
+
+**Constraints:**
+- `mitarbeiter_id IS NOT NULL OR lehrling_id IS NOT NULL` – immer einer von beiden gesetzt
+- Unique Index: `(mitarbeiter_id, datum)` und `(lehrling_id, datum)` – pro Person max. ein Eintrag pro Tag
+
+**Verwendung:**
+- Kommen: `POST /api/tagesstempel/kommen` (Tablet) oder `PATCH /api/tagesstempel/zeiten` (manuell)
+- Gehen: `POST /api/tagesstempel/gehen` (Tablet) oder `PATCH /api/tagesstempel/zeiten` (manuell)
+- Abfrage: `GET /api/tagesstempel?datum=YYYY-MM-DD` → liefert stempel + unterbrechungen + pausen
+
+---
+
+### ⏸ `arbeitsunterbrechungen`
+
+Kurzzeitige Unterbrechungen des Arbeitstags (z.B. Mittagspause, kurze Pause) pro Person und Tag. Mehrere Einträge pro Person und Tag möglich. Wird über die Tablet-App oder das Web-Frontend angelegt und beendet.
+
+| Feld | Typ | Beschreibung |
+|------|-----|--------------|
+| `id` | INTEGER | Primärschlüssel (auto) |
+| `mitarbeiter_id` | INTEGER | FK → mitarbeiter.id (NULL wenn Lehrling) |
+| `lehrling_id` | INTEGER | FK → lehrlinge.id (NULL wenn Mitarbeiter) |
+| `datum` | TEXT | Datum der Unterbrechung im Format YYYY-MM-DD (**Pflicht**) |
+| `start_zeit` | TEXT | Startzeitpunkt der Unterbrechung im Format HH:MM (**Pflicht**) |
+| `ende_zeit` | TEXT | Endzeitpunkt der Unterbrechung im Format HH:MM (NULL solange laufend) |
+| `erstellt_am` | TEXT | Erstellungszeitpunkt |
+
+**Constraints:**
+- `mitarbeiter_id IS NOT NULL OR lehrling_id IS NOT NULL`
+
+**Verwendung:**
+- Unterbrechung starten: `POST /api/tagesstempel/unterbrechung/start`
+- Unterbrechung beenden: `POST /api/tagesstempel/unterbrechung/ende`
+- Manuell bearbeiten: `PATCH /api/tagesstempel/unterbrechung/:id`
+- Dauer wird von der Netto-Arbeitszeit in der Zeitstempelung-Ansicht abgezogen
+
+**Unterschied zu `pause_tracking`:**
+- `pause_tracking` = vollautomatische Mittagspausen-Logik mit Termin-Verschiebung (Tablet-App)
+- `arbeitsunterbrechungen` = manuelle Pausen/Unterbrechungen ohne Termin-Verschiebung
 
 ---
 

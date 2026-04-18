@@ -3821,6 +3821,29 @@
             <div id="zeitstempelungContainer">
                 <p class="loading-text">Lade Stempelzeiten…</p>
             </div>
+
+            <!-- Zeitkonto -->
+            <div style="margin-top:28px;">
+                <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:10px;">
+                    <div style="display:flex;align-items:center;gap:8px;">
+                        <h3 style="margin:0;font-size:16px;font-weight:600;">📊 Zeitkonto</h3>
+                        <div style="display:flex;gap:4px;" id="zeitkontoRangeButtons">
+                            <button class="btn btn-sm btn-outline-primary zeitkonto-range-btn" data-range="woche">Woche</button>
+                            <button class="btn btn-sm btn-primary zeitkonto-range-btn" data-range="monat">Monat</button>
+                            <button class="btn btn-sm btn-outline-primary zeitkonto-range-btn" data-range="quartal">Quartal</button>
+                        </div>
+                    </div>
+                    <div style="display:flex;align-items:center;gap:6px;font-size:13px;color:#666;">
+                        <input type="date" id="zeitkontoVon" class="modern-date-input" style="height:26px;font-size:12px;padding:1px 5px;">
+                        <span>–</span>
+                        <input type="date" id="zeitkontoBis" class="modern-date-input" style="height:26px;font-size:12px;padding:1px 5px;">
+                        <button class="btn btn-sm btn-outline-secondary" onclick="window.app.loadZeitkonto()">↻</button>
+                    </div>
+                </div>
+                <div id="zeitkontoContainer">
+                    <p class="loading-text" style="color:#aaa;font-size:13px;">Zeitraum wählen…</p>
+                </div>
+            </div>
         </template>
 
         <div id="papierkorb" class="tab-content" data-template-id="tab-template-papierkorb"></div>

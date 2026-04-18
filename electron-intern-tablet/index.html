@@ -2312,45 +2312,54 @@
         `;
       }
 
-      // 2. Pause-Button - IMMER ANZEIGEN
+      // 2. Smart-Pause-Button
       const jetztMinuten = jetzt.getHours() * 60 + jetzt.getMinutes();
       const [pauseH, pauseM] = (person.mittagspause_start || '12:00').split(':').map(Number);
       const pausenStartMinuten = pauseH * 60 + pauseM;
       const pausenEndeMinuten = pausenStartMinuten + (person.pausenzeit_minuten || 30);
-      const zeitfensterMin = pausenStartMinuten - 60; // 1h vor Pausenzeit
-      const zeitfensterMax = pausenEndeMinuten + 60; // 1h nach Pausenende
-      const imIdealemZeitfenster = jetztMinuten >= zeitfensterMin && jetztMinuten <= pausenStartMinuten;
+      const zeitfensterMin = pausenStartMinuten - 60;
+      const zeitfensterMax = pausenEndeMinuten + 60;
       const imAnzeigeZeitraum = jetztMinuten >= zeitfensterMin && jetztMinuten <= zeitfensterMax;
-      const heuteDatum = formatDateLocal(new Date()); // Datum vorher berechnen
-      
-      if (person.pause_tracking_aktiv) {
-        // Aktive Pause mit verbleibender Zeit
-        const verbleibendeMin = person.pause_verbleibende_minuten || 0;
-        buttonsHtml += `
-          <button class="tablet-btn tablet-btn-pause aktiv" disabled>
-            <span class="btn-icon">⏸️</span> Pause (${verbleibendeMin} Min)
-          </button>
-        `;
-      } else if (person.pause_bereits_gemacht) {
-        // Pause heute bereits gemacht
+      const heuteDatum = formatDateLocal(new Date());
+      const hatKommenNow = tagesstempel && tagesstempel.kommen_zeit;
+      const hatGehenNow  = tagesstempel && tagesstempel.gehen_zeit;
+      const aktiveUnterbr = (unterbrechungen || []).find(u => !u.ende_zeit);
+
+      if (hatKommenNow && !hatGehenNow && !istAbwesend && !inBerufsschule) {
+        if (aktiveUnterbr) {
+          buttonsHtml += `
+            <button class="tablet-btn" style="background:#ffc107;color:#333;" onclick="unterbrechungEnde(${personId}, '${typ}')">
+              <span class="btn-icon">▶</span> Weiterarbeiten
+            </button>
+          `;
+        } else if (person.pause_tracking_aktiv) {
+          const verblMin = person.pause_verbleibende_minuten || 0;
+          const total = person.pausenzeit_minuten || 30;
+          const pct = Math.round((1 - verblMin / total) * 100);
+          buttonsHtml += `
+            <button class="tablet-btn tablet-btn-pause aktiv" disabled title="Mittagspause läuft noch ${verblMin} Minuten" style="min-width:140px;">
+              <span>🍽️ ${verblMin} Min · läuft</span>
+              <span style="display:block;height:4px;background:rgba(255,255,255,0.35);border-radius:2px;margin-top:3px;"><span style="display:block;height:4px;background:#fff;border-radius:2px;width:${pct}%;"></span></span>
+            </button>
+          `;
+        } else if (imAnzeigeZeitraum && !person.pause_bereits_gemacht) {
+          buttonsHtml += `
+            <button class="tablet-btn tablet-btn-pause" style="background:#fd7e14;color:#fff;"
+                    onclick="handlePauseStarten(${personId}, '${typ}', '${heuteDatum}', true)">
+              <span class="btn-icon">🍽️</span> Mittagspause · ${person.mittagspause_start || '12:00'}
+            </button>
+          `;
+        } else {
+          const btnLabel = person.pause_bereits_gemacht ? '⏸ Kurze Pause' : '⏸ Pause';
+          buttonsHtml += `
+            <button class="tablet-btn" style="background:#6c757d;color:#fff;"
+                    onclick="unterbrechungStart(${personId}, '${typ}')">${btnLabel}</button>
+          `;
+        }
+      } else if (person.pause_bereits_gemacht && (!hatKommenNow || hatGehenNow)) {
         buttonsHtml += `
           <button class="tablet-btn tablet-btn-pause" disabled title="Pause wurde heute bereits gemacht">
             <span class="btn-icon">✅</span> Pause erledigt
-          </button>
-        `;
-      } else if (!inBerufsschule && !istAbwesend) {
-        // Pause-Button immer aktiv (kein Zeitfenster)
-        buttonsHtml += `
-          <button class="tablet-btn tablet-btn-pause"
-                  onclick="handlePauseStarten(${personId}, '${typ}', '${heuteDatum}', true)">
-            <span class="btn-icon">🍽️</span> Pause
-          </button>
-        `;
-      } else {
-        // Deaktivierter Pause-Button
-        buttonsHtml += `
-          <button class="tablet-btn tablet-btn-pause" disabled>
-            <span class="btn-icon">🍽️</span> Pause
           </button>
         `;
       }
@@ -2400,14 +2409,10 @@
       }
       if (!hatGehen) {
         const kommenZeit = tagesstempel.kommen_zeit.substring(0, 5);
-        const unterbrechungBtn = aktiveUnterbrechung
-          ? `<button class="tablet-btn tablet-btn-unterbrechung aktiv" onclick="unterbrechungEnde(${personId}, '${typ}')"><span class="btn-icon">▶️</span> Weiter</button>`
-          : `<button class="tablet-btn tablet-btn-unterbrechung" onclick="unterbrechungStart(${personId}, '${typ}')"><span class="btn-icon">⏸️</span> Unterbrechung</button>`;
         return `
           <div class="tagesstempel-zeile">
             <span class="tagesstempel-info">🕐 Seit ${kommenZeit} Uhr</span>
             <div class="tagesstempel-btn-gruppe">
-              ${unterbrechungBtn}
               <button class="tablet-btn tablet-btn-gehen" onclick="tagesstempelGehen(${personId}, '${typ}')">
                 <span class="btn-icon">🔴</span> Arbeitsende
               </button>

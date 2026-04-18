@@ -948,6 +948,48 @@ class App {
       this.loadZeitstempelung();
     }, 'ZeitstempelungHeute');
 
+    // Zeitkonto: Range-Buttons + Datumsfelder
+    this.bindEventListenerOnce(document.getElementById('zeitkontoRangeButtons'), 'click', (e) => {
+      const btn = e.target.closest('.zeitkonto-range-btn');
+      if (!btn) return;
+      const range = btn.dataset.range;
+      const heute = new Date();
+      let von, bis;
+      if (range === 'woche') {
+        const tag = heute.getDay() || 7;
+        von = new Date(heute); von.setDate(heute.getDate() - tag + 1);
+        bis = new Date(heute); bis.setDate(heute.getDate() - tag + 7);
+      } else if (range === 'monat') {
+        von = new Date(heute.getFullYear(), heute.getMonth(), 1);
+        bis = new Date(heute.getFullYear(), heute.getMonth() + 1, 0);
+      } else {
+        const q = Math.floor(heute.getMonth() / 3);
+        von = new Date(heute.getFullYear(), q * 3, 1);
+        bis = new Date(heute.getFullYear(), q * 3 + 3, 0);
+      }
+      const fmt = d => d.toISOString().substring(0, 10);
+      document.getElementById('zeitkontoVon').value = fmt(von);
+      document.getElementById('zeitkontoBis').value = fmt(bis);
+      document.querySelectorAll('.zeitkonto-range-btn').forEach(b => {
+        b.className = b.dataset.range === range
+          ? 'btn btn-sm btn-primary zeitkonto-range-btn'
+          : 'btn btn-sm btn-outline-primary zeitkonto-range-btn';
+      });
+      this.loadZeitkonto();
+    }, 'ZeitkontoRangeClick');
+
+    // Initiale Monatswerte setzen
+    const heute2 = new Date();
+    const vonEl = document.getElementById('zeitkontoVon');
+    const bisEl = document.getElementById('zeitkontoBis');
+    if (vonEl && bisEl && !vonEl.value) {
+      const ersterTag = new Date(heute2.getFullYear(), heute2.getMonth(), 1);
+      const letzterTag = new Date(heute2.getFullYear(), heute2.getMonth() + 1, 0);
+      vonEl.value = ersterTag.toISOString().substring(0, 10);
+      bisEl.value = letzterTag.toISOString().substring(0, 10);
+      this.loadZeitkonto();
+    }
+
     const planungPrevTag = document.getElementById('planungPrevTag');
     const planungNextTag = document.getElementById('planungNextTag');
     const planungPrevWoche = document.getElementById('planungPrevWoche');
@@ -30668,6 +30710,124 @@ class App {
     }
   }
 
+  async loadZeitkonto() {
+    const von = document.getElementById('zeitkontoVon')?.value;
+    const bis = document.getElementById('zeitkontoBis')?.value;
+    const container = document.getElementById('zeitkontoContainer');
+    if (!container) return;
+    if (!von || !bis) {
+      container.innerHTML = '<p style="color:#aaa;font-size:13px;">Zeitraum wählen…</p>';
+      return;
+    }
+    container.innerHTML = '<p class="loading-text" style="font-size:13px;">Lade Zeitkonto…</p>';
+    try {
+      const daten = await ApiService.get(`/zeitkonto?von=${von}&bis=${bis}`);
+      this.renderZeitkonto(daten, von, bis);
+    } catch (err) {
+      container.innerHTML = `<p style="color:#e55;font-size:13px;">Fehler: ${err.message}</p>`;
+    }
+  }
+
+  renderZeitkonto(daten, von, bis) {
+    const container = document.getElementById('zeitkontoContainer');
+    if (!container) return;
+
+    const minToStr = m => {
+      if (m === 0) return '0:00';
+      const neg = m < 0;
+      const abs = Math.abs(m);
+      return (neg ? '−' : '') + Math.floor(abs / 60) + ':' + String(abs % 60).padStart(2, '0');
+    };
+
+    const saldoStyle = saldo => {
+      if (saldo > 0) return 'color:#1a7f37;font-weight:600;';
+      if (saldo < 0) return 'color:#cf222e;font-weight:600;';
+      return 'color:#666;';
+    };
+
+    const abwLabel = { urlaub: '🏖️ Urlaub', krank: '🤒 Krank', berufsschule: '🏫 Berufsschule', lehrgang: '📚 Lehrgang' };
+
+    if (!daten || daten.length === 0) {
+      container.innerHTML = '<p style="color:#aaa;font-size:13px;">Keine Daten im gewählten Zeitraum.</p>';
+      return;
+    }
+
+    const rows = daten.map((p, idx) => {
+      const g = p.gesamt;
+      const saldo = g.saldo_min;
+      const balkenBreite = g.soll_min > 0 ? Math.min(100, Math.round((g.ist_min / g.soll_min) * 100)) : 0;
+      const balkenFarbe = saldo >= 0 ? '#1a7f37' : '#cf222e';
+
+      const tageHtml = p.tage.map(t => {
+        const d = new Date(t.datum + 'T00:00:00');
+        const wt = ['So', 'Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa'][d.getDay()];
+        const dStr = d.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' });
+        const abwHtml = t.abwesenheit ? `<span style="background:#fff3cd;color:#856404;border-radius:4px;padding:1px 5px;font-size:11px;">${abwLabel[t.abwesenheit] || t.abwesenheit}</span>` : '';
+        const nichtGestempelt = t.soll_min > 0 && t.ist_min === 0 && !t.abwesenheit;
+        const tagSaldo = t.ist_min - t.soll_min;
+        return `<tr style="font-size:12px;${nichtGestempelt ? 'opacity:0.6;' : ''}">
+          <td style="padding:3px 8px;white-space:nowrap;color:#888;">${wt} ${dStr}</td>
+          <td style="padding:3px 8px;text-align:right;">${minToStr(t.soll_min)}</td>
+          <td style="padding:3px 8px;text-align:right;">${t.abwesenheit ? minToStr(t.soll_min) : minToStr(t.ist_min)}</td>
+          <td style="padding:3px 8px;text-align:right;${saldoStyle(tagSaldo)}">${minToStr(tagSaldo)}</td>
+          <td style="padding:3px 8px;">${abwHtml}${nichtGestempelt ? '<span style="color:#aaa;font-size:11px;">nicht gestempelt</span>' : ''}</td>
+        </tr>`;
+      }).join('');
+
+      return `
+        <div style="border:1px solid #e5e7eb;border-radius:8px;margin-bottom:8px;overflow:hidden;">
+          <div class="zeitkonto-row" data-idx="${idx}" style="display:flex;align-items:center;padding:10px 14px;cursor:pointer;background:#fafafa;gap:12px;flex-wrap:wrap;">
+            <div style="flex:1;min-width:120px;">
+              <span style="font-weight:600;font-size:14px;">${p.name}</span>
+              <span style="font-size:11px;color:#888;margin-left:6px;">${p.typ === 'lehrling' ? 'Lehrling' : 'Mitarbeiter'}</span>
+            </div>
+            <div style="display:flex;gap:16px;align-items:center;flex-wrap:wrap;">
+              <span style="font-size:12px;color:#666;">Soll: <b>${minToStr(g.soll_min)}</b></span>
+              <span style="font-size:12px;color:#666;">Ist: <b>${minToStr(g.ist_min)}</b></span>
+              <span style="font-size:13px;${saldoStyle(saldo)}">Saldo: ${saldo >= 0 ? '+' : ''}${minToStr(saldo)}</span>
+            </div>
+            <div style="width:80px;">
+              <div style="height:6px;background:#e5e7eb;border-radius:3px;overflow:hidden;">
+                <div style="height:100%;width:${balkenBreite}%;background:${balkenFarbe};border-radius:3px;transition:width 0.3s;"></div>
+              </div>
+            </div>
+            <span style="color:#aaa;font-size:12px;">▼</span>
+          </div>
+          <div id="zeitkonto-detail-${idx}" style="display:none;border-top:1px solid #f3f4f6;">
+            <table style="width:100%;border-collapse:collapse;">
+              <thead>
+                <tr style="font-size:11px;color:#888;background:#f9fafb;">
+                  <th style="padding:4px 8px;text-align:left;">Tag</th>
+                  <th style="padding:4px 8px;text-align:right;">Soll</th>
+                  <th style="padding:4px 8px;text-align:right;">Ist</th>
+                  <th style="padding:4px 8px;text-align:right;">Saldo</th>
+                  <th style="padding:4px 8px;"></th>
+                </tr>
+              </thead>
+              <tbody>${tageHtml}</tbody>
+            </table>
+          </div>
+        </div>`;
+    }).join('');
+
+    container.innerHTML = rows;
+
+    container.querySelectorAll('.zeitkonto-row').forEach(el => {
+      el.addEventListener('click', () => {
+        const detail = document.getElementById(`zeitkonto-detail-${el.dataset.idx}`);
+        if (!detail) return;
+        const arrow = el.querySelector('span:last-child');
+        if (detail.style.display === 'none') {
+          detail.style.display = 'block';
+          if (arrow) arrow.textContent = '▲';
+        } else {
+          detail.style.display = 'none';
+          if (arrow) arrow.textContent = '▼';
+        }
+      });
+    });
+  }
+
   async loadZeitstempelung() {
     const container = document.getElementById('zeitstempelungContainer');
     const datumInput = document.getElementById('zeitstempelungDatum');
@@ -30688,7 +30848,9 @@ class App {
       // Maps aufbauen: key = "m_<id>" oder "l_<id>"
       const tagesstempelMap = {};
       const unterbrechungenMap = {};
-      const { stempel: tsStempel = [], unterbrechungen: tsUnterbrechungen = [] } = tagesstempelRaw || {};
+      const pausenMap = {};
+      const mittagspauseMap = {};  // geplante Mittagspause je Person
+      const { stempel: tsStempel = [], unterbrechungen: tsUnterbrechungen = [], pausen: tsPausen = [] } = tagesstempelRaw || {};
       tsStempel.forEach(s => {
         const key = s.mitarbeiter_id ? `m_${s.mitarbeiter_id}` : `l_${s.lehrling_id}`;
         tagesstempelMap[key] = s;
@@ -30697,6 +30859,11 @@ class App {
         const key = u.mitarbeiter_id ? `m_${u.mitarbeiter_id}` : `l_${u.lehrling_id}`;
         if (!unterbrechungenMap[key]) unterbrechungenMap[key] = [];
         unterbrechungenMap[key].push(u);
+      });
+      tsPausen.forEach(p => {
+        const key = p.mitarbeiter_id ? `m_${p.mitarbeiter_id}` : `l_${p.lehrling_id}`;
+        if (!pausenMap[key]) pausenMap[key] = [];
+        pausenMap[key].push(p);
       });
 
       // Alle bekannten Keys aus Terminen + Tagesstempeln
@@ -30707,16 +30874,17 @@ class App {
       });
 
       // Aktive Mitarbeiter und Lehrlinge die noch nicht in der Liste sind → leere Gruppe
-      const aktive = [
-        ...(Array.isArray(mitarbeiterListe) ? mitarbeiterListe : (mitarbeiterListe?.mitarbeiter || []))
-          .filter(m => m.aktiv !== 0 && m.aktiv !== false)
-          .map(m => ({ key: `m_${m.id}`, person_typ: 'mitarbeiter', person_id: m.id, person_name: m.name, arbeiten: [] })),
-        ...(Array.isArray(lehrlingsListe) ? lehrlingsListe : (lehrlingsListe?.lehrlinge || []))
-          .filter(l => l.aktiv !== 0 && l.aktiv !== false)
-          .map(l => ({ key: `l_${l.id}`, person_typ: 'lehrling', person_id: l.id, person_name: l.name, arbeiten: [] }))
-      ];
-      aktive.forEach(p => {
-        if (!gruppenMap.has(p.key)) gruppenMap.set(p.key, p);
+      const mListe = Array.isArray(mitarbeiterListe) ? mitarbeiterListe : (mitarbeiterListe?.mitarbeiter || []);
+      const lListe = Array.isArray(lehrlingsListe) ? lehrlingsListe : (lehrlingsListe?.lehrlinge || []);
+      mListe.filter(m => m.aktiv !== 0 && m.aktiv !== false).forEach(m => {
+        const key = `m_${m.id}`;
+        mittagspauseMap[key] = m.mittagspause_start || null;
+        if (!gruppenMap.has(key)) gruppenMap.set(key, { key, person_typ: 'mitarbeiter', person_id: m.id, person_name: m.name, arbeiten: [] });
+      });
+      lListe.filter(l => l.aktiv !== 0 && l.aktiv !== false).forEach(l => {
+        const key = `l_${l.id}`;
+        mittagspauseMap[key] = l.mittagspause_start || null;
+        if (!gruppenMap.has(key)) gruppenMap.set(key, { key, person_typ: 'lehrling', person_id: l.id, person_name: l.name, arbeiten: [] });
       });
 
       const alleGruppen = [...gruppenMap.values()];
@@ -30728,7 +30896,14 @@ class App {
 
       container.innerHTML = alleGruppen.map(g => {
         const key = g.person_typ === 'lehrling' ? `l_${g.person_id}` : `m_${g.person_id}`;
-        return this.renderZeitstempelungGruppe(g, tagesstempelMap[key] || null, unterbrechungenMap[key] || [], istHeute);
+        return this.renderZeitstempelungGruppe(
+          g,
+          tagesstempelMap[key] || null,
+          unterbrechungenMap[key] || [],
+          istHeute,
+          pausenMap[key] || [],
+          mittagspauseMap[key] || null
+        );
       }).join('');
     } catch (err) {
       console.error('[Zeitstempelung] Ladefehler:', err);
@@ -30736,7 +30911,7 @@ class App {
     }
   }
 
-  renderZeitstempelungGruppe(gruppe, tagesstempel = null, unterbrechungen = [], istHeute = false) {
+  renderZeitstempelungGruppe(gruppe, tagesstempel = null, unterbrechungen = [], istHeute = false, pausen = [], mittagspauseGeplant = null) {
     const gesamtRichtzeit = gruppe.arbeiten.reduce((s, a) => s + (a.richtwert_min || a.geschaetzte_min || 0), 0);
     const gesamtIst = gruppe.arbeiten.reduce((s, a) => s + (a.ist_min || 0), 0);
     const icon = gruppe.person_typ === 'lehrling' ? '🎓' : '👷';
@@ -30782,35 +30957,126 @@ class App {
       `;
     }).join('');
 
-    // Tagesstempel-Info: Zeiten inline hinter dem Namen
-    const _z2m = z => { const [h, m] = z.substring(0, 5).split(':').map(Number); return h * 60 + m; };
-    const hatKommen = tagesstempel && tagesstempel.kommen_zeit;
-    const hatGehen  = tagesstempel && tagesstempel.gehen_zeit;
-    const aktiveUnterbrechung = (unterbrechungen || []).find(u => !u.ende_zeit);
+    // Tagesstempel-Info: editierbare Zeitfelder (24h), immer sichtbar
+    const _z2m = z => { if (!z) return 0; const [h, m] = z.substring(0, 5).split(':').map(Number); return h * 60 + m; };
+    const _m2s = m => (m < 0 ? 0 : m) + 'min';
+    // ISO-Timestamp → lokale HH:MM (Zeitzone korrekt berücksichtigt)
+    const isoToLocal = s => {
+      if (!s) return '';
+      if (s.length <= 5) return s.substring(0, 5);
+      const d = new Date(s);
+      return d.getHours().toString().padStart(2, '0') + ':' + d.getMinutes().toString().padStart(2, '0');
+    };
+    const kommenVal = tagesstempel && tagesstempel.kommen_zeit ? tagesstempel.kommen_zeit.substring(0,5) : '';
+    const gehenVal  = tagesstempel && tagesstempel.gehen_zeit  ? tagesstempel.gehen_zeit.substring(0,5)  : '';
 
-    // Inline-Stempelzeiten (hinter dem Namen, auf derselben Zeile)
-    let stempelInlineHtml = '';
-    if (hatKommen) {
-      const kommenZeit = tagesstempel.kommen_zeit.substring(0, 5);
-      let gehenPart = '';
-      let nettoPart = '';
-      let ubPart = '';
-      if (hatGehen) {
-        const gehenZeit = tagesstempel.gehen_zeit.substring(0, 5);
-        const ubMin = (unterbrechungen || []).filter(u => u.ende_zeit)
-          .reduce((sum, u) => sum + (_z2m(u.ende_zeit) - _z2m(u.start_zeit)), 0);
-        const nettoMin = _z2m(gehenZeit) - _z2m(kommenZeit) - ubMin;
-        const nettoH = Math.floor(nettoMin / 60);
-        const nettoM = nettoMin % 60;
-        gehenPart = `<span style="color:#dc3545;font-weight:600;margin-left:8px;">■ ${gehenZeit}</span>`;
-        nettoPart = `<span style="color:#555;margin-left:8px;">⏱ ${nettoH > 0 ? nettoH + 'h ' : ''}${nettoM}min</span>`;
+    // Abgeschlossene Unterbrechungen (mit Start + Ende) → werden abgezogen
+    const abgeschlosseneUb = (unterbrechungen || []).filter(u => u.start_zeit && u.ende_zeit);
+    const ubMinGesamt = abgeschlosseneUb.reduce((sum, u) => sum + (_z2m(u.ende_zeit) - _z2m(u.start_zeit)), 0);
+
+    // Abgeschlossene Mittagspausen aus pause_tracking → werden ebenfalls abgezogen
+    const abgeschlossenePausen = (pausen || []).filter(p => p.pause_start_zeit && p.pause_ende_zeit);
+    const pauseMinGesamt = abgeschlossenePausen.reduce((sum, p) => {
+      const start = isoToLocal(p.pause_start_zeit);
+      const ende  = isoToLocal(p.pause_ende_zeit);
+      return sum + (_z2m(ende) - _z2m(start));
+    }, 0);
+
+    // Netto berechnen (Arbeitsunterbrechungen + Mittagspausen abgezogen)
+    let nettoHtml = '<span style="color:#aaa;font-size:13px;">⏱ —</span>';
+    if (kommenVal && gehenVal) {
+      const nettoMin = _z2m(gehenVal) - _z2m(kommenVal) - ubMinGesamt - pauseMinGesamt;
+      if (nettoMin > 0) {
+        const h = Math.floor(nettoMin / 60), m = nettoMin % 60;
+        nettoHtml = `<span style="color:#555;font-size:13px;">⏱ ${h > 0 ? h + 'h ' : ''}${m}min</span>`;
       }
-      const abgeschlosseneUb = (unterbrechungen || []).filter(u => u.ende_zeit);
-      if (abgeschlosseneUb.length) {
-        ubPart = `<span style="color:#888;margin-left:8px;">🚬 ${abgeschlosseneUb.map(u => u.start_zeit.substring(0,5) + '–' + u.ende_zeit.substring(0,5)).join(', ')}</span>`;
-      }
-      stempelInlineHtml = `<span style="font-size:13px;font-weight:normal;margin-left:12px;"><span style="color:#198754;font-weight:600;">▶ ${kommenZeit}</span>${gehenPart}${nettoPart}${ubPart}</span>`;
     }
+
+    // Mittagspausen aus pause_tracking – gestempelte als Text, fehlende als Eingabe zum Nachtragen
+    const raw = s => isoToLocal(s);
+    const inputStylePause = 'width:44px;font-size:12px;border:none;background:transparent;outline:none;font-family:monospace;text-align:center;';
+    const pausenZeilen = (() => {
+      const liste = pausen && pausen.length > 0 ? pausen : [];
+      const gestempeltePillen = liste.map((p, pi) => {
+        const startVal = raw(p.pause_start_zeit);
+        const endeVal  = raw(p.pause_ende_zeit);
+        const dauer    = (startVal && endeVal) ? ` (${_m2s(_z2m(endeVal) - _z2m(startVal))})` : '';
+        const laeuft   = p.id && !p.abgeschlossen;
+        const pilleId  = `pause-pill-${p.id || ('new-' + pi)}`;
+        const saveArgs = p.id
+          ? `'${pilleId}', ${p.id}, null, null, null`
+          : `'${pilleId}', null, ${midArg}, ${lidArg}, '${tagesstempel ? tagesstempel.datum : ''}'`;
+        // Anzeigemodus: gestempelte Werte als lesbarer Text + Stift-Button zum Bearbeiten
+        const anzeigeHtml = `
+          <span data-view="1" style="font-family:monospace;font-size:12px;color:#555;">${startVal || '—'}</span>
+          <span data-view="1" style="color:#856404;">–</span>
+          <span data-view="1" style="font-family:monospace;font-size:12px;color:#555;">${endeVal || (laeuft ? '<span style="color:#ffc107">läuft…</span>' : '—')}</span>
+          ${dauer ? `<span data-view="1" style="color:#997404;">${dauer}</span>` : ''}
+          <button data-view="1" onclick="window.app.tagesstempelPauseBearbeiten('${pilleId}')" title="Bearbeiten" style="border:none;background:none;cursor:pointer;color:#aaa;font-size:11px;padding:0 1px;line-height:1;">✏️</button>`;
+        // Bearbeitungsmodus (hidden, wird per JS eingeblendet)
+        const editHtml = `
+          <input data-edit="1" type="text" value="${startVal}" placeholder="HH:MM" maxlength="5" style="${inputStylePause}color:#555;display:none;">
+          <span data-edit="1" style="color:#856404;display:none;">–</span>
+          <input data-edit="1" type="text" value="${endeVal}" placeholder="HH:MM" maxlength="5" style="${inputStylePause}color:#555;display:none;">
+          <button data-edit="1" onclick="window.app.tagesstempelPauseSave(${saveArgs})" title="Speichern" style="border:none;background:none;cursor:pointer;color:#198754;font-size:13px;padding:0 2px;line-height:1;display:none;">✓</button>`;
+        return `<span id="${pilleId}" style="display:inline-flex;align-items:center;gap:2px;margin-left:8px;color:#856404;font-size:12px;background:#fff3cd;border:1px solid #ffc107;border-radius:4px;padding:1px 6px;" title="Mittagspause (gestempelt)">
+          🍽️${anzeigeHtml}${editHtml}
+        </span>`;
+      });
+      // Pille zum Nachtragen (wenn noch keine Pause vorhanden)
+      const pilleIdNeu = `pause-pill-new-${midArg}-${lidArg}`;
+      const saveArgsNeu = `'${pilleIdNeu}', null, ${midArg}, ${lidArg}, '${tagesstempel ? tagesstempel.datum : ''}'`;
+      const nachtragenPille = `<span id="${pilleIdNeu}" style="display:inline-flex;align-items:center;gap:2px;margin-left:8px;color:#aaa;font-size:12px;background:#fffdf0;border:1px dashed #ffc107;border-radius:4px;padding:1px 6px;" title="Mittagspause nachtragen">
+        🍽️
+        <input type="text" placeholder="HH:MM" maxlength="5" style="${inputStylePause}color:#555;">
+        <span style="color:#ccc;">–</span>
+        <input type="text" placeholder="HH:MM" maxlength="5" style="${inputStylePause}color:#555;">
+        <button onclick="window.app.tagesstempelPauseSave(${saveArgsNeu})" title="Speichern" style="border:none;background:none;cursor:pointer;color:#198754;font-size:13px;padding:0 2px;line-height:1;">✓</button>
+      </span>`;
+      return gestempeltePillen.join('') + nachtragenPille;
+    })();
+
+    // Geplante Mittagspause – immer anzeigen (auch ohne Eintrag)
+    const geplantHtml = `<span style="display:inline-flex;align-items:center;gap:3px;margin-left:8px;color:#6c757d;font-size:12px;background:#f8f9fa;border:1px solid #dee2e6;border-radius:4px;padding:1px 6px;" title="Geplante Mittagspause (aus Stammdaten)">
+      📅 ${mittagspauseGeplant || '<span style=\'color:#bbb\'>—</span>'}
+    </span>`;
+
+    // Unterbrechungen: Anzeige der Zeiten + editierbare Inputs
+    const ubZeilen = (unterbrechungen || []).map((u, i) => {
+      const startVal = u.start_zeit ? u.start_zeit.substring(0,5) : '';
+      const endeVal  = u.ende_zeit  ? u.ende_zeit.substring(0,5)  : '';
+      const dauer    = (startVal && endeVal) ? ` (${_m2s(_z2m(endeVal) - _z2m(startVal))})` : '';
+      return `<span style="display:inline-flex;align-items:center;gap:3px;margin-left:8px;color:#777;font-size:12px;background:#f8f8f8;border:1px solid #ddd;border-radius:4px;padding:1px 6px;">
+        <span title="Arbeitsunterbrechung ${i+1}">⏸</span>
+        <input type="text" value="${startVal}" placeholder="HH:MM" maxlength="5" pattern="([01][0-9]|2[0-3]):[0-5][0-9]" style="width:44px;font-size:12px;border:none;background:transparent;outline:none;color:#555;font-family:monospace;text-align:center;"
+          onchange="window.app.tagesstempelUnterbrechungUpdate(${u.id}, 'start_zeit', this.value)">
+        <span>–</span>
+        <input type="text" value="${endeVal}" placeholder="HH:MM" maxlength="5" pattern="([01][0-9]|2[0-3]):[0-5][0-9]" style="width:44px;font-size:12px;border:none;background:transparent;outline:none;color:#555;font-family:monospace;text-align:center;"
+          onchange="window.app.tagesstempelUnterbrechungUpdate(${u.id}, 'ende_zeit', this.value)">
+        ${dauer ? `<span style="color:#999;">${dauer}</span>` : ''}
+      </span>`;
+    }).join('');
+
+    const datumArg = `'${tagesstempel ? tagesstempel.datum : ''}'`;
+    const timeInputStyle = 'width:52px;font-size:13px;border:1px solid #ccc;border-radius:3px;padding:1px 4px;text-align:center;font-family:monospace;';
+    // Reset-Button: nur wenn Stempel existiert und noch kein Gehen gesetzt
+    const resetBtn = (tagesstempel && tagesstempel.id && !tagesstempel.gehen_zeit)
+      ? `<button onclick="window.app.tagesstempelReset(${tagesstempel.id})" title="Versehentlich gestarteten Stempel löschen" style="border:none;background:none;cursor:pointer;color:#dc3545;font-size:13px;padding:0 2px;margin-left:4px;" >🗑️</button>`
+      : '';
+    const stempelZeilenHtml = `
+      <div style="display:flex;align-items:center;flex-wrap:wrap;gap:6px;font-size:13px;margin-top:4px;">
+        <span style="color:#198754;font-weight:600;">▶</span>
+        <input type="text" value="${kommenVal}" placeholder="HH:MM" maxlength="5" pattern="([01][0-9]|2[0-3]):[0-5][0-9]" style="${timeInputStyle}"
+          onchange="window.app.tagesstempelZeitUpdate(${midArg}, ${lidArg}, ${datumArg}, 'kommen_zeit', this.value)">
+        <span style="color:#dc3545;font-weight:600;">■</span>
+        <input type="text" value="${gehenVal}" placeholder="HH:MM" maxlength="5" pattern="([01][0-9]|2[0-3]):[0-5][0-9]" style="${timeInputStyle}"
+          onchange="window.app.tagesstempelZeitUpdate(${midArg}, ${lidArg}, ${datumArg}, 'gehen_zeit', this.value)">
+        ${resetBtn}
+        ${nettoHtml}
+        ${ubZeilen}
+        ${pausenZeilen}
+        ${geplantHtml}
+      </div>`;
 
     // Richtwert-Zeile (zweite Zeile)
     const richtwertZeile = `<div style="font-size:12px;color:#6c757d;margin-top:2px;">Richtzeit: ${gesamtRichtzeit} Min${gesamtIst ? ' · Gestempelt: ' + gesamtIst + ' Min' : ''}</div>`;
@@ -30839,7 +31105,8 @@ class App {
     return `
       <div class="card" style="margin-bottom: 16px;">
         <div class="card-header">
-          <div><strong style="font-size:15px;">${icon} ${this.escapeHtml(gruppe.person_name)}</strong>${stempelInlineHtml}</div>
+          <div><strong style="font-size:15px;">${icon} ${this.escapeHtml(gruppe.person_name)}</strong></div>
+          ${stempelZeilenHtml}
           ${richtwertZeile}
         </div>
         ${leereTabelle}
@@ -31218,7 +31485,7 @@ class App {
       toggleButtonHtml = `<button class="intern-tab-btn intern-tab-btn-confirm" disabled><span class="intern-tab-btn-icon">▶️</span> Starten</button>`;
     }
 
-    // Mittagspause-Button (immer sichtbar, disabled wenn nicht im Zeitfenster)
+    // Zeitfenster-Berechnung für Smart-Pause-Button (HTML wird nach aktiveUnterbrechung gebaut)
     const jetztNow = new Date();
     const jetztMinNow = jetztNow.getHours() * 60 + jetztNow.getMinutes();
     const [pHNow, pMNow] = (person.mittagspause_start || '12:00').split(':').map(Number);
@@ -31226,19 +31493,7 @@ class App {
     const pausenEndeMinNow = pausenStartMinNow + (person.pausenzeit_minuten || 30);
     const pauseFensterMin = pausenStartMinNow - 60;
     const pauseFensterMax = pausenEndeMinNow + 60;
-    const imIdealPauseFenster = jetztMinNow >= pauseFensterMin && jetztMinNow <= pausenStartMinNow;
     const imAnzeigePauseFenster = jetztMinNow >= pauseFensterMin && jetztMinNow <= pauseFensterMax;
-    let pauseMahlzeitButtonHtml = '';
-    if (person.pause_tracking_aktiv) {
-      const verblMin = person.pause_verbleibende_minuten || 0;
-      pauseMahlzeitButtonHtml = `<button class="intern-tab-btn intern-tab-btn-pause aktiv" disabled><span class="intern-tab-btn-icon">⏸️</span> Pause (${verblMin} Min)</button>`;
-    } else if (person.pause_bereits_gemacht) {
-      pauseMahlzeitButtonHtml = `<button class="intern-tab-btn intern-tab-btn-pause" disabled title="Pause wurde heute bereits gemacht"><span class="intern-tab-btn-icon">✅</span> Pause erledigt</button>`;
-    } else if (!inBerufsschule && !istAbwesend) {
-      pauseMahlzeitButtonHtml = `<button class="intern-tab-btn intern-tab-btn-pause" onclick="app.internPauseStarten(${personId}, '${typ}', '${today}', true)"><span class="intern-tab-btn-icon">🍽️</span> Pause</button>`;
-    } else {
-      pauseMahlzeitButtonHtml = `<button class="intern-tab-btn intern-tab-btn-pause" disabled><span class="intern-tab-btn-icon">🍽️</span> Pause</button>`;
-    }
 
     // Tagesstempel-Strip + Buttons
     const mid = isLehrling ? null : personId;
@@ -31249,6 +31504,31 @@ class App {
     const hatKommen = tagesstempel && tagesstempel.kommen_zeit;
     const hatGehen  = tagesstempel && tagesstempel.gehen_zeit;
     const aktiveUnterbrechung = (unterbrechungen || []).find(u => !u.ende_zeit);
+
+    // Smart-Pause-Button: ein Button der sich je nach Kontext automatisch anpasst
+    let smartPauseBtn = '';
+    if (hatKommen && !hatGehen && !istAbwesend && !inBerufsschule) {
+      if (aktiveUnterbrechung) {
+        // Unterbrechung aktiv → Weiterarbeiten
+        smartPauseBtn = `<button class="intern-tab-btn" style="background:#ffc107;color:#333;border:none;border-radius:6px;padding:5px 12px;font-size:13px;font-weight:600;cursor:pointer;" onclick="app.webUnterbrechungEnde(${midArg}, ${lidArg})">▶ Weiterarbeiten</button>`;
+      } else if (person.pause_tracking_aktiv) {
+        // Mittagspause läuft → Countdown mit Fortschrittsbalken
+        const verblMin = person.pause_verbleibende_minuten || 0;
+        const total = person.pausenzeit_minuten || 30;
+        const pct = Math.round((1 - verblMin / total) * 100);
+        smartPauseBtn = `<button class="intern-tab-btn" style="background:#fd7e14;color:#fff;border:none;border-radius:6px;padding:5px 12px;font-size:13px;cursor:default;min-width:130px;" disabled title="Mittagspause läuft noch ${verblMin} Minuten">
+          <span>🍽️ ${verblMin} Min · läuft</span>
+          <span style="display:block;height:4px;background:rgba(255,255,255,0.35);border-radius:2px;margin-top:3px;"><span style="display:block;height:4px;background:#fff;border-radius:2px;width:${pct}%;"></span></span>
+        </button>`;
+      } else if (imAnzeigePauseFenster && !person.pause_bereits_gemacht) {
+        // Im Zeitfenster, Mittagspause noch nicht gemacht → Mittagspause anbieten
+        smartPauseBtn = `<button class="intern-tab-btn intern-tab-btn-pause" style="background:#fd7e14;color:#fff;border:none;border-radius:6px;padding:5px 12px;font-size:13px;cursor:pointer;" onclick="app.internPauseStarten(${personId}, '${typ}', '${today}', true)">🍽️ Mittagspause · ${person.mittagspause_start || '12:00'}</button>`;
+      } else {
+        // Außerhalb Zeitfenster oder Mittagspause bereits gemacht → kurze Pause
+        const btnLabel = person.pause_bereits_gemacht ? '⏸ Kurze Pause' : '⏸ Pause';
+        smartPauseBtn = `<button class="intern-tab-btn" style="background:#6c757d;color:#fff;border:none;border-radius:6px;padding:5px 12px;font-size:13px;cursor:pointer;" onclick="app.webUnterbrechungStart(${midArg}, ${lidArg})">${btnLabel}</button>`;
+      }
+    }
 
     let tagesstempelStripHtml = '';
     if (hatKommen) {
@@ -31275,11 +31555,8 @@ class App {
           <button class="intern-tab-btn" style="background:#28a745;color:#fff;border:none;border-radius:6px;padding:5px 12px;font-size:13px;cursor:pointer;" onclick="app.webTagesstempelKommen(${midArg}, ${lidArg})">▶ Arbeitsbeginn</button>
         </div>`;
       } else if (!hatGehen) {
-        const ubBtn = aktiveUnterbrechung
-          ? `<button class="intern-tab-btn" style="background:#ffc107;color:#333;border:none;border-radius:6px;padding:5px 12px;font-size:13px;cursor:pointer;" onclick="app.webUnterbrechungEnde(${midArg}, ${lidArg})">▶ Weiterarbeiten</button>`
-          : `<button class="intern-tab-btn" style="background:#6c757d;color:#fff;border:none;border-radius:6px;padding:5px 12px;font-size:13px;cursor:pointer;" onclick="app.webUnterbrechungStart(${midArg}, ${lidArg})">⏸ Unterbrechung</button>`;
-        tagesstempelBtnHtml = `<div style="padding:6px 12px;background:#fff8f8;border-top:1px solid #dee2e6;display:flex;gap:8px;">
-          <button class="intern-tab-btn" style="background:#dc3545;color:#fff;border:none;border-radius:6px;padding:5px 12px;font-size:13px;cursor:pointer;" onclick="app.webTagesstempelGehen(${midArg}, ${lidArg})">■ Arbeitsende</button>${ubBtn}
+        tagesstempelBtnHtml = `<div style="padding:6px 12px;background:#fff8f8;border-top:1px solid #dee2e6;">
+          <button class="intern-tab-btn" style="background:#dc3545;color:#fff;border:none;border-radius:6px;padding:5px 12px;font-size:13px;cursor:pointer;" onclick="app.webTagesstempelGehen(${midArg}, ${lidArg})">■ Arbeitsende</button>
         </div>`;
       }
     }
@@ -31294,7 +31571,7 @@ class App {
             </div>
             <div class="intern-person-badge ${badgeClass}">${badgeText}</div>
           </div>
-          <div class="intern-kachel-tab-buttons">${toggleButtonHtml}${pauseMahlzeitButtonHtml}</div>
+          <div class="intern-kachel-tab-buttons">${toggleButtonHtml}${smartPauseBtn}</div>
         </div>
         ${tagesstempelStripHtml}
         ${tagesstempelBtnHtml}
@@ -36522,6 +36799,79 @@ class App {
       this.loadWiederkehrendeTermine();
     } catch (e) {
       this.showToast('Fehler beim Löschen', 'error');
+    }
+  }
+
+  async tagesstempelZeitUpdate(mitarbeiter_id, lehrling_id, datum, feld, wert) {
+    if (wert && !/^([01]\d|2[0-3]):[0-5]\d$/.test(wert)) {
+      this.showToast('Bitte Zeit im Format HH:MM eingeben (z.B. 07:30)', 'warning');
+      return;
+    }
+    if (!datum) {
+      // kein Tagesstempel-Eintrag vorhanden → Datum aus aktuellem Input lesen
+      const datumInput = document.getElementById('zeitstempelungDatum');
+      datum = datumInput ? datumInput.value : this.formatDateLocal(this.getToday());
+    }
+    try {
+      await ApiService.patch('/tagesstempel/zeiten', { mitarbeiter_id, lehrling_id, datum, [feld]: wert });
+      this.loadZeitstempelung();
+    } catch (err) {
+      this.showToast('Fehler beim Speichern: ' + (err.message || 'Unbekannt'), 'error');
+    }
+  }
+
+  async tagesstempelUnterbrechungUpdate(id, feld, wert) {
+    try {
+      await ApiService.patch(`/tagesstempel/unterbrechung/${id}`, { [feld]: wert });
+      this.loadZeitstempelung();
+    } catch (err) {
+      this.showToast('Fehler beim Speichern: ' + (err.message || 'Unbekannt'), 'error');
+    }
+  }
+
+  async tagesstempelReset(id) {
+    if (!confirm('Stempel wirklich löschen? Dies entfernt den versehentlich gestarteten Arbeitsbeginn.')) return;
+    try {
+      await ApiService.delete(`/tagesstempel/${id}`);
+      this.loadZeitstempelung();
+    } catch (err) {
+      this.showToast('Fehler: ' + (err.message || 'Unbekannt'), 'error');
+    }
+  }
+
+  tagesstempelPauseBearbeiten(pilleId) {
+    const pille = document.getElementById(pilleId);
+    if (!pille) return;
+    pille.querySelectorAll('[data-view]').forEach(el => el.style.display = 'none');
+    pille.querySelectorAll('[data-edit]').forEach(el => el.style.display = '');
+    pille.querySelector('[data-edit] input, input[data-edit]')?.focus();
+    const inputs = pille.querySelectorAll('input[data-edit]');
+    if (inputs[0]) inputs[0].focus();
+  }
+
+  async tagesstempelPauseSave(pilleId, id, mitarbeiter_id, lehrling_id, datum) {
+    const pille = document.getElementById(pilleId);
+    if (!pille) return;
+    const inputs = pille.querySelectorAll('input[type="text"]');
+    const start = inputs[0]?.value?.trim() || null;
+    const ende  = inputs[1]?.value?.trim() || null;
+    const re = /^([01]\d|2[0-3]):[0-5]\d$/;
+    if (start && !re.test(start)) { this.showToast('Startzeit: Bitte HH:MM eingeben', 'warning'); return; }
+    if (ende  && !re.test(ende))  { this.showToast('Endzeit: Bitte HH:MM eingeben', 'warning'); return; }
+    try {
+      if (id) {
+        await ApiService.patch(`/tagesstempel/pause/${id}`, { pause_start_zeit: start, pause_ende_zeit: ende });
+      } else {
+        if (!start && !ende) return;
+        if (!datum) {
+          const inp = document.getElementById('zeitstempelungDatum');
+          datum = inp ? inp.value : this.formatDateLocal(this.getToday());
+        }
+        await ApiService.post('/tagesstempel/pause', { mitarbeiter_id, lehrling_id, datum, pause_start_zeit: start, pause_ende_zeit: ende });
+      }
+      this.loadZeitstempelung();
+    } catch (err) {
+      this.showToast('Fehler beim Speichern: ' + (err.message || 'Unbekannt'), 'error');
     }
   }
 

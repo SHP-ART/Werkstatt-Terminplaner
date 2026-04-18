@@ -344,6 +344,7 @@ Vollständige Beschreibungen in [.claude/PROJEKT.md](.claude/PROJEKT.md) Abschni
 | `tabletRoutes.js` | Tablet-spezifische Endpunkte |
 | `tabletUpdateRoutes.js` | Auto-Update-System für Tablet-App |
 | `tagesstempelRoutes.js` | Arbeitsbeginn/Arbeitsende/Unterbrechungen je Person (→ tagesstempelController) |
+| `GET /api/zeitkonto` | Zeitkonto pro Person (kein eigenes Route-File, direkt in index.js → zeitkontoController) |
 | `sucheRoutes.js` | Globale Suche |
 | `systemRoutes.js` | Systeminfos, Health-Check |
 | `aiRoutes.js` / `kiPlanungRoutes.js` | KI-gestützte Terminoptimierung |
