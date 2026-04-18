@@ -30678,9 +30678,11 @@ class App {
     container.innerHTML = '<p class="loading-text">Lade Stempelzeiten…</p>';
 
     try {
-      const [gruppen, tagesstempelRaw] = await Promise.all([
+      const [gruppen, tagesstempelRaw, mitarbeiterListe, lehrlingsListe] = await Promise.all([
         ApiService.get(`/stempelzeiten?datum=${datum}`).catch(() => []),
-        ApiService.get(`/tagesstempel?datum=${datum}`).catch(() => null)
+        ApiService.get(`/tagesstempel?datum=${datum}`).catch(() => null),
+        ApiService.get('/mitarbeiter').catch(() => []),
+        ApiService.get('/lehrlinge').catch(() => [])
       ]);
 
       // Maps aufbauen: key = "m_<id>" oder "l_<id>"
@@ -30697,26 +30699,30 @@ class App {
         unterbrechungenMap[key].push(u);
       });
 
-      // Mitarbeiter/Lehrlinge die gestempelt haben aber keine Termine haben → als leere Gruppe hinzufügen
-      const gruppenKeys = new Set((gruppen || []).map(g =>
-        g.person_typ === 'lehrling' ? `l_${g.person_id}` : `m_${g.person_id}`
-      ));
-      const extraGruppen = tsStempel
-        .filter(s => {
-          const key = s.mitarbeiter_id ? `m_${s.mitarbeiter_id}` : `l_${s.lehrling_id}`;
-          return !gruppenKeys.has(key);
-        })
-        .map(s => ({
-          person_typ: s.mitarbeiter_id ? 'mitarbeiter' : 'lehrling',
-          person_id: s.mitarbeiter_id || s.lehrling_id,
-          person_name: s.mitarbeiter_name || s.lehrling_name || '—',
-          arbeiten: []
-        }));
+      // Alle bekannten Keys aus Terminen + Tagesstempeln
+      const gruppenMap = new Map();
+      (gruppen || []).forEach(g => {
+        const key = g.person_typ === 'lehrling' ? `l_${g.person_id}` : `m_${g.person_id}`;
+        gruppenMap.set(key, g);
+      });
 
-      const alleGruppen = [...(gruppen || []), ...extraGruppen];
+      // Aktive Mitarbeiter und Lehrlinge die noch nicht in der Liste sind → leere Gruppe
+      const aktive = [
+        ...(Array.isArray(mitarbeiterListe) ? mitarbeiterListe : (mitarbeiterListe?.mitarbeiter || []))
+          .filter(m => m.aktiv !== 0 && m.aktiv !== false)
+          .map(m => ({ key: `m_${m.id}`, person_typ: 'mitarbeiter', person_id: m.id, person_name: m.name, arbeiten: [] })),
+        ...(Array.isArray(lehrlingsListe) ? lehrlingsListe : (lehrlingsListe?.lehrlinge || []))
+          .filter(l => l.aktiv !== 0 && l.aktiv !== false)
+          .map(l => ({ key: `l_${l.id}`, person_typ: 'lehrling', person_id: l.id, person_name: l.name, arbeiten: [] }))
+      ];
+      aktive.forEach(p => {
+        if (!gruppenMap.has(p.key)) gruppenMap.set(p.key, p);
+      });
+
+      const alleGruppen = [...gruppenMap.values()];
 
       if (alleGruppen.length === 0) {
-        container.innerHTML = '<div class="empty-state"><p>Keine Stempelzeiten oder Arbeiten für diesen Tag.</p></div>';
+        container.innerHTML = '<div class="empty-state"><p>Keine aktiven Mitarbeiter gefunden.</p></div>';
         return;
       }
 
