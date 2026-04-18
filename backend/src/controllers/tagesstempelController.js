@@ -1,5 +1,6 @@
 const { getAsync, allAsync, runAsync } = require('../utils/dbHelper');
 const { broadcastEvent } = require('../utils/websocket');
+const TermineModel = require('../models/termineModel');
 
 function getJetztZeit() {
   const n = new Date();
@@ -111,7 +112,9 @@ class TagesstempelController {
   /**
    * POST /api/tagesstempel/gehen/bestaetigen
    * Body: { mitarbeiter_id?, lehrling_id?, termine_verschieben: boolean }
-   * Setzt gehen_zeit. Wenn termine_verschieben=true: alle in_arbeit-Termine auf nächsten Tag.
+   * Setzt gehen_zeit.
+   * Wenn termine_verschieben=true: alle in_arbeit-Termine bleiben heute auf 'wartend',
+   * es wird ein Folgetermin für morgen mit der Restzeit (Richtwert - gestempelt) angelegt.
    */
   static async gehenBestaetigen(req, res) {
     try {
@@ -125,34 +128,107 @@ class TagesstempelController {
       morgen.setDate(morgen.getDate() + 1);
       const morgenStr = morgen.toISOString().slice(0, 10);
 
+      const folgeTermineAngelegt = [];
+
       if (termine_verschieben) {
-        let laufendeIds = [];
+        // Richtwerte aus Zeitverwaltung laden (einmalig)
+        const alleArbeitszeiten = await allAsync(`SELECT bezeichnung, standard_minuten, aliase FROM arbeitszeiten`, []);
+        const _norm = s => s.toLowerCase().replace(/[\/\-_\.]+/g, ' ').replace(/\s+/g, ' ').trim();
+        const _getRichtwert = (arbeitName) => {
+          if (!arbeitName) return null;
+          const suche = _norm(arbeitName);
+          let match = alleArbeitszeiten.find(a => _norm(a.bezeichnung) === suche);
+          if (!match) match = alleArbeitszeiten.find(a => { const b = _norm(a.bezeichnung); return b.includes(suche) || suche.includes(b); });
+          if (!match) match = alleArbeitszeiten.find(a =>
+            (a.aliase || '').split(',').map(x => _norm(x)).some(al => al && (al === suche || al.includes(suche) || suche.includes(al)))
+          );
+          return match ? match.standard_minuten : null;
+        };
+
+        // Laufende in_arbeit-Termine für diese Person holen
+        let laufendeTermine = [];
         if (mitarbeiter_id) {
-          const rows = await allAsync(
-            `SELECT id FROM termine WHERE datum = ? AND mitarbeiter_id = ? AND status = 'in_arbeit' AND geloescht_am IS NULL`,
+          laufendeTermine = await allAsync(
+            `SELECT id, termin_nr, kennzeichen, kunde_id, kunde_name, kunde_telefon,
+                    arbeit, umfang, geschaetzte_zeit, mitarbeiter_id, lehrling_id,
+                    arbeitszeiten_details, dringlichkeit, vin, fahrzeugtyp,
+                    abholung_typ, abholung_details, abholung_zeit, abholung_datum,
+                    bring_zeit, kontakt_option, kilometerstand
+             FROM termine WHERE datum = ? AND mitarbeiter_id = ? AND status = 'in_arbeit' AND geloescht_am IS NULL`,
             [datum, mitarbeiter_id]
           );
-          laufendeIds = rows.map(r => r.id);
         } else {
-          const rows = await allAsync(
-            `SELECT id FROM termine WHERE datum = ? AND lehrling_id = ? AND status = 'in_arbeit' AND geloescht_am IS NULL`,
+          laufendeTermine = await allAsync(
+            `SELECT id, termin_nr, kennzeichen, kunde_id, kunde_name, kunde_telefon,
+                    arbeit, umfang, geschaetzte_zeit, mitarbeiter_id, lehrling_id,
+                    arbeitszeiten_details, dringlichkeit, vin, fahrzeugtyp,
+                    abholung_typ, abholung_details, abholung_zeit, abholung_datum,
+                    bring_zeit, kontakt_option, kilometerstand
+             FROM termine WHERE datum = ? AND lehrling_id = ? AND status = 'in_arbeit' AND geloescht_am IS NULL`,
             [datum, lehrling_id]
           );
-          laufendeIds = rows.map(r => r.id);
         }
 
-        for (const id of laufendeIds) {
+        for (const t of laufendeTermine) {
+          // Original-Termin auf 'wartend' setzen (bleibt heute als Dokumentation)
           await runAsync(
-            `UPDATE termine SET datum = ?, status = 'wartend' WHERE id = ?`,
-            [morgenStr, id]
+            `UPDATE termine SET status = 'wartend' WHERE id = ?`,
+            [t.id]
           );
-          broadcastEvent('termin.updated', { id, datum, newDatum: morgenStr });
+          broadcastEvent('termin.updated', { id: t.id, datum });
+
+          // Bereits gestempelte Minuten ermitteln (abgeschlossene Arbeiten aus termine_arbeiten)
+          const stempelZeilen = await allAsync(
+            `SELECT stempel_start, stempel_ende, zeit AS geschaetzte_min FROM termine_arbeiten WHERE termin_id = ?`,
+            [t.id]
+          );
+          const bereitsGestempeltMin = stempelZeilen.reduce((sum, s) => {
+            if (!s.stempel_start || !s.stempel_ende) return sum;
+            const [sh, sm] = s.stempel_start.split(':').map(Number);
+            const [eh, em] = s.stempel_ende.split(':').map(Number);
+            return sum + Math.max(0, (eh * 60 + em) - (sh * 60 + sm));
+          }, 0);
+
+          // Richtwert (Minuten aus Zeitverwaltung) – Fallback auf geschaetzte_zeit des Termins
+          const richtwertMin = _getRichtwert(t.arbeit) || t.geschaetzte_zeit || 60;
+
+          // Restzeit = Richtwert - bereits gestempelt (mind. 15 min)
+          const restMin = Math.max(15, richtwertMin - bereitsGestempeltMin);
+
+          // Folgetermin anlegen
+          const result = await TermineModel.create({
+            kunde_id:             t.kunde_id,
+            kunde_name:           t.kunde_name,
+            kunde_telefon:        t.kunde_telefon,
+            kennzeichen:          t.kennzeichen,
+            arbeit:               t.arbeit,
+            umfang:               t.umfang,
+            geschaetzte_zeit:     restMin,
+            datum:                morgenStr,
+            abholung_typ:         t.abholung_typ,
+            abholung_details:     t.abholung_details,
+            abholung_zeit:        t.abholung_zeit,
+            abholung_datum:       t.abholung_datum,
+            bring_zeit:           t.bring_zeit,
+            kontakt_option:       t.kontakt_option,
+            kilometerstand:       t.kilometerstand,
+            mitarbeiter_id:       t.mitarbeiter_id,
+            arbeitszeiten_details: null,
+            dringlichkeit:        t.dringlichkeit,
+            vin:                  t.vin,
+            fahrzeugtyp:          t.fahrzeugtyp,
+            ist_schwebend:        0,
+            status:               'geplant'
+          });
+
+          folgeTermineAngelegt.push({ originalId: t.id, folgeId: result.id, folgeNr: result.terminNr, restMin });
+          broadcastEvent('termin.created', { id: result.id, datum: morgenStr, folgeVon: t.id });
         }
       }
 
       await TagesstempelController._setzeGehenZeit(mitarbeiter_id, lehrling_id, datum);
       broadcastEvent('tagesstempel.gehen', { mitarbeiter_id: mitarbeiter_id || null, lehrling_id: lehrling_id || null, datum });
-      res.json({ success: true, zeit: getJetztZeit(), verschoben: termine_verschieben || false });
+      res.json({ success: true, zeit: getJetztZeit(), verschoben: termine_verschieben || false, folge_termine: folgeTermineAngelegt });
     } catch (err) {
       console.error('[Tagesstempel-GehenBestaetigen] Fehler:', err);
       res.status(500).json({ error: err.message });

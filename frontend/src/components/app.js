@@ -36967,10 +36967,23 @@ class App {
     try {
       const result = await ApiService.post('/tagesstempel/gehen', { mitarbeiter_id, lehrling_id });
       if (result && result.bestaetigung_erforderlich) {
-        const names = (result.laufende_termine || []).map(t => t.termin_nr || t.id).join(', ');
-        const ok = confirm(`Noch laufende Aufträge: ${names}\nTrotzdem Arbeitsende stempeln?`);
+        const anzahl = (result.laufende_termine || []).length;
+        const names = (result.laufende_termine || []).map(t => `${t.termin_nr || t.id}${t.arbeit ? ' ('+t.arbeit+')' : ''}`).join('\n  ');
+        const ok = confirm(
+          `Es gibt noch ${anzahl} laufende${anzahl === 1 ? 'n' : ''} Auftrag${anzahl === 1 ? '' : 'aufträge'}:\n  ${names}\n\n` +
+          `Trotzdem Arbeitsende stempeln?\n` +
+          `Die laufenden Aufträge werden auf „wartend" gesetzt und ein Folgetermin für morgen angelegt (Restzeit wird automatisch berechnet).`
+        );
         if (!ok) return;
-        await ApiService.post('/tagesstempel/gehen/bestaetigen', { mitarbeiter_id, lehrling_id });
+        const bestaetigung = await ApiService.post('/tagesstempel/gehen/bestaetigen', { mitarbeiter_id, lehrling_id, termine_verschieben: true });
+        if (bestaetigung && bestaetigung.folge_termine && bestaetigung.folge_termine.length > 0) {
+          const folgeInfo = bestaetigung.folge_termine.map(f => `${f.folgeNr} (${f.restMin} Min)`).join(', ');
+          this.showToast(`■ Arbeitsende gestempelt – Folgetermine für morgen: ${folgeInfo}`, 'success');
+        } else {
+          this.showToast('■ Arbeitsende gestempelt', 'success');
+        }
+        this.loadZeitstempelung();
+        return;
       }
       this.showToast('■ Arbeitsende gestempelt', 'success');
       this.loadZeitstempelung();
