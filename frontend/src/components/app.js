@@ -30334,7 +30334,7 @@ class App {
     try {
       // Hole alle Daten parallel (inkl. Einstellungen für Nebenzeit)
       const heute = this.formatDateLocal(this.getToday());
-      const [mitarbeiterRaw, lehrlingeRaw, termineRaw, einstellungen, abwesenheiten, aktiveArbeitspausen, aktivePausen, heutigePausen] = await Promise.all([
+      const [mitarbeiterRaw, lehrlingeRaw, termineRaw, einstellungen, abwesenheiten, aktiveArbeitspausen, aktivePausen, heutigePausen, tagesstempelRaw] = await Promise.all([
         ApiService.get('/mitarbeiter'),
         ApiService.get('/lehrlinge'),
         ApiService.get(`/termine?datum=${heute}`),
@@ -30342,7 +30342,8 @@ class App {
         ApiService.get(`/abwesenheiten/datum/${heute}`).catch(() => []),
         ApiService.get('/arbeitspausen/aktive').catch(() => []),
         ApiService.get('/pause/aktive').catch(() => []),
-        ApiService.get('/pause/heute').catch(() => [])
+        ApiService.get('/pause/heute').catch(() => []),
+        ApiService.get(`/tagesstempel?datum=${heute}`).catch(() => [])
       ]);
 
       // Normalisieren: Controller gibt manchmal { termine, aktivePausen } statt reines Array
@@ -30386,6 +30387,15 @@ class App {
       arbeitszeitenResults.forEach(result => {
         const key = `${result.type}_${result.id}`;
         arbeitszeitenMap[key] = result.data;
+      });
+
+      // Tagesstempel-Maps aufbauen
+      const tagesstempelMap = {};
+      const unterbrechungenMap = {};
+      (tagesstempelRaw || []).forEach(eintrag => {
+        const key = eintrag.mitarbeiter_id ? `m_${eintrag.mitarbeiter_id}` : `l_${eintrag.lehrling_id}`;
+        tagesstempelMap[key] = eintrag.stempel || null;
+        unterbrechungenMap[key] = eintrag.unterbrechungen || [];
       });
 
       // Erstelle Map für Abwesenheiten (für schnellen Zugriff)
@@ -30474,18 +30484,20 @@ class App {
 
       // Render Mitarbeiter-Kacheln
       if (mitarbeiterContainer) {
-        mitarbeiterContainer.innerHTML = aktiveMitarbeiter.map(m =>
-          this.renderInternPersonKachel(m, relevanteTermine, 'mitarbeiter', berechnungsKontext)
-        ).join('');
+        mitarbeiterContainer.innerHTML = aktiveMitarbeiter.map(m => {
+          const tsKey = `m_${m.id}`;
+          return this.renderInternPersonKachel(m, relevanteTermine, 'mitarbeiter', berechnungsKontext, tagesstempelMap[tsKey] || null, unterbrechungenMap[tsKey] || []);
+        }).join('');
       }
 
       // Render Lehrlinge-Kacheln
       if (lehrlingeContainer) {
         if (aktiveLehrlinge.length > 0) {
           if (keineLehrlingeEl) keineLehrlingeEl.style.display = 'none';
-          lehrlingeContainer.innerHTML = aktiveLehrlinge.map(l =>
-            this.renderInternPersonKachel(l, relevanteTermine, 'lehrling', berechnungsKontext)
-          ).join('');
+          lehrlingeContainer.innerHTML = aktiveLehrlinge.map(l => {
+            const tsKey = `l_${l.id}`;
+            return this.renderInternPersonKachel(l, relevanteTermine, 'lehrling', berechnungsKontext, tagesstempelMap[tsKey] || null, unterbrechungenMap[tsKey] || []);
+          }).join('');
         } else {
           lehrlingeContainer.innerHTML = '';
           if (keineLehrlingeEl) keineLehrlingeEl.style.display = 'flex';
@@ -30816,7 +30828,7 @@ class App {
    * @param {string} typ - 'mitarbeiter' oder 'lehrling'
    * @param {Object} kontext - Berechnungskontext mit globaleNebenzeitProzent, mitarbeiter, lehrlinge
    */
-  renderInternPersonKachel(person, alleTermine, typ = 'mitarbeiter', kontext = {}) {
+  renderInternPersonKachel(person, alleTermine, typ = 'mitarbeiter', kontext = {}, tagesstempel = null, unterbrechungen = []) {
     const personId = person.id;
     const personName = person.name;
     const isLehrling = typ === 'lehrling';
@@ -31204,6 +31216,50 @@ class App {
       pauseMahlzeitButtonHtml = `<button class="intern-tab-btn intern-tab-btn-pause" disabled><span class="intern-tab-btn-icon">🍽️</span> Pause</button>`;
     }
 
+    // Tagesstempel-Strip + Buttons
+    const mid = isLehrling ? null : personId;
+    const lid = isLehrling ? personId : null;
+    const midArg = mid !== null ? mid : 'null';
+    const lidArg = lid !== null ? lid : 'null';
+    const _z2m = z => { const [h, m] = z.substring(0, 5).split(':').map(Number); return h * 60 + m; };
+    const hatKommen = tagesstempel && tagesstempel.kommen_zeit;
+    const hatGehen  = tagesstempel && tagesstempel.gehen_zeit;
+    const aktiveUnterbrechung = (unterbrechungen || []).find(u => !u.ende_zeit);
+
+    let tagesstempelStripHtml = '';
+    if (hatKommen) {
+      const kommenZeit = tagesstempel.kommen_zeit.substring(0, 5);
+      let nettoHtml = '';
+      if (hatGehen) {
+        const gehenZeit = tagesstempel.gehen_zeit.substring(0, 5);
+        const ubMin = (unterbrechungen || []).filter(u => u.ende_zeit).reduce((s, u) => s + (_z2m(u.ende_zeit) - _z2m(u.start_zeit)), 0);
+        const nettoMin = _z2m(gehenZeit) - _z2m(kommenZeit) - ubMin;
+        const nH = Math.floor(nettoMin / 60); const nM = nettoMin % 60;
+        nettoHtml = `<span style="color:#555;font-size:12px;">⏱ ${nH > 0 ? nH + 'h ' : ''}${nM}min</span>`;
+      }
+      const ubList = (unterbrechungen || []).filter(u => u.ende_zeit);
+      const ubHtml = ubList.length ? `<span style="color:#888;font-size:12px;">⏸ ${ubList.map(u => u.start_zeit.substring(0,5)+'–'+u.ende_zeit.substring(0,5)).join(', ')}</span>` : '';
+      const gehenText = hatGehen ? `<span style="color:#dc3545;font-weight:600;">■ ${tagesstempel.gehen_zeit.substring(0,5)}</span>` : '';
+      tagesstempelStripHtml = `<div style="padding:5px 12px;background:#f8f9fa;border-top:1px solid #dee2e6;display:flex;align-items:center;flex-wrap:wrap;gap:8px;font-size:13px;">
+        <span style="color:#198754;font-weight:600;">▶ ${kommenZeit}</span>${gehenText}${nettoHtml}${ubHtml}</div>`;
+    }
+
+    let tagesstempelBtnHtml = '';
+    if (!istAbwesend && !inBerufsschule) {
+      if (!hatKommen) {
+        tagesstempelBtnHtml = `<div style="padding:6px 12px;background:#f0fff4;border-top:1px solid #dee2e6;">
+          <button class="intern-tab-btn" style="background:#28a745;color:#fff;border:none;border-radius:6px;padding:5px 12px;font-size:13px;cursor:pointer;" onclick="app.webTagesstempelKommen(${midArg}, ${lidArg})">▶ Arbeitsbeginn</button>
+        </div>`;
+      } else if (!hatGehen) {
+        const ubBtn = aktiveUnterbrechung
+          ? `<button class="intern-tab-btn" style="background:#ffc107;color:#333;border:none;border-radius:6px;padding:5px 12px;font-size:13px;cursor:pointer;" onclick="app.webUnterbrechungEnde(${midArg}, ${lidArg})">▶ Weiterarbeiten</button>`
+          : `<button class="intern-tab-btn" style="background:#6c757d;color:#fff;border:none;border-radius:6px;padding:5px 12px;font-size:13px;cursor:pointer;" onclick="app.webUnterbrechungStart(${midArg}, ${lidArg})">⏸ Unterbrechung</button>`;
+        tagesstempelBtnHtml = `<div style="padding:6px 12px;background:#fff8f8;border-top:1px solid #dee2e6;display:flex;gap:8px;">
+          <button class="intern-tab-btn" style="background:#dc3545;color:#fff;border:none;border-radius:6px;padding:5px 12px;font-size:13px;cursor:pointer;" onclick="app.webTagesstempelGehen(${midArg}, ${lidArg})">■ Arbeitsende</button>${ubBtn}
+        </div>`;
+      }
+    }
+
     return `
       <div class="intern-person-kachel ${isLehrling ? 'lehrling' : ''} ${istArbeitPausiert ? 'arbeit-pausiert' : ''}">
         <div class="intern-person-header">
@@ -31216,6 +31272,8 @@ class App {
           </div>
           <div class="intern-kachel-tab-buttons">${toggleButtonHtml}${pauseMahlzeitButtonHtml}</div>
         </div>
+        ${tagesstempelStripHtml}
+        ${tagesstempelBtnHtml}
         ${zeigeArbeitszeit && arbeitszeit && !arbeitszeit.ist_frei && arbeitszeit.arbeitszeit_start && arbeitszeit.arbeitszeit_ende && arbeitszeit.arbeitszeit_start !== arbeitszeit.arbeitszeit_ende ? `
         <div class="intern-person-arbeitszeit">
           <span class="arbeitszeit-label">⏰ Arbeitszeit:</span>
