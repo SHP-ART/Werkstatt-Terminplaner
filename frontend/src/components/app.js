@@ -30815,26 +30815,6 @@ class App {
     // Richtwert-Zeile (zweite Zeile)
     const richtwertZeile = `<div style="font-size:12px;color:#6c757d;margin-top:2px;">Richtzeit: ${gesamtRichtzeit} Min${gesamtIst ? ' · Gestempelt: ' + gesamtIst + ' Min' : ''}</div>`;
 
-    // Buttons (dritte Zeile, nur heute, nur wenn noch kein Gehen)
-    let buttonsHtml = '';
-    if (istHeute) {
-      if (!hatKommen) {
-        buttonsHtml = `
-          <div style="margin-top:6px;">
-            <button class="btn btn-sm btn-success" onclick="window.app.webTagesstempelKommen(${midArg}, ${lidArg})">▶ Arbeitsbeginn</button>
-          </div>`;
-      } else if (!hatGehen) {
-        const unterbrechungBtn = aktiveUnterbrechung
-          ? `<button class="btn btn-sm btn-warning" style="margin-left:6px;" onclick="window.app.webUnterbrechungEnde(${midArg}, ${lidArg})">▶ Weiter</button>`
-          : `<button class="btn btn-sm btn-secondary" style="margin-left:6px;" onclick="window.app.webUnterbrechungStart(${midArg}, ${lidArg})">🚬 Raucherpause</button>`;
-        buttonsHtml = `
-          <div style="margin-top:6px;">
-            <button class="btn btn-sm btn-danger" onclick="window.app.webTagesstempelGehen(${midArg}, ${lidArg})">■ Arbeitsende</button>
-            ${unterbrechungBtn}
-          </div>`;
-      }
-    }
-
     const leereTabelle = gruppe.arbeiten.length === 0
       ? `<div style="padding:10px 16px;color:#6c757d;font-size:13px;font-style:italic;">Keine Aufträge für diesen Tag.</div>`
       : `<div class="card-body" style="padding:0;">
@@ -30861,7 +30841,6 @@ class App {
         <div class="card-header">
           <div><strong style="font-size:15px;">${icon} ${this.escapeHtml(gruppe.person_name)}</strong>${stempelInlineHtml}</div>
           ${richtwertZeile}
-          ${buttonsHtml}
         </div>
         ${leereTabelle}
       </div>
