@@ -129,6 +129,25 @@ Das Update-System funktioniert nur wenn:
 2. Das Update via `POST /api/tablet-update/register` registriert wurde
 3. Der Installer-Pfad auf dem Server korrekt ist
 
+### Tab-Verlust in index.html (wiederkehrendes Problem!)
+`frontend/index.html` ist sehr groß. Bei umfangreichen Commits werden Tab-Einträge gelegentlich versehentlich entfernt.
+**Pflicht vor jedem Commit der `index.html` enthält:**
+```bash
+# Prüfe dass alle kritischen Tabs noch vorhanden sind:
+grep -c "data-tab=" frontend/index.html
+```
+Folgende Tabs müssen **immer** vorhanden sein (Button in Nav + `<div id="...">` + `<template>`):
+`dashboard`, `heute`, `termine`, `kalender`, `kunden`, `zeitverwaltung`, `zeitstempelung`, `auslastung`, `intern`, `papierkorb`, `einstellungen`
+
+Schnellprüfung aller Tabs auf einmal:
+```powershell
+foreach ($tab in @("dashboard","heute","termine","kalender","kunden","zeitverwaltung","zeitstempelung","auslastung","intern","papierkorb","einstellungen")) {
+  if (!(Select-String -Path "frontend/index.html" -Pattern "data-tab=`"$tab`"" -Quiet)) {
+    Write-Host "FEHLT: $tab" -ForegroundColor Red
+  }
+}
+```
+
 ---
 
 ## 5. Build & Deploy
