@@ -1,10 +1,14 @@
 {
   "backendUrl": "http://192.168.0.57:3001",
   "fullscreen": true,
-  "kiosk": false,
+  "kiosk": true,
   "refreshInterval": 30,
-  "autostart": false,
+  "autostart": true,
   "displayOffTime": "18:10",
   "displayOnTime": "07:30",
-  "manuellerDisplayStatus": "an"
+  "manuellerDisplayStatus": "an",
+  "blockWindowsShortcuts": true,
+  "autoInstallUpdates": true,
+  "updateWindowStart": "02:00",
+  "updateWindowEnd": "05:00"
 }

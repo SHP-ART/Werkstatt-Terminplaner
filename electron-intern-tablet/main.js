@@ -7,11 +7,15 @@ const fs = require('fs');
 const DEFAULT_CONFIG = {
   backendUrl: 'http://127.0.0.1:3001',
   fullscreen: true,
-  kiosk: false,
+  kiosk: true,
   refreshInterval: 30,
-  autostart: false,
+  autostart: true,
   displayOffTime: '18:10',
-  displayOnTime: '07:30'
+  displayOnTime: '07:30',
+  blockWindowsShortcuts: true,
+  autoInstallUpdates: true,
+  updateWindowStart: '02:00',
+  updateWindowEnd: '05:00'
 };
 
 // Config-Datei Pfad - PERSISTENT über Updates!
@@ -68,6 +72,44 @@ function saveConfig(config) {
   }
 }
 
+// ========== WINDOWS-SHORTCUT-BLOCKER ==========
+// Setzt HKCU-Registry-Keys, die Win+L, Abmelden, Herunterfahren, Task-Manager sperren.
+// Keine Admin-Rechte nötig (HKCU gilt nur für aktuellen User).
+// Wirkung der Policies:
+//   DisableLockWorkstation  → Win+L blockiert
+//   DisableTaskMgr          → Task-Manager blockiert
+//   DisableChangePassword   → Passwort-Änderung blockiert
+//   NoLogoff                → Abmelden aus Startmenü/Ctrl+Alt+Del blockiert
+//   NoClose                 → Herunterfahren/Neustart aus Startmenü blockiert
+const WINDOWS_SHORTCUT_KEYS = [
+  { path: 'HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Policies\\System', name: 'DisableLockWorkstation' },
+  { path: 'HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Policies\\System', name: 'DisableTaskMgr' },
+  { path: 'HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Policies\\System', name: 'DisableChangePassword' },
+  { path: 'HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Policies\\Explorer', name: 'NoLogoff' },
+  { path: 'HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Policies\\Explorer', name: 'NoClose' }
+];
+
+function applyWindowsShortcutBlocker(enable) {
+  if (process.platform !== 'win32') return;
+  if (!app.isPackaged) {
+    console.log('🛠️ Dev-Modus: Windows-Shortcut-Blocker übersprungen');
+    return;
+  }
+  const { exec } = require('child_process');
+  WINDOWS_SHORTCUT_KEYS.forEach(({ path: regPath, name }) => {
+    const cmd = enable
+      ? `reg add "${regPath}" /v ${name} /t REG_DWORD /d 1 /f`
+      : `reg delete "${regPath}" /v ${name} /f`;
+    exec(cmd, { windowsHide: true }, (error) => {
+      if (error && enable) {
+        console.log(`⚠️ Registry ${name} setzen fehlgeschlagen:`, error.message);
+      } else if (!error) {
+        console.log(`${enable ? '🔒' : '🔓'} ${name} ${enable ? 'gesperrt' : 'freigegeben'}`);
+      }
+    });
+  });
+}
+
 // Autostart verwalten
 function setAutostart(enable) {
   if (process.platform !== 'win32') return;
@@ -102,6 +144,10 @@ const os = require('os');
 const packageJson = require('./package.json');
 const CURRENT_VERSION = packageJson.version;
 
+// API-Key für geschützte Backend-Endpunkte. Wird beim Start über
+// GET /api/client-config gezogen und in Folge-Requests als x-api-key gesendet.
+let CACHED_API_KEY = null;
+
 /**
  * Normalisiert eine Backend-URL (ergänzt http:// falls kein Schema angegeben)
  */
@@ -121,14 +167,21 @@ function httpRequest(url, options = {}) {
   return new Promise((resolve, reject) => {
     const urlObj = new URL(url);
     const protocol = urlObj.protocol === 'https:' ? https : http;
-    
-    const req = protocol.request(url, options, (res) => {
+
+    // API-Key automatisch mitsenden, wenn vorhanden und nicht explizit unterdrückt
+    const headers = Object.assign({}, options.headers || {});
+    if (CACHED_API_KEY && !options.skipApiKey && !headers['x-api-key']) {
+      headers['x-api-key'] = CACHED_API_KEY;
+    }
+    const reqOptions = Object.assign({}, options, { headers });
+
+    const req = protocol.request(url, reqOptions, (res) => {
       const chunks = [];
-      
+
       res.on('data', (chunk) => chunks.push(chunk));
       res.on('end', () => {
         const body = Buffer.concat(chunks);
-        
+
         if (res.statusCode >= 200 && res.statusCode < 300) {
           resolve({
             ok: true,
@@ -142,15 +195,35 @@ function httpRequest(url, options = {}) {
         }
       });
     });
-    
+
     req.on('error', reject);
-    
+
     if (options.body) {
       req.write(options.body);
     }
-    
+
     req.end();
   });
+}
+
+/**
+ * Holt den API-Key vom öffentlichen /api/client-config-Endpunkt.
+ * Muss VOR den ersten Update-/Status-Requests laufen, damit die Auth sitzt.
+ */
+async function fetchApiKey() {
+  try {
+    const backendUrl = CONFIG.backendUrl || 'http://localhost:3001';
+    const response = await httpRequest(`${backendUrl}/api/client-config`, { skipApiKey: true });
+    const data = response.json();
+    if (data && data.apiKey) {
+      CACHED_API_KEY = data.apiKey;
+      console.log('🔑 API-Key vom Backend bezogen');
+    } else {
+      console.log('ℹ️ Backend liefert keinen API-Key (Dev-Modus?)');
+    }
+  } catch (error) {
+    console.log('⚠️ API-Key konnte nicht abgerufen werden:', error.message);
+  }
 }
 
 /**
@@ -176,6 +249,43 @@ async function checkForUpdates() {
   } catch (error) {
     console.log('⚠️ Update-Check Fehler:', error.message);
     return null;
+  }
+}
+
+/**
+ * Prüft ob aktuelle Uhrzeit im konfigurierten Update-Wartungsfenster liegt.
+ * Unterstützt Fenster über Mitternacht (z.B. 22:00–05:00).
+ */
+function isWithinUpdateWindow() {
+  const start = CONFIG.updateWindowStart;
+  const end = CONFIG.updateWindowEnd;
+  if (!start || !end) return false;
+  const now = new Date();
+  const current = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+  if (start < end) {
+    return current >= start && current < end;
+  }
+  // Über Mitternacht
+  return current >= start || current < end;
+}
+
+/**
+ * Reagiert auf ein gefundenes Update:
+ *   - Im Wartungsfenster + autoInstallUpdates=true → sofort silent installieren
+ *   - Sonst → Notification im UI anzeigen, User entscheidet
+ */
+function handleAvailableUpdate(updateInfo) {
+  if (!updateInfo || !updateInfo.updateAvailable) return;
+
+  if (CONFIG.autoInstallUpdates && isWithinUpdateWindow()) {
+    console.log(`🌙 Update ${updateInfo.latestVersion} im Wartungsfenster — installiere automatisch`);
+    downloadAndInstallUpdate();
+    return;
+  }
+
+  console.log(`📢 Update ${updateInfo.latestVersion} verfügbar — zeige Notification`);
+  if (mainWindow) {
+    mainWindow.webContents.send('update-available', updateInfo);
   }
 }
 
@@ -254,10 +364,10 @@ async function reportStatusToServer() {
       hostname,
       ip
     });
-    
-    await fetch(statusUrl, {
+
+    await httpRequest(statusUrl, {
       method: 'POST',
-      headers: { 
+      headers: {
         'Content-Type': 'application/json',
         'Content-Length': String(Buffer.byteLength(body))
       },
@@ -275,19 +385,15 @@ async function reportStatusToServer() {
  */
 function startUpdateCheck() {
   // Erster Check erfolgt via did-finish-load in createWindow() sobald der Renderer bereit ist.
-  // Starte den periodischen Check-Intervall (alle 30 Minuten):
+  // Periodischer Check alle 15 Minuten (damit kein Wartungsfenster verpasst wird)
   updateCheckInterval = setInterval(() => {
     checkForUpdates().then(updateInfo => {
-      if (updateInfo && updateInfo.updateAvailable) {
-        if (mainWindow) {
-          mainWindow.webContents.send('update-available', updateInfo);
-        }
-      }
+      handleAvailableUpdate(updateInfo);
     });
-    
+
     // Status an Server melden
     reportStatusToServer();
-  }, 30 * 60 * 1000); // 30 Minuten
+  }, 15 * 60 * 1000); // 15 Minuten
 
   // Status sofort beim Start an Server melden
   reportStatusToServer();
@@ -320,25 +426,48 @@ function createWindow() {
   // Erster Update-Check erst nach vollständigem Laden (sonst ist der Listener im Renderer noch nicht bereit)
   mainWindow.webContents.once('did-finish-load', () => {
     checkForUpdates().then(updateInfo => {
-      if (updateInfo && updateInfo.updateAvailable && mainWindow) {
-        mainWindow.webContents.send('update-available', updateInfo);
-      }
+      handleAvailableUpdate(updateInfo);
     });
   });
 
   // DevTools für lokales Testen aktiviert
   if (!app.isPackaged) mainWindow.webContents.openDevTools();
 
-  // Vollbild-Toggle mit F11
+  // Tastatur-Handler: Kiosk-Mode vs. Entwickler-Mode
   mainWindow.webContents.on('before-input-event', (event, input) => {
+    const isKiosk = app.isPackaged && CONFIG.kiosk;
+
+    // Wartungs-Kombi: Ctrl+Alt+Shift+Q → App sauber beenden (Registry-Cleanup läuft in before-quit)
+    if (input.control && input.alt && input.shift && (input.key === 'Q' || input.key === 'q')) {
+      console.log('🔑 Wartungs-Kombi erkannt, beende App');
+      event.preventDefault();
+      app.quit();
+      return;
+    }
+
+    if (isKiosk) {
+      // Im Kiosk-Mode: alle Ausbruchs-Tasten blockieren
+      if (input.key === 'F11' || input.key === 'Escape' || input.key === 'F4' ||
+          (input.alt && input.key === 'F4') ||
+          (input.control && (input.key === 'w' || input.key === 'W')) ||
+          (input.control && input.shift && (input.key === 'i' || input.key === 'I'))) {
+        event.preventDefault();
+        return;
+      }
+      // F5 Reload im Kiosk erlaubt (nützlich bei Server-Reconnect)
+      if (input.key === 'F5') {
+        mainWindow.reload();
+      }
+      return;
+    }
+
+    // Dev-Mode: alte Komfort-Shortcuts
     if (input.key === 'F11') {
       mainWindow.setFullScreen(!mainWindow.isFullScreen());
     }
-    // Escape zum Beenden des Vollbildmodus
     if (input.key === 'Escape' && mainWindow.isFullScreen()) {
       mainWindow.setFullScreen(false);
     }
-    // F5 zum Neuladen
     if (input.key === 'F5') {
       mainWindow.reload();
     }
@@ -481,14 +610,22 @@ function checkDisplaySchedule() {
 }
 
 // App bereit
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
   // Autostart beim ersten Start setzen falls konfiguriert
   if (CONFIG.autostart) {
     setAutostart(true);
   }
 
+  // Windows-Shortcuts sperren (Win+L, Abmelden, Herunterfahren, Task-Manager)
+  if (CONFIG.blockWindowsShortcuts) {
+    applyWindowsShortcutBlocker(true);
+  }
+
+  // API-Key holen, bevor Update-/Status-Requests laufen
+  await fetchApiKey();
+
   createWindow();
-  
+
   // Starte Auto-Update-Check
   startUpdateCheck();
 
@@ -507,6 +644,7 @@ app.on('window-all-closed', () => {
 });
 
 // Beim Beenden: Windows-Energiesparplan auf vernünftigen Standardwert zurücksetzen
+// und Shortcut-Sperren aufheben, damit Wartung/Abmelden wieder möglich ist.
 app.on('before-quit', () => {
   if (process.platform === 'win32') {
     const { exec } = require('child_process');
@@ -514,6 +652,9 @@ app.on('before-quit', () => {
     exec('powercfg /change monitor-timeout-ac 10', { windowsHide: true });
     exec('powercfg /change monitor-timeout-dc 5', { windowsHide: true });
     console.log('🔧 Monitor-Timeout auf Standard zurückgesetzt');
+  }
+  if (CONFIG.blockWindowsShortcuts) {
+    applyWindowsShortcutBlocker(false);
   }
 });
 
@@ -532,6 +673,9 @@ ipcMain.handle('save-config', (event, newConfig) => {
   }
 
   const urlChanged = newConfig.backendUrl && newConfig.backendUrl !== CONFIG.backendUrl;
+  const shortcutBlockerChanged =
+    newConfig.blockWindowsShortcuts !== undefined &&
+    newConfig.blockWindowsShortcuts !== CONFIG.blockWindowsShortcuts;
 
   CONFIG = { ...CONFIG, ...newConfig };
   saveConfig(CONFIG);
@@ -539,20 +683,26 @@ ipcMain.handle('save-config', (event, newConfig) => {
   // Autostart aktualisieren
   setAutostart(CONFIG.autostart);
 
+  // Windows-Shortcut-Blocker zur Laufzeit umschalten
+  if (shortcutBlockerChanged) {
+    applyWindowsShortcutBlocker(CONFIG.blockWindowsShortcuts);
+  }
+
   // Display-Timer neu starten wenn Zeiten geändert wurden
   if (newConfig.displayOffTime || newConfig.displayOnTime) {
     startDisplayTimer();
   }
 
-  // Bei neuer Server-URL sofort Update-Check und Status-Meldung wiederholen
+  // Bei neuer Server-URL: neuen API-Key holen, dann Check + Status
   if (urlChanged) {
-    console.log('🔄 Backend-URL geändert, starte Update-Check neu...');
-    checkForUpdates().then(updateInfo => {
-      if (updateInfo && updateInfo.updateAvailable && mainWindow) {
-        mainWindow.webContents.send('update-available', updateInfo);
-      }
+    console.log('🔄 Backend-URL geändert, hole neuen API-Key und starte Update-Check...');
+    CACHED_API_KEY = null;
+    fetchApiKey().then(() => {
+      checkForUpdates().then(updateInfo => {
+        handleAvailableUpdate(updateInfo);
+      });
+      reportStatusToServer();
     });
-    reportStatusToServer();
   }
 
   return CONFIG;
