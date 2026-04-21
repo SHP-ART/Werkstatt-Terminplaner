@@ -243,6 +243,21 @@
       border-left: 5px solid #fdcb6e;
     }
 
+    .person-kachel.in-unterbrechung {
+      border-left: 5px solid #ffc107;
+      background: linear-gradient(to right, #fff8e1 0%, #ffffff 8%);
+    }
+    .person-kachel.in-unterbrechung .person-name::after {
+      content: ' ⏸ In Pause';
+      background: #ffc107;
+      color: #333;
+      font-size: 12px;
+      padding: 3px 8px;
+      border-radius: 10px;
+      margin-left: 8px;
+      font-weight: 600;
+    }
+
     .intern-btn-arbeit-pause {
       width: 100%;
       padding: 8px;
@@ -2412,8 +2427,9 @@
         `;
       }
 
+      const istInUnterbrechung = !!aktiveUnterbr;
       return `
-        <div class="person-kachel ${isLehrling ? 'lehrling' : ''} ${istArbeitPausiert ? 'arbeit-pausiert' : ''}">
+        <div class="person-kachel ${isLehrling ? 'lehrling' : ''} ${istArbeitPausiert ? 'arbeit-pausiert' : ''} ${istInUnterbrechung ? 'in-unterbrechung' : ''}">
           <div class="person-header">
             <div class="person-header-left">
               <div class="person-name">
@@ -2457,9 +2473,13 @@
       }
       if (!hatGehen) {
         const kommenZeit = tagesstempel.kommen_zeit.substring(0, 5);
+        const pauseInfo = aktiveUnterbrechung
+          ? `<span class="tagesstempel-info" style="background:#ffc107;color:#333;padding:4px 10px;border-radius:12px;font-weight:600;margin-left:8px;">⏸ In Pause seit ${aktiveUnterbrechung.start_zeit.substring(0,5)}</span>`
+          : '';
         return `
-          <div class="tagesstempel-zeile">
+          <div class="tagesstempel-zeile${aktiveUnterbrechung ? ' in-pause' : ''}">
             <span class="tagesstempel-info">🕐 Seit ${kommenZeit} Uhr</span>
+            ${pauseInfo}
             <div class="tagesstempel-btn-gruppe">
               <button class="tablet-btn tablet-btn-gehen" onclick="tagesstempelGehen(${personId}, '${typ}')">
                 <span class="btn-icon">🔴</span> Arbeitsende

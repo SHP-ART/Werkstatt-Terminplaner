@@ -31624,12 +31624,15 @@ class App {
       }
       const ubList = (unterbrechungen || []).filter(u => u.ende_zeit);
       const ubHtml = ubList.length ? `<span style="color:#888;font-size:12px;">⏸ ${ubList.map(u => u.start_zeit.substring(0,5)+'–'+u.ende_zeit.substring(0,5)).join(', ')}</span>` : '';
+      const aktiveUbHtml = aktiveUnterbrechung
+        ? `<span style="background:#ffc107;color:#333;padding:2px 10px;border-radius:10px;font-weight:700;font-size:12px;">⏸ In Pause seit ${aktiveUnterbrechung.start_zeit.substring(0,5)}</span>`
+        : '';
       const gehenText = hatGehen ? `<span style="color:#dc3545;font-weight:600;">■ ${tagesstempel.gehen_zeit.substring(0,5)}</span>` : '';
       const _quelleIcon = q => q === 'stempel' ? '<span title="Live gestempelt" style="font-size:11px;">🟢</span>' : q === 'manuell' ? '<span title="Manuell korrigiert" style="font-size:11px;">✏️</span>' : q === 'auto' ? '<span title="Automatisch abgestempelt" style="font-size:11px;">🤖</span>' : '';
       const kommenIconHtml = _quelleIcon(tagesstempel.kommen_quelle);
       const gehenIconHtml  = hatGehen ? _quelleIcon(tagesstempel.gehen_quelle) : '';
-      tagesstempelStripHtml = `<div style="padding:5px 12px;background:#f8f9fa;border-top:1px solid #dee2e6;display:flex;align-items:center;flex-wrap:wrap;gap:8px;font-size:13px;">
-        <span style="color:#198754;font-weight:600;">▶ ${kommenZeit}</span>${kommenIconHtml}${gehenText ? gehenText + gehenIconHtml : ''}${nettoHtml}${ubHtml}</div>`;
+      tagesstempelStripHtml = `<div style="padding:5px 12px;background:${aktiveUnterbrechung ? '#fff8e1' : '#f8f9fa'};border-top:1px solid ${aktiveUnterbrechung ? '#ffc107' : '#dee2e6'};display:flex;align-items:center;flex-wrap:wrap;gap:8px;font-size:13px;">
+        <span style="color:#198754;font-weight:600;">▶ ${kommenZeit}</span>${kommenIconHtml}${gehenText ? gehenText + gehenIconHtml : ''}${nettoHtml}${aktiveUbHtml}${ubHtml}</div>`;
     }
 
     let tagesstempelBtnHtml = '';
