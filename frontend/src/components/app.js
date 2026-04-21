@@ -30908,7 +30908,7 @@ class App {
     }
     container.innerHTML = '<p class="loading-text" style="font-size:13px;">Lade Pausen-Report…</p>';
     try {
-      const res = await ApiService.get(`/reporting/pausen?von=${von}&bis=${bis}`);
+      const res = await ApiService.get(`/reports/pausen?von=${von}&bis=${bis}`);
       const eintraege = res?.eintraege || [];
       this._pausenReportData = { von, bis, eintraege };
       this.renderPausenReport(eintraege);
