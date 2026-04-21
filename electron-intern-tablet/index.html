@@ -2022,6 +2022,20 @@
       }
     }
 
+    async function handlePauseBeenden(personId, personTyp) {
+      try {
+        await ApiService.post('/pause/beenden', {
+          personId: parseInt(personId),
+          personTyp: String(personTyp)
+        });
+        await loadTeamUebersicht();
+        showToast('Pause beendet', 'success');
+      } catch (error) {
+        console.error('Fehler beim Pause beenden:', error);
+        showToast(`Fehler: ${error.message}`, 'error');
+      }
+    }
+
     function showToast(message, type = 'info') {
       // Einfache Toast-Benachrichtigung
       const toast = document.createElement('div');
@@ -2399,9 +2413,11 @@
           const verblMin = person.pause_verbleibende_minuten || 0;
           const total = person.pausenzeit_minuten || 30;
           const pct = Math.round((1 - verblMin / total) * 100);
+          const labelText = verblMin > 0 ? `🍽️ ${verblMin} Min · läuft • Stop` : '🍽️ Pause beenden';
           buttonsHtml += `
-            <button class="tablet-btn tablet-btn-pause aktiv" disabled title="Mittagspause läuft noch ${verblMin} Minuten" style="min-width:140px;">
-              <span>🍽️ ${verblMin} Min · läuft</span>
+            <button class="tablet-btn tablet-btn-pause aktiv" title="Klicken um Pause zu beenden" style="min-width:140px;cursor:pointer;"
+                    onclick="handlePauseBeenden(${personId}, '${typ}')">
+              <span>${labelText}</span>
               <span style="display:block;height:4px;background:rgba(255,255,255,0.35);border-radius:2px;margin-top:3px;"><span style="display:block;height:4px;background:#fff;border-radius:2px;width:${pct}%;"></span></span>
             </button>
           `;

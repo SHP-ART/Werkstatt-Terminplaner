@@ -30,4 +30,10 @@ router.get('/aktive', PauseController.getAktive);
  */
 router.get('/heute', PauseController.getHeute);
 
+/**
+ * POST /api/pause/beenden
+ * Beendet die aktive Pause einer Person manuell.
+ */
+router.post('/beenden', PauseController.beenden);
+
 module.exports = router;

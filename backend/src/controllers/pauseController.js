@@ -353,6 +353,71 @@ class PauseController {
       res.status(500).json({ error: 'Fehler beim Laden der heutigen Pausen', details: error.message });
     }
   }
+
+  /**
+   * POST /api/pause/beenden
+   * Beendet die aktive Pause einer Person manuell.
+   * Setzt abgeschlossen=1, pause_ende_zeit=now und (optional) den nächsten Termin auf 'in_arbeit',
+   * wenn der Aufrufer das wünscht (Default: nein – User soll selbst Starten drücken).
+   *
+   * Body:
+   * - personId: ID des Mitarbeiters/Lehrlings
+   * - personTyp: 'mitarbeiter' oder 'lehrling'
+   * - autoStartTermin: optional, Default false
+   */
+  static async beenden(req, res) {
+    try {
+      const { personId, personTyp, autoStartTermin = false } = req.body;
+
+      if (!personId || !personTyp) {
+        return res.status(400).json({ error: 'Fehlende Parameter: personId, personTyp erforderlich' });
+      }
+
+      const personSpalte = personTyp === 'mitarbeiter' ? 'mitarbeiter_id' : 'lehrling_id';
+      const aktivePause = await PauseController.dbGet(`
+        SELECT id, pause_naechster_termin_id
+        FROM pause_tracking
+        WHERE ${personSpalte} = ? AND abgeschlossen = 0
+        ORDER BY id DESC LIMIT 1
+      `, [personId]);
+
+      if (!aktivePause) {
+        return res.status(404).json({ error: 'Keine aktive Pause gefunden' });
+      }
+
+      const now = new Date();
+      await PauseController.dbRun(`
+        UPDATE pause_tracking
+        SET abgeschlossen = 1, pause_ende_zeit = ?
+        WHERE id = ?
+      `, [now.toISOString(), aktivePause.id]);
+
+      // Nur wenn explizit gewünscht: nächsten Termin automatisch starten
+      if (autoStartTermin && aktivePause.pause_naechster_termin_id) {
+        await PauseController.dbRun(`
+          UPDATE termine
+          SET status = 'in_arbeit'
+          WHERE id = ? AND status != 'abgeschlossen'
+        `, [aktivePause.pause_naechster_termin_id]);
+      }
+
+      // WebSocket-Event (best-effort)
+      try {
+        const { broadcastEvent } = require('../utils/websocket');
+        broadcastEvent('pause.beendet', { personId, personTyp });
+      } catch (e) { /* websocket optional */ }
+
+      res.json({
+        success: true,
+        pause_tracking_id: aktivePause.id,
+        pause_ende_zeit: now.toISOString(),
+        auto_gestarteter_termin_id: autoStartTermin ? aktivePause.pause_naechster_termin_id : null
+      });
+    } catch (error) {
+      console.error('[Pause-Beenden] Fehler:', error);
+      res.status(500).json({ error: 'Fehler beim Beenden der Pause', details: error.message });
+    }
+  }
 }
 
 /**

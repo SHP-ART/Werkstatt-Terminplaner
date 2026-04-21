@@ -31595,12 +31595,13 @@ class App {
         // Unterbrechung aktiv → Weiterarbeiten
         smartPauseBtn = `<button class="intern-tab-btn" style="background:#ffc107;color:#333;border:none;border-radius:6px;padding:5px 12px;font-size:13px;font-weight:600;cursor:pointer;" onclick="app.webUnterbrechungEnde(${midArg}, ${lidArg})">▶ Weiterarbeiten</button>`;
       } else if (person.pause_tracking_aktiv) {
-        // Mittagspause läuft → Countdown mit Fortschrittsbalken
+        // Mittagspause läuft → Countdown mit Fortschrittsbalken; Klick = Pause beenden
         const verblMin = person.pause_verbleibende_minuten || 0;
         const total = person.pausenzeit_minuten || 30;
         const pct = Math.round((1 - verblMin / total) * 100);
-        smartPauseBtn = `<button class="intern-tab-btn" style="background:#fd7e14;color:#fff;border:none;border-radius:6px;padding:5px 12px;font-size:13px;cursor:default;min-width:130px;" disabled title="Mittagspause läuft noch ${verblMin} Minuten">
-          <span>🍽️ ${verblMin} Min · läuft</span>
+        const labelText = verblMin > 0 ? `🍽️ ${verblMin} Min · läuft • Klick = Stop` : '🍽️ Pause beenden';
+        smartPauseBtn = `<button class="intern-tab-btn" style="background:#fd7e14;color:#fff;border:none;border-radius:6px;padding:5px 12px;font-size:13px;cursor:pointer;min-width:130px;" onclick="app.internPauseBeenden(${personId}, '${typ}')" title="Klicken um Pause zu beenden">
+          <span>${labelText}</span>
           <span style="display:block;height:4px;background:rgba(255,255,255,0.35);border-radius:2px;margin-top:3px;"><span style="display:block;height:4px;background:#fff;border-radius:2px;width:${pct}%;"></span></span>
         </button>`;
       } else if (imAnzeigePauseFenster && !person.pause_bereits_gemacht) {
@@ -31814,6 +31815,16 @@ class App {
     } catch (err) {
       console.error('internPauseStarten Fehler:', err);
       alert('Fehler beim Starten der Pause.');
+    }
+  }
+
+  async internPauseBeenden(personId, personTyp) {
+    try {
+      await ApiService.post('/pause/beenden', { personId, personTyp });
+      this.loadInternTeamUebersicht();
+    } catch (err) {
+      console.error('internPauseBeenden Fehler:', err);
+      alert('Fehler beim Beenden der Pause.');
     }
   }
 
