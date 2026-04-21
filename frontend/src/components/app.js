@@ -31002,17 +31002,13 @@ class App {
           ? `<span class="${ueberschritten ? 'text-warning' : 'text-success'}">${istMin} Min${ueberschritten ? ' ⚠️' : ''}</span>`
           : '<span class="text-muted">—</span>';
 
-      const safeArbeit = this.escapeHtml(a.arbeit || '').replace(/'/g, "\\'");
+      // Stempelzeiten-Tab im Web ist reine Anzeige — Stempeln läuft über die Tablet-App.
       const startCell = a.stempel_start
         ? `<span style="color:var(--success,#28a745);font-weight:600;">▶ ${a.stempel_start}</span>`
-        : istHeute
-          ? `<button class="btn btn-sm btn-outline-success py-0 px-1" style="font-size:11px;" onclick="window.app.stempelSetzen(${a.termin_id},'${safeArbeit}','start').then(()=>window.app.loadZeitstempelung())">▶ Start</button>`
-          : '<span class="text-muted">—</span>';
+        : '<span class="text-muted">—</span>';
       const endeCell = a.stempel_ende
         ? `<span style="color:var(--danger,#dc3545);font-weight:600;">■ ${a.stempel_ende}</span>`
-        : istHeute
-          ? `<button class="btn btn-sm btn-outline-danger py-0 px-1" style="font-size:11px;" ${!a.stempel_start ? 'disabled' : ''} onclick="window.app.stempelSetzen(${a.termin_id},'${safeArbeit}','ende').then(()=>window.app.loadZeitstempelung())">■ Ende</button>`
-          : '<span class="text-muted">—</span>';
+        : '<span class="text-muted">—</span>';
 
       return `
         <tr>
