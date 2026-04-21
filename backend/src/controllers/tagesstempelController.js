@@ -177,6 +177,18 @@ class TagesstempelController {
           );
           broadcastEvent('termin.updated', { id: t.id, datum });
 
+          // Offene Arbeiten dieses Termins (stempel_start gesetzt, stempel_ende NULL)
+          // bekommen die aktuelle Uhrzeit als stempel_ende (= Arbeitsende)
+          const jetztHHMM = getJetztZeit().substring(0, 5);
+          await runAsync(
+            `UPDATE termine_arbeiten
+                SET stempel_ende = ?
+              WHERE termin_id = ?
+                AND stempel_start IS NOT NULL
+                AND (stempel_ende IS NULL OR stempel_ende = '')`,
+            [jetztHHMM, t.id]
+          );
+
           // Bereits gestempelte Minuten ermitteln (abgeschlossene Arbeiten aus termine_arbeiten)
           const stempelZeilen = await allAsync(
             `SELECT stempel_start, stempel_ende, zeit AS geschaetzte_min FROM termine_arbeiten WHERE termin_id = ?`,

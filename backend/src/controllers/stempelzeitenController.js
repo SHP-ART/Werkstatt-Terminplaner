@@ -5,6 +5,85 @@ const ArbeitszeitenModel = require('../models/arbeitszeitenModel');
 const ZEIT_REGEX = /^([01]\d|2[0-3]):([0-5]\d)$/;
 
 class StempelzeitenController {
+  /**
+   * Berechnet die Anzahl der Minuten in [start, ende], die mit einer Pause
+   * (Mittagspause aus pause_tracking ODER manueller Unterbrechung aus
+   * arbeitsunterbrechungen) überlappen. Wird zur IST-Zeit-Korrektur verwendet.
+   *
+   * pauseRanges: Array von { start: 'HH:MM', ende: 'HH:MM' }
+   */
+  static _pauseAbzugMinuten(start, ende, pauseRanges) {
+    if (!start || !ende || !pauseRanges || pauseRanges.length === 0) return 0;
+    const sMin = StempelzeitenController._hhmmToMin(start);
+    const eMin = StempelzeitenController._hhmmToMin(ende);
+    if (sMin === null || eMin === null || eMin <= sMin) return 0;
+
+    let abzug = 0;
+    for (const p of pauseRanges) {
+      const pStart = StempelzeitenController._hhmmToMin(p.start);
+      const pEnde  = StempelzeitenController._hhmmToMin(p.ende);
+      if (pStart === null || pEnde === null || pEnde <= pStart) continue;
+      const overlap = Math.max(0, Math.min(eMin, pEnde) - Math.max(sMin, pStart));
+      abzug += overlap;
+    }
+    return abzug;
+  }
+
+  static _hhmmToMin(hhmm) {
+    if (!hhmm) return null;
+    const m = String(hhmm).match(/^(\d{1,2}):(\d{2})/);
+    if (!m) return null;
+    return parseInt(m[1], 10) * 60 + parseInt(m[2], 10);
+  }
+
+  static _isoToHHMMSimple(iso) {
+    if (!iso) return null;
+    const d = new Date(iso);
+    if (isNaN(d)) return null;
+    return String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+  }
+
+  /**
+   * Lädt alle Pausen (Mittagspause + manuelle Unterbrechungen) für einen Tag,
+   * gruppiert nach Person-Schlüssel ('mitarbeiter_<id>' / 'lehrling_<id>').
+   */
+  static async _ladePauseRangesProPerson(datum) {
+    const result = {};
+    const _add = (key, range) => {
+      if (!range || !range.start || !range.ende) return;
+      if (!result[key]) result[key] = [];
+      result[key].push(range);
+    };
+
+    // Mittagspausen (pause_tracking) — nur abgeschlossene haben ende_zeit
+    const mittag = await allAsync(
+      `SELECT mitarbeiter_id, lehrling_id, pause_start_zeit, pause_ende_zeit
+       FROM pause_tracking WHERE datum = ? AND abgeschlossen = 1 AND pause_ende_zeit IS NOT NULL`,
+      [datum]
+    );
+    for (const p of mittag) {
+      const start = StempelzeitenController._isoToHHMMSimple(p.pause_start_zeit);
+      const ende  = StempelzeitenController._isoToHHMMSimple(p.pause_ende_zeit);
+      if (p.mitarbeiter_id) _add(`mitarbeiter_${p.mitarbeiter_id}`, { start, ende });
+      if (p.lehrling_id)    _add(`lehrling_${p.lehrling_id}`,       { start, ende });
+    }
+
+    // Manuelle Unterbrechungen — nur beendete (ende_zeit gesetzt)
+    const unterbr = await allAsync(
+      `SELECT mitarbeiter_id, lehrling_id, start_zeit, ende_zeit
+       FROM arbeitsunterbrechungen WHERE datum = ? AND ende_zeit IS NOT NULL`,
+      [datum]
+    );
+    for (const u of unterbr) {
+      const start = u.start_zeit ? String(u.start_zeit).substring(0, 5) : null;
+      const ende  = u.ende_zeit  ? String(u.ende_zeit).substring(0, 5)  : null;
+      if (u.mitarbeiter_id) _add(`mitarbeiter_${u.mitarbeiter_id}`, { start, ende });
+      if (u.lehrling_id)    _add(`lehrling_${u.lehrling_id}`,       { start, ende });
+    }
+
+    return result;
+  }
+
   static async getTagUebersicht(req, res) {
     try {
       const datum = req.query.datum || new Date().toISOString().slice(0, 10);
@@ -56,6 +135,9 @@ class StempelzeitenController {
           AND t.geloescht_am IS NULL
         ORDER BY person_name, ta.termin_id, ta.reihenfolge
       `, [datum]);
+
+      // Pausen + Unterbrechungen für diesen Tag pro Person laden — wird vom IST abgezogen
+      const pauseRangesProPerson = await StempelzeitenController._ladePauseRangesProPerson(datum);
 
       // Personen-Map: alle bekannten Mitarbeiter und Lehrlinge laden
       // Richtwerte aus Zeitverwaltung (Herstellervorgabe) — in-memory Fuzzy-Match
@@ -197,6 +279,15 @@ class StempelzeitenController {
           ? StempelzeitenController._diffMinuten(effStart, effEnde) : null;
         const richtwertS = _getRichtwert(s.arbeit || t.termin_arbeit);
         const planS = _planZeiten(t, richtwertS);
+        const personKey = personId ? `${personTyp}_${personId}` : null;
+        const pauseRanges = personKey ? (pauseRangesProPerson[personKey] || []) : [];
+        const rawIst = (s.stempel_start && s.stempel_ende)
+          ? StempelzeitenController._diffMinuten(s.stempel_start, s.stempel_ende)
+          : istMin;
+        const pauseAbzug = (rawIst != null && effStart && effEnde)
+          ? StempelzeitenController._pauseAbzugMinuten(effStart, effEnde, pauseRanges)
+          : 0;
+        const istNetto = rawIst != null ? Math.max(0, rawIst - pauseAbzug) : null;
         _addArbeit(grupKey, { person_typ: personTyp, person_id: personId, person_name: personName }, t, {
           arbeit_id: s.arbeit_id, termin_id: s.termin_id,
           termin_nr: t.termin_nr || '', interne_auftragsnummer: t.interne_auftragsnummer || '', kennzeichen: t.kennzeichen || '', kunde_name: t.kunde_name || '',
@@ -205,8 +296,9 @@ class StempelzeitenController {
           geschaetzte_min: s.geschaetzte_min,
           plan_start: planS.plan_start, plan_ende: planS.plan_ende,
           stempel_start: s.stempel_start, stempel_ende: s.stempel_ende,
-          ist_min: (s.stempel_start && s.stempel_ende)
-            ? StempelzeitenController._diffMinuten(s.stempel_start, s.stempel_ende) : istMin
+          ist_min: istNetto,
+          ist_brutto_min: rawIst,
+          pause_abzug_min: pauseAbzug
         });
       }
 
@@ -220,13 +312,21 @@ class StempelzeitenController {
           const rw = _getRichtwert(t.termin_arbeit);
           const planP = _planZeiten(t, rw);
           const fb = _fallbackFromTermin(t, t.termin_arbeit);
+          const pauseRanges = pauseRangesProPerson[grupKey] || [];
+          const pauseAbzug = (fb.ist_min != null && fb.stempel_start && fb.stempel_ende)
+            ? StempelzeitenController._pauseAbzugMinuten(fb.stempel_start, fb.stempel_ende, pauseRanges)
+            : 0;
+          const istNetto = fb.ist_min != null ? Math.max(0, fb.ist_min - pauseAbzug) : null;
           _addArbeit(grupKey, person, t, {
             arbeit_id: null, termin_id: t.termin_id,
             termin_nr: t.termin_nr || '', interne_auftragsnummer: t.interne_auftragsnummer || '', kennzeichen: t.kennzeichen || '', kunde_name: t.kunde_name || '',
             arbeit: t.termin_arbeit || '', richtwert_min: rw,
             geschaetzte_min: t.geschaetzte_zeit,
             plan_start: planP.plan_start, plan_ende: planP.plan_ende,
-            stempel_start: fb.stempel_start, stempel_ende: fb.stempel_ende, ist_min: fb.ist_min
+            stempel_start: fb.stempel_start, stempel_ende: fb.stempel_ende,
+            ist_min: istNetto,
+            ist_brutto_min: fb.ist_min,
+            pause_abzug_min: pauseAbzug
           });
         }
       }
