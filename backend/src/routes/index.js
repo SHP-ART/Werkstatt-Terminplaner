@@ -51,7 +51,10 @@ router.use('/teile-bestellungen', teileRoutes);
 router.use('/fahrzeuge', fahrzeugeRoutes);
 router.use('/ki-planung', kiPlanungRoutes);
 router.use('/tablet', tabletRoutes);
-router.use('/tablet-update', requireAuth, tabletUpdateRoutes);
+// /tablet-update: check/download/report-status sind öffentlich (für alte
+// Tablet-Builds ohne API-Key-Support). register/status bleiben auth-geschützt
+// — siehe routes/tabletUpdateRoutes.js
+router.use('/tablet-update', tabletUpdateRoutes);
 router.use('/pause', pauseRoutes);
 router.use('/arbeitspausen', arbeitspausenRoutes);
 
