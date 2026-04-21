@@ -23,7 +23,11 @@ class StempelzeitenController {
           t.lehrling_id,
           t.mitarbeiter_id,
           t.arbeitszeiten_details,
-          t.interne_auftragsnummer
+          t.interne_auftragsnummer,
+          t.fertigstellung_zeit,
+          t.tatsaechliche_zeit,
+          t.startzeit,
+          t.status
         FROM termine t
         LEFT JOIN kunden k ON t.kunde_id = k.id
         WHERE t.datum = ?
@@ -105,6 +109,40 @@ class StempelzeitenController {
         stempelByTermin[s.termin_id].push(s);
       }
 
+      // Fallback: wenn termine_arbeiten.stempel_start/ende leer sind, aus
+      // termine.arbeitszeiten_details / termine.fertigstellung_zeit ableiten.
+      // Wird gesetzt, wenn die Arbeit via "Fertig"-Button (Web) abgeschlossen
+      // wurde statt via Tablet-App-Stempelung.
+      const _isoToHHMM = (iso) => {
+        if (!iso) return null;
+        const d = new Date(iso);
+        if (isNaN(d)) return null;
+        return String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+      };
+      const _parseDetails = (termin) => {
+        if (!termin || !termin.arbeitszeiten_details) return null;
+        try {
+          return typeof termin.arbeitszeiten_details === 'string'
+            ? JSON.parse(termin.arbeitszeiten_details)
+            : termin.arbeitszeiten_details;
+        } catch (_) { return null; }
+      };
+      // Liefert { stempel_start, stempel_ende, ist_min } aus Termin-Fallbacks.
+      // arbeitName=null → globaler Termin-Fallback (fertigstellung_zeit für Ende).
+      const _fallbackFromTermin = (termin, arbeitName) => {
+        const det = _parseDetails(termin);
+        let fbStart = null, fbEnde = null;
+        if (det && det._startzeit) fbStart = det._startzeit;
+        if (arbeitName && det && det[arbeitName] && det[arbeitName].fertigstellung_zeit) {
+          fbEnde = _isoToHHMM(det[arbeitName].fertigstellung_zeit);
+        }
+        if (!fbEnde && termin && termin.fertigstellung_zeit) {
+          fbEnde = _isoToHHMM(termin.fertigstellung_zeit);
+        }
+        const ist = (fbStart && fbEnde) ? StempelzeitenController._diffMinuten(fbStart, fbEnde) : null;
+        return { stempel_start: fbStart, stempel_ende: fbEnde, ist_min: ist };
+      };
+
       const gruppenMap = new Map();
 
       const _getPerson = (person_typ, person_id, fallbackName) => {
@@ -133,14 +171,18 @@ class StempelzeitenController {
         }
         const grupKey = personId ? `${personTyp}_${personId}` : `unbekannt_${s.termin_id}`;
         const t = alleTermine.find(x => x.termin_id === s.termin_id) || {};
-        const istMin = s.stempel_start && s.stempel_ende
-          ? StempelzeitenController._diffMinuten(s.stempel_start, s.stempel_ende) : null;
+        // Fallback aus arbeitszeiten_details/fertigstellung_zeit falls stempel_* leer
+        const fb = _fallbackFromTermin(t, s.arbeit);
+        const effStart = s.stempel_start || fb.stempel_start;
+        const effEnde  = s.stempel_ende  || fb.stempel_ende;
+        const istMin = effStart && effEnde
+          ? StempelzeitenController._diffMinuten(effStart, effEnde) : null;
         _addArbeit(grupKey, { person_typ: personTyp, person_id: personId, person_name: personName }, t, {
           arbeit_id: s.arbeit_id, termin_id: s.termin_id,
           termin_nr: t.termin_nr || '', interne_auftragsnummer: t.interne_auftragsnummer || '', kennzeichen: t.kennzeichen || '', kunde_name: t.kunde_name || '',
           arbeit: s.arbeit || t.termin_arbeit || '',
           richtwert_min: _getRichtwert(s.arbeit || t.termin_arbeit),
-          geschaetzte_min: s.geschaetzte_min, stempel_start: s.stempel_start, stempel_ende: s.stempel_ende, ist_min: istMin
+          geschaetzte_min: s.geschaetzte_min, stempel_start: effStart, stempel_ende: effEnde, ist_min: istMin
         });
       }
 
@@ -151,12 +193,13 @@ class StempelzeitenController {
         if (tp) {
           const person = _getPerson(tp.person_typ, tp.person_id);
           const grupKey = `${tp.person_typ}_${tp.person_id}`;
+          const fb = _fallbackFromTermin(t, t.termin_arbeit);
           _addArbeit(grupKey, person, t, {
             arbeit_id: null, termin_id: t.termin_id,
             termin_nr: t.termin_nr || '', interne_auftragsnummer: t.interne_auftragsnummer || '', kennzeichen: t.kennzeichen || '', kunde_name: t.kunde_name || '',
             arbeit: t.termin_arbeit || '', richtwert_min: _getRichtwert(t.termin_arbeit),
             geschaetzte_min: t.geschaetzte_zeit,
-            stempel_start: null, stempel_ende: null, ist_min: null
+            stempel_start: fb.stempel_start, stempel_ende: fb.stempel_ende, ist_min: fb.ist_min
           });
         }
       }
@@ -167,13 +210,16 @@ class StempelzeitenController {
         gruppenMap.set('alle_auftraege', {
           person_typ: 'alle', person_id: 0,
           person_name: '📋 Alle Aufträge (noch nicht gestempelt)',
-          arbeiten: ohnePersonOhneStempel.map(t => ({
-            arbeit_id: null, termin_id: t.termin_id,
-            termin_nr: t.termin_nr || '', interne_auftragsnummer: t.interne_auftragsnummer || '', kennzeichen: t.kennzeichen || '', kunde_name: t.kunde_name || '',
-            arbeit: t.termin_arbeit || '', richtwert_min: _getRichtwert(t.termin_arbeit),
-            geschaetzte_min: t.geschaetzte_zeit,
-            stempel_start: null, stempel_ende: null, ist_min: null
-          }))
+          arbeiten: ohnePersonOhneStempel.map(t => {
+            const fb = _fallbackFromTermin(t, t.termin_arbeit);
+            return {
+              arbeit_id: null, termin_id: t.termin_id,
+              termin_nr: t.termin_nr || '', interne_auftragsnummer: t.interne_auftragsnummer || '', kennzeichen: t.kennzeichen || '', kunde_name: t.kunde_name || '',
+              arbeit: t.termin_arbeit || '', richtwert_min: _getRichtwert(t.termin_arbeit),
+              geschaetzte_min: t.geschaetzte_zeit,
+              stempel_start: fb.stempel_start, stempel_ende: fb.stempel_ende, ist_min: fb.ist_min
+            };
+          })
         });
       }
 
