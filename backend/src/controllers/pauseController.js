@@ -166,6 +166,7 @@ class PauseController {
       // 4. Filtere Termine nach _gesamt_mitarbeiter_id
       const eigeneTermine = [];
       let naechsterTerminId = null;
+      let aktuellerTerminId = null;  // erster in_arbeit-Termin = der gerade laufende
 
       for (const termin of termine) {
         if (termin.arbeitszeiten_details) {
@@ -181,6 +182,9 @@ class PauseController {
 
               if (istEigener) {
                 eigeneTermine.push(termin);
+                if (!aktuellerTerminId && termin.status === 'in_arbeit') {
+                  aktuellerTerminId = termin.id;
+                }
                 if (!naechsterTerminId && termin.status === 'geplant') {
                   naechsterTerminId = termin.id;
                 }
@@ -190,6 +194,18 @@ class PauseController {
             console.error('Fehler beim Parsen von arbeitszeiten_details:', e);
           }
         }
+      }
+
+      // Fallback: aktuell laufender Termin auch ueber direkte mitarbeiter_id-Zuordnung erkennen
+      if (!aktuellerTerminId) {
+        const directField = personTyp === 'mitarbeiter' ? 'mitarbeiter_id' : 'lehrling_id';
+        const direkt = await PauseController.dbGet(
+          `SELECT id FROM termine
+            WHERE datum = ? AND ${directField} = ? AND status = 'in_arbeit' AND geloescht_am IS NULL
+            ORDER BY id LIMIT 1`,
+          [datum, personId]
+        );
+        if (direkt) aktuellerTerminId = direkt.id;
       }
 
       if (eigeneTermine.length === 0) {
@@ -251,15 +267,16 @@ class PauseController {
       const result = await PauseController.dbRun(`
         INSERT INTO pause_tracking (
           mitarbeiter_id, lehrling_id, pause_start_zeit,
-          pause_naechster_termin_id, datum, abgeschlossen
-        ) VALUES (?, ?, ?, ?, ?, 0)
-      `, [mitarbeiterId, lehrlingId, pauseStartZeit, naechsterTerminId, datum]);
+          pause_naechster_termin_id, pause_aktueller_termin_id, datum, abgeschlossen
+        ) VALUES (?, ?, ?, ?, ?, ?, 0)
+      `, [mitarbeiterId, lehrlingId, pauseStartZeit, naechsterTerminId, aktuellerTerminId, datum]);
 
       res.json({
         success: true,
         pause_tracking_id: result.lastID,
         verschobene_termine: eigeneTermine.length,
         naechster_termin_id: naechsterTerminId,
+        aktueller_termin_id: aktuellerTerminId,
         pause_start_zeit: pauseStartZeit
       });
 

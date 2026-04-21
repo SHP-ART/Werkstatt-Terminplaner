@@ -10,7 +10,7 @@ class StempelzeitenController {
    * (Mittagspause aus pause_tracking ODER manueller Unterbrechung aus
    * arbeitsunterbrechungen) überlappen. Wird zur IST-Zeit-Korrektur verwendet.
    *
-   * pauseRanges: Array von { start: 'HH:MM', ende: 'HH:MM' }
+   * pauseRanges: Array von { start: 'HH:MM', ende: 'HH:MM', typ, grund?, pause_id?, aktueller_termin_id? }
    */
   static _pauseAbzugMinuten(start, ende, pauseRanges) {
     if (!start || !ende || !pauseRanges || pauseRanges.length === 0) return 0;
@@ -27,6 +27,39 @@ class StempelzeitenController {
       abzug += overlap;
     }
     return abzug;
+  }
+
+  /**
+   * Liefert detaillierte Pausen-Auflistung fuer einen [start, ende]-Stempelbereich.
+   * Jede Pause die ueberlappt wird mit Typ, Original-Zeitfenster, ueberlapptem Abzug
+   * und ggf. Grund/Termin-Zuordnung zurueckgegeben.
+   */
+  static _pauseDetailsFuerBereich(start, ende, pauseRanges, terminId) {
+    const result = [];
+    if (!start || !ende || !pauseRanges || pauseRanges.length === 0) return result;
+    const sMin = StempelzeitenController._hhmmToMin(start);
+    const eMin = StempelzeitenController._hhmmToMin(ende);
+    if (sMin === null || eMin === null || eMin <= sMin) return result;
+
+    for (const p of pauseRanges) {
+      const pStart = StempelzeitenController._hhmmToMin(p.start);
+      const pEnde  = StempelzeitenController._hhmmToMin(p.ende);
+      if (pStart === null || pEnde === null || pEnde <= pStart) continue;
+      const overlap = Math.max(0, Math.min(eMin, pEnde) - Math.max(sMin, pStart));
+      // Pause die explizit diesem Termin zugeordnet ist auch ohne Ueberlappung melden
+      const istExplizitFuerTermin = terminId && p.aktueller_termin_id === terminId;
+      if (overlap <= 0 && !istExplizitFuerTermin) continue;
+      result.push({
+        typ: p.typ || 'pause',
+        start: p.start,
+        ende: p.ende,
+        abzug_min: overlap,
+        grund: p.grund || null,
+        aktiv: !!p.aktiv,
+        explizit: istExplizitFuerTermin
+      });
+    }
+    return result;
   }
 
   static _hhmmToMin(hhmm) {
@@ -46,6 +79,8 @@ class StempelzeitenController {
   /**
    * Lädt alle Pausen (Mittagspause + manuelle Unterbrechungen) für einen Tag,
    * gruppiert nach Person-Schlüssel ('mitarbeiter_<id>' / 'lehrling_<id>').
+   * Aktive (noch laufende) Pausen werden mit Endzeit = jetzt eingetragen, damit
+   * pausierte Termine in der Live-Anzeige korrekt erscheinen.
    */
   static async _ladePauseRangesProPerson(datum) {
     const result = {};
@@ -55,30 +90,71 @@ class StempelzeitenController {
       result[key].push(range);
     };
 
-    // Mittagspausen (pause_tracking) — nur abgeschlossene haben ende_zeit
+    const heuteStr = new Date().toISOString().slice(0, 10);
+    const istHeute = datum === heuteStr;
+    const jetztHHMM = (() => {
+      const n = new Date();
+      return String(n.getHours()).padStart(2, '0') + ':' + String(n.getMinutes()).padStart(2, '0');
+    })();
+
+    // Mittagspausen (pause_tracking) — abgeschlossene + heute laufende
     const mittag = await allAsync(
-      `SELECT mitarbeiter_id, lehrling_id, pause_start_zeit, pause_ende_zeit
-       FROM pause_tracking WHERE datum = ? AND abgeschlossen = 1 AND pause_ende_zeit IS NOT NULL`,
+      `SELECT id, mitarbeiter_id, lehrling_id, pause_start_zeit, pause_ende_zeit, abgeschlossen,
+              pause_naechster_termin_id, pause_aktueller_termin_id
+       FROM pause_tracking WHERE datum = ?`,
       [datum]
     );
     for (const p of mittag) {
       const start = StempelzeitenController._isoToHHMMSimple(p.pause_start_zeit);
-      const ende  = StempelzeitenController._isoToHHMMSimple(p.pause_ende_zeit);
-      if (p.mitarbeiter_id) _add(`mitarbeiter_${p.mitarbeiter_id}`, { start, ende });
-      if (p.lehrling_id)    _add(`lehrling_${p.lehrling_id}`,       { start, ende });
+      let ende, aktiv = false;
+      if (p.abgeschlossen && p.pause_ende_zeit) {
+        ende = StempelzeitenController._isoToHHMMSimple(p.pause_ende_zeit);
+      } else if (istHeute && start) {
+        // Live: aktive Pause bis jetzt
+        ende = jetztHHMM;
+        aktiv = true;
+      } else {
+        continue;
+      }
+      const range = {
+        start, ende,
+        typ: 'mittagspause',
+        pause_id: p.id,
+        aktueller_termin_id: p.pause_aktueller_termin_id || null,
+        naechster_termin_id: p.pause_naechster_termin_id || null,
+        aktiv
+      };
+      if (p.mitarbeiter_id) _add(`mitarbeiter_${p.mitarbeiter_id}`, range);
+      if (p.lehrling_id)    _add(`lehrling_${p.lehrling_id}`,       range);
     }
 
-    // Manuelle Unterbrechungen — nur beendete (ende_zeit gesetzt)
+    // Manuelle Unterbrechungen — abgeschlossene + heute laufende
     const unterbr = await allAsync(
-      `SELECT mitarbeiter_id, lehrling_id, start_zeit, ende_zeit
-       FROM arbeitsunterbrechungen WHERE datum = ? AND ende_zeit IS NOT NULL`,
+      `SELECT id, mitarbeiter_id, lehrling_id, start_zeit, ende_zeit, grund, termin_id
+       FROM arbeitsunterbrechungen WHERE datum = ?`,
       [datum]
     );
     for (const u of unterbr) {
       const start = u.start_zeit ? String(u.start_zeit).substring(0, 5) : null;
-      const ende  = u.ende_zeit  ? String(u.ende_zeit).substring(0, 5)  : null;
-      if (u.mitarbeiter_id) _add(`mitarbeiter_${u.mitarbeiter_id}`, { start, ende });
-      if (u.lehrling_id)    _add(`lehrling_${u.lehrling_id}`,       { start, ende });
+      let ende, aktiv = false;
+      if (u.ende_zeit) {
+        ende = String(u.ende_zeit).substring(0, 5);
+      } else if (istHeute && start) {
+        ende = jetztHHMM;
+        aktiv = true;
+      } else {
+        continue;
+      }
+      const range = {
+        start, ende,
+        typ: 'unterbrechung',
+        pause_id: u.id,
+        grund: u.grund || null,
+        aktueller_termin_id: u.termin_id || null,
+        aktiv
+      };
+      if (u.mitarbeiter_id) _add(`mitarbeiter_${u.mitarbeiter_id}`, range);
+      if (u.lehrling_id)    _add(`lehrling_${u.lehrling_id}`,       range);
     }
 
     return result;
@@ -287,6 +363,9 @@ class StempelzeitenController {
         const pauseAbzug = (rawIst != null && effStart && effEnde)
           ? StempelzeitenController._pauseAbzugMinuten(effStart, effEnde, pauseRanges)
           : 0;
+        const pauseDetails = (effStart && effEnde)
+          ? StempelzeitenController._pauseDetailsFuerBereich(effStart, effEnde, pauseRanges, s.termin_id)
+          : [];
         const istNetto = rawIst != null ? Math.max(0, rawIst - pauseAbzug) : null;
         _addArbeit(grupKey, { person_typ: personTyp, person_id: personId, person_name: personName }, t, {
           arbeit_id: s.arbeit_id, termin_id: s.termin_id,
@@ -298,7 +377,8 @@ class StempelzeitenController {
           stempel_start: s.stempel_start, stempel_ende: s.stempel_ende,
           ist_min: istNetto,
           ist_brutto_min: rawIst,
-          pause_abzug_min: pauseAbzug
+          pause_abzug_min: pauseAbzug,
+          pause_details: pauseDetails
         });
       }
 
@@ -316,6 +396,9 @@ class StempelzeitenController {
           const pauseAbzug = (fb.ist_min != null && fb.stempel_start && fb.stempel_ende)
             ? StempelzeitenController._pauseAbzugMinuten(fb.stempel_start, fb.stempel_ende, pauseRanges)
             : 0;
+          const pauseDetails = (fb.stempel_start && fb.stempel_ende)
+            ? StempelzeitenController._pauseDetailsFuerBereich(fb.stempel_start, fb.stempel_ende, pauseRanges, t.termin_id)
+            : [];
           const istNetto = fb.ist_min != null ? Math.max(0, fb.ist_min - pauseAbzug) : null;
           _addArbeit(grupKey, person, t, {
             arbeit_id: null, termin_id: t.termin_id,
@@ -326,7 +409,8 @@ class StempelzeitenController {
             stempel_start: fb.stempel_start, stempel_ende: fb.stempel_ende,
             ist_min: istNetto,
             ist_brutto_min: fb.ist_min,
-            pause_abzug_min: pauseAbzug
+            pause_abzug_min: pauseAbzug,
+            pause_details: pauseDetails
           });
         }
       }

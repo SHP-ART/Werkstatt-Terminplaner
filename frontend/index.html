@@ -3816,6 +3816,7 @@
             <div style="display:flex;gap:0;border-bottom:2px solid #e5e7eb;margin-bottom:16px;">
                 <button id="ztSubTabStempel" class="zt-sub-tab zt-sub-tab-active" style="padding:7px 18px;font-size:13px;font-weight:600;border:none;background:none;cursor:pointer;border-bottom:2px solid #3b82f6;margin-bottom:-2px;color:#3b82f6;">⏱️ Stempelzeiten</button>
                 <button id="ztSubTabZeitkonto" class="zt-sub-tab" style="padding:7px 18px;font-size:13px;font-weight:600;border:none;background:none;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-2px;color:#666;">📊 Zeitkonto</button>
+                <button id="ztSubTabPausen" class="zt-sub-tab" style="padding:7px 18px;font-size:13px;font-weight:600;border:none;background:none;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-2px;color:#666;">☕ Pausen-Report</button>
             </div>
 
             <!-- Panel: Stempelzeiten -->
@@ -3848,6 +3849,24 @@
                 </div>
                 <div id="zeitkontoContainer">
                     <p style="color:#aaa;font-size:13px;">Zeitraum wählen…</p>
+                </div>
+            </div>
+
+            <!-- Panel: Pausen-Report -->
+            <div id="ztPanelPausen" style="display:none;">
+                <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:12px;">
+                    <div style="display:flex;align-items:center;gap:6px;font-size:13px;color:#666;">
+                        <input type="date" id="pausenReportVon" class="modern-date-input" style="height:26px;font-size:12px;padding:1px 5px;">
+                        <span>–</span>
+                        <input type="date" id="pausenReportBis" class="modern-date-input" style="height:26px;font-size:12px;padding:1px 5px;">
+                        <button class="btn btn-sm btn-outline-secondary" onclick="window.app.loadPausenReport()">↻ Aktualisieren</button>
+                    </div>
+                    <div>
+                        <button class="btn btn-sm btn-outline-success" onclick="window.app.exportPausenReportCsv()">⬇ CSV-Export</button>
+                    </div>
+                </div>
+                <div id="pausenReportContainer">
+                    <p style="color:#aaa;font-size:13px;">Klicken Sie auf „Aktualisieren" um Pausen zu laden…</p>
                 </div>
             </div>
         </template>

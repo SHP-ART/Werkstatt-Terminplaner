@@ -1004,16 +1004,21 @@ class App {
     // Sub-Tab-Umschaltung
     const subTabStempel = document.getElementById('ztSubTabStempel');
     const subTabZeitkonto = document.getElementById('ztSubTabZeitkonto');
+    const subTabPausen = document.getElementById('ztSubTabPausen');
     const switchZtSubTab = (active) => {
-      const isStempel = active === 'stempel';
-      document.getElementById('ztPanelStempel').style.display = isStempel ? '' : 'none';
-      document.getElementById('ztPanelZeitkonto').style.display = isStempel ? 'none' : '';
-      subTabStempel.style.borderBottomColor = isStempel ? '#3b82f6' : 'transparent';
-      subTabStempel.style.color = isStempel ? '#3b82f6' : '#666';
-      subTabZeitkonto.style.borderBottomColor = isStempel ? 'transparent' : '#3b82f6';
-      subTabZeitkonto.style.color = isStempel ? '#666' : '#3b82f6';
-      if (!isStempel) {
-        // Zeitkonto lazy laden wenn noch kein Inhalt
+      const panels = {
+        stempel: document.getElementById('ztPanelStempel'),
+        zeitkonto: document.getElementById('ztPanelZeitkonto'),
+        pausen: document.getElementById('ztPanelPausen'),
+      };
+      const tabs = { stempel: subTabStempel, zeitkonto: subTabZeitkonto, pausen: subTabPausen };
+      Object.entries(panels).forEach(([k, el]) => { if (el) el.style.display = (k === active) ? '' : 'none'; });
+      Object.entries(tabs).forEach(([k, el]) => {
+        if (!el) return;
+        el.style.borderBottomColor = (k === active) ? '#3b82f6' : 'transparent';
+        el.style.color = (k === active) ? '#3b82f6' : '#666';
+      });
+      if (active === 'zeitkonto') {
         const vonEl2 = document.getElementById('zeitkontoVon');
         const bisEl2 = document.getElementById('zeitkontoBis');
         if (vonEl2 && !vonEl2.value) {
@@ -1022,10 +1027,20 @@ class App {
           bisEl2.value = new Date(h.getFullYear(), h.getMonth() + 1, 0).toISOString().substring(0, 10);
         }
         this.loadZeitkonto();
+      } else if (active === 'pausen') {
+        const vonEl3 = document.getElementById('pausenReportVon');
+        const bisEl3 = document.getElementById('pausenReportBis');
+        if (vonEl3 && !vonEl3.value) {
+          const h = new Date();
+          vonEl3.value = new Date(h.getFullYear(), h.getMonth(), 1).toISOString().substring(0, 10);
+          bisEl3.value = new Date(h.getFullYear(), h.getMonth() + 1, 0).toISOString().substring(0, 10);
+        }
+        this.loadPausenReport();
       }
     };
     this.bindEventListenerOnce(subTabStempel, 'click', () => switchZtSubTab('stempel'), 'ZtSubTabStempel');
     this.bindEventListenerOnce(subTabZeitkonto, 'click', () => switchZtSubTab('zeitkonto'), 'ZtSubTabZeitkonto');
+    this.bindEventListenerOnce(subTabPausen, 'click', () => switchZtSubTab('pausen'), 'ZtSubTabPausen');
 
     const planungPrevTag = document.getElementById('planungPrevTag');
     const planungNextTag = document.getElementById('planungNextTag');
@@ -30882,6 +30897,144 @@ class App {
     });
   }
 
+  async loadPausenReport() {
+    const von = document.getElementById('pausenReportVon')?.value;
+    const bis = document.getElementById('pausenReportBis')?.value;
+    const container = document.getElementById('pausenReportContainer');
+    if (!container) return;
+    if (!von || !bis) {
+      container.innerHTML = '<p style="color:#aaa;font-size:13px;">Zeitraum wählen…</p>';
+      return;
+    }
+    container.innerHTML = '<p class="loading-text" style="font-size:13px;">Lade Pausen-Report…</p>';
+    try {
+      const res = await ApiService.get(`/reporting/pausen?von=${von}&bis=${bis}`);
+      const eintraege = res?.eintraege || [];
+      this._pausenReportData = { von, bis, eintraege };
+      this.renderPausenReport(eintraege);
+    } catch (err) {
+      container.innerHTML = `<p style="color:#e55;font-size:13px;">Fehler: ${err.message}</p>`;
+    }
+  }
+
+  renderPausenReport(eintraege) {
+    const container = document.getElementById('pausenReportContainer');
+    if (!container) return;
+    if (!eintraege || eintraege.length === 0) {
+      container.innerHTML = '<p style="color:#aaa;font-size:13px;">Keine Pausen im gewählten Zeitraum.</p>';
+      return;
+    }
+    const fmtDatum = d => {
+      const dt = new Date(d + 'T00:00:00');
+      return dt.toLocaleDateString('de-DE', { weekday: 'short', day: '2-digit', month: '2-digit', year: '2-digit' });
+    };
+    const minToStr = m => {
+      if (!m) return '0:00';
+      return Math.floor(m / 60) + ':' + String(m % 60).padStart(2, '0');
+    };
+
+    const rows = eintraege.map((e, idx) => {
+      const mpListe = (e.mittagspausen || []).map(p => {
+        const ref = p.aktueller_termin_nr ? ` <span style="color:#888;">(${p.aktueller_termin_nr}${p.aktueller_kennzeichen ? ' / ' + p.aktueller_kennzeichen : ''})</span>` : '';
+        const status = p.abgeschlossen ? '' : ' <span style="color:#b48a00;">[läuft]</span>';
+        return `<div style="font-size:11.5px;color:#555;">☕ ${p.start || '?'}–${p.ende || '?'} <b>${p.dauer_min} min</b>${ref}${status}</div>`;
+      }).join('');
+      const ubListe = (e.unterbrechungen || []).map(u => {
+        const ref = u.termin_nr ? ` <span style="color:#888;">(${u.termin_nr}${u.kennzeichen ? ' / ' + u.kennzeichen : ''})</span>` : '';
+        const grund = u.grund ? ` – ${this.escapeHtml(u.grund)}` : '';
+        const status = u.ende ? '' : ' <span style="color:#b48a00;">[läuft]</span>';
+        return `<div style="font-size:11.5px;color:#555;">⏸ ${u.start || '?'}–${u.ende || '?'} <b>${u.dauer_min} min</b>${grund}${ref}${status}</div>`;
+      }).join('');
+
+      return `
+        <tr style="border-bottom:1px solid #f0f0f0;">
+          <td style="padding:6px 8px;white-space:nowrap;font-size:12px;color:#666;">${fmtDatum(e.datum)}</td>
+          <td style="padding:6px 8px;font-size:13px;font-weight:600;">${this.escapeHtml(e.person_name || '')} <span style="font-size:11px;color:#999;font-weight:normal;">${e.person_typ === 'lehrling' ? 'L' : 'M'}</span></td>
+          <td style="padding:6px 8px;text-align:right;font-size:13px;color:#444;">${minToStr(e.mittagspause_min)}</td>
+          <td style="padding:6px 8px;text-align:right;font-size:13px;color:#444;">${minToStr(e.unterbrechung_min)}</td>
+          <td style="padding:6px 8px;text-align:right;font-size:13px;font-weight:600;">${minToStr(e.gesamt_min)}</td>
+          <td style="padding:6px 8px;">${mpListe}${ubListe}</td>
+        </tr>`;
+    }).join('');
+
+    // Summen
+    const sumMp = eintraege.reduce((s, e) => s + (e.mittagspause_min || 0), 0);
+    const sumUb = eintraege.reduce((s, e) => s + (e.unterbrechung_min || 0), 0);
+    const sumG = sumMp + sumUb;
+
+    container.innerHTML = `
+      <div style="overflow-x:auto;border:1px solid #e5e7eb;border-radius:8px;">
+        <table style="width:100%;border-collapse:collapse;">
+          <thead style="background:#f9fafb;">
+            <tr>
+              <th style="padding:8px;text-align:left;font-size:11px;color:#666;">Datum</th>
+              <th style="padding:8px;text-align:left;font-size:11px;color:#666;">Person</th>
+              <th style="padding:8px;text-align:right;font-size:11px;color:#666;">☕ Mittag</th>
+              <th style="padding:8px;text-align:right;font-size:11px;color:#666;">⏸ Unterbr.</th>
+              <th style="padding:8px;text-align:right;font-size:11px;color:#666;">Σ Gesamt</th>
+              <th style="padding:8px;text-align:left;font-size:11px;color:#666;">Details</th>
+            </tr>
+          </thead>
+          <tbody>${rows}</tbody>
+          <tfoot>
+            <tr style="background:#f3f4f6;font-weight:600;">
+              <td colspan="2" style="padding:8px;font-size:12px;">Summe (${eintraege.length} Einträge)</td>
+              <td style="padding:8px;text-align:right;font-size:12px;">${minToStr(sumMp)}</td>
+              <td style="padding:8px;text-align:right;font-size:12px;">${minToStr(sumUb)}</td>
+              <td style="padding:8px;text-align:right;font-size:12px;">${minToStr(sumG)}</td>
+              <td></td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>`;
+  }
+
+  exportPausenReportCsv() {
+    const data = this._pausenReportData;
+    if (!data || !data.eintraege || data.eintraege.length === 0) {
+      alert('Keine Daten zum Exportieren. Bitte zuerst Report laden.');
+      return;
+    }
+    const csvEscape = v => {
+      if (v == null) return '';
+      const s = String(v);
+      if (s.includes(';') || s.includes('"') || s.includes('\n')) {
+        return '"' + s.replace(/"/g, '""') + '"';
+      }
+      return s;
+    };
+    const lines = [];
+    lines.push(['Datum', 'Person', 'Typ', 'Mittagspause_min', 'Unterbrechung_min', 'Gesamt_min', 'Details'].join(';'));
+    for (const e of data.eintraege) {
+      const details = [];
+      (e.mittagspausen || []).forEach(p => {
+        details.push(`Mittag ${p.start || '?'}-${p.ende || '?'} ${p.dauer_min}min` + (p.aktueller_termin_nr ? ` (Termin ${p.aktueller_termin_nr})` : ''));
+      });
+      (e.unterbrechungen || []).forEach(u => {
+        details.push(`Unterbr ${u.start || '?'}-${u.ende || '?'} ${u.dauer_min}min` + (u.grund ? ` [${u.grund}]` : '') + (u.termin_nr ? ` (Termin ${u.termin_nr})` : ''));
+      });
+      lines.push([
+        e.datum,
+        e.person_name || '',
+        e.person_typ === 'lehrling' ? 'Lehrling' : 'Mitarbeiter',
+        e.mittagspause_min || 0,
+        e.unterbrechung_min || 0,
+        e.gesamt_min || 0,
+        details.join(' | ')
+      ].map(csvEscape).join(';'));
+    }
+    const csv = '\uFEFF' + lines.join('\r\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `pausen-report_${data.von}_${data.bis}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }
+
   async loadZeitstempelung() {
     const container = document.getElementById('zeitstempelungContainer');
     const datumInput = document.getElementById('zeitstempelungDatum');
@@ -31004,6 +31157,29 @@ class App {
           ? `<span class="${ueberschritten ? 'text-warning' : 'text-success'}">${istMin} Min${ueberschritten ? ' ⚠️' : ''}</span>`
           : '<span class="text-muted">—</span>';
 
+      // Pause-Badge: zeigt Pausen die in dieser Arbeit (Stempel-Bereich) liegen
+      const pauseDetails = Array.isArray(a.pause_details) ? a.pause_details : [];
+      const pauseAbzug = a.pause_abzug_min || 0;
+      const istBrutto = a.ist_brutto_min;
+      let pauseBadge = '';
+      let pauseTooltipHtml = '';
+      const pausiertAktiv = pauseDetails.some(d => d.aktiv);
+      if (pauseDetails.length > 0) {
+        const tooltipLines = pauseDetails.map(d => {
+          const ico = d.typ === 'mittagspause' ? '☕' : '⏸';
+          const grundTxt = d.grund ? ` – ${this.escapeHtml(d.grund)}` : '';
+          const aktivTxt = d.aktiv ? ' (läuft…)' : '';
+          return `${ico} ${d.start}–${d.ende} ${d.typ === 'mittagspause' ? 'Mittagspause' : 'Unterbrechung'}${grundTxt}: −${d.abzug_min} min${aktivTxt}`;
+        }).join('\n');
+        const bruttoTxt = (istBrutto != null && pauseAbzug > 0)
+          ? `\nBrutto ${istBrutto} min − Pause ${pauseAbzug} min = Netto ${istMin} min`
+          : '';
+        const tooltipText = (tooltipLines + bruttoTxt).replace(/"/g, '&quot;');
+        const badgeColor = pausiertAktiv ? '#ffc107' : '#6c757d';
+        const badgeBg = pausiertAktiv ? '#fff3cd' : '#f1f3f5';
+        pauseBadge = ` <span title="${tooltipText}" style="display:inline-block;margin-left:4px;background:${badgeBg};color:${badgeColor};border:1px solid ${badgeColor};border-radius:10px;padding:1px 7px;font-size:11px;font-weight:600;cursor:help;">${pausiertAktiv ? '⏸ pausiert' : '☕ −' + pauseAbzug + ' min'}</span>`;
+      }
+
       // Stempelzeiten-Tab im Web ist reine Anzeige — Stempeln läuft über die Tablet-App.
       const planStartCell = a.plan_start
         ? `<span style="color:#6c757d;">${a.plan_start}</span>`
@@ -31018,8 +31194,9 @@ class App {
         ? `<span style="color:var(--danger,#dc3545);font-weight:600;">■ ${a.stempel_ende}</span>`
         : '<span class="text-muted">—</span>';
 
+      const rowStyle = pausiertAktiv ? ' style="background:#fffbe6;"' : '';
       return `
-        <tr>
+        <tr${rowStyle}>
           <td>${this.escapeHtml(a.termin_nr || '')}</td>
           <td>${this.escapeHtml(a.interne_auftragsnummer || '')}</td>
           <td>${this.escapeHtml(a.kunde_name || '')}</td>
@@ -31030,7 +31207,7 @@ class App {
           <td class="text-success">${startCell}</td>
           <td class="text-danger">${endeCell}</td>
           <td class="text-warning">${richtwertMin ? richtwertMin + ' Min' : '—'}</td>
-          <td>${istText}</td>
+          <td>${istText}${pauseBadge}</td>
         </tr>
       `;
     }).join('');

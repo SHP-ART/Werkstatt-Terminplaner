@@ -372,11 +372,13 @@ class TagesstempelController {
 
       const unterbrechungen = await allAsync(
         `SELECT au.id, au.mitarbeiter_id, au.lehrling_id, au.datum,
-                au.start_zeit, au.ende_zeit,
+                au.start_zeit, au.ende_zeit, au.grund, au.termin_id,
+                t.termin_nr, t.kennzeichen,
                 m.name AS mitarbeiter_name, l.name AS lehrling_name
          FROM arbeitsunterbrechungen au
          LEFT JOIN mitarbeiter m ON au.mitarbeiter_id = m.id
          LEFT JOIN lehrlinge l ON au.lehrling_id = l.id
+         LEFT JOIN termine t ON au.termin_id = t.id
          WHERE au.datum = ?
          ORDER BY au.start_zeit`,
         [datum]
@@ -384,8 +386,13 @@ class TagesstempelController {
 
       const pausen = await allAsync(
         `SELECT pt.id, pt.mitarbeiter_id, pt.lehrling_id, pt.datum,
-                pt.pause_start_zeit, pt.pause_ende_zeit, pt.abgeschlossen
+                pt.pause_start_zeit, pt.pause_ende_zeit, pt.abgeschlossen,
+                pt.pause_aktueller_termin_id, pt.pause_naechster_termin_id,
+                ta.termin_nr AS aktueller_termin_nr, ta.kennzeichen AS aktueller_kennzeichen,
+                tn.termin_nr AS naechster_termin_nr, tn.kennzeichen AS naechster_kennzeichen
          FROM pause_tracking pt
+         LEFT JOIN termine ta ON pt.pause_aktueller_termin_id = ta.id
+         LEFT JOIN termine tn ON pt.pause_naechster_termin_id = tn.id
          WHERE pt.datum = ?
          ORDER BY pt.pause_start_zeit`,
         [datum]
@@ -404,7 +411,7 @@ class TagesstempelController {
    */
   static async unterbrechungStart(req, res) {
     try {
-      const { mitarbeiter_id, lehrling_id } = req.body;
+      const { mitarbeiter_id, lehrling_id, grund, termin_id } = req.body;
       if (!mitarbeiter_id && !lehrling_id) {
         return res.status(400).json({ error: 'mitarbeiter_id oder lehrling_id erforderlich' });
       }
@@ -412,13 +419,25 @@ class TagesstempelController {
       const datum = getHeuteDatum();
       const zeit = getJetztZeit();
 
+      // Wenn kein termin_id mitgegeben: ersten in_arbeit-Termin der Person automatisch zuordnen
+      let resolvedTerminId = termin_id || null;
+      if (!resolvedTerminId) {
+        const directField = mitarbeiter_id ? 'mitarbeiter_id' : 'lehrling_id';
+        const direkt = await getAsync(
+          `SELECT id FROM termine WHERE datum = ? AND ${directField} = ? AND status = 'in_arbeit' AND geloescht_am IS NULL ORDER BY id LIMIT 1`,
+          [datum, mitarbeiter_id || lehrling_id]
+        );
+        if (direkt) resolvedTerminId = direkt.id;
+      }
+
       const result = await runAsync(
-        `INSERT INTO arbeitsunterbrechungen (mitarbeiter_id, lehrling_id, datum, start_zeit, erstellt_am) VALUES (?, ?, ?, ?, datetime('now'))`,
-        [mitarbeiter_id || null, lehrling_id || null, datum, zeit]
+        `INSERT INTO arbeitsunterbrechungen (mitarbeiter_id, lehrling_id, datum, start_zeit, grund, termin_id, erstellt_am)
+         VALUES (?, ?, ?, ?, ?, ?, datetime('now'))`,
+        [mitarbeiter_id || null, lehrling_id || null, datum, zeit, grund || null, resolvedTerminId]
       );
 
-      broadcastEvent('tagesstempel.unterbrechung', { mitarbeiter_id: mitarbeiter_id || null, lehrling_id: lehrling_id || null, datum });
-      res.json({ success: true, id: result.lastID, start_zeit: zeit });
+      broadcastEvent('tagesstempel.unterbrechung', { mitarbeiter_id: mitarbeiter_id || null, lehrling_id: lehrling_id || null, datum, termin_id: resolvedTerminId, grund: grund || null });
+      res.json({ success: true, id: result.lastID, start_zeit: zeit, termin_id: resolvedTerminId });
     } catch (err) {
       console.error('[Unterbrechung-Start] Fehler:', err);
       res.status(500).json({ error: err.message });
@@ -528,7 +547,7 @@ class TagesstempelController {
   static async updateUnterbrechung(req, res) {
     try {
       const { id } = req.params;
-      const { start_zeit, ende_zeit } = req.body;
+      const { start_zeit, ende_zeit, grund, termin_id } = req.body;
       const ZEIT_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
       if (start_zeit && !ZEIT_RE.test(start_zeit)) return res.status(400).json({ error: 'Ungültige start_zeit' });
       if (ende_zeit  && !ZEIT_RE.test(ende_zeit))  return res.status(400).json({ error: 'Ungültige ende_zeit' });
@@ -540,6 +559,8 @@ class TagesstempelController {
       const params = [];
       if (start_zeit !== undefined) { sets.push('start_zeit = ?'); params.push(start_zeit); }
       if (ende_zeit  !== undefined) { sets.push('ende_zeit = ?');  params.push(ende_zeit === '' ? null : ende_zeit); }
+      if (grund      !== undefined) { sets.push('grund = ?');      params.push(grund === '' ? null : grund); }
+      if (termin_id  !== undefined) { sets.push('termin_id = ?');  params.push(termin_id || null); }
       if (sets.length) {
         params.push(id);
         await runAsync(`UPDATE arbeitsunterbrechungen SET ${sets.join(', ')} WHERE id = ?`, params);
