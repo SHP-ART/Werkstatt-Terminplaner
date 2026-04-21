@@ -113,13 +113,13 @@
       position: absolute;
       top: 0;
       left: 0;
-      color: #ffffff;
+      color: #4a4a4a;
       font-family: 'Segoe UI', Arial, sans-serif;
       font-weight: 700;
       font-size: 4em;
       letter-spacing: 0.15em;
       white-space: nowrap;
-      text-shadow: 0 0 30px rgba(255, 255, 255, 0.25);
+      text-shadow: 0 0 18px rgba(120, 120, 120, 0.18);
       will-change: transform;
       user-select: none;
       pointer-events: none;
@@ -1259,16 +1259,7 @@
 
           // Display-Status-Listener registrieren
           window.electronAPI.onDisplayStatus((shouldBeOff) => {
-            const overlay = document.getElementById('displayOffOverlay');
-            if (overlay) {
-              if (shouldBeOff) {
-                overlay.classList.add('active');
-                startScreensaverAnimation();
-              } else {
-                overlay.classList.remove('active');
-                stopScreensaverAnimation();
-              }
-            }
+            handleDisplayStatusChange(shouldBeOff);
           });
 
           // Update-Listener registrieren
@@ -1288,6 +1279,82 @@
     // DVD-Logo-Style: Schriftzug bewegt sich diagonal, prallt von Rändern ab
     let screensaverRafId = null;
     let screensaverState = { x: 40, y: 40, vx: 2.2, vy: 1.6 };
+
+    // ========== DISPLAY-STATUS mit Gehen-Stempel-Verzögerung ==========
+    // Aktiviert den Bildschirmschoner nicht sofort wenn Display-Aus-Zeit erreicht ist,
+    // sondern wartet bis ALLE aktiven Personen "Gehen" gestempelt haben UND mind. 5 Min
+    // seit dem letzten Gehen-Stempel vergangen sind. Re-Check alle 30 Sekunden.
+    let _displayShouldBeOff = false;       // Letzter Wunsch vom Electron-Main-Process
+    let _displayDelayTimer = null;          // Re-Check-Timer
+    const DISPLAY_DELAY_NACH_GEHEN_MS = 5 * 60 * 1000; // 5 Minuten
+
+    async function handleDisplayStatusChange(shouldBeOff) {
+      _displayShouldBeOff = shouldBeOff;
+      if (_displayDelayTimer) { clearTimeout(_displayDelayTimer); _displayDelayTimer = null; }
+
+      const overlay = document.getElementById('displayOffOverlay');
+      if (!overlay) return;
+
+      if (!shouldBeOff) {
+        overlay.classList.remove('active');
+        stopScreensaverAnimation();
+        return;
+      }
+
+      // Pruefe Gehen-Stempel; wenn noch zu frueh, retry in 30s
+      const wartezeitMs = await berechneVerbleibendeWartezeit();
+      if (wartezeitMs > 0) {
+        const minuten = Math.ceil(wartezeitMs / 60000);
+        console.log(`[Bildschirmschoner] Verzoegert um ${minuten} Min (jemand noch nicht gegangen oder <5min seit letztem Gehen)`);
+        _displayDelayTimer = setTimeout(() => handleDisplayStatusChange(_displayShouldBeOff), Math.min(wartezeitMs, 30000));
+        return;
+      }
+
+      // Alle gegangen + 5min vorbei => aktivieren
+      overlay.classList.add('active');
+      startScreensaverAnimation();
+    }
+
+    /**
+     * Liefert die in ms verbleibende Wartezeit bis der Bildschirmschoner aktiviert
+     * werden darf. 0 = darf sofort aktiviert werden.
+     * Negativ-/Fehlerfall: 0 (Fail-Open, damit Bildschirmschoner nicht haengt).
+     */
+    async function berechneVerbleibendeWartezeit() {
+      try {
+        const heute = new Date().toISOString().slice(0, 10);
+        const data = await ApiService.get(`/tagesstempel?datum=${heute}`);
+        const stempel = (data && data.stempel) || data || [];
+        if (!Array.isArray(stempel) || stempel.length === 0) return 0; // niemand da -> sofort
+
+        // Nur Personen die heute "Kommen" gestempelt haben sind relevant
+        const aktive = stempel.filter(s => s.kommen_zeit);
+        if (aktive.length === 0) return 0;
+
+        // Wenn noch jemand offen ist (kein gehen_zeit) -> 30s warten und neu pruefen
+        const nochOffen = aktive.filter(s => !s.gehen_zeit);
+        if (nochOffen.length > 0) return 30000;
+
+        // Letzten Gehen-Zeitpunkt finden
+        let letzterGehen = null;
+        for (const s of aktive) {
+          if (!s.gehen_zeit) continue;
+          const [h, m] = String(s.gehen_zeit).substring(0, 5).split(':').map(Number);
+          if (isNaN(h) || isNaN(m)) continue;
+          const dt = new Date();
+          dt.setHours(h, m, 0, 0);
+          if (!letzterGehen || dt > letzterGehen) letzterGehen = dt;
+        }
+        if (!letzterGehen) return 0;
+
+        const elapsed = Date.now() - letzterGehen.getTime();
+        const wartezeit = DISPLAY_DELAY_NACH_GEHEN_MS - elapsed;
+        return wartezeit > 0 ? wartezeit : 0;
+      } catch (err) {
+        console.warn('[Bildschirmschoner] Fehler bei Stempel-Pruefung, aktiviere sofort:', err);
+        return 0;
+      }
+    }
 
     function startScreensaverAnimation() {
       const textEl = document.getElementById('screensaverText');
