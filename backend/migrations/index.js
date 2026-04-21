@@ -52,6 +52,7 @@ const migrations = [
   require('./034_tagesstempel'),               // Version 34 - Tagesstempel + Arbeitsunterbrechungen
   require('./035_tagesstempel_quelle'),        // Version 35 - kommen_quelle + gehen_quelle
   require('./036_backfill_stempel_aus_details'), // Version 36 - Backfill stempel_* aus arbeitszeiten_details
+  require('./037_backfill_stempel_in_arbeit'),   // Version 37 - Backfill für Status in_arbeit
 ];
 
 /**

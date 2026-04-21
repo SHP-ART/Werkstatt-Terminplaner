@@ -143,6 +143,24 @@ class StempelzeitenController {
         return { stempel_start: fbStart, stempel_ende: fbEnde, ist_min: ist };
       };
 
+      // Liefert die GEPLANTEN Zeiten (Auftrags-Startzeit und berechnetes Ende).
+      // plan_start = termin.startzeit || details._startzeit
+      // plan_ende  = plan_start + richtwertMin  (falls richtwertMin bekannt)
+      const _planZeiten = (termin, richtwertMin) => {
+        const det = _parseDetails(termin);
+        let planStart = termin && termin.startzeit ? String(termin.startzeit).substring(0, 5) : null;
+        if (!planStart && det && det._startzeit) planStart = String(det._startzeit).substring(0, 5);
+        let planEnde = null;
+        if (planStart && richtwertMin && richtwertMin > 0) {
+          const [h, m] = planStart.split(':').map(Number);
+          if (!isNaN(h) && !isNaN(m)) {
+            const end = h * 60 + m + richtwertMin;
+            planEnde = String(Math.floor((end / 60) % 24)).padStart(2, '0') + ':' + String(end % 60).padStart(2, '0');
+          }
+        }
+        return { plan_start: planStart, plan_ende: planEnde };
+      };
+
       const gruppenMap = new Map();
 
       const _getPerson = (person_typ, person_id, fallbackName) => {
@@ -177,12 +195,18 @@ class StempelzeitenController {
         const effEnde  = s.stempel_ende  || fb.stempel_ende;
         const istMin = effStart && effEnde
           ? StempelzeitenController._diffMinuten(effStart, effEnde) : null;
+        const richtwertS = _getRichtwert(s.arbeit || t.termin_arbeit);
+        const planS = _planZeiten(t, richtwertS);
         _addArbeit(grupKey, { person_typ: personTyp, person_id: personId, person_name: personName }, t, {
           arbeit_id: s.arbeit_id, termin_id: s.termin_id,
           termin_nr: t.termin_nr || '', interne_auftragsnummer: t.interne_auftragsnummer || '', kennzeichen: t.kennzeichen || '', kunde_name: t.kunde_name || '',
           arbeit: s.arbeit || t.termin_arbeit || '',
-          richtwert_min: _getRichtwert(s.arbeit || t.termin_arbeit),
-          geschaetzte_min: s.geschaetzte_min, stempel_start: effStart, stempel_ende: effEnde, ist_min: istMin
+          richtwert_min: richtwertS,
+          geschaetzte_min: s.geschaetzte_min,
+          plan_start: planS.plan_start, plan_ende: planS.plan_ende,
+          stempel_start: s.stempel_start, stempel_ende: s.stempel_ende,
+          ist_min: (s.stempel_start && s.stempel_ende)
+            ? StempelzeitenController._diffMinuten(s.stempel_start, s.stempel_ende) : istMin
         });
       }
 
@@ -193,12 +217,15 @@ class StempelzeitenController {
         if (tp) {
           const person = _getPerson(tp.person_typ, tp.person_id);
           const grupKey = `${tp.person_typ}_${tp.person_id}`;
+          const rw = _getRichtwert(t.termin_arbeit);
+          const planP = _planZeiten(t, rw);
           const fb = _fallbackFromTermin(t, t.termin_arbeit);
           _addArbeit(grupKey, person, t, {
             arbeit_id: null, termin_id: t.termin_id,
             termin_nr: t.termin_nr || '', interne_auftragsnummer: t.interne_auftragsnummer || '', kennzeichen: t.kennzeichen || '', kunde_name: t.kunde_name || '',
-            arbeit: t.termin_arbeit || '', richtwert_min: _getRichtwert(t.termin_arbeit),
+            arbeit: t.termin_arbeit || '', richtwert_min: rw,
             geschaetzte_min: t.geschaetzte_zeit,
+            plan_start: planP.plan_start, plan_ende: planP.plan_ende,
             stempel_start: fb.stempel_start, stempel_ende: fb.stempel_ende, ist_min: fb.ist_min
           });
         }
@@ -211,12 +238,15 @@ class StempelzeitenController {
           person_typ: 'alle', person_id: 0,
           person_name: '📋 Alle Aufträge (noch nicht gestempelt)',
           arbeiten: ohnePersonOhneStempel.map(t => {
+            const rw = _getRichtwert(t.termin_arbeit);
+            const planP = _planZeiten(t, rw);
             const fb = _fallbackFromTermin(t, t.termin_arbeit);
             return {
               arbeit_id: null, termin_id: t.termin_id,
               termin_nr: t.termin_nr || '', interne_auftragsnummer: t.interne_auftragsnummer || '', kennzeichen: t.kennzeichen || '', kunde_name: t.kunde_name || '',
-              arbeit: t.termin_arbeit || '', richtwert_min: _getRichtwert(t.termin_arbeit),
+              arbeit: t.termin_arbeit || '', richtwert_min: rw,
               geschaetzte_min: t.geschaetzte_zeit,
+              plan_start: planP.plan_start, plan_ende: planP.plan_ende,
               stempel_start: fb.stempel_start, stempel_ende: fb.stempel_ende, ist_min: fb.ist_min
             };
           })

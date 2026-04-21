@@ -31003,6 +31003,12 @@ class App {
           : '<span class="text-muted">—</span>';
 
       // Stempelzeiten-Tab im Web ist reine Anzeige — Stempeln läuft über die Tablet-App.
+      const planStartCell = a.plan_start
+        ? `<span style="color:#6c757d;">${a.plan_start}</span>`
+        : '<span class="text-muted">—</span>';
+      const planEndeCell = a.plan_ende
+        ? `<span style="color:#6c757d;">${a.plan_ende}</span>`
+        : '<span class="text-muted">—</span>';
       const startCell = a.stempel_start
         ? `<span style="color:var(--success,#28a745);font-weight:600;">▶ ${a.stempel_start}</span>`
         : '<span class="text-muted">—</span>';
@@ -31017,6 +31023,8 @@ class App {
           <td>${this.escapeHtml(a.kunde_name || '')}</td>
           <td>${this.escapeHtml(a.kennzeichen || '')}</td>
           <td>${this.escapeHtml(a.arbeit)}</td>
+          <td>${planStartCell}</td>
+          <td>${planEndeCell}</td>
           <td class="text-success">${startCell}</td>
           <td class="text-danger">${endeCell}</td>
           <td class="text-warning">${richtwertMin ? richtwertMin + ' Min' : '—'}</td>
@@ -31163,8 +31171,10 @@ class App {
                 <th>Kunde</th>
                 <th>Kennzeichen</th>
                 <th>Arbeit</th>
-                <th class="text-success">Start ▶</th>
-                <th class="text-danger">Ende ■</th>
+                <th class="text-muted">Plan Start</th>
+                <th class="text-muted">Plan Ende</th>
+                <th class="text-success">Stempel Start ▶</th>
+                <th class="text-danger">Stempel Ende ■</th>
                 <th class="text-warning">Richtzeit</th>
                 <th>Ist-Zeit</th>
               </tr>
