@@ -23310,8 +23310,10 @@ class App {
     pauseBlock.style.pointerEvents = 'none'; // Termine können über Pause hinweg platziert werden
     
     const verbleibendeMin = pauseInfo.verbleibende_minuten || 0;
-    pauseBlock.title = `🍽️ AKTIVE PAUSE\nGestartet: ${pauseH.toString().padStart(2,'0')}:${pauseM.toString().padStart(2,'0')}\nVerbleibend: ${verbleibendeMin} Min.\n⚠️ Pause kann nicht verschoben werden\n✓ Termine können hier platziert werden`;
-    pauseBlock.innerHTML = `🍽️ <small style="margin-left:3px;">${verbleibendeMin}min</small>`;
+    pauseBlock.title = `🍽️ AKTIVE PAUSE\nGestartet: ${pauseH.toString().padStart(2,'0')}:${pauseM.toString().padStart(2,'0')}${verbleibendeMin > 0 ? `\nVerbleibend: ${verbleibendeMin} Min.` : ''}\n⚠️ Pause kann nicht verschoben werden\n✓ Termine können hier platziert werden`;
+    pauseBlock.innerHTML = verbleibendeMin > 0
+      ? `🍽️ <small style="margin-left:3px;">${verbleibendeMin}min</small>`
+      : `🍽️`;
     pauseBlock.setAttribute('data-pause', 'true');
     pauseBlock.setAttribute('data-locked', 'true'); // Markierung für gesperrte Elemente
     
