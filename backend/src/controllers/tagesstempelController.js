@@ -169,7 +169,8 @@ class TagesstempelController {
           );
         }
 
-        for (const t of laufendeTermine) {
+        // Helper: einen laufenden Termin auf 'wartend' setzen und Folgetermin fuer morgen anlegen
+        const _verschiebeTermin = async (t) => {
           // Original-Termin auf 'wartend' setzen (bleibt heute als Dokumentation)
           await runAsync(
             `UPDATE termine SET status = 'wartend' WHERE id = ?`,
@@ -235,6 +236,43 @@ class TagesstempelController {
 
           folgeTermineAngelegt.push({ originalId: t.id, folgeId: result.id, folgeNr: result.terminNr, restMin });
           broadcastEvent('termin.created', { id: result.id, datum: morgenStr, folgeVon: t.id });
+        };
+
+        for (const t of laufendeTermine) {
+          await _verschiebeTermin(t);
+        }
+
+        // Zusaetzlich: Wenn diese Person die LETZTE ist, die heute Gehen stempelt,
+        // auch orphan-Termine (manuell auf in_arbeit gesetzt, ohne Personen-Zuweisung)
+        // fuer morgen verschieben.
+        const nochOffeneTagesstempel = await getAsync(
+          `SELECT COUNT(*) AS cnt FROM tagesstempel
+            WHERE datum = ?
+              AND kommen_zeit IS NOT NULL
+              AND (gehen_zeit IS NULL OR gehen_zeit = '')
+              AND NOT (
+                ${mitarbeiter_id ? 'mitarbeiter_id = ?' : 'lehrling_id = ?'}
+              )`,
+          [datum, mitarbeiter_id || lehrling_id]
+        );
+        const istLetztePerson = !nochOffeneTagesstempel || nochOffeneTagesstempel.cnt === 0;
+
+        if (istLetztePerson) {
+          const orphanTermine = await allAsync(
+            `SELECT id, termin_nr, kennzeichen, kunde_id, kunde_name, kunde_telefon,
+                    arbeit, umfang, geschaetzte_zeit, mitarbeiter_id, lehrling_id,
+                    arbeitszeiten_details, dringlichkeit, vin, fahrzeugtyp,
+                    abholung_typ, abholung_details, abholung_zeit, abholung_datum,
+                    bring_zeit, kontakt_option, kilometerstand
+             FROM termine
+             WHERE datum = ? AND status = 'in_arbeit' AND geloescht_am IS NULL
+               AND (mitarbeiter_id IS NULL OR mitarbeiter_id = 0)
+               AND (lehrling_id IS NULL OR lehrling_id = 0)`,
+            [datum]
+          );
+          for (const t of orphanTermine) {
+            await _verschiebeTermin(t);
+          }
         }
       }
 
