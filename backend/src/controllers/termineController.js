@@ -2693,11 +2693,68 @@ class TermineController {
         return res.status(400).json({ error: 'tatsaechliche_zeit (in Minuten) erforderlich' });
       }
 
+      const decodedArbeit = decodeURIComponent(arbeitName);
       const aktualisierterTermin = await TermineModel.completeEinzelarbeit(
         id,
-        decodeURIComponent(arbeitName),
+        decodedArbeit,
         parseInt(tatsaechliche_zeit)
       );
+
+      // Zeiten auch in termine_arbeiten.stempel_* spiegeln, damit die DB
+      // eine einheitliche Wahrheit für Stempelzeiten hat.
+      try {
+        const { getAsync, runAsync } = require('../utils/dbHelper');
+        const details = aktualisierterTermin.arbeitszeiten_details
+          ? (typeof aktualisierterTermin.arbeitszeiten_details === 'string'
+              ? JSON.parse(aktualisierterTermin.arbeitszeiten_details)
+              : aktualisierterTermin.arbeitszeiten_details)
+          : null;
+        const startHHMM = (details && details._startzeit) || null;
+        const endeIso = (details && details[decodedArbeit] && details[decodedArbeit].fertigstellung_zeit)
+          || aktualisierterTermin.fertigstellung_zeit
+          || null;
+        let endeHHMM = null;
+        if (endeIso) {
+          const d = new Date(endeIso);
+          if (!isNaN(d)) {
+            endeHHMM = String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+          }
+        }
+        if (startHHMM || endeHHMM) {
+          const ta = await getAsync(
+            `SELECT id, stempel_start, stempel_ende FROM termine_arbeiten
+             WHERE termin_id = ? AND arbeit = ?`,
+            [id, decodedArbeit]
+          );
+          if (ta) {
+            const updates = [];
+            const vals = [];
+            if (startHHMM && !ta.stempel_start) { updates.push('stempel_start = ?'); vals.push(startHHMM); }
+            if (endeHHMM  && !ta.stempel_ende)  { updates.push('stempel_ende = ?');  vals.push(endeHHMM);  }
+            if (updates.length > 0) {
+              vals.push(ta.id);
+              await runAsync(`UPDATE termine_arbeiten SET ${updates.join(', ')} WHERE id = ?`, vals);
+            }
+          } else {
+            await runAsync(
+              `INSERT INTO termine_arbeiten
+                 (termin_id, arbeit, zeit, mitarbeiter_id, lehrling_id, reihenfolge, stempel_start, stempel_ende)
+               VALUES (?, ?, ?, ?, ?, 0, ?, ?)`,
+              [
+                id,
+                decodedArbeit,
+                parseInt(tatsaechliche_zeit) || aktualisierterTermin.geschaetzte_zeit || 1,
+                aktualisierterTermin.mitarbeiter_id || null,
+                aktualisierterTermin.lehrling_id || null,
+                startHHMM,
+                endeHHMM
+              ]
+            );
+          }
+        }
+      } catch (syncErr) {
+        console.warn('[completeEinzelarbeit] stempel-sync fehlgeschlagen:', syncErr.message);
+      }
 
       // Cache invalidieren
       invalidateTermineCache();
