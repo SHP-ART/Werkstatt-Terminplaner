@@ -37192,13 +37192,50 @@ class App {
   }
 
   async webUnterbrechungStart(mitarbeiter_id, lehrling_id) {
-    try {
-      await ApiService.post('/tagesstempel/unterbrechung/start', { mitarbeiter_id, lehrling_id });
-      this.showToast('⏸ Unterbrechung gestartet', 'success');
-      this.loadZeitstempelung();
-    } catch (err) {
-      this.showToast('Fehler: ' + (err.message || 'Unbekannt'), 'error');
-    }
+    const grundLabels = {
+      raucherpause: '🚬 Raucherpause',
+      abwesend: '🚪 Abwesend',
+      sonstiges: '📝 Sonstiges'
+    };
+    const optionsHtml = Object.entries(grundLabels).map(([val, label]) => `
+      <label style="display:flex;align-items:center;gap:10px;padding:9px;border:1px solid #e0e0e0;border-radius:6px;cursor:pointer;font-size:13px;">
+        <input type="radio" name="webUbGrund" value="${val}" style="accent-color:#fd7e14;">${label}
+      </label>`).join('');
+    const modal = document.createElement('div');
+    modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;z-index:9999;';
+    modal.innerHTML = `
+      <div style="background:white;border-radius:10px;padding:22px;width:340px;box-shadow:0 8px 32px rgba(0,0,0,0.3);">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+          <strong style="font-size:15px;">⏸ Arbeitsunterbrechung</strong>
+          <span id="webUbClose" style="cursor:pointer;color:#999;font-size:20px;">✕</span>
+        </div>
+        <p style="font-size:12.5px;color:#666;margin:0 0 12px;">Grund (Arbeitszeit zählt nicht weiter):</p>
+        <div style="display:flex;flex-direction:column;gap:7px;margin-bottom:12px;">${optionsHtml}</div>
+        <input id="webUbFreitext" type="text" placeholder="optionale Notiz" style="width:100%;padding:8px 10px;border:1px solid #e0e0e0;border-radius:6px;font-size:13px;margin-bottom:16px;box-sizing:border-box;">
+        <div style="display:flex;gap:8px;">
+          <button id="webUbAbbrechen" style="flex:1;padding:9px;background:#f0f0f0;color:#555;border:none;border-radius:6px;font-size:13px;cursor:pointer;">Abbrechen</button>
+          <button id="webUbBestaetigen" style="flex:1;padding:9px;background:#fd7e14;color:white;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;">⏸ Starten</button>
+        </div>
+      </div>`;
+    document.body.appendChild(modal);
+    const close = () => document.body.removeChild(modal);
+    modal.querySelector('#webUbClose').onclick = close;
+    modal.querySelector('#webUbAbbrechen').onclick = close;
+    modal.onclick = (e) => { if (e.target === modal) close(); };
+    modal.querySelector('#webUbBestaetigen').onclick = async () => {
+      const sel = modal.querySelector('input[name="webUbGrund"]:checked');
+      if (!sel) { alert('Bitte einen Grund auswählen.'); return; }
+      const freitext = (modal.querySelector('#webUbFreitext').value || '').trim();
+      const grund = freitext ? `${grundLabels[sel.value]} – ${freitext}` : grundLabels[sel.value];
+      try {
+        await ApiService.post('/tagesstempel/unterbrechung/start', { mitarbeiter_id, lehrling_id, grund });
+        close();
+        this.showToast('⏸ Unterbrechung gestartet', 'success');
+        this.loadZeitstempelung();
+      } catch (err) {
+        this.showToast('Fehler: ' + (err.message || 'Unbekannt'), 'error');
+      }
+    };
   }
 
   async webUnterbrechungEnde(mitarbeiter_id, lehrling_id) {
