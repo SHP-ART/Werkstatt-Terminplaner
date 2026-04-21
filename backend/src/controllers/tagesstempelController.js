@@ -118,7 +118,10 @@ class TagesstempelController {
    */
   static async gehenBestaetigen(req, res) {
     try {
-      const { mitarbeiter_id, lehrling_id, termine_verschieben } = req.body;
+      const { mitarbeiter_id, lehrling_id } = req.body;
+      // termine_verschieben wird ignoriert: laufende in_arbeit-Termine werden IMMER
+      // automatisch auf morgen verschoben (ausser sie sind gerade pausiert), weil die
+      // Buehne sonst blockiert bleibt und der Termin die naechste Arbeit darstellt.
       if (!mitarbeiter_id && !lehrling_id) {
         return res.status(400).json({ error: 'mitarbeiter_id oder lehrling_id erforderlich' });
       }
@@ -130,7 +133,7 @@ class TagesstempelController {
 
       const folgeTermineAngelegt = [];
 
-      if (termine_verschieben) {
+      {
         // Richtwerte aus Zeitverwaltung laden (einmalig)
         const alleArbeitszeiten = await allAsync(`SELECT bezeichnung, standard_minuten, aliase FROM arbeitszeiten`, []);
         const _norm = s => s.toLowerCase().replace(/[\/\-_\.]+/g, ' ').replace(/\s+/g, ' ').trim();
@@ -238,7 +241,17 @@ class TagesstempelController {
           broadcastEvent('termin.created', { id: result.id, datum: morgenStr, folgeVon: t.id });
         };
 
+        // Pausierte Termine (aktive pause_tracking-Zeile) nicht verschieben
+        const pausierteTerminIds = new Set();
+        const aktivePausen = await allAsync(
+          `SELECT pause_naechster_termin_id FROM pause_tracking
+            WHERE abgeschlossen = 0 AND pause_naechster_termin_id IS NOT NULL`,
+          []
+        );
+        for (const p of aktivePausen) pausierteTerminIds.add(p.pause_naechster_termin_id);
+
         for (const t of laufendeTermine) {
+          if (pausierteTerminIds.has(t.id)) continue;
           await _verschiebeTermin(t);
         }
 
@@ -271,6 +284,7 @@ class TagesstempelController {
             [datum]
           );
           for (const t of orphanTermine) {
+            if (pausierteTerminIds.has(t.id)) continue;
             await _verschiebeTermin(t);
           }
         }
@@ -278,7 +292,7 @@ class TagesstempelController {
 
       await TagesstempelController._setzeGehenZeit(mitarbeiter_id, lehrling_id, datum);
       broadcastEvent('tagesstempel.gehen', { mitarbeiter_id: mitarbeiter_id || null, lehrling_id: lehrling_id || null, datum });
-      res.json({ success: true, zeit: getJetztZeit(), verschoben: termine_verschieben || false, folge_termine: folgeTermineAngelegt });
+      res.json({ success: true, zeit: getJetztZeit(), verschoben: folgeTermineAngelegt.length > 0, folge_termine: folgeTermineAngelegt });
     } catch (err) {
       console.error('[Tagesstempel-GehenBestaetigen] Fehler:', err);
       res.status(500).json({ error: err.message });
