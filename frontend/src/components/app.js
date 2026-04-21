@@ -37482,10 +37482,20 @@ App.prototype._checkFeierabendUeberlauf = async function(terminId, terminDaten, 
   document.getElementById('feierabendAufteilen')?.addEventListener('click', async () => {
     removeToast();
     // Direkt aufteilen via folgearbeit-Endpoint
+    // Wichtig: datum mitgeben, damit Teil 1 garantiert auf das Drag&Drop-Datum gesetzt wird
+    // (DB-Stand kann veraltet sein, weil die Drag&Drop-Änderung erst im lokalen Puffer liegt)
     try {
-      const result = await TermineService.folgearbeitErstellen(terminId, feierabend, startzeit, false);
+      const result = await TermineService.folgearbeitErstellen(terminId, feierabend, startzeit, false, datum);
       const morgenLabel = (() => { const d = new Date(datum+'T12:00:00'); d.setDate(d.getDate()+1); while(d.getDay()===0||d.getDay()===6) d.setDate(d.getDate()+1); return d.toLocaleDateString('de-DE',{weekday:'short',day:'2-digit',month:'2-digit'}); })();
       this.showToast(`✅ Aufgeteilt: ${result.heute_minuten} Min. heute, ${result.rest_minuten} Min. am ${morgenLabel}`, 'success');
+      // Gepufferte Änderung verwerfen – sonst würde 'Speichern' den PATCH erneut anwenden
+      // und Teil 1 ein zweites Mal verschieben/zurücksetzen
+      if (this.planungAenderungen?.has(terminId)) {
+        this.planungAenderungen.delete(terminId);
+        if (typeof this.updatePlanungAenderungenUI === 'function') {
+          this.updatePlanungAenderungenUI();
+        }
+      }
       this.loadAuslastungDragDrop();
     } catch (err) {
       this.showToast('❌ ' + (err.message || 'Fehler beim Aufteilen'), 'error');

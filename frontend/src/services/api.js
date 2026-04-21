@@ -371,11 +371,12 @@ class TermineService {
     return ApiService.get(`/termine/${id}/split-termine`);
   }
 
-  static async folgearbeitErstellen(terminId, feierabend = '17:00', startzeit = null, verschiebeUeberlappende = false) {
+  static async folgearbeitErstellen(terminId, feierabend = '17:00', startzeit = null, verschiebeUeberlappende = false, datumTeil1 = null) {
     return ApiService.post(`/termine/${terminId}/folgearbeit`, {
       feierabend,
       ...(startzeit ? { startzeit } : {}),
-      ...(verschiebeUeberlappende ? { verschiebe_ueberlappende: true } : {})
+      ...(verschiebeUeberlappende ? { verschiebe_ueberlappende: true } : {}),
+      ...(datumTeil1 ? { datum_teil1: datumTeil1 } : {})
     });
   }
 

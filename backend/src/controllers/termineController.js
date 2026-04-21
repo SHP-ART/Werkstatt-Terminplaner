@@ -2116,7 +2116,12 @@ class TermineController {
   static async folgearbeitErstellen(req, res) {
     try {
       const { id } = req.params;
-      const { feierabend = '17:00', startzeit: neueStartzeit, verschiebe_ueberlappende = false } = req.body;
+      const {
+        feierabend = '17:00',
+        startzeit: neueStartzeit,
+        verschiebe_ueberlappende = false,
+        datum_teil1: datumTeil1Body
+      } = req.body;
 
       if (!/^\d{2}:\d{2}$/.test(feierabend)) {
         return res.status(400).json({ error: 'Ungültige Feierabend-Zeit (Format HH:MM erwartet)' });
@@ -2124,6 +2129,10 @@ class TermineController {
 
       if (neueStartzeit && !/^\d{2}:\d{2}$/.test(neueStartzeit)) {
         return res.status(400).json({ error: 'Ungültige Startzeit (Format HH:MM erwartet)' });
+      }
+
+      if (datumTeil1Body && !/^\d{4}-\d{2}-\d{2}$/.test(datumTeil1Body)) {
+        return res.status(400).json({ error: 'Ungültiges Datum (Format YYYY-MM-DD erwartet)' });
       }
 
       const termin = await TermineModel.getById(id);
@@ -2142,19 +2151,30 @@ class TermineController {
       // Kein Block mehr wenn heuteMinuten >= geschaetzte_zeit:
       // User kann explizit splitten auch wenn Termin "passen würde"
 
-      // Falls neue Startzeit angegeben: bring_zeit und startzeit des Termins aktualisieren
+      // Falls neue Startzeit/Datum angegeben: Termin aktualisieren
+      // (Datum aus Drag&Drop-Puffer kann vom DB-Stand abweichen)
+      const updateFields = {};
       if (neueStartzeit) {
-        await TermineModel.update(id, { bring_zeit: neueStartzeit, startzeit: neueStartzeit });
+        updateFields.bring_zeit = neueStartzeit;
+        updateFields.startzeit = neueStartzeit;
+      }
+      if (datumTeil1Body && datumTeil1Body !== termin.datum) {
+        updateFields.datum = datumTeil1Body;
+      }
+      if (Object.keys(updateFields).length > 0) {
+        await TermineModel.update(id, updateFields);
       }
 
       const restMinuten = termin.geschaetzte_zeit - heuteMinuten;
-      const heuteDatum = termin.datum || new Date().toISOString().split('T')[0];
+      const heuteDatum = datumTeil1Body || termin.datum || new Date().toISOString().split('T')[0];
       const morgen = TermineModel.naechsterArbeitstag(heuteDatum);
 
       const result = await TermineModel.splitTermin(id, {
         teil1_zeit: heuteMinuten,
         teil2_datum: morgen,
-        teil2_zeit: restMinuten
+        teil2_zeit: restMinuten,
+        datum_teil1: heuteDatum,
+        startzeit_teil1: neueStartzeit || undefined
       });
 
       // Teil-2-Termin auf morgen früh 08:00 setzen
