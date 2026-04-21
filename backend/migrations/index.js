@@ -51,6 +51,7 @@ const migrations = [
   require('./033_relax_termine_arbeiten_person_constraint'), // Version 33 - Person-Constraint entfernt
   require('./034_tagesstempel'),               // Version 34 - Tagesstempel + Arbeitsunterbrechungen
   require('./035_tagesstempel_quelle'),        // Version 35 - kommen_quelle + gehen_quelle
+  require('./036_backfill_stempel_aus_details'), // Version 36 - Backfill stempel_* aus arbeitszeiten_details
 ];
 
 /**
