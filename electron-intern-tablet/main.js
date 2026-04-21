@@ -503,32 +503,57 @@ function startDisplayTimer() {
   checkDisplaySchedule();
 }
 
+// PowerSaveBlocker IMMER aktiv halten — verhindert, dass Windows
+// Standby/Sleep/Lock/Auto-Logoff triggert. Der "aus"-Zustand wird
+// ausschließlich durch das schwarze Overlay mit Schriftzug dargestellt,
+// nicht durch echtes Abschalten des Monitors.
+function ensurePowerSaveBlockerActive() {
+  if (powerSaveBlockerId === null) {
+    try {
+      powerSaveBlockerId = powerSaveBlocker.start('prevent-display-sleep');
+      console.log('☀️ PowerSaveBlocker aktiv (Display bleibt an, Windows bleibt wach)');
+    } catch (e) {
+      console.error('Fehler beim Starten des PowerSaveBlockers:', e);
+    }
+  }
+}
+
+// Einmaliger Setup beim App-Start: Windows-Energiesparen und Bildschirmschoner deaktivieren.
+// Verhindert Auto-Abmeldung, Lock-Screen und Windows-eigenen Screensaver.
+function disableWindowsPowerAndScreensaver() {
+  if (process.platform !== 'win32') return;
+  if (!app.isPackaged) return;
+  const { exec } = require('child_process');
+  // Kein Monitor-Timeout, kein Standby, kein Hibernate
+  exec('powercfg /change monitor-timeout-ac 0', { windowsHide: true });
+  exec('powercfg /change monitor-timeout-dc 0', { windowsHide: true });
+  exec('powercfg /change standby-timeout-ac 0', { windowsHide: true });
+  exec('powercfg /change standby-timeout-dc 0', { windowsHide: true });
+  exec('powercfg /change hibernate-timeout-ac 0', { windowsHide: true });
+  exec('powercfg /change hibernate-timeout-dc 0', { windowsHide: true });
+  // Windows-Bildschirmschoner in HKCU deaktivieren
+  exec('reg add "HKCU\\Control Panel\\Desktop" /v ScreenSaveActive /t REG_SZ /d 0 /f', { windowsHide: true });
+  exec('reg add "HKCU\\Control Panel\\Desktop" /v ScreenSaveTimeOut /t REG_SZ /d 0 /f', { windowsHide: true });
+  exec('reg add "HKCU\\Control Panel\\Desktop" /v ScreenSaverIsSecure /t REG_SZ /d 0 /f', { windowsHide: true });
+  console.log('🛡️ Windows-Energiesparen und Bildschirmschoner deaktiviert');
+}
+
 function checkDisplaySchedule() {
   if (!mainWindow || !CONFIG.displayOffTime || !CONFIG.displayOnTime) {
     return;
   }
 
+  // Windows bleibt IMMER wach — wir stellen nur das Overlay um.
+  ensurePowerSaveBlockerActive();
+
   // Manueller Override hat Vorrang vor Zeitsteuerung
   if (CONFIG.manuellerDisplayStatus === 'an') {
-    if (powerSaveBlockerId === null) {
-      try {
-        powerSaveBlockerId = powerSaveBlocker.start('prevent-display-sleep');
-        console.log('☀️ Display-Energiesparmodus blockiert (manuell AN)');
-      } catch (e) { /* ignorieren wenn bereits aktiv */ }
-    }
     if (mainWindow && mainWindow.webContents) {
       mainWindow.webContents.send('display-status', false);
     }
     return;
   }
   if (CONFIG.manuellerDisplayStatus === 'aus') {
-    if (powerSaveBlockerId !== null) {
-      try {
-        powerSaveBlocker.stop(powerSaveBlockerId);
-        powerSaveBlockerId = null;
-        console.log('🌙 Display-Energiesparmodus aktiviert (manuell AUS)');
-      } catch (e) { /* ignorieren */ }
-    }
     if (mainWindow && mainWindow.webContents) {
       mainWindow.webContents.send('display-status', true);
     }
@@ -542,68 +567,15 @@ function checkDisplaySchedule() {
   const onTime = CONFIG.displayOnTime;
 
   let shouldBeOff = false;
-
-  // Prüfe ob wir im "Aus"-Zeitfenster sind
   if (offTime > onTime) {
-    // Normaler Fall (z.B. offTime=18:10, onTime=07:30 → Zeitfenster über Mitternacht)
-    // Ausgeschaltet wenn: ab 18:10 ODER vor 07:30
+    // Zeitfenster über Mitternacht (z.B. 18:10–07:30)
     shouldBeOff = currentTime >= offTime || currentTime < onTime;
   } else {
-    // Sonderfall: offTime und onTime am selben Tag (z.B. offTime=07:30, onTime=18:10)
+    // Zeitfenster am selben Tag (z.B. 07:30–18:10)
     shouldBeOff = currentTime >= offTime && currentTime < onTime;
   }
 
-  if (shouldBeOff) {
-    // --- DISPLAY AUS ---
-    // 1. PowerSaveBlocker stoppen (OS darf Display abschalten)
-    if (powerSaveBlockerId !== null) {
-      try {
-        powerSaveBlocker.stop(powerSaveBlockerId);
-        powerSaveBlockerId = null;
-        console.log('🌙 PowerSaveBlocker gestoppt (Display kann ausschalten)');
-      } catch (e) {
-        console.error('Fehler beim Stoppen des PowerSaveBlockers:', e);
-      }
-    }
-
-    if (process.platform === 'win32') {
-      const { exec } = require('child_process');
-      // 2. Windows-Energiesparplan: Monitor-Timeout auf 1 Minute setzen →
-      //    OS schaltet Display nach kurzer Inaktivität physisch aus
-      exec('powercfg /change monitor-timeout-ac 1', { windowsHide: true });
-      exec('powercfg /change monitor-timeout-dc 1', { windowsHide: true });
-
-      // 3. Sofort-Ausschalten versuchen via PostMessage (async, keine Blockierung)
-      const psOff = `powershell -WindowStyle Hidden -Command "` +
-        `Add-Type -TypeDefinition 'using System;using System.Runtime.InteropServices;` +
-        `public class Mon{[DllImport(\\"user32.dll\\")]public static extern bool PostMessage(IntPtr h,uint m,IntPtr w,IntPtr l);}';` +
-        `[Mon]::PostMessage([IntPtr](-1),0x0112,[IntPtr]0xF170,[IntPtr]2)"`;
-      exec(psOff, { windowsHide: true, timeout: 5000 }, (error) => {
-        if (error) console.log('PostMessage fehlgeschlagen (Overlay übernimmt):', error.message);
-        else console.log('🌙 Monitor-Aus-Signal gesendet');
-      });
-    }
-  } else {
-    // --- DISPLAY AN ---
-    // 1. Windows-Energiesparplan: Monitor-Timeout auf Nie (0) setzen
-    if (process.platform === 'win32') {
-      const { exec } = require('child_process');
-      exec('powercfg /change monitor-timeout-ac 0', { windowsHide: true });
-      exec('powercfg /change monitor-timeout-dc 0', { windowsHide: true });
-    }
-
-    // 2. PowerSaveBlocker aktivieren (verhindert Standby durch OS/Chromium)
-    if (powerSaveBlockerId === null) {
-      try {
-        powerSaveBlockerId = powerSaveBlocker.start('prevent-display-sleep');
-        console.log('☀️ PowerSaveBlocker aktiv (Display bleibt an)');
-      } catch (e) {
-        console.error('Fehler beim Starten des PowerSaveBlockers:', e);
-      }
-    }
-  }
-
-  // Display-Status an Renderer senden (für UI-Overlay)
+  // Nur das Overlay umschalten, keinen Windows-Systemeingriff mehr
   if (mainWindow && mainWindow.webContents) {
     mainWindow.webContents.send('display-status', shouldBeOff);
   }
@@ -620,6 +592,9 @@ app.whenReady().then(async () => {
   if (CONFIG.blockWindowsShortcuts) {
     applyWindowsShortcutBlocker(true);
   }
+
+  // Windows-Energiesparen + Bildschirmschoner deaktivieren (verhindert Auto-Abmeldung)
+  disableWindowsPowerAndScreensaver();
 
   // API-Key holen, bevor Update-/Status-Requests laufen
   await fetchApiKey();
@@ -746,64 +721,14 @@ ipcMain.handle('set-display-manual', (event, shouldBeOff) => {
   console.log(`🔧 Manuelles Display-Schalten: ${shouldBeOff ? 'AUS' : 'AN'}`);
   // Manuellen Status merken, damit checkDisplaySchedule() ihn respektiert
   CONFIG.manuellerDisplayStatus = shouldBeOff ? 'aus' : 'an';
-  
-  if (shouldBeOff) {
-    // Display ausschalten
-    if (powerSaveBlockerId !== null) {
-      try {
-        powerSaveBlocker.stop(powerSaveBlockerId);
-        powerSaveBlockerId = null;
-      } catch (e) {
-        console.error('Fehler beim Stoppen des PowerSaveBlockers:', e);
-      }
-    }
-    
-    // Windows Monitor ausschalten
-    if (process.platform === 'win32') {
-      try {
-        const { exec } = require('child_process');
-        
-        const psCommand = `powershell -Command "Add-Type -TypeDefinition @'
-using System;
-using System.Runtime.InteropServices;
-public class Monitor {
-    [DllImport(\\"user32.dll\\")]
-    public static extern int SendMessage(int hWnd, int hMsg, int wParam, int lParam);
-    public static void Off() {
-        SendMessage(0xFFFF, 0x0112, 0xF170, 2);
-    }
-}
-'@; [Monitor]::Off()"`;
-        
-        exec(psCommand, { windowsHide: true, timeout: 2000 }, (error) => {
-          if (error) {
-            console.log('Fehler beim manuellen Display-Ausschalten:', error.message);
-          } else {
-            console.log('🌙 Windows-Monitor manuell ausgeschaltet');
-          }
-        });
-        
-      } catch (e) {
-        console.error('Fehler:', e.message);
-      }
-    }
-  } else {
-    // Display einschalten
-    if (powerSaveBlockerId === null) {
-      try {
-        powerSaveBlockerId = powerSaveBlocker.start('prevent-display-sleep');
-        console.log('☀️ Display-Energiesparmodus blockiert (manuell)');
-      } catch (e) {
-        console.error('Fehler beim Starten des PowerSaveBlockers:', e);
-      }
-    }
-  }
-  
-  // Status an Renderer senden
+
+  // Windows bleibt IMMER wach — Overlay macht den sichtbaren "aus"-Effekt.
+  ensurePowerSaveBlockerActive();
+
   if (mainWindow && mainWindow.webContents) {
     mainWindow.webContents.send('display-status', shouldBeOff);
   }
-  
+
   return { success: true };
 });
 
