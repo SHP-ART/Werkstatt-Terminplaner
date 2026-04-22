@@ -31781,13 +31781,19 @@ class App {
           <span>${labelText}</span>
           <span style="display:block;height:4px;background:rgba(255,255,255,0.35);border-radius:2px;margin-top:3px;"><span style="display:block;height:4px;background:#fff;border-radius:2px;width:${pct}%;"></span></span>
         </button>`;
-      } else if (imAnzeigePauseFenster && !person.pause_bereits_gemacht) {
-        // Im Zeitfenster, Mittagspause noch nicht gemacht → Mittagspause anbieten
-        smartPauseBtn = `<button class="intern-tab-btn intern-tab-btn-pause" style="background:#fd7e14;color:#fff;border:none;border-radius:6px;padding:5px 12px;font-size:13px;cursor:pointer;" onclick="app.internPauseStarten(${personId}, '${typ}', '${today}', true)">🍽️ Mittagspause · ${person.mittagspause_start || '12:00'}</button>`;
       } else {
-        // Außerhalb Zeitfenster oder Mittagspause bereits gemacht → kurze Pause
-        const btnLabel = person.pause_bereits_gemacht ? '⏸ Kurze Pause' : '⏸ Pause';
-        smartPauseBtn = `<button class="intern-tab-btn" style="background:#6c757d;color:#fff;border:none;border-radius:6px;padding:5px 12px;font-size:13px;cursor:pointer;" onclick="app.webUnterbrechungStart(${midArg}, ${lidArg})">${btnLabel}</button>`;
+        // Zwei separate Buttons: Mittagspause + Arbeitsunterbrechung
+        let mittagsBtn = '';
+        if (!person.pause_bereits_gemacht) {
+          const labelMit = imAnzeigePauseFenster
+            ? `🍽️ Mittagspause · ${person.mittagspause_start || '12:00'}`
+            : '🍽️ Mittagspause';
+          mittagsBtn = `<button class="intern-tab-btn intern-tab-btn-pause" style="background:#fd7e14;color:#fff;border:none;border-radius:6px;padding:5px 12px;font-size:13px;cursor:pointer;" onclick="app.internPauseStarten(${personId}, '${typ}', '${today}', ${imAnzeigePauseFenster})">${labelMit}</button>`;
+        } else {
+          mittagsBtn = `<button class="intern-tab-btn" disabled style="background:#e9ecef;color:#6c757d;border:none;border-radius:6px;padding:5px 12px;font-size:13px;cursor:not-allowed;" title="Mittagspause heute bereits gemacht">✅ Pause erledigt</button>`;
+        }
+        const unterbrBtn = `<button class="intern-tab-btn" style="background:#6c757d;color:#fff;border:none;border-radius:6px;padding:5px 12px;font-size:13px;cursor:pointer;" onclick="app.webUnterbrechungStart(${midArg}, ${lidArg})">⏸ Arbeitsunterbrechung</button>`;
+        smartPauseBtn = `<span style="display:inline-flex;gap:8px;">${mittagsBtn}${unterbrBtn}</span>`;
       }
     }
 

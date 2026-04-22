@@ -761,3 +761,7 @@ ipcMain.handle('install-update', async () => {
   return await downloadAndInstallUpdate();
 });
 
+ipcMain.handle('get-app-version', () => {
+  return CURRENT_VERSION;
+});
+

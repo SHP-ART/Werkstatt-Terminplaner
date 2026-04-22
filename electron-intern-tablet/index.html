@@ -500,13 +500,14 @@
     /* ========== TABLET BUTTONS ========== */
     .tablet-buttons {
       display: flex;
-      gap: 6px;
+      gap: 14px;
       flex-wrap: nowrap;
     }
 
     .tablet-buttons.in-header {
       padding: 0;
       margin-left: auto;
+      gap: 14px;
     }
 
     .tablet-btn {
@@ -1154,6 +1155,7 @@
     </div>
     <div class="header-time" id="headerTime">--:--</div>
     <div class="header-actions">
+      <span id="appVersionDisplay" title="Installierte Version" style="font-size:0.85em;color:rgba(255,255,255,0.85);background:rgba(0,0,0,0.25);padding:4px 10px;border-radius:8px;margin-right:6px;">v–</span>
       <button class="btn-header" id="btnRefresh" title="Aktualisieren (F5)">🔄 Aktualisieren</button>
       <button class="btn-header" id="btnSettings" title="Einstellungen">⚙️</button>
     </div>
@@ -1266,6 +1268,15 @@
           window.electronAPI.onUpdateAvailable((updateInfo) => {
             showUpdateNotification(updateInfo);
           });
+
+          // App-Version im Header anzeigen
+          if (window.electronAPI.getAppVersion) {
+            try {
+              const v = await window.electronAPI.getAppVersion();
+              const verEl = document.getElementById('appVersionDisplay');
+              if (verEl && v) verEl.textContent = 'v' + v;
+            } catch (e) { /* ignore */ }
+          }
         } catch (e) {
           console.warn('Keine Electron-API verfügbar');
         }
