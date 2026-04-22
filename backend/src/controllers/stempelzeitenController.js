@@ -172,7 +172,7 @@ class StempelzeitenController {
       const heuteIso = new Date().toISOString().slice(0, 10);
       const istHeute = datum === heuteIso;
       const tagesUebergreifendWhere = istHeute
-        ? `OR (t.status = 'in_arbeit' AND t.datum < ?)`
+        ? `OR (t.status = 'in_arbeit' AND t.datum = date(?, '-1 day'))`
         : '';
       const tagesUebergreifendParams = istHeute ? [datum] : [];
 

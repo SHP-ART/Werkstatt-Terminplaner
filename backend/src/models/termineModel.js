@@ -75,11 +75,13 @@ class TermineModel {
   }
 
   static async getByDatum(datum, includeLaufende = false) {
-    // includeLaufende=true: zusätzlich auch Termine aus früheren Tagen mit Status 'in_arbeit'
+    // includeLaufende=true: zusätzlich auch Termine vom Vortag mit Status 'in_arbeit'
     // (z.B. Auftrag wurde gestern gestartet, läuft heute weiter), damit sie auf dem
     // Tablet/in der Zeitstempelung am aktuellen Tag sichtbar bleiben.
+    // Begrenzung auf -1 Tag verhindert, dass "vergessene" alte in_arbeit-Termine
+    // (Status nie auf abgeschlossen gesetzt) dauerhaft jeden Tag mitlaufen.
     const wherePartLaufende = includeLaufende
-      ? `OR (t.status = 'in_arbeit' AND t.datum < ?)`
+      ? `OR (t.status = 'in_arbeit' AND t.datum = date(?, '-1 day'))`
       : '';
     const query = `
       SELECT t.*,
