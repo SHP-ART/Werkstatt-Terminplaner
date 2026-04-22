@@ -2300,6 +2300,12 @@
         let badges = '';
         if (istVerschoben) badges += '<span class="badge-verschoben">📅 Verschoben</span>';
         if (istVerspaetet) badges += '<span class="badge-verspaetet">⚠️ Verzögerung</span>';
+        // Tagesübergreifender Termin (z.B. gestern gestartet, heute weiterarbeiten)
+        if (aktuellerAuftrag.datum && aktuellerAuftrag.datum !== formatDateLocal(new Date())) {
+          const d = new Date(aktuellerAuftrag.datum);
+          const dStr = `${String(d.getDate()).padStart(2,'0')}.${String(d.getMonth()+1).padStart(2,'0')}.`;
+          badges += `<span class="badge-verschoben" title="Termin l\u00e4uft seit ${dStr}">⏳ seit ${dStr}</span>`;
+        }
 
         // Prüfe ob Termin mehrere Arbeiten hat
         const arbeiten = getArbeitenFromTermin(aktuellerAuftrag);
@@ -2626,7 +2632,7 @@
         const [mitarbeiterRaw, lehrlingeRaw, termineRaw, einstellungen, aktivePausen, abwesenheiten, heutigePausen, aktiveArbeitspausen, tagesstempelDaten] = await Promise.all([
           ApiService.get('/mitarbeiter'),
           ApiService.get('/lehrlinge'),
-          ApiService.get(`/termine?datum=${heute}`),
+          ApiService.get(`/termine?datum=${heute}&include_laufende=1`),
           ApiService.get('/einstellungen/werkstatt'),
           ApiService.get('/pause/aktive'),
           ApiService.get(`/abwesenheiten/datum/${heute}`),

@@ -167,6 +167,15 @@ class StempelzeitenController {
       // Alle Termine des Tages — mit Stempel wenn vorhanden
       // Termine ohne Mitarbeiter-Zuweisung erscheinen unter "Alle Aufträge"
       // Termine MIT Stempel erscheinen unter dem jeweiligen Mitarbeiter/Lehrling
+      // Bei Anzeige des heutigen Tages werden zusätzlich tagesübergreifend laufende
+      // in_arbeit-Termine früherer Tage mitgeladen, damit sie nicht verloren gehen.
+      const heuteIso = new Date().toISOString().slice(0, 10);
+      const istHeute = datum === heuteIso;
+      const tagesUebergreifendWhere = istHeute
+        ? `OR (t.status = 'in_arbeit' AND t.datum < ?)`
+        : '';
+      const tagesUebergreifendParams = istHeute ? [datum] : [];
+
       const alleTermine = await allAsync(`
         SELECT
           t.id                     AS termin_id,
@@ -182,14 +191,15 @@ class StempelzeitenController {
           t.fertigstellung_zeit,
           t.tatsaechliche_zeit,
           t.startzeit,
-          t.status
+          t.status,
+          t.datum                  AS termin_datum
         FROM termine t
         LEFT JOIN kunden k ON t.kunde_id = k.id
-        WHERE t.datum = ?
+        WHERE (t.datum = ? ${tagesUebergreifendWhere})
           AND t.geloescht_am IS NULL
           AND t.status NOT IN ('storniert')
         ORDER BY t.id
-      `, [datum]);
+      `, [datum, ...tagesUebergreifendParams]);
 
       const stempelRows = await allAsync(`
         SELECT
@@ -207,10 +217,10 @@ class StempelzeitenController {
         JOIN termine t ON ta.termin_id = t.id
         LEFT JOIN mitarbeiter m ON ta.mitarbeiter_id = m.id
         LEFT JOIN lehrlinge l  ON ta.lehrling_id  = l.id
-        WHERE t.datum = ?
+        WHERE (t.datum = ? ${tagesUebergreifendWhere})
           AND t.geloescht_am IS NULL
         ORDER BY person_name, ta.termin_id, ta.reihenfolge
-      `, [datum]);
+      `, [datum, ...tagesUebergreifendParams]);
 
       // Pausen + Unterbrechungen für diesen Tag pro Person laden — wird vom IST abgezogen
       const pauseRangesProPerson = await StempelzeitenController._ladePauseRangesProPerson(datum);

@@ -20,8 +20,8 @@ const CACHE_TTL = 60000; // 1 Minute
 
 const termineListCache = new SimpleCache({ ttlMs: 60000, maxEntries: 200 });
 
-function getTermineCacheKey(datum, pagination) {
-  return `termine:${datum || 'all'}:${pagination ? JSON.stringify(pagination) : 'all'}`;
+function getTermineCacheKey(datum, pagination, includeLaufende) {
+  return `termine:${datum || 'all'}:${pagination ? JSON.stringify(pagination) : 'all'}:${includeLaufende ? 'incl' : 'noincl'}`;
 }
 
 function invalidateTermineCache() {
@@ -634,10 +634,11 @@ class TermineController {
   static async getAll(req, res) {
     try {
       const { datum } = req.query;
+      const includeLaufende = req.query.include_laufende === '1' || req.query.include_laufende === 'true';
       const pagination = parsePagination(req.query);
 
       if (!pagination) {
-        const cacheKey = getTermineCacheKey(datum, null);
+        const cacheKey = getTermineCacheKey(datum, null, includeLaufende);
         const cached = termineListCache.get(cacheKey);
         if (cached) {
           // Auch für gecachte Daten aktive Pausen hinzufügen
@@ -648,7 +649,7 @@ class TermineController {
           return res.json(cached);
         }
         if (datum) {
-          const rows = await TermineModel.getByDatum(datum);
+          const rows = await TermineModel.getByDatum(datum, includeLaufende);
           const aktivePausen = await getAktivePausenFuerDatum(datum);
           termineListCache.set(cacheKey, rows);
           return res.json({ termine: rows, aktivePausen });
@@ -659,7 +660,7 @@ class TermineController {
       }
 
       const { limit, offset, page, pageSize } = pagination;
-      const cacheKey = getTermineCacheKey(datum, pagination);
+      const cacheKey = getTermineCacheKey(datum, pagination, includeLaufende);
       const cached = termineListCache.get(cacheKey);
       if (cached) {
         return res.json(cached);

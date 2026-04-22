@@ -74,7 +74,13 @@ class TermineModel {
     return await getAsync(query, []);
   }
 
-  static async getByDatum(datum) {
+  static async getByDatum(datum, includeLaufende = false) {
+    // includeLaufende=true: zusätzlich auch Termine aus früheren Tagen mit Status 'in_arbeit'
+    // (z.B. Auftrag wurde gestern gestartet, läuft heute weiter), damit sie auf dem
+    // Tablet/in der Zeitstempelung am aktuellen Tag sichtbar bleiben.
+    const wherePartLaufende = includeLaufende
+      ? `OR (t.status = 'in_arbeit' AND t.datum < ?)`
+      : '';
     const query = `
       SELECT t.*,
              COALESCE(k.name, t.kunde_name) as kunde_name,
@@ -83,12 +89,13 @@ class TermineModel {
       FROM termine t
       LEFT JOIN kunden k ON t.kunde_id = k.id
       LEFT JOIN mitarbeiter m ON t.mitarbeiter_id = m.id
-      WHERE t.datum = ? AND t.geloescht_am IS NULL
+      WHERE (t.datum = ? ${wherePartLaufende}) AND t.geloescht_am IS NULL
         AND t.arbeit != 'Fahrzeug aus Import'
         AND t.arbeit != 'Fahrzeug hinzugefügt'
       ORDER BY t.erstellt_am
     `;
-    return await allAsync(query, [datum]);
+    const params = includeLaufende ? [datum, datum] : [datum];
+    return await allAsync(query, params);
   }
 
   static async getByDatumPaginated(datum, limit, offset) {
