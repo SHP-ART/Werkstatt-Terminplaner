@@ -264,6 +264,18 @@ class StempelzeitenController {
             typ = az._gesamt_mitarbeiter_id.type || 'mitarbeiter';
             pid = az._gesamt_mitarbeiter_id.id;
           }
+          // Fallback: Bearbeiter aus den einzelnen Arbeiten ableiten (erster
+          // Eintrag mit type+lehrling_id/mitarbeiter_id gewinnt). Tablet/Web
+          // speichern die Person je Arbeit, nicht zwingend als _gesamt_*.
+          if (!pid && az && typeof az === 'object') {
+            for (const key of Object.keys(az)) {
+              if (key.startsWith('_')) continue;
+              const a = az[key];
+              if (!a || typeof a !== 'object') continue;
+              if (a.type === 'lehrling' && a.lehrling_id) { typ = 'lehrling'; pid = a.lehrling_id; break; }
+              if (a.mitarbeiter_id) { typ = a.type || 'mitarbeiter'; pid = a.mitarbeiter_id; break; }
+            }
+          }
         } catch(e) {}
         if (!pid && t.lehrling_id)    { typ = 'lehrling';    pid = t.lehrling_id; }
         if (!pid && t.mitarbeiter_id) { typ = 'mitarbeiter'; pid = t.mitarbeiter_id; }
