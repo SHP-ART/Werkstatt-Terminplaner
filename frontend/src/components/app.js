@@ -31195,9 +31195,17 @@ class App {
         : '<span class="text-muted">—</span>';
 
       const rowStyle = pausiertAktiv ? ' style="background:#fffbe6;"' : '';
+      // Tagesübergreifend laufender Termin (z.B. gestern gestartet)?
+      const _heuteIso = new Date().toISOString().slice(0,10);
+      let terminNrZelle = this.escapeHtml(a.termin_nr || '');
+      if (a.termin_datum && a.termin_datum !== _heuteIso) {
+        const d = new Date(a.termin_datum);
+        const dStr = `${String(d.getDate()).padStart(2,'0')}.${String(d.getMonth()+1).padStart(2,'0')}.`;
+        terminNrZelle += ` <span title="Termin l\u00e4uft seit ${dStr}" style="display:inline-block;margin-left:4px;background:#fff3cd;color:#856404;border:1px solid #ffc107;border-radius:10px;padding:1px 7px;font-size:11px;font-weight:600;">⏳ seit ${dStr}</span>`;
+      }
       return `
         <tr${rowStyle}>
-          <td>${this.escapeHtml(a.termin_nr || '')}</td>
+          <td>${terminNrZelle}</td>
           <td>${this.escapeHtml(a.interne_auftragsnummer || '')}</td>
           <td>${this.escapeHtml(a.kunde_name || '')}</td>
           <td>${this.escapeHtml(a.kennzeichen || '')}</td>

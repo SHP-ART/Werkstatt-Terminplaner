@@ -380,6 +380,7 @@ class StempelzeitenController {
         _addArbeit(grupKey, { person_typ: personTyp, person_id: personId, person_name: personName }, t, {
           arbeit_id: s.arbeit_id, termin_id: s.termin_id,
           termin_nr: t.termin_nr || '', interne_auftragsnummer: t.interne_auftragsnummer || '', kennzeichen: t.kennzeichen || '', kunde_name: t.kunde_name || '',
+          termin_datum: t.termin_datum || null,
           arbeit: s.arbeit || t.termin_arbeit || '',
           richtwert_min: richtwertS,
           geschaetzte_min: s.geschaetzte_min,
@@ -413,6 +414,7 @@ class StempelzeitenController {
           _addArbeit(grupKey, person, t, {
             arbeit_id: null, termin_id: t.termin_id,
             termin_nr: t.termin_nr || '', interne_auftragsnummer: t.interne_auftragsnummer || '', kennzeichen: t.kennzeichen || '', kunde_name: t.kunde_name || '',
+            termin_datum: t.termin_datum || null,
             arbeit: t.termin_arbeit || '', richtwert_min: rw,
             geschaetzte_min: t.geschaetzte_zeit,
             plan_start: planP.plan_start, plan_ende: planP.plan_ende,
