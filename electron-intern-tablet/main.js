@@ -320,6 +320,12 @@ async function downloadAndInstallUpdate() {
     //  5) Bei Fehlschlag: zweiter Versuch ohne /S (sichtbarer Installer als Fallback)
     const tempLog = path.join(tempDir, 'werkstatt-update-launcher.log');
     const batchPath = path.join(tempDir, 'werkstatt-update-launcher.bat');
+    // Mögliche Installationspfade (per-user NSIS, productName "Werkstatt Intern")
+    const exeName = 'Werkstatt Intern.exe';
+    const installPathUser = `%LOCALAPPDATA%\\Programs\\werkstatt-intern\\${exeName}`;
+    const installPathUserAlt = `%LOCALAPPDATA%\\Programs\\Werkstatt Intern\\${exeName}`;
+    const installPathMachine = `%PROGRAMFILES%\\Werkstatt Intern\\${exeName}`;
+    const installPathMachineX86 = `%PROGRAMFILES(X86)%\\Werkstatt Intern\\${exeName}`;
     const batchContent =
       `@echo off\r\n` +
       `echo [%date% %time%] Update-Launcher gestartet > "${tempLog}"\r\n` +
@@ -329,12 +335,26 @@ async function downloadAndInstallUpdate() {
       `ping 127.0.0.1 -n 3 -w 1000 > nul\r\n` +
       `echo [%date% %time%] Starte Installer silent >> "${tempLog}"\r\n` +
       `"${updatePath}" /S >> "${tempLog}" 2>&1\r\n` +
-      `if %ERRORLEVEL% NEQ 0 (\r\n` +
-      `  echo [%date% %time%] Silent-Installation fehlgeschlagen ^(Code %ERRORLEVEL%^), versuche sichtbar >> "${tempLog}"\r\n` +
+      `set INSTALL_RC=%ERRORLEVEL%\r\n` +
+      `if %INSTALL_RC% NEQ 0 (\r\n` +
+      `  echo [%date% %time%] Silent-Installation fehlgeschlagen ^(Code %INSTALL_RC%^), versuche sichtbar >> "${tempLog}"\r\n` +
       `  ping 127.0.0.1 -n 3 -w 1000 > nul\r\n` +
       `  "${updatePath}" >> "${tempLog}" 2>&1\r\n` +
       `)\r\n` +
-      `echo [%date% %time%] Update-Launcher beendet ^(Code %ERRORLEVEL%^) >> "${tempLog}"\r\n`;
+      `ping 127.0.0.1 -n 3 -w 1000 > nul\r\n` +
+      `echo [%date% %time%] Suche neue App... >> "${tempLog}"\r\n` +
+      `set "APP_EXE="\r\n` +
+      `if exist "${installPathUser}" set "APP_EXE=${installPathUser}"\r\n` +
+      `if not defined APP_EXE if exist "${installPathUserAlt}" set "APP_EXE=${installPathUserAlt}"\r\n` +
+      `if not defined APP_EXE if exist "${installPathMachine}" set "APP_EXE=${installPathMachine}"\r\n` +
+      `if not defined APP_EXE if exist "${installPathMachineX86}" set "APP_EXE=${installPathMachineX86}"\r\n` +
+      `if defined APP_EXE (\r\n` +
+      `  echo [%date% %time%] Starte neue App: %APP_EXE% >> "${tempLog}"\r\n` +
+      `  start "" "%APP_EXE%"\r\n` +
+      `) else (\r\n` +
+      `  echo [%date% %time%] WARNUNG: Neue App-EXE nicht gefunden >> "${tempLog}"\r\n` +
+      `)\r\n` +
+      `echo [%date% %time%] Update-Launcher beendet >> "${tempLog}"\r\n`;
     fs.writeFileSync(batchPath, batchContent);
 
     const { spawn } = require('child_process');
