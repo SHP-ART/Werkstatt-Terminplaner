@@ -311,13 +311,32 @@ async function downloadAndInstallUpdate() {
     
     console.log('✅ Update heruntergeladen:', updatePath);
     console.log('🚀 Starte Installation...');
-    
-    // App zuerst beenden, dann Installer starten
-    // Kleines Batch-Skript: wartet kurz und startet dann den Installer
+
+    // Robustes Update-Batch:
+    //  1) 4s warten bis Electron sich sauber beendet hat
+    //  2) Force-Kill aller noch laufenden Werkstatt-Intern Prozesse (verhindert "file in use")
+    //  3) Nochmal 2s warten damit File-Locks im NTFS-Cache freigegeben werden
+    //  4) Installer silent starten; Exit-Code in Log-Datei schreiben (für Diagnose)
+    //  5) Bei Fehlschlag: zweiter Versuch ohne /S (sichtbarer Installer als Fallback)
+    const tempLog = path.join(tempDir, 'werkstatt-update-launcher.log');
     const batchPath = path.join(tempDir, 'werkstatt-update-launcher.bat');
-    const batchContent = `@echo off\r\nping 127.0.0.1 -n 3 -w 1000 > nul\r\n"${updatePath}" /S\r\n`;
+    const batchContent =
+      `@echo off\r\n` +
+      `echo [%date% %time%] Update-Launcher gestartet > "${tempLog}"\r\n` +
+      `ping 127.0.0.1 -n 5 -w 1000 > nul\r\n` +
+      `taskkill /F /IM "Werkstatt-Intern.exe" /T >> "${tempLog}" 2>&1\r\n` +
+      `taskkill /F /IM "Werkstatt Intern.exe" /T >> "${tempLog}" 2>&1\r\n` +
+      `ping 127.0.0.1 -n 3 -w 1000 > nul\r\n` +
+      `echo [%date% %time%] Starte Installer silent >> "${tempLog}"\r\n` +
+      `"${updatePath}" /S >> "${tempLog}" 2>&1\r\n` +
+      `if %ERRORLEVEL% NEQ 0 (\r\n` +
+      `  echo [%date% %time%] Silent-Installation fehlgeschlagen ^(Code %ERRORLEVEL%^), versuche sichtbar >> "${tempLog}"\r\n` +
+      `  ping 127.0.0.1 -n 3 -w 1000 > nul\r\n` +
+      `  "${updatePath}" >> "${tempLog}" 2>&1\r\n` +
+      `)\r\n` +
+      `echo [%date% %time%] Update-Launcher beendet ^(Code %ERRORLEVEL%^) >> "${tempLog}"\r\n`;
     fs.writeFileSync(batchPath, batchContent);
-    
+
     const { spawn } = require('child_process');
     const child = spawn('cmd.exe', ['/c', batchPath], {
       detached: true,
@@ -325,10 +344,11 @@ async function downloadAndInstallUpdate() {
       windowsHide: true
     });
     child.unref();
-    
-    console.log('✅ Update-Launcher gestartet - App wird jetzt beendet');
-    setTimeout(() => app.quit(), 500);
-    
+
+    console.log('✅ Update-Launcher gestartet - App wird sofort beendet (Log:', tempLog + ')');
+    // Sofort beenden, damit der Installer die EXE überschreiben kann
+    app.exit(0);
+
     return true;
   } catch (error) {
     console.error('❌ Update-Fehler:', error);
