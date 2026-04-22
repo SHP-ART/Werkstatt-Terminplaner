@@ -328,9 +328,36 @@ class StempelzeitenController {
         return { stempel_start: fbStart, stempel_ende: fbEnde, ist_min: ist };
       };
 
-      // Berechnet aus parent_arbeitszeiten_details die am Vortag bereits gearbeiteten
-      // Minuten und liefert das ursprüngliche Start-Datum + Start-Uhrzeit zurück.
-      // Quelle: _startzeit (Beginn) und _pause_unterbrochen_bei (Tagesende).
+      // Berechnet aus parent-Stempeln (termine_arbeiten des Vortagstermins)
+      // die am Vortag tatsächlich gearbeiteten Minuten.
+      // Quelle: SUMME(stempel_ende - stempel_start) der parent-Arbeiten,
+      // abzüglich Pausen/Unterbrechungen am parent-Datum für die zugehörige Person.
+      // Fallback (falls keine parent-Stempel vorhanden): _startzeit + _pause_unterbrochen_bei
+      // aus parent_arbeitszeiten_details — alte Logik, ungenau (siehe Bug T-2026-191).
+      const parentIds = [...new Set(alleTermine.filter(t => t.parent_termin_id).map(t => t.parent_termin_id))];
+      const parentStempelMap = {};
+      const parentPauseRangesByDatum = {}; // datum → result of _ladePauseRangesProPerson
+      if (parentIds.length > 0) {
+        const placeholders = parentIds.map(() => '?').join(',');
+        const parentRows = await allAsync(
+          `SELECT termin_id, stempel_start, stempel_ende
+             FROM termine_arbeiten
+            WHERE termin_id IN (${placeholders})
+              AND stempel_start IS NOT NULL AND stempel_start != ''
+              AND stempel_ende IS NOT NULL AND stempel_ende != ''`,
+          parentIds
+        );
+        for (const r of parentRows) {
+          if (!parentStempelMap[r.termin_id]) parentStempelMap[r.termin_id] = [];
+          parentStempelMap[r.termin_id].push(r);
+        }
+        // Pause-Ranges für jedes parent_datum einmal laden (Cache)
+        const parentDaten = [...new Set(alleTermine.filter(t => t.parent_termin_id && t.parent_datum).map(t => t.parent_datum))];
+        for (const pd of parentDaten) {
+          parentPauseRangesByDatum[pd] = await StempelzeitenController._ladePauseRangesProPerson(pd);
+        }
+      }
+
       const _vortagsInfo = (termin) => {
         if (!termin || !termin.parent_termin_id) return null;
         let det = null;
@@ -339,12 +366,43 @@ class StempelzeitenController {
             ? JSON.parse(termin.parent_arbeitszeiten_details)
             : termin.parent_arbeitszeiten_details;
         } catch (_) {}
-        const start = (det && det._startzeit) || termin.parent_startzeit || null;
-        const ende  = det && det._pause_unterbrochen_bei ? det._pause_unterbrochen_bei : null;
-        const min = (start && ende) ? StempelzeitenController._diffMinuten(start, ende) : null;
+        const parentStartzeit = (det && det._startzeit) || termin.parent_startzeit || null;
+
+        // Primär: parent-Stempelzeilen summieren
+        const stempel = parentStempelMap[termin.parent_termin_id] || [];
+        if (stempel.length > 0) {
+          let bruttoMin = 0;
+          let frueheste = null, spaeteste = null;
+          for (const s of stempel) {
+            const start = String(s.stempel_start).substring(0, 5);
+            const ende = String(s.stempel_ende).substring(0, 5);
+            const diff = StempelzeitenController._diffMinuten(start, ende);
+            if (diff > 0) bruttoMin += diff;
+            if (!frueheste || start < frueheste) frueheste = start;
+            if (!spaeteste || ende > spaeteste) spaeteste = ende;
+          }
+          // Pause-Abzug am parent-Tag (Mittagspause/Unterbrechungen) — nur was im Stempel-Bereich liegt
+          let pauseAbzug = 0;
+          const tp = terminPersonMap[termin.termin_id] || terminPersonMap[termin.parent_termin_id];
+          if (tp && termin.parent_datum && frueheste && spaeteste && parentPauseRangesByDatum[termin.parent_datum]) {
+            const personKey = `${tp.person_typ}_${tp.person_id}`;
+            const ranges = parentPauseRangesByDatum[termin.parent_datum][personKey] || [];
+            pauseAbzug = StempelzeitenController._pauseAbzugMinuten(frueheste, spaeteste, ranges);
+          }
+          const nettoMin = Math.max(0, bruttoMin - pauseAbzug);
+          return {
+            parent_datum: termin.parent_datum || null,
+            parent_startzeit: parentStartzeit ? String(parentStartzeit).substring(0, 5) : null,
+            vortags_min: nettoMin > 0 ? nettoMin : null
+          };
+        }
+
+        // Fallback: alte Logik aus _pause_unterbrochen_bei (ungenau, nur wenn keine Stempel)
+        const ende = det && det._pause_unterbrochen_bei ? det._pause_unterbrochen_bei : null;
+        const min = (parentStartzeit && ende) ? StempelzeitenController._diffMinuten(parentStartzeit, ende) : null;
         return {
           parent_datum: termin.parent_datum || null,
-          parent_startzeit: start ? String(start).substring(0, 5) : null,
+          parent_startzeit: parentStartzeit ? String(parentStartzeit).substring(0, 5) : null,
           vortags_min: min && min > 0 ? min : null
         };
       };
