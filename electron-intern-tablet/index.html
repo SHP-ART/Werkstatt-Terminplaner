@@ -2488,18 +2488,29 @@
               <span style="display:block;height:4px;background:rgba(255,255,255,0.35);border-radius:2px;margin-top:3px;"><span style="display:block;height:4px;background:#fff;border-radius:2px;width:${pct}%;"></span></span>
             </button>
           `;
-        } else if (imAnzeigeZeitraum && !person.pause_bereits_gemacht) {
-          buttonsHtml += `
-            <button class="tablet-btn tablet-btn-pause" style="background:#fd7e14;color:#fff;"
-                    onclick="handlePauseStarten(${personId}, '${typ}', '${heuteDatum}', true)">
-              <span class="btn-icon">🍽️</span> Mittagspause · ${person.mittagspause_start || '12:00'}
-            </button>
-          `;
         } else {
-          const btnLabel = '⏸ Arbeitsunterbrechung';
+          // Mittagspause-Button (nur wenn noch nicht gemacht)
+          if (!person.pause_bereits_gemacht) {
+            const mittagsLabel = imAnzeigeZeitraum
+              ? `🍽️ Mittagspause · ${person.mittagspause_start || '12:00'}`
+              : '🍽️ Mittagspause';
+            buttonsHtml += `
+              <button class="tablet-btn tablet-btn-pause" style="background:#fd7e14;color:#fff;"
+                      onclick="handlePauseStarten(${personId}, '${typ}', '${heuteDatum}', ${imAnzeigeZeitraum})">
+                <span>${mittagsLabel}</span>
+              </button>
+            `;
+          } else {
+            buttonsHtml += `
+              <button class="tablet-btn tablet-btn-pause" disabled title="Mittagspause heute bereits gemacht">
+                <span class="btn-icon">✅</span> Pause erledigt
+              </button>
+            `;
+          }
+          // Arbeitsunterbrechung-Button (immer verfügbar während Arbeitstag)
           buttonsHtml += `
             <button class="tablet-btn" style="background:#6c757d;color:#fff;"
-                    onclick="unterbrechungStartMitDialog(${personId}, '${typ}')">${btnLabel}</button>
+                    onclick="unterbrechungStartMitDialog(${personId}, '${typ}')">⏸ Arbeitsunterbrechung</button>
           `;
         }
       } else if (person.pause_bereits_gemacht && (!hatKommenNow || hatGehenNow)) {
