@@ -192,9 +192,14 @@ class StempelzeitenController {
           t.tatsaechliche_zeit,
           t.startzeit,
           t.status,
-          t.datum                  AS termin_datum
+          t.datum                  AS termin_datum,
+          t.parent_termin_id,
+          p.datum                  AS parent_datum,
+          p.startzeit              AS parent_startzeit,
+          p.arbeitszeiten_details  AS parent_arbeitszeiten_details
         FROM termine t
         LEFT JOIN kunden k ON t.kunde_id = k.id
+        LEFT JOIN termine p ON t.parent_termin_id = p.id AND p.geloescht_am IS NULL
         WHERE (t.datum = ? ${tagesUebergreifendWhere})
           AND t.geloescht_am IS NULL
           AND t.status NOT IN ('storniert')
@@ -323,6 +328,27 @@ class StempelzeitenController {
         return { stempel_start: fbStart, stempel_ende: fbEnde, ist_min: ist };
       };
 
+      // Berechnet aus parent_arbeitszeiten_details die am Vortag bereits gearbeiteten
+      // Minuten und liefert das ursprüngliche Start-Datum + Start-Uhrzeit zurück.
+      // Quelle: _startzeit (Beginn) und _pause_unterbrochen_bei (Tagesende).
+      const _vortagsInfo = (termin) => {
+        if (!termin || !termin.parent_termin_id) return null;
+        let det = null;
+        try {
+          det = typeof termin.parent_arbeitszeiten_details === 'string'
+            ? JSON.parse(termin.parent_arbeitszeiten_details)
+            : termin.parent_arbeitszeiten_details;
+        } catch (_) {}
+        const start = (det && det._startzeit) || termin.parent_startzeit || null;
+        const ende  = det && det._pause_unterbrochen_bei ? det._pause_unterbrochen_bei : null;
+        const min = (start && ende) ? StempelzeitenController._diffMinuten(start, ende) : null;
+        return {
+          parent_datum: termin.parent_datum || null,
+          parent_startzeit: start ? String(start).substring(0, 5) : null,
+          vortags_min: min && min > 0 ? min : null
+        };
+      };
+
       // Liefert die GEPLANTEN Zeiten (Auftrags-Startzeit und berechnetes Ende).
       // plan_start = termin.startzeit || details._startzeit
       // plan_ende  = plan_start + richtwertMin  (falls richtwertMin bekannt)
@@ -393,6 +419,9 @@ class StempelzeitenController {
           arbeit_id: s.arbeit_id, termin_id: s.termin_id,
           termin_nr: t.termin_nr || '', interne_auftragsnummer: t.interne_auftragsnummer || '', kennzeichen: t.kennzeichen || '', kunde_name: t.kunde_name || '',
           termin_datum: t.termin_datum || null,
+          parent_datum: (_vortagsInfo(t) || {}).parent_datum,
+          parent_startzeit: (_vortagsInfo(t) || {}).parent_startzeit,
+          vortags_min: (_vortagsInfo(t) || {}).vortags_min,
           arbeit: s.arbeit || t.termin_arbeit || '',
           richtwert_min: richtwertS,
           geschaetzte_min: s.geschaetzte_min,
@@ -427,6 +456,9 @@ class StempelzeitenController {
             arbeit_id: null, termin_id: t.termin_id,
             termin_nr: t.termin_nr || '', interne_auftragsnummer: t.interne_auftragsnummer || '', kennzeichen: t.kennzeichen || '', kunde_name: t.kunde_name || '',
             termin_datum: t.termin_datum || null,
+            parent_datum: (_vortagsInfo(t) || {}).parent_datum,
+            parent_startzeit: (_vortagsInfo(t) || {}).parent_startzeit,
+            vortags_min: (_vortagsInfo(t) || {}).vortags_min,
             arbeit: t.termin_arbeit || '', richtwert_min: rw,
             geschaetzte_min: t.geschaetzte_zeit,
             plan_start: planP.plan_start, plan_ende: planP.plan_ende,

@@ -87,10 +87,14 @@ class TermineModel {
       SELECT t.*,
              COALESCE(k.name, t.kunde_name) as kunde_name,
              COALESCE(k.telefon, t.kunde_telefon) as kunde_telefon,
-             m.name as mitarbeiter_name
+             m.name as mitarbeiter_name,
+             p.datum AS parent_datum,
+             p.startzeit AS parent_startzeit,
+             p.arbeitszeiten_details AS parent_arbeitszeiten_details
       FROM termine t
       LEFT JOIN kunden k ON t.kunde_id = k.id
       LEFT JOIN mitarbeiter m ON t.mitarbeiter_id = m.id
+      LEFT JOIN termine p ON t.parent_termin_id = p.id AND p.geloescht_am IS NULL
       WHERE (t.datum = ? ${wherePartLaufende}) AND t.geloescht_am IS NULL
         AND t.arbeit != 'Fahrzeug aus Import'
         AND t.arbeit != 'Fahrzeug hinzugefügt'

@@ -2301,10 +2301,14 @@
         if (istVerschoben) badges += '<span class="badge-verschoben">📅 Verschoben</span>';
         if (istVerspaetet) badges += '<span class="badge-verspaetet">⚠️ Verzögerung</span>';
         // Tagesübergreifender Termin (z.B. gestern gestartet, heute weiterarbeiten)
-        if (aktuellerAuftrag.datum && aktuellerAuftrag.datum !== formatDateLocal(new Date())) {
-          const d = new Date(aktuellerAuftrag.datum);
+        const heuteStr = formatDateLocal(new Date());
+        const seitDatumStr = aktuellerAuftrag.parent_datum
+          || (aktuellerAuftrag.datum && aktuellerAuftrag.datum !== heuteStr ? aktuellerAuftrag.datum : null);
+        const seitZeitStr = aktuellerAuftrag.parent_startzeit || null;
+        if (seitDatumStr) {
+          const d = new Date(seitDatumStr);
           const dStr = `${String(d.getDate()).padStart(2,'0')}.${String(d.getMonth()+1).padStart(2,'0')}.`;
-          badges += `<span class="badge-verschoben" title="Termin l\u00e4uft seit ${dStr}">⏳ seit ${dStr}</span>`;
+          badges += `<span class="badge-verschoben" title="Auftrag l\u00e4uft seit ${dStr}${seitZeitStr ? ' '+seitZeitStr : ''}">⏳ seit ${dStr}${seitZeitStr ? ' '+seitZeitStr : ''}</span>`;
         }
 
         // Prüfe ob Termin mehrere Arbeiten hat
@@ -2336,8 +2340,8 @@
 
           <div class="zeit-info">
             <div class="zeit-item">
-              <div class="zeit-label">Beginn</div>
-              <div class="zeit-value">${getEffektiveStartzeit(aktuellerAuftrag) || '--:--'}</div>
+              <div class="zeit-label">Beginn${seitDatumStr ? ' (Vortag)' : ''}</div>
+              <div class="zeit-value">${seitDatumStr ? (seitZeitStr || '--:--') : (getEffektiveStartzeit(aktuellerAuftrag) || '--:--')}</div>
             </div>
             <div class="zeit-item">
               <div class="zeit-label">Fertig ca.</div>

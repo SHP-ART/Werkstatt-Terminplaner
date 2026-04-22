@@ -31148,13 +31148,15 @@ class App {
     const lidArg = lid !== null ? lid : 'null';
 
     const rows = gruppe.arbeiten.map(a => {
-      const istMin = a.ist_min;
+      const vortagsMin = a.vortags_min || 0;
+      const istMinHeute = a.ist_min;
+      const istMin = istMinHeute !== null ? istMinHeute + vortagsMin : (vortagsMin > 0 ? vortagsMin : null);
       const richtwertMin = a.richtwert_min || a.geschaetzte_min || 0;
       const ueberschritten = istMin !== null && richtwertMin > 0 && istMin > richtwertMin * 1.1;
       const istText = a.stempel_start && !a.stempel_ende
-        ? '<span class="badge badge-info">laufend…</span>'
+        ? `<span class="badge badge-info">laufend…</span>${vortagsMin > 0 ? ` <span class="text-muted" style="font-size:11px;">(+${vortagsMin} Min Vortag)</span>` : ''}`
         : istMin !== null
-          ? `<span class="${ueberschritten ? 'text-warning' : 'text-success'}">${istMin} Min${ueberschritten ? ' ⚠️' : ''}</span>`
+          ? `<span class="${ueberschritten ? 'text-warning' : 'text-success'}">${istMin} Min${ueberschritten ? ' ⚠️' : ''}</span>${vortagsMin > 0 ? ` <span class="text-muted" style="font-size:11px;">(davon ${vortagsMin} Vortag)</span>` : ''}`
           : '<span class="text-muted">—</span>';
 
       // Pause-Badge: zeigt Pausen die in dieser Arbeit (Stempel-Bereich) liegen
@@ -31198,10 +31200,15 @@ class App {
       // Tagesübergreifend laufender Termin (z.B. gestern gestartet)?
       const _heuteIso = new Date().toISOString().slice(0,10);
       let terminNrZelle = this.escapeHtml(a.termin_nr || '');
-      if (a.termin_datum && a.termin_datum !== _heuteIso) {
-        const d = new Date(a.termin_datum);
+      // Variante 1: Termin selbst hat ein anderes Datum als heute (echte tagesübergreifende Termine)
+      // Variante 2: Folgetermin (parent_datum gesetzt) – ursprünglicher Beginn am Vortag
+      const seitDatum = a.parent_datum || (a.termin_datum && a.termin_datum !== _heuteIso ? a.termin_datum : null);
+      const seitZeit = a.parent_startzeit || null;
+      if (seitDatum) {
+        const d = new Date(seitDatum);
         const dStr = `${String(d.getDate()).padStart(2,'0')}.${String(d.getMonth()+1).padStart(2,'0')}.`;
-        terminNrZelle += ` <span title="Termin l\u00e4uft seit ${dStr}" style="display:inline-block;margin-left:4px;background:#fff3cd;color:#856404;border:1px solid #ffc107;border-radius:10px;padding:1px 7px;font-size:11px;font-weight:600;">⏳ seit ${dStr}</span>`;
+        const titleTxt = `Auftrag l\u00e4uft seit ${dStr}${seitZeit ? ' ' + seitZeit : ''}` + (a.vortags_min ? ` (+${a.vortags_min} Min am Vortag gearbeitet)` : '');
+        terminNrZelle += ` <span title="${titleTxt}" style="display:inline-block;margin-left:4px;background:#fff3cd;color:#856404;border:1px solid #ffc107;border-radius:10px;padding:1px 7px;font-size:11px;font-weight:600;">⏳ seit ${dStr}${seitZeit ? ' ' + seitZeit : ''}</span>`;
       }
       return `
         <tr${rowStyle}>
