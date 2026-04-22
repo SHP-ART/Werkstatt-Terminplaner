@@ -31334,7 +31334,10 @@ class App {
       ? `<button onclick="window.app.tagesstempelReset(${tagesstempel.id})" title="Versehentlich gestarteten Stempel löschen" style="border:none;background:none;cursor:pointer;color:#dc3545;font-size:13px;padding:0 2px;margin-left:4px;" >🗑️</button>`
       : '';
     const _qi = q => q === 'stempel' ? '<span title="Live gestempelt" style="font-size:10px;">🟢</span>' : q === 'manuell' ? '<span title="Manuell korrigiert" style="font-size:10px;">✏️</span>' : q === 'auto' ? '<span title="Automatisch abgestempelt" style="font-size:10px;">🤖</span>' : '';
-    const stempelZeilenHtml = `
+    // Pseudo-Gruppe "Alle Aufträge" (person_id=0) hat keinen echten Tagesstempel –
+    // Eingabefelder dort würden ins Leere zeigen (Backend lehnt person_id=0 ab).
+    const istEchtePerson = (gruppe.person_typ === 'mitarbeiter' || gruppe.person_typ === 'lehrling') && gruppe.person_id > 0;
+    const stempelZeilenHtml = !istEchtePerson ? '' : `
       <div style="display:flex;align-items:center;flex-wrap:wrap;gap:6px;font-size:13px;margin-top:4px;">
         <span style="color:#198754;font-weight:600;">▶</span>
         <input type="text" value="${kommenVal}" placeholder="HH:MM" maxlength="5" pattern="([01][0-9]|2[0-3]):[0-5][0-9]" style="${timeInputStyle}"
@@ -31797,7 +31800,7 @@ class App {
           <span style="display:block;height:4px;background:rgba(255,255,255,0.35);border-radius:2px;margin-top:3px;"><span style="display:block;height:4px;background:#fff;border-radius:2px;width:${pct}%;"></span></span>
         </button>`;
       } else {
-        // Zwei separate Buttons: Mittagspause + Arbeitsunterbrechung
+        // Nur Mittagspause-Button im Header – Arbeitsunterbrechung wandert in das 'Beenden'-Sheet
         let mittagsBtn = '';
         if (!person.pause_bereits_gemacht) {
           const labelMit = imAnzeigePauseFenster
@@ -31807,8 +31810,7 @@ class App {
         } else {
           mittagsBtn = `<button class="intern-tab-btn" disabled style="background:#e9ecef;color:#6c757d;border:none;border-radius:6px;padding:5px 12px;font-size:13px;cursor:not-allowed;" title="Mittagspause heute bereits gemacht">✅ Pause erledigt</button>`;
         }
-        const unterbrBtn = `<button class="intern-tab-btn" style="background:#6c757d;color:#fff;border:none;border-radius:6px;padding:5px 12px;font-size:13px;cursor:pointer;" onclick="app.webUnterbrechungStart(${midArg}, ${lidArg})">⏸ Arbeitsunterbrechung</button>`;
-        smartPauseBtn = `<span style="display:inline-flex;gap:8px;">${mittagsBtn}${unterbrBtn}</span>`;
+        smartPauseBtn = mittagsBtn;
       }
     }
 
@@ -31844,7 +31846,7 @@ class App {
         </div>`;
       } else if (!hatGehen) {
         tagesstempelBtnHtml = `<div style="padding:6px 12px;background:#fff8f8;border-top:1px solid #dee2e6;">
-          <button class="intern-tab-btn" style="background:#dc3545;color:#fff;border:none;border-radius:6px;padding:5px 12px;font-size:13px;cursor:pointer;" onclick="app.webTagesstempelGehen(${midArg}, ${lidArg})">■ Arbeitsende</button>
+          <button class="intern-tab-btn" style="background:#dc3545;color:#fff;border:none;border-radius:6px;padding:5px 12px;font-size:13px;cursor:pointer;" onclick="app.webBeendenSheet(${midArg}, ${lidArg})">🔴 Beenden <span style="opacity:0.85;font-size:0.9em;">▾</span></button>
         </div>`;
       }
     }
@@ -37105,6 +37107,10 @@ class App {
       this.showToast('Bitte Zeit im Format HH:MM eingeben (z.B. 07:30)', 'warning');
       return;
     }
+    if (!mitarbeiter_id && !lehrling_id) {
+      this.showToast('Diese Zeile ist nicht einer Person zugeordnet.', 'warning');
+      return;
+    }
     if (!datum) {
       // kein Tagesstempel-Eintrag vorhanden → Datum aus aktuellem Input lesen
       const datumInput = document.getElementById('zeitstempelungDatum');
@@ -37210,6 +37216,51 @@ class App {
     } catch (err) {
       this.showToast('Fehler: ' + (err.message || 'Unbekannt'), 'error');
     }
+  }
+
+  /**
+   * Bottom-Sheet 'Beenden' für Intern-Tab – fasst Arbeitsunterbrechung
+   * und Arbeitsende in einer großen Touch-Auswahl zusammen.
+   */
+  webBeendenSheet(mitarbeiter_id, lehrling_id) {
+    const sheet = document.createElement('div');
+    sheet.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.55);display:flex;flex-direction:column;justify-content:flex-end;z-index:9999;';
+    sheet.innerHTML = `
+      <style>
+        @keyframes intern-bs-slide { from { transform:translateY(100%) } to { transform:translateY(0) } }
+      </style>
+      <div style="background:#fff;border-radius:18px 18px 0 0;padding:18px 16px 24px;box-shadow:0 -4px 30px rgba(0,0,0,0.25);animation:intern-bs-slide 0.2s ease-out;max-width:520px;margin:0 auto;width:100%;">
+        <div style="width:48px;height:5px;background:#dee2e6;border-radius:3px;margin:0 auto 14px;"></div>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+          <strong style="font-size:16px;color:#212529;">🔴 Beenden – Was möchtest du tun?</strong>
+          <button data-bs-close style="background:none;border:none;font-size:22px;color:#999;cursor:pointer;padding:2px 8px;">✕</button>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:9px;">
+          <button data-bs-action="ub" style="background:linear-gradient(135deg,#fd7e14 0%,#ffa54a 100%);color:#fff;border:none;border-radius:10px;padding:14px 16px;text-align:left;cursor:pointer;font-size:15px;">
+            <span style="font-size:22px;margin-right:8px;">⏸</span>
+            <strong>Arbeitsunterbrechung</strong>
+            <div style="font-size:12px;font-weight:400;opacity:0.92;margin-top:2px;">Kurze Pause – Arbeitszeit zählt nicht weiter</div>
+          </button>
+          <button data-bs-action="ende" style="background:linear-gradient(135deg,#dc3545 0%,#ef5350 100%);color:#fff;border:none;border-radius:10px;padding:14px 16px;text-align:left;cursor:pointer;font-size:15px;">
+            <span style="font-size:22px;margin-right:8px;">🔴</span>
+            <strong>Arbeitsende stempeln</strong>
+            <div style="font-size:12px;font-weight:400;opacity:0.92;margin-top:2px;">Heute Feierabend – schließt offene Arbeiten</div>
+          </button>
+          <button data-bs-close style="background:#f1f3f5;color:#495057;border:none;border-radius:10px;padding:11px;font-size:14px;cursor:pointer;margin-top:4px;">Abbrechen</button>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(sheet);
+    const close = () => { try { document.body.removeChild(sheet); } catch(_) {} };
+    sheet.addEventListener('click', (e) => {
+      if (e.target === sheet || e.target.closest('[data-bs-close]')) { close(); return; }
+      const btn = e.target.closest('[data-bs-action]');
+      if (!btn) return;
+      const action = btn.dataset.bsAction;
+      close();
+      if (action === 'ub')   this.webUnterbrechungStart(mitarbeiter_id, lehrling_id);
+      if (action === 'ende') this.webTagesstempelGehen(mitarbeiter_id, lehrling_id);
+    });
   }
 
   async webUnterbrechungStart(mitarbeiter_id, lehrling_id) {

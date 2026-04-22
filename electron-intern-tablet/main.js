@@ -341,7 +341,9 @@ async function downloadAndInstallUpdate() {
       `  ping 127.0.0.1 -n 3 -w 1000 > nul\r\n` +
       `  "${updatePath}" >> "${tempLog}" 2>&1\r\n` +
       `)\r\n` +
-      `ping 127.0.0.1 -n 3 -w 1000 > nul\r\n` +
+      // Längere Wartezeit: NSIS oneClick-Installer brauchen oft 5-8s bis alle Files geschrieben sind
+      `echo [%date% %time%] Warte 8s bis Installation final ist... >> "${tempLog}"\r\n` +
+      `ping 127.0.0.1 -n 9 -w 1000 > nul\r\n` +
       `echo [%date% %time%] Suche neue App... >> "${tempLog}"\r\n` +
       `set "APP_EXE="\r\n` +
       `if exist "${installPathUser}" set "APP_EXE=${installPathUser}"\r\n` +
@@ -350,7 +352,15 @@ async function downloadAndInstallUpdate() {
       `if not defined APP_EXE if exist "${installPathMachineX86}" set "APP_EXE=${installPathMachineX86}"\r\n` +
       `if defined APP_EXE (\r\n` +
       `  echo [%date% %time%] Starte neue App: %APP_EXE% >> "${tempLog}"\r\n` +
-      `  start "" "%APP_EXE%"\r\n` +
+      // Sicherheits-Fallback: schtasks-Eintrag der die App in 90s nochmal startet (falls 'start' fehlschlägt)
+      `  powershell -NoProfile -Command "$t=(Get-Date).AddSeconds(90).ToString('HH:mm'); schtasks /Create /F /SC ONCE /TN WerkstattInternUpdateStart /TR ('\\"%APP_EXE%\\"') /ST $t" >> "${tempLog}" 2>&1\r\n` +
+      `  echo [%date% %time%] Fallback-Task registriert (laeuft in ca. 90s falls primaerer Start versagt) >> "${tempLog}"\r\n` +
+      // Primärer Start: zuerst über start, dann direkt
+      `  start "" "%APP_EXE%" >> "${tempLog}" 2>&1\r\n` +
+      `  if %ERRORLEVEL% NEQ 0 (\r\n` +
+      `    echo [%date% %time%] start fehlgeschlagen, versuche direkt >> "${tempLog}"\r\n` +
+      `    "%APP_EXE%" >> "${tempLog}" 2>&1\r\n` +
+      `  )\r\n` +
       `) else (\r\n` +
       `  echo [%date% %time%] WARNUNG: Neue App-EXE nicht gefunden >> "${tempLog}"\r\n` +
       `)\r\n` +
