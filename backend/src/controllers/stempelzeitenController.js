@@ -511,10 +511,11 @@ class StempelzeitenController {
             ? StempelzeitenController._pauseDetailsFuerBereich(fb.stempel_start, fb.stempel_ende, pauseRanges, t.termin_id)
             : [];
           const istNetto = fb.ist_min != null ? Math.max(0, fb.ist_min - pauseAbzug) : null;
-          // stempel_start nur zeigen wenn Termin wirklich in Arbeit ist – nicht bei geplanten Terminen,
-          // da dort _startzeit nur die Planzeit ist, keine echte Stempelzeit.
-          const fbStempelStart = t.status === 'in_arbeit' ? fb.stempel_start : null;
-          const fbStempelEnde  = t.status === 'in_arbeit' ? fb.stempel_ende  : null;
+          // stempel_start nur zeigen wenn Termin gestartet oder abgeschlossen ist – nicht bei geplanten
+          // Terminen, da dort _startzeit nur die Planzeit ist, keine echte Stempelzeit.
+          const _hatEchtenStempel = t.status === 'in_arbeit' || t.status === 'abgeschlossen' || t.status === 'wartend';
+          const fbStempelStart = _hatEchtenStempel ? fb.stempel_start : null;
+          const fbStempelEnde  = _hatEchtenStempel ? fb.stempel_ende  : null;
           _addArbeit(grupKey, person, t, {
             arbeit_id: null, termin_id: t.termin_id,
             termin_nr: t.termin_nr || '', interne_auftragsnummer: t.interne_auftragsnummer || '', kennzeichen: t.kennzeichen || '', kunde_name: t.kunde_name || '',
@@ -545,8 +546,9 @@ class StempelzeitenController {
             const rw = _getRichtwert(t.termin_arbeit);
             const planP = _planZeiten(t, rw);
             const fb = _fallbackFromTermin(t, t.termin_arbeit);
-            const fbStempelStart = t.status === 'in_arbeit' ? fb.stempel_start : null;
-            const fbStempelEnde  = t.status === 'in_arbeit' ? fb.stempel_ende  : null;
+            const _hatEchtenStempel = t.status === 'in_arbeit' || t.status === 'abgeschlossen' || t.status === 'wartend';
+            const fbStempelStart = _hatEchtenStempel ? fb.stempel_start : null;
+            const fbStempelEnde  = _hatEchtenStempel ? fb.stempel_ende  : null;
             return {
               arbeit_id: null, termin_id: t.termin_id,
               termin_nr: t.termin_nr || '', interne_auftragsnummer: t.interne_auftragsnummer || '', kennzeichen: t.kennzeichen || '', kunde_name: t.kunde_name || '',
