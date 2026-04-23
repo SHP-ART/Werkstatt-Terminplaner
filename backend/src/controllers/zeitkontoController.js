@@ -176,6 +176,13 @@ class ZeitkontoController {
           if (sollMin > 0) arbeitstage++;
         }
 
+        const unterbrechungen = (ubMap[stempelKey] || []).map(u => ({
+          start: u.start_zeit,
+          ende: u.ende_zeit,
+          dauer_min: zeitZuMinuten(u.ende_zeit) - zeitZuMinuten(u.start_zeit)
+        }));
+        const ubGesamtMin = unterbrechungen.reduce((s, u) => s + u.dauer_min, 0);
+
         return {
           datum,
           soll_min: sollMin,
@@ -186,7 +193,9 @@ class ZeitkontoController {
           kommen_zeit: stempel ? stempel.kommen_zeit : null,
           gehen_zeit: stempel ? stempel.gehen_zeit : null,
           soll_start: plan ? plan.arbeitszeit_start : null,
-          soll_ende: plan ? plan.arbeitszeit_ende : null
+          soll_ende: plan ? plan.arbeitszeit_ende : null,
+          unterbrechungen,
+          ub_gesamt_min: ubGesamtMin
         };
       }));
 

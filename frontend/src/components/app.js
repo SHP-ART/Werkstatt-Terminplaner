@@ -30859,6 +30859,19 @@ class App {
         const tagSaldo = t.ist_min - t.soll_min;
         const kommenHtml = t.abwesenheit ? '<span style="color:#bbb;">—</span>' : stempelZeitHtml(t.kommen_zeit, t.soll_start);
         const gehenHtml = t.abwesenheit ? '<span style="color:#bbb;">—</span>' : stempelZeitHtml(t.gehen_zeit, t.soll_ende);
+
+        // Unterbrechungen
+        const ubs = t.unterbrechungen || [];
+        let ubHtml = '';
+        if (ubs.length > 0) {
+          const ubDetails = ubs.map(u => {
+            const startStr = u.start ? minZuHHMM(zeitZuMin(u.start)) : '?';
+            const endeStr = u.ende ? minZuHHMM(zeitZuMin(u.ende)) : '?';
+            return `${startStr}–${endeStr} (${u.dauer_min}′)`;
+          }).join(', ');
+          ubHtml = `<span style="color:#e57c00;font-size:11px;margin-left:4px;" title="${ubDetails}">⏸ ${ubs.length}× ${minToStr(t.ub_gesamt_min)}</span>`;
+        }
+
         return `<tr style="font-size:12px;${nichtGestempelt ? 'opacity:0.6;' : ''}">
           <td style="padding:3px 8px;white-space:nowrap;color:#888;">${wt} ${dStr}</td>
           <td style="padding:3px 8px;text-align:right;">${kommenHtml}</td>
@@ -30866,7 +30879,7 @@ class App {
           <td style="padding:3px 8px;text-align:right;">${minToStr(t.soll_min)}</td>
           <td style="padding:3px 8px;text-align:right;">${t.abwesenheit ? minToStr(t.soll_min) : minToStr(t.ist_min)}</td>
           <td style="padding:3px 8px;text-align:right;${saldoStyle(tagSaldo)}">${minToStr(tagSaldo)}</td>
-          <td style="padding:3px 8px;">${abwHtml}${nichtGestempelt ? '<span style="color:#aaa;font-size:11px;">nicht gestempelt</span>' : ''}</td>
+          <td style="padding:3px 8px;">${abwHtml}${nichtGestempelt ? '<span style="color:#aaa;font-size:11px;">nicht gestempelt</span>' : ''}${ubHtml}</td>
         </tr>`;
       }).join('');
 
