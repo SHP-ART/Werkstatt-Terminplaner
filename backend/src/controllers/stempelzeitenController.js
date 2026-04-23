@@ -477,6 +477,7 @@ class StempelzeitenController {
           arbeit_id: s.arbeit_id, termin_id: s.termin_id,
           termin_nr: t.termin_nr || '', interne_auftragsnummer: t.interne_auftragsnummer || '', kennzeichen: t.kennzeichen || '', kunde_name: t.kunde_name || '',
           termin_datum: t.termin_datum || null,
+          termin_status: t.status || null,
           parent_datum: (_vortagsInfo(t) || {}).parent_datum,
           parent_startzeit: (_vortagsInfo(t) || {}).parent_startzeit,
           vortags_min: (_vortagsInfo(t) || {}).vortags_min,
@@ -510,17 +511,22 @@ class StempelzeitenController {
             ? StempelzeitenController._pauseDetailsFuerBereich(fb.stempel_start, fb.stempel_ende, pauseRanges, t.termin_id)
             : [];
           const istNetto = fb.ist_min != null ? Math.max(0, fb.ist_min - pauseAbzug) : null;
+          // stempel_start nur zeigen wenn Termin wirklich in Arbeit ist – nicht bei geplanten Terminen,
+          // da dort _startzeit nur die Planzeit ist, keine echte Stempelzeit.
+          const fbStempelStart = t.status === 'in_arbeit' ? fb.stempel_start : null;
+          const fbStempelEnde  = t.status === 'in_arbeit' ? fb.stempel_ende  : null;
           _addArbeit(grupKey, person, t, {
             arbeit_id: null, termin_id: t.termin_id,
             termin_nr: t.termin_nr || '', interne_auftragsnummer: t.interne_auftragsnummer || '', kennzeichen: t.kennzeichen || '', kunde_name: t.kunde_name || '',
             termin_datum: t.termin_datum || null,
+            termin_status: t.status || null,
             parent_datum: (_vortagsInfo(t) || {}).parent_datum,
             parent_startzeit: (_vortagsInfo(t) || {}).parent_startzeit,
             vortags_min: (_vortagsInfo(t) || {}).vortags_min,
             arbeit: t.termin_arbeit || '', richtwert_min: rw,
             geschaetzte_min: t.geschaetzte_zeit,
             plan_start: planP.plan_start, plan_ende: planP.plan_ende,
-            stempel_start: fb.stempel_start, stempel_ende: fb.stempel_ende,
+            stempel_start: fbStempelStart, stempel_ende: fbStempelEnde,
             ist_min: istNetto,
             ist_brutto_min: fb.ist_min,
             pause_abzug_min: pauseAbzug,
@@ -539,13 +545,17 @@ class StempelzeitenController {
             const rw = _getRichtwert(t.termin_arbeit);
             const planP = _planZeiten(t, rw);
             const fb = _fallbackFromTermin(t, t.termin_arbeit);
+            const fbStempelStart = t.status === 'in_arbeit' ? fb.stempel_start : null;
+            const fbStempelEnde  = t.status === 'in_arbeit' ? fb.stempel_ende  : null;
             return {
               arbeit_id: null, termin_id: t.termin_id,
               termin_nr: t.termin_nr || '', interne_auftragsnummer: t.interne_auftragsnummer || '', kennzeichen: t.kennzeichen || '', kunde_name: t.kunde_name || '',
+              termin_datum: t.termin_datum || null,
+              termin_status: t.status || null,
               arbeit: t.termin_arbeit || '', richtwert_min: rw,
               geschaetzte_min: t.geschaetzte_zeit,
               plan_start: planP.plan_start, plan_ende: planP.plan_ende,
-              stempel_start: fb.stempel_start, stempel_ende: fb.stempel_ende, ist_min: fb.ist_min
+              stempel_start: fbStempelStart, stempel_ende: fbStempelEnde, ist_min: fb.ist_min
             };
           })
         });

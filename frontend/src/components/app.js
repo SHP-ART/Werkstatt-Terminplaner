@@ -30867,7 +30867,8 @@ class App {
           const ubDetails = ubs.map(u => {
             const startStr = u.start ? minZuHHMM(zeitZuMin(u.start)) : '?';
             const endeStr = u.ende ? minZuHHMM(zeitZuMin(u.ende)) : '?';
-            return `${startStr}–${endeStr} (${u.dauer_min}′)`;
+            const typLabel = u.typ === 'termin_pause' ? ' 🔧Auftrag' : '';
+            return `${startStr}–${endeStr} (${u.dauer_min}′)${typLabel}`;
           }).join(', ');
           ubHtml = `<span style="color:#e57c00;font-size:11px;margin-left:4px;" title="${ubDetails}">⏸ ${ubs.length}× ${minToStr(t.ub_gesamt_min)}</span>`;
         }
@@ -31195,7 +31196,8 @@ class App {
       const istMin = istMinHeute !== null ? istMinHeute + vortagsMin : (vortagsMin > 0 ? vortagsMin : null);
       const richtwertMin = a.richtwert_min || a.geschaetzte_min || 0;
       const ueberschritten = istMin !== null && richtwertMin > 0 && istMin > richtwertMin * 1.1;
-      const istText = a.stempel_start && !a.stempel_ende
+      const istLaufend = (a.stempel_start && !a.stempel_ende) || (!a.stempel_start && a.termin_status === 'in_arbeit');
+      const istText = istLaufend
         ? `<span class="badge badge-info">laufend…</span>${vortagsMin > 0 ? ` <span class="text-muted" style="font-size:11px;">(+${vortagsMin} Min Vortag)</span>` : ''}`
         : istMin !== null
           ? `<span class="${ueberschritten ? 'text-warning' : 'text-success'}">${istMin} Min${ueberschritten ? ' ⚠️' : ''}</span>${vortagsMin > 0 ? ` <span class="text-muted" style="font-size:11px;">(davon ${vortagsMin} Vortag)</span>` : ''}`

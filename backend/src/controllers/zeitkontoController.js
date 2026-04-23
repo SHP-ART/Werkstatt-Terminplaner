@@ -91,6 +91,29 @@ class ZeitkontoController {
       ubMap[key].push(u);
     });
 
+    // Termin-Arbeitspausen (über Pause-Button im Tablet) für den Zeitraum
+    const apRows = await allAsync(
+      `SELECT ap.mitarbeiter_id, ap.lehrling_id, t.datum,
+              ap.gestartet_am, ap.beendet_am
+       FROM arbeitspausen ap
+       JOIN termine t ON ap.termin_id = t.id
+       WHERE t.datum >= ? AND t.datum <= ?
+         AND ap.beendet_am IS NOT NULL`,
+      [von, bis]
+    );
+    const apMap = {};
+    const _isoToHHMM = s => {
+      if (!s) return null;
+      const d = new Date(s);
+      if (isNaN(d)) return null;
+      return String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+    };
+    apRows.forEach(ap => {
+      const key = (ap.mitarbeiter_id ? `m_${ap.mitarbeiter_id}` : `l_${ap.lehrling_id}`) + '_' + ap.datum;
+      if (!apMap[key]) apMap[key] = [];
+      apMap[key].push(ap);
+    });
+
     // Mittagspausen für den Zeitraum
     const pauseRows = await allAsync(
       `SELECT mitarbeiter_id, lehrling_id, datum, pause_start_zeit, pause_ende_zeit
@@ -176,11 +199,24 @@ class ZeitkontoController {
           if (sollMin > 0) arbeitstage++;
         }
 
-        const unterbrechungen = (ubMap[stempelKey] || []).map(u => ({
+        // Tagesstempel-Unterbrechungen (arbeitsunterbrechungen)
+        const ubTages = (ubMap[stempelKey] || []).map(u => ({
           start: u.start_zeit,
           ende: u.ende_zeit,
-          dauer_min: zeitZuMinuten(u.ende_zeit) - zeitZuMinuten(u.start_zeit)
+          dauer_min: zeitZuMinuten(u.ende_zeit) - zeitZuMinuten(u.start_zeit),
+          typ: 'tagesstempel'
         }));
+        // Termin-Pausen (arbeitspausen via Tablet Pause-Button)
+        const ubTermin = (apMap[stempelKey] || []).map(ap => {
+          const startHHMM = _isoToHHMM(ap.gestartet_am);
+          const endeHHMM  = _isoToHHMM(ap.beendet_am);
+          const dauerMin = (startHHMM && endeHHMM)
+            ? zeitZuMinuten(endeHHMM) - zeitZuMinuten(startHHMM)
+            : 0;
+          return { start: startHHMM, ende: endeHHMM, dauer_min: dauerMin, typ: 'termin_pause' };
+        }).filter(u => u.dauer_min > 0);
+        const unterbrechungen = [...ubTages, ...ubTermin]
+          .sort((a, b) => (a.start || '').localeCompare(b.start || ''));
         const ubGesamtMin = unterbrechungen.reduce((s, u) => s + u.dauer_min, 0);
 
         return {
