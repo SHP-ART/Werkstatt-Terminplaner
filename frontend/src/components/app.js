@@ -15286,12 +15286,15 @@ class App {
               const fStr = String(fertigDate.getHours()).padStart(2,'0') + ':' + String(fertigDate.getMinutes()).padStart(2,'0');
               fertigRow = `<div class="detail-row"><span class="detail-label" style="color:#16a34a;">✅</span><span class="detail-value">Fertiggestellt: <strong style="color:#16a34a;">${fStr}</strong></span></div>`;
             }
-            // Tatsächliche Arbeitszeit: bevorzuge Berechnung aus Startzeit→Fertigstellung
+            // Tatsächliche Arbeitszeit: DB-Wert bevorzugen (korrekt beim Abschluss gesetzt)
+            // Nur Fallback auf Differenzberechnung wenn tatsaechliche_zeit fehlt
             let tatsZeitRow = '';
-            let tatsZeit = termin.tatsaechliche_zeit;
-            // Wenn fertigstellung_zeit bekannt: echte Dauer aus Differenz berechnen
-            if (fertigDate && !isNaN(fertigDate)) {
-              let startStr = tatsStart; // tatsStart wurde oben ermittelt
+            let tatsZeit = (termin.tatsaechliche_zeit && parseInt(termin.tatsaechliche_zeit) > 0)
+              ? parseInt(termin.tatsaechliche_zeit)
+              : null;
+            // Fallback: Differenz aus gestempelter Startzeit → Fertigstellung (nur wenn kein DB-Wert)
+            if (!tatsZeit && fertigDate && !isNaN(fertigDate)) {
+              let startStr = tatsStart;
               if (startStr) {
                 const [sh, sm] = startStr.split(':').map(Number);
                 const sd = new Date(fertigDate);
