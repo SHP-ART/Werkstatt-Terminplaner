@@ -121,7 +121,7 @@ async function createSchemaManually(db) {
       kunde_name TEXT,
       kunde_telefon TEXT,
       kennzeichen TEXT NOT NULL,
-      datum TEXT NOT NULL,
+      datum TEXT,
       bring_zeit TEXT,
       geschaetzte_zeit INTEGER NOT NULL,
       arbeit TEXT NOT NULL,
