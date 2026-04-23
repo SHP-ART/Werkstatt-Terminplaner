@@ -15013,13 +15013,62 @@ class App {
   // ========== SCHNELL-STATUS-WECHSEL (Shift+Click in Planung) ==========
   
   // Schnell-Status-Dialog für Timeline-Termin anzeigen
+  // Rendert Arbeitspausen-Sektion für den SchnellStatusDialog
+  _renderSchnellStatusPausen(pausen, terminId) {
+    const id = terminId ? `id="schnell-arbeitspausen-${terminId}"` : '';
+    if (!pausen || pausen.length === 0) {
+      return `<div ${id}></div>`;
+    }
+    const grundLabels = { teil_fehlt: 'Teil fehlt', rueckfrage_kunde: 'Rückfrage Kunde', vorrang: 'Vorrang' };
+    const isoToHHMM = (iso) => {
+      if (!iso) return '—';
+      const d = new Date(iso);
+      return isNaN(d) ? '—' : `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+    };
+    const gesamtMinutenAbzug = pausen.reduce((sum, p) => {
+      if (!p.gestartet_am) return sum;
+      const start = new Date(p.gestartet_am);
+      const end = p.beendet_am ? new Date(p.beendet_am) : new Date();
+      const diff = Math.round((end - start) / 60000);
+      return sum + (diff > 0 ? diff : 0);
+    }, 0);
+    const pausenRows = pausen.map(p => {
+      const start = isoToHHMM(p.gestartet_am);
+      const ende = p.beendet_am ? isoToHHMM(p.beendet_am) : '<span style="color:#fd7e14;">läuft…</span>';
+      const dauerMin = p.gestartet_am ? Math.round(((p.beendet_am ? new Date(p.beendet_am) : new Date()) - new Date(p.gestartet_am)) / 60000) : 0;
+      const grundTxt = grundLabels[p.grund] || p.grund || '';
+      return `<div style="font-size:0.82em;color:#666;padding:1px 0;">🔧 ${start}–${ende} (${dauerMin} min)${grundTxt ? ' · ' + grundTxt : ''}</div>`;
+    }).join('');
+    const abzugText = gesamtMinutenAbzug > 0 ? ` <span style="color:#fd7e14;font-size:0.85em;">(−${gesamtMinutenAbzug} min)</span>` : '';
+    return `<div ${id}>
+      <div class="detail-row">
+        <span class="detail-label">🔧</span>
+        <span class="detail-value"><strong>Auftragsunterbrechungen</strong>${abzugText}
+          ${pausenRows}
+        </span>
+      </div>
+    </div>`;
+  }
+
   showSchnellStatusDialog(termin, element, startzeit, dauer, arbeitName = null) {
+    // Arbeitspausen async nachladen und Dialog aktualisieren
+    const terminId = termin.id;
+    if (!termin.arbeitspausen) {
+      ApiService.get(`/arbeitspausen/termin/${terminId}`)
+        .then(pausen => {
+          termin.arbeitspausen = pausen || [];
+          if (this.termineById[terminId]) this.termineById[terminId].arbeitspausen = termin.arbeitspausen;
+          const container = document.getElementById(`schnell-arbeitspausen-${terminId}`);
+          if (container) container.outerHTML = this._renderSchnellStatusPausen(termin.arbeitspausen);
+        })
+        .catch(() => {});
+    }
+
     // Alten Dialog entfernen falls vorhanden
     const existingDialog = document.getElementById('schnellStatusDialog');
     if (existingDialog) existingDialog.remove();
     
     const currentStatus = termin.status || 'geplant';
-    const terminId = termin.id;
     const heuteDatumStr = new Date().toISOString().slice(0, 10);
     const zeigeWeiterfuehren = termin.datum && termin.datum < heuteDatumStr && termin.datum !== '9999-12-31' && !['abgeschlossen', 'storniert'].includes(currentStatus);
     
@@ -15265,6 +15314,7 @@ class App {
             <span class="detail-label">📅</span>
             <span class="detail-value">Abholung: <strong>${abholzeitText}</strong> (${abholDatumText})</span>
           </div>
+          ${this._renderSchnellStatusPausen(termin.arbeitspausen, termin.id)}
           <div class="detail-divider"></div>
           <div class="detail-row" style="align-items: center; gap: 6px; flex-wrap: wrap;">
             <span class="detail-label">🕐</span>

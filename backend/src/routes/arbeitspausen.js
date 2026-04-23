@@ -34,4 +34,10 @@ router.post('/beenden', ArbeitspausenController.beenden);
  */
 router.get('/aktive', ArbeitspausenController.getAktive);
 
+/**
+ * GET /api/arbeitspausen/termin/:termin_id
+ * Gibt alle Arbeitspausen für einen bestimmten Termin zurück
+ */
+router.get('/termin/:termin_id', ArbeitspausenController.getByTermin);
+
 module.exports = router;

@@ -118,6 +118,27 @@ class ArbeitspausenController {
   }
 
   /**
+   * GET /api/arbeitspausen/termin/:termin_id
+   * Gibt alle Arbeitspausen für einen Termin zurück
+   */
+  static async getByTermin(req, res) {
+    try {
+      const { termin_id } = req.params;
+      const pausen = await ArbeitspausenController.dbAll(
+        `SELECT id, termin_id, mitarbeiter_id, lehrling_id, grund, gestartet_am, beendet_am
+         FROM arbeitspausen
+         WHERE termin_id = ?
+         ORDER BY gestartet_am ASC`,
+        [termin_id]
+      );
+      res.json(pausen);
+    } catch (error) {
+      console.error('[Arbeitspausen-Termin] Fehler:', error);
+      res.status(500).json({ error: 'Fehler beim Laden der Arbeitspausen', details: error.message });
+    }
+  }
+
+  /**
    * GET /api/arbeitspausen/aktive
    * Gibt alle Arbeitspausen zurück bei denen beendet_am IS NULL
    */
