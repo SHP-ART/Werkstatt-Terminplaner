@@ -14,6 +14,7 @@ router.delete('/:id/permanent', validateId, asyncHandler(TermineController.perma
 router.get('/schwebend', asyncHandler(TermineController.getSchwebend));
 router.post('/:id/schwebend', validateId, asyncHandler(TermineController.setSchwebend));
 router.post('/:id/split', validateId, asyncHandler(TermineController.splitTermin));
+router.post('/:id/pause-split', validateId, asyncHandler(TermineController.pauseSplit));
 router.get('/:id/split-termine', validateId, asyncHandler(TermineController.getSplitTermine));
 router.post('/:id/weiterfuehren', validateId, asyncHandler(TermineController.weiterfuehren));
 router.post('/:id/folgearbeit', validateId, asyncHandler(TermineController.folgearbeitErstellen));

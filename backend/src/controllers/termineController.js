@@ -1921,6 +1921,47 @@ class TermineController {
     }
   }
 
+  static async pauseSplit(req, res) {
+    try {
+      const { id } = req.params;
+      const { grund } = req.body;
+
+      if (!grund) {
+        return res.status(400).json({ error: 'grund ist erforderlich' });
+      }
+
+      const erlaubteGruende = ['teil_fehlt', 'rueckfrage_kunde', 'vorrang', 'sonstiges'];
+      if (!erlaubteGruende.includes(grund)) {
+        return res.status(400).json({ error: `grund muss einer von: ${erlaubteGruende.join(', ')} sein` });
+      }
+
+      const termin = await TermineModel.getById(id);
+      if (!termin) {
+        return res.status(404).json({ error: 'Termin nicht gefunden' });
+      }
+      if (termin.status !== 'in_arbeit') {
+        return res.status(409).json({ error: 'Termin ist nicht in Arbeit und kann nicht aufgeteilt werden' });
+      }
+      if (termin.split_teil === 1) {
+        return res.status(409).json({ error: 'Termin wurde bereits aufgeteilt' });
+      }
+
+      const result = await TermineModel.pauseSplit(id, grund);
+
+      invalidateAuslastungCache(termin.datum);
+      invalidateTermineCache();
+      broadcastEvent('termin.updated', { id: Number(id), datum: termin.datum || null, status: 'unterbrochen' });
+      broadcastEvent('termin.created', { id: result.teil2.id, datum: null });
+
+      res.json({
+        message: 'Auftrag erfolgreich aufgeteilt',
+        ...result
+      });
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  }
+
   // Termin auf nächsten Arbeitstag weiterführen
   // Verschiebt den Termin auf das angegebene Datum, behält Mitarbeiter-Zuweisung,
   // setzt Status auf "geplant" und löscht die tatsaechliche_zeit (neu starten)
