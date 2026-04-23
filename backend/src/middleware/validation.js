@@ -166,7 +166,7 @@ const validateTermin = [
     .custom(isValidDate).withMessage('Ungültiges Datumsformat (YYYY-MM-DD erwartet)'),
   body('status')
     .optional({ nullable: true })
-    .isIn(['geplant', 'in_arbeit', 'wartend', 'abgeschlossen', 'storniert'])
+    .isIn(['geplant', 'offen', 'in_arbeit', 'wartend', 'abgeschlossen', 'storniert'])
     .withMessage('Ungültiger Status'),
   body('ersatzauto')
     .optional({ nullable: true })
