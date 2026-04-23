@@ -2961,12 +2961,31 @@
       const modal = document.createElement('div');
       modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;z-index:9999;';
       modal.innerHTML = `
-        <div style="background:white;border-radius:12px;padding:24px;width:340px;box-shadow:0 8px 32px rgba(0,0,0,0.3);">
+        <div style="background:white;border-radius:12px;padding:24px;width:360px;box-shadow:0 8px 32px rgba(0,0,0,0.3);">
           <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
-            <strong style="font-size:15px;">⏸️ Arbeit unterbrechen</strong>
+            <strong style="font-size:15px;">⏸️ Auftrag unterbrechen</strong>
             <span id="tabletPauseClose" style="cursor:pointer;color:#999;font-size:20px;">✕</span>
           </div>
-          <p style="font-size:13px;color:#666;margin-bottom:14px;">Warum wird die Arbeit unterbrochen?</p>
+
+          <p style="font-size:13px;color:#666;margin-bottom:10px;">Was soll danach passieren?</p>
+          <div style="display:flex;flex-direction:column;gap:6px;margin-bottom:16px;">
+            <label style="display:flex;align-items:flex-start;gap:10px;padding:10px;border:2px solid #1976d2;border-radius:8px;cursor:pointer;font-size:13px;background:#e3f2fd;">
+              <input type="radio" name="tabletPauseTyp" value="kurz" checked style="accent-color:#1976d2;margin-top:2px;">
+              <div>
+                <div style="font-weight:600;color:#1976d2;">⏸ Kurze Unterbrechung</div>
+                <div style="color:#555;font-size:12px;margin-top:2px;">Schraffierung in der Zeitleiste. Setze gleich fort.</div>
+              </div>
+            </label>
+            <label style="display:flex;align-items:flex-start;gap:10px;padding:10px;border:1px solid #e0e0e0;border-radius:8px;cursor:pointer;font-size:13px;">
+              <input type="radio" name="tabletPauseTyp" value="split" style="accent-color:#e65100;margin-top:2px;">
+              <div>
+                <div style="font-weight:600;color:#e65100;">✂️ Termin aufteilen</div>
+                <div style="color:#555;font-size:12px;margin-top:2px;">Rest kommt zur Neuplanung. Für längere Unterbrechungen.</div>
+              </div>
+            </label>
+          </div>
+
+          <p style="font-size:13px;color:#666;margin-bottom:10px;">Warum wird unterbrochen?</p>
           <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:20px;">
             ${Object.entries(grundLabels).map(([val, label]) => `
               <label style="display:flex;align-items:center;gap:10px;padding:10px;border:1px solid #e0e0e0;border-radius:8px;cursor:pointer;font-size:14px;">
@@ -2977,7 +2996,7 @@
           </div>
           <div style="display:flex;gap:8px;">
             <button id="tabletPauseAbbrechen" style="flex:1;padding:10px;background:#f0f0f0;color:#555;border:none;border-radius:6px;font-size:13px;cursor:pointer;">Abbrechen</button>
-            <button id="tabletPauseBestaetigen" style="flex:1;padding:10px;background:#636e72;color:white;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;">⏸️ Pausieren</button>
+            <button id="tabletPauseBestaetigen" style="flex:1;padding:10px;background:#636e72;color:white;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;">⏸️ Bestätigen</button>
           </div>
         </div>
       `;
@@ -2987,23 +3006,32 @@
       modal.querySelector('#tabletPauseAbbrechen').onclick = schliesseModal;
       modal.onclick = (e) => { if (e.target === modal) schliesseModal(); };
       modal.querySelector('#tabletPauseBestaetigen').onclick = async () => {
-        const selected = modal.querySelector('input[name="tabletPauseGrund"]:checked');
-        if (!selected) { alert('Bitte einen Grund auswählen.'); return; }
+        const selectedGrund = modal.querySelector('input[name="tabletPauseGrund"]:checked');
+        const selectedTyp = modal.querySelector('input[name="tabletPauseTyp"]:checked');
+        if (!selectedGrund) { alert('Bitte einen Grund auswählen.'); return; }
         const bestaetigenBtn = modal.querySelector('#tabletPauseBestaetigen');
         bestaetigenBtn.disabled = true;
         try {
-          await ApiService.post('/arbeitspausen/starten', {
-            termin_id: terminId,
-            mitarbeiter_id: mitarbeiterId || null,
-            lehrling_id: lehrlingId || null,
-            grund: selected.value
-          });
-          schliesseModal();
+          if (selectedTyp && selectedTyp.value === 'split') {
+            await ApiService.post(`/termine/${terminId}/pause-split`, {
+              grund: selectedGrund.value
+            });
+            schliesseModal();
+            showToast('✂️ Auftrag aufgeteilt — Rest wartet in der Planung', 'success');
+          } else {
+            await ApiService.post('/arbeitspausen/starten', {
+              termin_id: terminId,
+              mitarbeiter_id: mitarbeiterId || null,
+              lehrling_id: lehrlingId || null,
+              grund: selectedGrund.value
+            });
+            schliesseModal();
+          }
           await loadTeamUebersicht();
         } catch (e) {
           console.error('[Tablet-Pause] Fehler:', e);
           bestaetigenBtn.disabled = false;
-          alert('Fehler beim Starten der Pause.');
+          alert('Fehler beim Verarbeiten der Pause.');
         }
       };
     }
