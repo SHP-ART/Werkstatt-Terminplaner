@@ -26,6 +26,12 @@ SMB-CREDENTIALS-LOCAL.md
 .claude/
 .superpowers/
 
+# Clowdex Workflow-Dateien (lokal, nicht committen)
+CLAUDE.local.md
+Scratchpad.md
+Daily Notes/
+Task Board.md
+
 # Build artifacts (will be distributed via GitHub Releases)
 /backend/dist/
 /backend/dist-*/

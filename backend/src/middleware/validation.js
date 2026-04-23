@@ -156,7 +156,8 @@ const validateTermin = [
     .isLength({ min: 1, max: 500 }).withMessage('Arbeit muss zwischen 1 und 500 Zeichen lang sein'),
   body('umfang')
     .optional({ nullable: true, checkFalsy: true })
-    .isIn(['klein', 'mittel', 'gross']).withMessage('Umfang muss klein, mittel oder gross sein'),
+    .trim()
+    .isLength({ max: 1000 }).withMessage('Umfang zu lang'),
   body('geschaetzte_zeit')
     .optional({ nullable: true })
     .isInt({ min: 0 }).withMessage('Geschätzte Zeit muss eine positive Zahl sein'),

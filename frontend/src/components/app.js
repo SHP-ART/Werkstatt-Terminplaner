@@ -30816,6 +30816,29 @@ class App {
 
     const abwLabel = { urlaub: '🏖️ Urlaub', krank: '🤒 Krank', berufsschule: '🏫 Berufsschule', lehrgang: '📚 Lehrgang' };
 
+    const zeitZuMin = s => {
+      if (!s) return null;
+      let hh, mm;
+      if (s.length > 5) { const d = new Date(s); hh = d.getHours(); mm = d.getMinutes(); }
+      else { [hh, mm] = s.substring(0, 5).split(':').map(Number); }
+      return hh * 60 + mm;
+    };
+    const minZuHHMM = m => `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
+
+    const stempelZeitHtml = (zeitStr, sollZeitStr) => {
+      if (!zeitStr) return '<span style="color:#bbb;">—</span>';
+      const istMin = zeitZuMin(zeitStr);
+      const label = minZuHHMM(istMin);
+      if (!sollZeitStr) return `<span>${label}</span>`;
+      const sollMin = zeitZuMin(sollZeitStr);
+      const diff = istMin - sollMin;
+      const ok = Math.abs(diff) <= 10;
+      const color = ok ? '#1a7f37' : '#cf222e';
+      const sign = diff > 0 ? '+' : '';
+      const hint = diff !== 0 ? ` <span style="font-size:10px;">(${sign}${diff}′)</span>` : '';
+      return `<span style="color:${color};font-weight:600;">${label}</span>${hint}`;
+    };
+
     if (!daten || daten.length === 0) {
       container.innerHTML = '<p style="color:#aaa;font-size:13px;">Keine Daten im gewählten Zeitraum.</p>';
       return;
@@ -30834,8 +30857,12 @@ class App {
         const abwHtml = t.abwesenheit ? `<span style="background:#fff3cd;color:#856404;border-radius:4px;padding:1px 5px;font-size:11px;">${abwLabel[t.abwesenheit] || t.abwesenheit}</span>` : '';
         const nichtGestempelt = t.soll_min > 0 && t.ist_min === 0 && !t.abwesenheit;
         const tagSaldo = t.ist_min - t.soll_min;
+        const kommenHtml = t.abwesenheit ? '<span style="color:#bbb;">—</span>' : stempelZeitHtml(t.kommen_zeit, t.soll_start);
+        const gehenHtml = t.abwesenheit ? '<span style="color:#bbb;">—</span>' : stempelZeitHtml(t.gehen_zeit, t.soll_ende);
         return `<tr style="font-size:12px;${nichtGestempelt ? 'opacity:0.6;' : ''}">
           <td style="padding:3px 8px;white-space:nowrap;color:#888;">${wt} ${dStr}</td>
+          <td style="padding:3px 8px;text-align:right;">${kommenHtml}</td>
+          <td style="padding:3px 8px;text-align:right;">${gehenHtml}</td>
           <td style="padding:3px 8px;text-align:right;">${minToStr(t.soll_min)}</td>
           <td style="padding:3px 8px;text-align:right;">${t.abwesenheit ? minToStr(t.soll_min) : minToStr(t.ist_min)}</td>
           <td style="padding:3px 8px;text-align:right;${saldoStyle(tagSaldo)}">${minToStr(tagSaldo)}</td>
@@ -30867,6 +30894,8 @@ class App {
               <thead>
                 <tr style="font-size:11px;color:#888;background:#f9fafb;">
                   <th style="padding:4px 8px;text-align:left;">Tag</th>
+                  <th style="padding:4px 8px;text-align:right;">↑ Kommen</th>
+                  <th style="padding:4px 8px;text-align:right;">↓ Gehen</th>
                   <th style="padding:4px 8px;text-align:right;">Soll</th>
                   <th style="padding:4px 8px;text-align:right;">Ist</th>
                   <th style="padding:4px 8px;text-align:right;">Saldo</th>

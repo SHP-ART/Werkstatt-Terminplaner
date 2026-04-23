@@ -182,7 +182,11 @@ class ZeitkontoController {
           ist_min: istMin,
           saldo_min: istMin - sollMin,
           abwesenheit: abwTyp,
-          gestempelt: !!(stempel && stempel.kommen_zeit)
+          gestempelt: !!(stempel && stempel.kommen_zeit),
+          kommen_zeit: stempel ? stempel.kommen_zeit : null,
+          gehen_zeit: stempel ? stempel.gehen_zeit : null,
+          soll_start: plan ? plan.arbeitszeit_start : null,
+          soll_ende: plan ? plan.arbeitszeit_ende : null
         };
       }));
 
