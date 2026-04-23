@@ -157,6 +157,41 @@ class StempelzeitenController {
       if (u.lehrling_id)    _add(`lehrling_${u.lehrling_id}`,       range);
     }
 
+    // Termin-Arbeitspausen (Pause-Button im Tablet) — abgeschlossene + heute laufende
+    const apRows = await allAsync(
+      `SELECT ap.id, ap.termin_id, ap.mitarbeiter_id, ap.lehrling_id,
+              ap.grund, ap.gestartet_am, ap.beendet_am
+         FROM arbeitspausen ap
+         JOIN termine t ON ap.termin_id = t.id
+        WHERE t.datum = ?`,
+      [datum]
+    );
+    for (const ap of apRows) {
+      const start = StempelzeitenController._isoToHHMMSimple(ap.gestartet_am);
+      if (!start) continue;
+      let ende, aktiv = false;
+      if (ap.beendet_am) {
+        ende = StempelzeitenController._isoToHHMMSimple(ap.beendet_am);
+      } else if (istHeute && start) {
+        ende = jetztHHMM;
+        aktiv = true;
+      } else {
+        continue;
+      }
+      if (!ende) continue;
+      const grundLabels = { teil_fehlt: 'Teil fehlt', rueckfrage_kunde: 'Rückfrage Kunde', vorrang: 'Vorrang' };
+      const range = {
+        start, ende,
+        typ: 'termin_pause',
+        pause_id: ap.id,
+        grund: grundLabels[ap.grund] || ap.grund || null,
+        aktueller_termin_id: ap.termin_id,
+        aktiv
+      };
+      if (ap.mitarbeiter_id) _add(`mitarbeiter_${ap.mitarbeiter_id}`, range);
+      if (ap.lehrling_id)    _add(`lehrling_${ap.lehrling_id}`,       range);
+    }
+
     return result;
   }
 

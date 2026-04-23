@@ -31212,18 +31212,21 @@ class App {
       const pausiertAktiv = pauseDetails.some(d => d.aktiv);
       if (pauseDetails.length > 0) {
         const tooltipLines = pauseDetails.map(d => {
-          const ico = d.typ === 'mittagspause' ? '☕' : '⏸';
+          const ico = d.typ === 'mittagspause' ? '☕' : d.typ === 'termin_pause' ? '🔧' : '⏸';
+          const typLabel = d.typ === 'mittagspause' ? 'Mittagspause' : d.typ === 'termin_pause' ? 'Auftragsunterbrechung' : 'Unterbrechung';
           const grundTxt = d.grund ? ` – ${this.escapeHtml(d.grund)}` : '';
           const aktivTxt = d.aktiv ? ' (läuft…)' : '';
-          return `${ico} ${d.start}–${d.ende} ${d.typ === 'mittagspause' ? 'Mittagspause' : 'Unterbrechung'}${grundTxt}: −${d.abzug_min} min${aktivTxt}`;
+          return `${ico} ${d.start}–${d.ende} ${typLabel}${grundTxt}: −${d.abzug_min} min${aktivTxt}`;
         }).join('\n');
         const bruttoTxt = (istBrutto != null && pauseAbzug > 0)
           ? `\nBrutto ${istBrutto} min − Pause ${pauseAbzug} min = Netto ${istMin} min`
           : '';
         const tooltipText = (tooltipLines + bruttoTxt).replace(/"/g, '&quot;');
-        const badgeColor = pausiertAktiv ? '#ffc107' : '#6c757d';
-        const badgeBg = pausiertAktiv ? '#fff3cd' : '#f1f3f5';
-        pauseBadge = ` <span title="${tooltipText}" style="display:inline-block;margin-left:4px;background:${badgeBg};color:${badgeColor};border:1px solid ${badgeColor};border-radius:10px;padding:1px 7px;font-size:11px;font-weight:600;cursor:help;">${pausiertAktiv ? '⏸ pausiert' : '☕ −' + pauseAbzug + ' min'}</span>`;
+        const hatTerminPause = pauseDetails.some(d => d.typ === 'termin_pause');
+        const badgeColor = pausiertAktiv ? '#ffc107' : hatTerminPause ? '#fd7e14' : '#6c757d';
+        const badgeBg = pausiertAktiv ? '#fff3cd' : hatTerminPause ? '#fff3e0' : '#f1f3f5';
+        const badgeLabel = pausiertAktiv ? '⏸ pausiert' : hatTerminPause ? '🔧 −' + pauseAbzug + ' min' : '☕ −' + pauseAbzug + ' min';
+        pauseBadge = ` <span title="${tooltipText}" style="display:inline-block;margin-left:4px;background:${badgeBg};color:${badgeColor};border:1px solid ${badgeColor};border-radius:10px;padding:1px 7px;font-size:11px;font-weight:600;cursor:help;">${badgeLabel}</span>`;
       }
 
       // Stempelzeiten-Tab im Web ist reine Anzeige — Stempeln läuft über die Tablet-App.
