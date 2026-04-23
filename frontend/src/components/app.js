@@ -24816,13 +24816,8 @@ class App {
               if (liveMin > tatsaechlich) tatsaechlich = liveMin;
             }
           }
-          let d = tatsaechlich;
-          if (nebenzeitProzent > 0) d = d * (1 + nebenzeitProzent / 100);
-          if (zugeordneterLehrling && zugeordneterLehrling.aufgabenbewaeltigung_prozent &&
-              zugeordneterLehrling.aufgabenbewaeltigung_prozent !== 100) {
-            d = d * (zugeordneterLehrling.aufgabenbewaeltigung_prozent / 100);
-          }
-          return Math.round(d);
+          // Gemessene Zeit: KEINE Nebenzeit oder Lehrlings-Faktor — tatsächliche Zeit ist unveränderlich
+          return Math.round(tatsaechlich);
         }
 
         // Wenn Termin in Arbeit: prüfe ob Live-Dauer (aktuelle Zeit − Startzeit) > geplante Dauer
@@ -24845,13 +24840,8 @@ class App {
               }
               if (!geplanteDauer) geplanteDauer = parseInt(termin.geschaetzte_zeit) || 30;
               if (liveMin > geplanteDauer) {
-                let d = liveMin;
-                if (nebenzeitProzent > 0) d = d * (1 + nebenzeitProzent / 100);
-                if (zugeordneterLehrling && zugeordneterLehrling.aufgabenbewaeltigung_prozent &&
-                    zugeordneterLehrling.aufgabenbewaeltigung_prozent !== 100) {
-                  d = d * (zugeordneterLehrling.aufgabenbewaeltigung_prozent / 100);
-                }
-                return Math.round(d);
+                // Live-Zeit: KEINE Nebenzeit oder Lehrlings-Faktor — echter Zeitverlauf
+                return Math.round(liveMin);
               }
             }
           }
@@ -24898,9 +24888,11 @@ class App {
 
     // Fallback: tatsaechliche_zeit für laufende/abgeschlossene; sonst fertigstellung_zeit − startzeit; sonst geschaetzte_zeit
     let dauer = 0;
+    let dauerIstGemessen = false;
     if (['in_arbeit', 'abgeschlossen'].includes(termin.status)) {
       if (parseInt(termin.tatsaechliche_zeit) > 0) {
         dauer = parseInt(termin.tatsaechliche_zeit);
+        dauerIstGemessen = true;
       } else if (termin.status === 'abgeschlossen' && termin.fertigstellung_zeit) {
         const startStr = termin.startzeit || termin.bring_zeit;
         if (startStr && /^\d{1,2}:\d{2}/.test(startStr)) {
@@ -24908,21 +24900,21 @@ class App {
           const fertigMin = fertigLokal.getHours() * 60 + fertigLokal.getMinutes();
           const [sh, sm] = startStr.split(':').map(Number);
           const diffMin = fertigMin - (sh * 60 + sm);
-          if (diffMin > 5) dauer = diffMin;
+          if (diffMin > 5) { dauer = diffMin; dauerIstGemessen = true; }
         }
       }
     }
     if (!dauer) dauer = termin.geschaetzte_zeit || 30;
 
-    // 1. Nebenzeit-Aufschlag anwenden
-    if (nebenzeitProzent > 0) {
-      dauer = dauer * (1 + nebenzeitProzent / 100);
-    }
-
-    // 2. Aufgabenbewältigung für Lehrling anwenden (falls zugeordnet)
-    if (zugeordneterLehrling && zugeordneterLehrling.aufgabenbewaeltigung_prozent &&
-        zugeordneterLehrling.aufgabenbewaeltigung_prozent !== 100) {
-      dauer = dauer * (zugeordneterLehrling.aufgabenbewaeltigung_prozent / 100);
+    // Nebenzeit und Lehrlings-Faktor NUR für geplante Dauern — nie für gemessene Zeiten
+    if (!dauerIstGemessen) {
+      if (nebenzeitProzent > 0) {
+        dauer = dauer * (1 + nebenzeitProzent / 100);
+      }
+      if (zugeordneterLehrling && zugeordneterLehrling.aufgabenbewaeltigung_prozent &&
+          zugeordneterLehrling.aufgabenbewaeltigung_prozent !== 100) {
+        dauer = dauer * (zugeordneterLehrling.aufgabenbewaeltigung_prozent / 100);
+      }
     }
 
     return Math.round(dauer);
