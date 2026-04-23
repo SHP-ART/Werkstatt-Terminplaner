@@ -21553,7 +21553,8 @@ class App {
             mitarbeiterId: terminMitarbeiterId,
             lehrlingId: terminLehrlingId,
             istNacharbeit: termin.muss_bearbeitet_werden === 1 || termin.muss_bearbeitet_werden === '1',
-            nacharbeitStartZeit: termin.nacharbeit_start_zeit || null
+            nacharbeitStartZeit: termin.nacharbeit_start_zeit || null,
+            arbeitspausen: termin.arbeitspausen || []
           };
 
           // Nacharbeit: Startzeit und angezeigte Dauer überschreiben
