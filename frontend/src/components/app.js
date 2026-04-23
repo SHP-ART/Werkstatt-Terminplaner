@@ -22316,10 +22316,13 @@ class App {
     this.updatePlanungAenderungenUI();
 
     try {
-      // 1. Termine für das Datum laden (API gibt jetzt {termine: [], aktivePausen: []} zurück)
+      // 1. Termine für das Datum laden (API gibt jetzt {termine: [], aktivePausen: [], arbeitspausenMap: {}} zurück)
       const terminResponse = await TermineService.getAllMitPausen(datum);
       let termine = terminResponse.termine || [];
       let aktivePausen = terminResponse.aktivePausen || [];
+      const arbeitspausenMap = terminResponse.arbeitspausenMap || {};
+      // Arbeitspausen direkt in Termin-Objekte einbetten
+      termine = termine.map(t => ({ ...t, arbeitspausen: arbeitspausenMap[t.id] || [] }));
 
       // 1b. Schwebende Termine laden (alle Termine, dann filtern)
       const alleTermine = await TermineService.getAll(null);
@@ -23210,6 +23213,9 @@ class App {
 
       // "Jetzt"-Linie hinzufügen
       this.addTimelineNowLine(startHour, endHour);
+
+      // Arbeitspausen als Overlay-Blöcke auf die Timeline zeichnen
+      this.addArbeitspauseOverlays(termine, mitarbeiterMap, lehrlingeMap, startHour);
 
       // Live-Balken für laufende Termine (in_arbeit): Breite jede Minute aktualisieren
       if (this.inArbeitBarInterval) clearInterval(this.inArbeitBarInterval);
@@ -26984,6 +26990,104 @@ class App {
     tracksToResolve.forEach(track => {
       if (track) this.resolveTimelineOverlaps(track);
     });
+  }
+
+  /**
+   * Zeichnet Arbeitspausen-Overlays auf die Timeline-Tracks.
+   * Für Termine mit echten Stempel-Zeiten (in_arbeit/wartend/abgeschlossen) wird jede
+   * abgeschlossene Arbeitspause als orange schraffierter Block auf dem Track dargestellt.
+   */
+  addArbeitspauseOverlays(termine, mitarbeiterMap, lehrlingeMap, startHour) {
+    const pixelPerMinute = 100 / 60; // 100px pro Stunde
+
+    const isoToHHMM = (iso) => {
+      if (!iso) return null;
+      const d = new Date(iso);
+      if (isNaN(d)) return null;
+      return String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+    };
+    const hhmmToMin = (hhmm) => {
+      if (!hhmm) return null;
+      const m = String(hhmm).match(/^(\d{1,2}):(\d{2})/);
+      return m ? parseInt(m[1]) * 60 + parseInt(m[2]) : null;
+    };
+    const grundLabels = { teil_fehlt: 'Teil fehlt', rueckfrage_kunde: 'Rückfrage Kunde', vorrang: 'Vorrang' };
+
+    for (const termin of termine) {
+      const pausen = termin.arbeitspausen;
+      if (!pausen || pausen.length === 0) continue;
+      const status = termin.status;
+      if (status !== 'in_arbeit' && status !== 'abgeschlossen' && status !== 'wartend') continue;
+
+      // Zugehörigen Track-Container finden
+      let track = null;
+      if (termin.mitarbeiter_id && mitarbeiterMap[termin.mitarbeiter_id]) {
+        track = mitarbeiterMap[termin.mitarbeiter_id];
+      } else if (termin.lehrling_id && lehrlingeMap[termin.lehrling_id]) {
+        track = lehrlingeMap[termin.lehrling_id];
+      } else {
+        // Aus arbeitszeiten_details ermitteln
+        try {
+          const det = typeof termin.arbeitszeiten_details === 'string'
+            ? JSON.parse(termin.arbeitszeiten_details) : (termin.arbeitszeiten_details || {});
+          if (det._gesamt_mitarbeiter_id) {
+            const { type, id } = det._gesamt_mitarbeiter_id;
+            if (type === 'mitarbeiter' && mitarbeiterMap[id]) track = mitarbeiterMap[id];
+            else if (type === 'lehrling' && lehrlingeMap[id]) track = lehrlingeMap[id];
+          }
+        } catch (_) {}
+      }
+      if (!track) continue;
+
+      const jetzt = new Date();
+      const jetztHHMM = String(jetzt.getHours()).padStart(2, '0') + ':' + String(jetzt.getMinutes()).padStart(2, '0');
+
+      for (const p of pausen) {
+        const pauseStartHHMM = isoToHHMM(p.gestartet_am);
+        if (!pauseStartHHMM) continue;
+        const pauseEndeHHMM = p.beendet_am ? isoToHHMM(p.beendet_am) : jetztHHMM;
+        if (!pauseEndeHHMM) continue;
+
+        const pStartMin = hhmmToMin(pauseStartHHMM);
+        const pEndeMin = hhmmToMin(pauseEndeHHMM);
+        if (pStartMin === null || pEndeMin === null || pEndeMin <= pStartMin) continue;
+
+        const leftPx = (pStartMin - startHour * 60) * pixelPerMinute;
+        if (leftPx < 0) continue; // Außerhalb sichtbarer Bereich
+        const widthPx = Math.max((pEndeMin - pStartMin) * pixelPerMinute, 8);
+        const istAktiv = !p.beendet_am;
+        const grundTxt = grundLabels[p.grund] || p.grund || '';
+        const dauerMin = Math.round(pEndeMin - pStartMin);
+        const tooltip = `🔧 Auftragsunterbrechung\n${pauseStartHHMM}–${pauseEndeHHMM} (${dauerMin} min)${grundTxt ? '\nGrund: ' + grundTxt : ''}${istAktiv ? '\n(läuft…)' : ''}`;
+
+        const overlay = document.createElement('div');
+        overlay.className = 'arbeitspause-overlay' + (istAktiv ? ' aktiv' : '');
+        overlay.title = tooltip;
+        overlay.style.cssText = `
+          position:absolute;
+          left:${leftPx}px;
+          width:${widthPx}px;
+          top:2px;
+          bottom:2px;
+          background:repeating-linear-gradient(45deg,#fd7e14,#fd7e14 4px,rgba(253,126,20,0.25) 4px,rgba(253,126,20,0.25) 8px);
+          border-left:2px solid #fd7e14;
+          border-right:2px solid #fd7e14;
+          border-radius:3px;
+          z-index:15;
+          pointer-events:all;
+          cursor:help;
+          box-sizing:border-box;
+        `;
+        // Dauer-Label wenn breit genug
+        if (widthPx >= 24) {
+          const label = document.createElement('span');
+          label.style.cssText = 'position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);font-size:10px;font-weight:700;color:#fff;white-space:nowrap;pointer-events:none;text-shadow:0 1px 2px rgba(0,0,0,0.5);';
+          label.textContent = `🔧 ${dauerMin}′`;
+          overlay.appendChild(label);
+        }
+        track.appendChild(overlay);
+      }
+    }
   }
 
   addTimelineNowLine(startHour, endHour) {

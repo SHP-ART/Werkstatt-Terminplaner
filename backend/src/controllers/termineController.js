@@ -29,6 +29,31 @@ function invalidateTermineCache() {
 }
 
 // Hilfsfunktion: Lade aktive Pausen für ein Datum
+async function getArbeitspausenMapFuerDatum(datum) {
+  return new Promise((resolve, reject) => {
+    db.all(`
+      SELECT ap.id, ap.termin_id, ap.mitarbeiter_id, ap.lehrling_id,
+             ap.grund, ap.gestartet_am, ap.beendet_am
+        FROM arbeitspausen ap
+        JOIN termine t ON ap.termin_id = t.id
+       WHERE t.datum = ?
+       ORDER BY ap.gestartet_am
+    `, [datum], (err, rows) => {
+      if (err) {
+        console.error('[getArbeitspausenMapFuerDatum] Fehler:', err);
+        resolve({});
+      } else {
+        const map = {};
+        for (const r of (rows || [])) {
+          if (!map[r.termin_id]) map[r.termin_id] = [];
+          map[r.termin_id].push(r);
+        }
+        resolve(map);
+      }
+    });
+  });
+}
+
 async function getAktivePausenFuerDatum(datum) {
   return new Promise((resolve, reject) => {
     db.all(`
@@ -644,15 +669,17 @@ class TermineController {
           // Auch für gecachte Daten aktive Pausen hinzufügen
           if (datum) {
             const aktivePausen = await getAktivePausenFuerDatum(datum);
-            return res.json({ termine: cached, aktivePausen });
+            const arbeitspausenMap = await getArbeitspausenMapFuerDatum(datum);
+            return res.json({ termine: cached, aktivePausen, arbeitspausenMap });
           }
           return res.json(cached);
         }
         if (datum) {
           const rows = await TermineModel.getByDatum(datum, includeLaufende);
           const aktivePausen = await getAktivePausenFuerDatum(datum);
+          const arbeitspausenMap = await getArbeitspausenMapFuerDatum(datum);
           termineListCache.set(cacheKey, rows);
-          return res.json({ termine: rows, aktivePausen });
+          return res.json({ termine: rows, aktivePausen, arbeitspausenMap });
         }
         const rows = await TermineModel.getAll();
         termineListCache.set(cacheKey, rows);

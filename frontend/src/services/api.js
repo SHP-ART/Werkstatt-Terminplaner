@@ -261,9 +261,9 @@ class TermineService {
   static async getAllMitPausen(datum) {
     const result = await ApiService.get(`/termine?datum=${datum}`);
     if (result && result.termine) {
-      return { termine: result.termine, aktivePausen: result.aktivePausen || [] };
+      return { termine: result.termine, aktivePausen: result.aktivePausen || [], arbeitspausenMap: result.arbeitspausenMap || {} };
     }
-    return { termine: Array.isArray(result) ? result : [], aktivePausen: [] };
+    return { termine: Array.isArray(result) ? result : [], aktivePausen: [], arbeitspausenMap: {} };
   }
 
   /**
