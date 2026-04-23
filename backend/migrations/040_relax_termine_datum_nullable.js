@@ -71,7 +71,21 @@ module.exports = {
           `, (err2) => {
             if (err2) return reject(err2);
 
-            db.run(`INSERT INTO termine SELECT * FROM termine_old_040`, (err3) => {
+            const cols = [
+              'id', 'termin_nr', 'kunde_id', 'kunde_name', 'kunde_telefon', 'kennzeichen',
+              'arbeit', 'umfang', 'geschaetzte_zeit', 'tatsaechliche_zeit', 'datum', 'status',
+              'abholung_typ', 'abholung_details', 'abholung_zeit', 'bring_zeit', 'kontakt_option',
+              'kilometerstand', 'ersatzauto', 'erstellt_am', 'abholung_datum', 'arbeitszeiten_details',
+              'mitarbeiter_id', 'geloescht_am', 'dringlichkeit', 'vin', 'fahrzeugtyp', 'notizen',
+              'ersatzauto_tage', 'ersatzauto_bis_datum', 'ersatzauto_bis_zeit', 'ist_schwebend',
+              'schwebend_prioritaet', 'parent_termin_id', 'split_teil', 'muss_bearbeitet_werden',
+              'erweiterung_von_id', 'ist_erweiterung', 'erweiterung_typ', 'teile_status',
+              'interne_auftragsnummer', 'startzeit', 'endzeit_berechnet', 'fertigstellung_zeit',
+              'ki_training_exclude', 'ki_training_note', 'verschoben_von_datum', 'nacharbeit_start_zeit',
+              'ist_wiederholung', 'lehrling_id', 'unterbrochen_am', 'unterbrochen_grund'
+            ];
+            const colList = cols.join(', ');
+            db.run(`INSERT INTO termine (${colList}) SELECT ${colList} FROM termine_old_040`, (err3) => {
               if (err3) return reject(err3);
 
               db.run(`DROP TABLE termine_old_040`, (err4) => {
@@ -160,8 +174,22 @@ module.exports = {
             if (err2) return reject(err2);
 
             // Nur Termine mit datum kopieren (NULL-Termine gehen verloren)
+            const cols = [
+              'id', 'termin_nr', 'kunde_id', 'kunde_name', 'kunde_telefon', 'kennzeichen',
+              'arbeit', 'umfang', 'geschaetzte_zeit', 'tatsaechliche_zeit', 'datum', 'status',
+              'abholung_typ', 'abholung_details', 'abholung_zeit', 'bring_zeit', 'kontakt_option',
+              'kilometerstand', 'ersatzauto', 'erstellt_am', 'abholung_datum', 'arbeitszeiten_details',
+              'mitarbeiter_id', 'geloescht_am', 'dringlichkeit', 'vin', 'fahrzeugtyp', 'notizen',
+              'ersatzauto_tage', 'ersatzauto_bis_datum', 'ersatzauto_bis_zeit', 'ist_schwebend',
+              'schwebend_prioritaet', 'parent_termin_id', 'split_teil', 'muss_bearbeitet_werden',
+              'erweiterung_von_id', 'ist_erweiterung', 'erweiterung_typ', 'teile_status',
+              'interne_auftragsnummer', 'startzeit', 'endzeit_berechnet', 'fertigstellung_zeit',
+              'ki_training_exclude', 'ki_training_note', 'verschoben_von_datum', 'nacharbeit_start_zeit',
+              'ist_wiederholung', 'lehrling_id', 'unterbrochen_am', 'unterbrochen_grund'
+            ];
+            const colList = cols.join(', ');
             db.run(
-              `INSERT INTO termine SELECT * FROM termine_old_040r WHERE datum IS NOT NULL`,
+              `INSERT INTO termine (${colList}) SELECT ${colList} FROM termine_old_040r WHERE datum IS NOT NULL`,
               (err3) => {
                 if (err3) return reject(err3);
                 db.run(`DROP TABLE termine_old_040r`, (err4) => {
