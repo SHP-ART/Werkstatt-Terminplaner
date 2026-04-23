@@ -21009,8 +21009,12 @@ class App {
     body.innerHTML = '<div class="zeitleiste-loading"><span>⏳</span> Lade Zeitleiste...</div>';
 
     try {
-      // Lade alle Termine für dieses Datum
-      const termine = await TermineService.getAll(datum);
+      // Lade alle Termine für dieses Datum (inkl. Arbeitspausen-Map)
+      const terminResponse = await TermineService.getAllMitPausen(datum);
+      const termine = Array.isArray(terminResponse) ? terminResponse : (terminResponse.termine || []);
+      const arbeitspausenMap = terminResponse.arbeitspausenMap || {};
+      // Arbeitspausen direkt in Termin-Objekte einbetten
+      for (const t of termine) { t.arbeitspausen = arbeitspausenMap[t.id] || []; }
       
       // Befülle termineById-Cache für Details-Popup
       for (const termin of termine) {
@@ -21299,7 +21303,8 @@ class App {
               mitarbeiterId: arbeitMitarbeiterId,
               lehrlingId: arbeitLehrlingId,
               istNacharbeit: termin.muss_bearbeitet_werden === 1 || termin.muss_bearbeitet_werden === '1',
-              nacharbeitStartZeit: termin.nacharbeit_start_zeit || null
+              nacharbeitStartZeit: termin.nacharbeit_start_zeit || null,
+              arbeitspausen: i === 0 ? (termin.arbeitspausen || []) : []
             };
 
             // Nacharbeit: bei der ersten Arbeit Startzeit + Dauer überschreiben
@@ -22019,17 +22024,52 @@ class App {
 
     bloeckeHtml += '</div>';
 
+    // Arbeitspausen-Overlays: orange schraffierte Blöcke für Termin-Unterbrechungen
+    let arbeitspausenHtml = '';
+    const isoToMin = (iso) => {
+      if (!iso) return null;
+      const d = new Date(iso);
+      return isNaN(d) ? null : d.getHours() * 60 + d.getMinutes();
+    };
+    const grundLabels = { teil_fehlt: 'Teil fehlt', rueckfrage_kunde: 'Rückfrage Kunde', vorrang: 'Vorrang' };
+    const jetztMin = new Date().getHours() * 60 + new Date().getMinutes();
+    for (const arbeit of sortedArbeiten) {
+      if (!arbeit.arbeitspausen || arbeit.arbeitspausen.length === 0) continue;
+      if (arbeit.status !== 'in_arbeit' && arbeit.status !== 'abgeschlossen' && arbeit.status !== 'wartend') continue;
+      for (const p of arbeit.arbeitspausen) {
+        const pStartMin = isoToMin(p.gestartet_am);
+        if (pStartMin === null) continue;
+        const pEndeMin = p.beendet_am ? isoToMin(p.beendet_am) : jetztMin;
+        if (pEndeMin === null || pEndeMin <= pStartMin) continue;
+        const displayStart = Math.max(pStartMin, startHour * 60);
+        const displayEnd = Math.min(pEndeMin, endHour * 60);
+        if (displayEnd <= displayStart) continue;
+        const leftPct = ((displayStart - startHour * 60) / (totalHours * 60)) * 100;
+        const widthPct = ((displayEnd - displayStart) / (totalHours * 60)) * 100;
+        if (widthPct <= 0) continue;
+        const istAktiv = !p.beendet_am;
+        const grundTxt = grundLabels[p.grund] || p.grund || '';
+        const dauerMin = Math.round(pEndeMin - pStartMin);
+        const startHHMM = `${Math.floor(pStartMin/60).toString().padStart(2,'0')}:${(pStartMin%60).toString().padStart(2,'0')}`;
+        const endeHHMM = `${Math.floor(pEndeMin/60).toString().padStart(2,'0')}:${(pEndeMin%60).toString().padStart(2,'0')}`;
+        const tipText = `🔧 Auftragsunterbrechung&#10;${startHHMM}–${endeHHMM} (${dauerMin} min)${grundTxt ? '&#10;Grund: ' + grundTxt : ''}${istAktiv ? '&#10;(läuft…)' : ''}`;
+        const label = widthPct > 3 ? `🔧 ${dauerMin}′` : '';
+        arbeitspausenHtml += `<div class="zeitleiste-arbeitspause${istAktiv ? ' aktiv' : ''}" style="left:${leftPct.toFixed(2)}%;width:${widthPct.toFixed(2)}%;position:absolute;top:4px;bottom:4px;background:repeating-linear-gradient(45deg,#fd7e14,#fd7e14 3px,rgba(253,126,20,0.2) 3px,rgba(253,126,20,0.2) 7px);border-left:2px solid #fd7e14;border-right:2px solid #fd7e14;border-radius:3px;z-index:12;pointer-events:all;cursor:help;display:flex;align-items:center;justify-content:center;" title="${tipText}"><span style="font-size:10px;font-weight:700;color:#fff;text-shadow:0 1px 2px rgba(0,0,0,0.6);white-space:nowrap;pointer-events:none;">${label}</span></div>`;
+      }
+    }
+
     return `
       <div class="${rowClass}">
         <div class="zeitleiste-mitarbeiter">
           <span class="zeitleiste-mitarbeiter-name">${this.escapeHtml(name)}</span>
           ${typ ? `<span class="zeitleiste-mitarbeiter-typ">${typ}</span>` : ''}
         </div>
-        <div class="zeitleiste-timeline">
+        <div class="zeitleiste-timeline" style="position:relative;">
           ${gitterHtml}
           ${mittagspauseHtml}
           ${jetztMarkerHtml}
           ${bloeckeHtml}
+          ${arbeitspausenHtml}
         </div>
       </div>
     `;
