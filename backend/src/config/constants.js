@@ -27,6 +27,7 @@ const TERMIN_STATUS = {
   GEPLANT: 'geplant',
   IN_ARBEIT: 'in_arbeit',
   WARTEND: 'wartend',
+  UNTERBROCHEN: 'unterbrochen',
   ABGESCHLOSSEN: 'abgeschlossen',
   STORNIERT: 'storniert'
 };

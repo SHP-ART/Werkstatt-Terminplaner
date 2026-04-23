@@ -1329,9 +1329,98 @@ class TermineModel {
     return await allAsync(query, [parentId, parentId]);
   }
 
-  // =====================================================
-  // AUFTRAGSERWEITERUNG FUNKTIONEN
-  // =====================================================
+  static async pauseSplit(id, grund) {
+    const ERLAUBTE_GRUENDE = ['teil_fehlt', 'rueckfrage_kunde', 'vorrang', 'sonstiges'];
+    if (!ERLAUBTE_GRUENDE.includes(grund)) {
+      throw new Error(`Ungültiger Grund: ${grund}`);
+    }
+
+    const termin = await this.getById(id);
+    if (!termin) throw new Error('Termin nicht gefunden');
+    if (termin.status !== 'in_arbeit') throw new Error('Termin ist nicht in Arbeit');
+    if (termin.split_teil === 1) throw new Error('Termin wurde bereits aufgeteilt');
+
+    const jetzt = new Date();
+    const jetztIso = jetzt.toISOString();
+
+    let gearbeiteteMin = 0;
+    const startzeit = termin.startzeit;
+    if (startzeit && /^\d{2}:\d{2}$/.test(startzeit)) {
+      const [sh, sm] = startzeit.split(':').map(Number);
+      const startMs = sh * 60 * 60 * 1000 + sm * 60 * 1000;
+      const jetztMs = jetzt.getHours() * 60 * 60 * 1000 + jetzt.getMinutes() * 60 * 1000;
+      gearbeiteteMin = Math.max(5, Math.round((jetztMs - startMs) / 60000));
+    } else {
+      gearbeiteteMin = Math.max(5, Math.round((termin.geschaetzte_zeit || 30) / 2));
+    }
+
+    const restMin = Math.max(1, (termin.geschaetzte_zeit || 30) - gearbeiteteMin);
+
+    await runAsync(
+      `UPDATE termine SET
+         status = 'unterbrochen',
+         geschaetzte_zeit = ?,
+         tatsaechliche_zeit = ?,
+         unterbrochen_am = ?,
+         unterbrochen_grund = ?,
+         split_teil = 1
+       WHERE id = ?`,
+      [gearbeiteteMin, gearbeiteteMin, jetztIso, grund, id]
+    );
+
+    const terminNr = await this.generateTerminNr();
+
+    const result = await runAsync(
+      `INSERT INTO termine
+         (termin_nr, kunde_id, kunde_name, kunde_telefon, kennzeichen, arbeit, umfang,
+          geschaetzte_zeit, datum, startzeit, status, abholung_typ, abholung_details, abholung_zeit,
+          bring_zeit, kontakt_option, kilometerstand, ersatzauto, mitarbeiter_id, lehrling_id,
+          arbeitszeiten_details, dringlichkeit, vin, fahrzeugtyp, parent_termin_id, split_teil,
+          unterbrochen_grund)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, 'geplant', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 2, ?)`,
+      [
+        terminNr,
+        termin.kunde_id, termin.kunde_name, termin.kunde_telefon,
+        termin.kennzeichen,
+        termin.arbeit + ' (Fortsetzung)',
+        termin.umfang,
+        restMin,
+        termin.abholung_typ, termin.abholung_details, termin.abholung_zeit,
+        termin.bring_zeit, termin.kontakt_option, termin.kilometerstand,
+        termin.ersatzauto,
+        termin.mitarbeiter_id, termin.lehrling_id,
+        termin.arbeitszeiten_details,
+        termin.dringlichkeit, termin.vin, termin.fahrzeugtyp,
+        id,
+        grund
+      ]
+    );
+
+    return {
+      teil1: { id: Number(id), gearbeitete_min: gearbeiteteMin },
+      teil2: { id: result.lastID, termin_nr: terminNr, rest_min: restMin }
+    };
+  }
+
+  static async getSplitPartner(id) {
+    const termin = await this.getById(id);
+    if (!termin) return null;
+
+    if (termin.split_teil === 1) {
+      return await getAsync(
+        `SELECT * FROM termine WHERE parent_termin_id = ? AND split_teil = 2 AND geloescht_am IS NULL LIMIT 1`,
+        [id]
+      );
+    } else if (termin.split_teil === 2 && termin.parent_termin_id) {
+      return await getAsync(
+        `SELECT * FROM termine WHERE id = ? AND geloescht_am IS NULL`,
+        [termin.parent_termin_id]
+      );
+    }
+    return null;
+  }
+
+
 
   /**
    * Erstellt einen Erweiterungs-Termin basierend auf einem bestehenden Termin
