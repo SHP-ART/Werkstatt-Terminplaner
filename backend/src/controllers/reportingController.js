@@ -102,6 +102,18 @@ async function getPausenReport(req, res) {
       const m = String(hhmm).match(/^(\d{1,2}):(\d{2})/);
       return m ? parseInt(m[1], 10) * 60 + parseInt(m[2], 10) : null;
     };
+    // Robustes HH:MM aus beliebigem Wert (ISO-String, Date, "HH:MM:SS", etc.) — niemals throw
+    const _toHHMM = v => {
+      if (!v) return null;
+      try {
+        const d = new Date(v);
+        if (!isNaN(d.getTime())) {
+          return String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+        }
+      } catch (e) { /* fallthrough */ }
+      const m = String(v).match(/(\d{1,2}):(\d{2})/);
+      return m ? `${m[1].padStart(2, '0')}:${m[2]}` : null;
+    };
 
     // Aggregat-Map: key = datum|person_typ|person_id
     const aggMap = new Map();
@@ -131,8 +143,8 @@ async function getPausenReport(req, res) {
       a.gesamt_min += dauer;
       a.mittagspausen.push({
         id: p.id,
-        start: p.pause_start_zeit ? new Date(p.pause_start_zeit).toISOString().substring(11, 16) : null,
-        ende: p.pause_ende_zeit ? new Date(p.pause_ende_zeit).toISOString().substring(11, 16) : null,
+        start: _toHHMM(p.pause_start_zeit),
+        ende: _toHHMM(p.pause_ende_zeit),
         dauer_min: dauer,
         abgeschlossen: !!p.abgeschlossen,
         aktueller_termin_nr: p.aktueller_termin_nr || null,
