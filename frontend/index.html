@@ -3556,7 +3556,13 @@
                 </div>
                 <!-- Hauptbereich: Timeline -->
                 <div class="timeline-panel">
-                    <h3>⏰ Zeitplan</h3>
+                    <div class="timeline-panel-header">
+                        <h3>⏰ Zeitplan</h3>
+                        <div class="timeline-header-actions">
+                            <span id="timelineLiveClock" class="timeline-live-clock" title="Aktuelle Uhrzeit">--:--</span>
+                            <button type="button" class="timeline-scroll-now-btn" onclick="app.scrollTimelineToNow()" title="Zum aktuellen Zeitpunkt scrollen">🎯 Jetzt</button>
+                        </div>
+                    </div>
                     <div class="timeline-container">
                         <!-- Zeitachse Header -->
                         <div class="timeline-header" id="timelineHeader">

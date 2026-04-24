@@ -9312,6 +9312,7 @@ mark.highlight {
 .timeline-hours {
     display: flex;
     flex: 1;
+    position: relative; /* für Header-Jetzt-Marker */
 }
 
 .timeline-hour {
@@ -9326,14 +9327,26 @@ mark.highlight {
 }
 
 .timeline-hour.timeline-hour-full {
-    font-weight: 600;
-    color: #333;
+    font-weight: 700;
+    font-size: 0.85em;
+    color: #1a1a1a;
 }
 
 .timeline-hour.timeline-hour-half {
-    font-weight: 400;
-    color: #999;
-    border-right: 1px dashed #dee2e6;
+    color: transparent;
+    font-size: 0.6em;
+    position: relative;
+}
+
+.timeline-hour.timeline-hour-half::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 1px;
+    height: 8px;
+    background: #bbb;
 }
 
 .timeline-hour.current-hour {
@@ -9494,7 +9507,7 @@ mark.highlight {
     background: rgba(210, 20, 44, 0.05);
 }
 
-/* Stunden-Trennlinien */
+/* Stunden-Trennlinien — volle Stunde kräftig, halbe dezent */
 .timeline-track::before {
     content: '';
     position: absolute;
@@ -9502,14 +9515,37 @@ mark.highlight {
     left: 0;
     right: 0;
     bottom: 0;
-    background: repeating-linear-gradient(
-        to right,
-        transparent,
-        transparent 99px,
-        #e9ecef 99px,
-        #e9ecef 100px
-    );
+    background-image:
+        /* Volle Stunde: 2px, gut sichtbar */
+        repeating-linear-gradient(
+            to right,
+            transparent 0,
+            transparent 98px,
+            rgba(40,50,70,0.30) 98px,
+            rgba(40,50,70,0.30) 100px
+        ),
+        /* Halbe Stunde: 1px, sehr hell */
+        repeating-linear-gradient(
+            to right,
+            transparent 0,
+            transparent 49px,
+            rgba(0,0,0,0.07) 49px,
+            rgba(0,0,0,0.07) 50px
+        );
     pointer-events: none;
+}
+
+/* Anfangsstrich am Track-Beginn */
+.timeline-track::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    width: 2px;
+    background: rgba(40,50,70,0.30);
+    pointer-events: none;
+    z-index: 0;
 }
 
 /* Termin auf der Timeline */
@@ -9752,6 +9788,89 @@ mark.highlight {
     font-size: 0.7em;
     color: var(--accent);
     font-weight: bold;
+}
+
+/* Jetzt-Marker im Header (Pin + Pfeil) */
+.timeline-now-marker-header {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    z-index: 15;
+    pointer-events: none;
+    transform: translateX(-50%);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+}
+
+.timeline-now-marker-header .pin {
+    background: var(--accent);
+    color: #fff;
+    font-size: 0.72em;
+    font-weight: 700;
+    padding: 2px 6px;
+    border-radius: 10px;
+    white-space: nowrap;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.25);
+}
+
+.timeline-now-marker-header .arrow {
+    width: 0;
+    height: 0;
+    border-left: 5px solid transparent;
+    border-right: 5px solid transparent;
+    border-top: 5px solid var(--accent);
+    margin-top: 1px;
+}
+
+/* Live-Uhr und Scroll-Button im Zeitplan-Header */
+.timeline-panel-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    margin: 0 0 10px 0;
+    padding-bottom: 8px;
+    border-bottom: 2px solid var(--accent);
+}
+
+.timeline-panel-header h3 {
+    margin: 0;
+    border-bottom: none;
+    padding-bottom: 0;
+}
+
+.timeline-panel-header .timeline-header-actions {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.timeline-live-clock {
+    font-family: 'Segoe UI', monospace;
+    font-size: 1.1em;
+    font-weight: 600;
+    color: var(--accent);
+    letter-spacing: 0.5px;
+    min-width: 48px;
+    text-align: right;
+}
+
+.timeline-scroll-now-btn {
+    background: #fff;
+    border: 1px solid var(--accent);
+    color: var(--accent);
+    padding: 4px 10px;
+    border-radius: 4px;
+    font-size: 0.85em;
+    cursor: pointer;
+    line-height: 1;
+}
+
+.timeline-scroll-now-btn:hover {
+    background: var(--accent);
+    color: #fff;
 }
 
 /* Roter Überlauf-Balken für Termine die über die Planzeit laufen */

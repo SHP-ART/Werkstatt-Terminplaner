@@ -1,0 +1,573 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<title>Timeline Preview – Vergleich Alt/Neu</title>
+<style>
+  :root {
+    --accent: #d2142c;
+    --timeline-px-per-hour: 100px;
+  }
+  * { box-sizing: border-box; }
+  body {
+    font-family: -apple-system, "Segoe UI", Roboto, sans-serif;
+    margin: 0;
+    padding: 20px;
+    background: #f0f2f5;
+    color: #222;
+  }
+  h1 { margin: 0 0 4px; font-size: 1.4em; }
+  .sub { color: #666; margin-bottom: 16px; font-size: 0.9em; }
+
+  .toolbar {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    align-items: center;
+    background: #fff;
+    padding: 10px 14px;
+    border-radius: 8px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+    margin-bottom: 16px;
+  }
+  .toolbar label {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.88em;
+    cursor: pointer;
+    user-select: none;
+  }
+  .toolbar .group {
+    display: flex;
+    gap: 4px;
+    border-left: 1px solid #ddd;
+    padding-left: 10px;
+    margin-left: 6px;
+  }
+  .toolbar button {
+    border: 1px solid #ccc;
+    background: #fff;
+    padding: 4px 10px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.85em;
+  }
+  .toolbar button.active {
+    background: var(--accent);
+    color: #fff;
+    border-color: var(--accent);
+  }
+  .toolbar button:hover:not(.active) { background: #f5f5f5; }
+
+  .timeline-panel {
+    background: #fff;
+    border-radius: 8px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+    padding: 14px;
+  }
+  .panel-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    border-bottom: 2px solid var(--accent);
+    padding-bottom: 8px;
+    margin-bottom: 10px;
+  }
+  .panel-head h3 { margin: 0; }
+  .live-clock {
+    font-family: "Segoe UI", monospace;
+    font-size: 1.15em;
+    font-weight: 600;
+    color: var(--accent);
+    letter-spacing: 0.5px;
+  }
+  .live-clock.hidden { display: none; }
+
+  .timeline-container {
+    overflow-x: auto;
+    overflow-y: visible;
+    position: relative;
+    border: 1px solid #e9ecef;
+    border-radius: 4px;
+  }
+
+  /* === HEADER === */
+  .timeline-header {
+    display: flex;
+    position: sticky;
+    top: 0;
+    background: #f8f9fa;
+    z-index: 10;
+    border-bottom: 2px solid #dee2e6;
+  }
+  .timeline-label {
+    width: 120px;
+    min-width: 120px;
+    padding: 10px;
+    font-weight: bold;
+    background: #e9ecef;
+    border-right: 1px solid #dee2e6;
+    position: sticky;
+    left: 0;
+    z-index: 11;
+  }
+  .timeline-hours {
+    display: flex;
+    flex: 1;
+    position: relative;
+  }
+  .timeline-hour {
+    width: calc(var(--timeline-px-per-hour) / 2);
+    min-width: calc(var(--timeline-px-per-hour) / 2);
+    text-align: center;
+    padding: 10px 0;
+    border-right: 1px solid #dee2e6;
+    font-size: 0.75em;
+    color: #666;
+    box-sizing: border-box;
+  }
+  .timeline-hour.timeline-hour-full { font-weight: 600; color: #333; }
+  .timeline-hour.timeline-hour-half {
+    font-weight: 400;
+    color: #999;
+    border-right: 1px dashed #dee2e6;
+  }
+
+  /* === BODY === */
+  .timeline-body { position: relative; }
+  .timeline-row {
+    display: flex;
+    border-bottom: 1px solid #e9ecef;
+    min-height: 80px;
+  }
+  .timeline-mitarbeiter {
+    width: 120px;
+    min-width: 120px;
+    padding: 10px;
+    background: #fafbfc;
+    border-right: 1px solid #dee2e6;
+    font-size: 0.85em;
+    position: sticky;
+    left: 0;
+    z-index: 5;
+  }
+  .timeline-mitarbeiter .name { font-weight: 600; }
+  .timeline-mitarbeiter .meta { color: #888; font-size: 0.85em; margin-top: 2px; }
+  .timeline-track {
+    flex: 1;
+    position: relative;
+    background: transparent;
+  }
+
+  /* === TERMINE (Mock) === */
+  .termin-mini-card {
+    position: absolute;
+    top: 6px;
+    bottom: 6px;
+    border-radius: 4px;
+    padding: 4px 6px;
+    color: #fff;
+    font-size: 0.72em;
+    font-weight: 500;
+    overflow: hidden;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.15);
+    cursor: pointer;
+    line-height: 1.2;
+  }
+  .termin-mini-card .kunde { font-weight: 700; }
+  .termin-mini-card .arbeit { opacity: 0.95; font-size: 0.95em; }
+  .termin-mini-card.s-geplant { background: #5b8def; }
+  .termin-mini-card.s-arbeit  { background: #2e7d32; }
+  .termin-mini-card.s-wartend { background: #f57c00; }
+
+  /* === JETZT-LINIE (klassisch, Body) === */
+  .timeline-now-line {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 2px;
+    background: var(--accent);
+    z-index: 20;
+    pointer-events: none;
+  }
+  .timeline-now-line::before {
+    content: 'Jetzt';
+    position: absolute;
+    top: -20px;
+    left: -15px;
+    font-size: 0.7em;
+    color: var(--accent);
+    font-weight: bold;
+  }
+
+  /* ============================================================
+     === NEUE FEATURES (per .feature-* Klasse auf .timeline-container)
+     ============================================================ */
+
+  /* (1) Vertikale Gitterlinien im Body — volle Stunde KRÄFTIG, halbe dezent */
+  .feature-grid .timeline-track {
+    background-image:
+      /* Volle Stunde: 2px, deutlich sichtbar */
+      repeating-linear-gradient(
+        to right,
+        transparent 0,
+        transparent calc(var(--timeline-px-per-hour) - 2px),
+        rgba(40,50,70,0.32) calc(var(--timeline-px-per-hour) - 2px),
+        rgba(40,50,70,0.32) var(--timeline-px-per-hour)
+      ),
+      /* Halbe Stunde: 1px, sehr hell */
+      repeating-linear-gradient(
+        to right,
+        transparent 0,
+        transparent calc(var(--timeline-px-per-hour) / 2 - 1px),
+        rgba(0,0,0,0.07) calc(var(--timeline-px-per-hour) / 2 - 1px),
+        rgba(0,0,0,0.07) calc(var(--timeline-px-per-hour) / 2)
+      );
+  }
+  /* Erster Strich am Track-Anfang (Stundenbeginn 8:00) */
+  .feature-grid .timeline-track::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    width: 2px;
+    background: rgba(40,50,70,0.32);
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  /* (4) Zebra-Spalten alternierend pro Stunde */
+  .feature-zebra .timeline-track {
+    background-color: transparent;
+  }
+  .feature-zebra .timeline-track::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: repeating-linear-gradient(
+      to right,
+      rgba(0,0,0,0.025) 0,
+      rgba(0,0,0,0.025) var(--timeline-px-per-hour),
+      transparent var(--timeline-px-per-hour),
+      transparent calc(var(--timeline-px-per-hour) * 2)
+    );
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  /* (3) Header-Hierarchie: halbe Stunden als kleiner Tick */
+  .feature-headerhier .timeline-hour-full {
+    font-size: 0.95em;
+    font-weight: 700;
+    color: #1a1a1a;
+  }
+  .feature-headerhier .timeline-hour-half {
+    color: transparent;
+    font-size: 0.6em;
+    position: relative;
+  }
+  .feature-headerhier .timeline-hour-half::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 1px;
+    height: 8px;
+    background: #bbb;
+  }
+
+  /* (2) Jetzt-Marker im Header */
+  .now-marker-header {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    z-index: 15;
+    pointer-events: none;
+    transform: translateX(-50%);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+  }
+  .now-marker-header .pin {
+    background: var(--accent);
+    color: #fff;
+    font-size: 0.72em;
+    font-weight: 700;
+    padding: 2px 6px;
+    border-radius: 10px;
+    white-space: nowrap;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.25);
+  }
+  .now-marker-header .arrow {
+    width: 0;
+    height: 0;
+    border-left: 5px solid transparent;
+    border-right: 5px solid transparent;
+    border-top: 5px solid var(--accent);
+    margin-top: 1px;
+  }
+
+
+  .legend {
+    margin-top: 14px;
+    padding: 12px;
+    background: #fff;
+    border-radius: 8px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+    font-size: 0.85em;
+    color: #555;
+  }
+  .legend code {
+    background: #f4f4f4;
+    padding: 1px 5px;
+    border-radius: 3px;
+    font-size: 0.92em;
+  }
+  .legend ul { margin: 6px 0 0 18px; padding: 0; }
+</style>
+</head>
+<body>
+
+<h1>⏰ Timeline-Vorschau – Verbesserungen</h1>
+<div class="sub">Schalte einzelne Features mit den Checkboxen ein/aus. Termine sind Mock-Daten.</div>
+
+<div class="toolbar">
+  <label><input type="checkbox" id="cb-grid" checked> Gitterlinien (1)</label>
+  <label><input type="checkbox" id="cb-headermarker" checked> Jetzt-Marker im Header (2)</label>
+  <label><input type="checkbox" id="cb-headerhier" checked> Header-Hierarchie (3)</label>
+  <label><input type="checkbox" id="cb-zebra"> Zebra-Spalten (4)</label>
+  <label><input type="checkbox" id="cb-clock" checked> Live-Uhr (12)</label>
+
+  <div class="group">
+    <span style="font-size:0.85em;color:#666;margin-right:4px;">Zoom (5/6):</span>
+    <button data-zoom="75">×0.75</button>
+    <button data-zoom="100" class="active">×1</button>
+    <button data-zoom="150">×1.5</button>
+    <button data-zoom="200">×2</button>
+  </div>
+
+  <div class="group">
+    <button id="btn-now-scroll">🎯 Zu „Jetzt" scrollen (7)</button>
+  </div>
+
+  <div class="group">
+    <span style="font-size:0.85em;color:#666;margin-right:4px;">Simulierte Uhrzeit:</span>
+    <input type="time" id="fakeTime" value="14:23" style="font-size:0.85em;padding:3px;">
+  </div>
+</div>
+
+<div class="timeline-panel">
+  <div class="panel-head">
+    <h3>⏰ Zeitplan – Freitag, 24.04.2026</h3>
+    <span id="liveClock" class="live-clock">14:23</span>
+  </div>
+  <div id="container" class="timeline-container">
+    <!-- Header -->
+    <div class="timeline-header">
+      <div class="timeline-label">Mitarbeiter</div>
+      <div class="timeline-hours" id="timelineHours"></div>
+    </div>
+    <!-- Body -->
+    <div class="timeline-body" id="timelineBody"></div>
+  </div>
+</div>
+
+<div class="legend">
+  <strong>Was wird hier gezeigt:</strong>
+  <ul>
+    <li><b>(1) Gitterlinien</b> — vertikale Linien durch alle Mitarbeiter-Zeilen, volle Stunde dunkler, halbe heller</li>
+    <li><b>(2) Jetzt-Marker im Header</b> — Pin mit Uhrzeit oben, ergänzt die Linie im Body</li>
+    <li><b>(3) Header-Hierarchie</b> — volle Stunden fett &amp; größer, halbe Stunden nur als Tick</li>
+    <li><b>(4) Zebra-Spalten</b> — jede 2. Stunde leicht grau (alternative zu Gitter, kann kombiniert werden)</li>
+    <li><b>(5/6) Zoom</b> — ändert <code>--timeline-px-per-hour</code>, alles passt sich an</li>
+    <li><b>(7) Zu Jetzt scrollen</b> — bei breiten Timelines hilfreich</li>
+    <li><b>(12) Live-Uhr</b> — neben „⏰ Zeitplan" Überschrift</li>
+  </ul>
+  <p style="margin-top:8px"><b>Tipp:</b> Spiel mit der „Simulierte Uhrzeit" um zu sehen, wie sich Marker/Linie/Highlight verschieben.</p>
+</div>
+
+<script>
+const START_HOUR = 8;
+const END_HOUR = 18;
+
+const MITARBEITER = [
+  { id: 1, name: 'Sven Müller', kapazitaet: '8h 0min' },
+  { id: 2, name: 'Markus Weber', kapazitaet: '8h 0min' },
+  { id: 3, name: 'Thomas Klein', kapazitaet: '6h 30min' },
+  { id: 4, name: 'Anna Schmidt', kapazitaet: '8h 0min' },
+];
+
+// Mock-Termine: { maId, startH, startM, dauerMin, kunde, arbeit, status }
+const TERMINE = [
+  { maId: 1, startH: 8,  startM: 0,  dauerMin: 90,  kunde: 'BMW 320', arbeit: 'Inspektion', status: 'arbeit' },
+  { maId: 1, startH: 10, startM: 0,  dauerMin: 60,  kunde: 'VW Golf', arbeit: 'Bremsen', status: 'arbeit' },
+  { maId: 1, startH: 13, startM: 30, dauerMin: 45,  kunde: 'Audi A4', arbeit: 'Ölwechsel', status: 'geplant' },
+  { maId: 1, startH: 14, startM: 30, dauerMin: 90,  kunde: 'Skoda', arbeit: 'Diagnose', status: 'geplant' },
+  { maId: 1, startH: 16, startM: 30, dauerMin: 60,  kunde: 'Ford', arbeit: 'Reifen', status: 'geplant' },
+
+  { maId: 2, startH: 8,  startM: 30, dauerMin: 120, kunde: 'Mercedes E', arbeit: 'Kupplung', status: 'wartend' },
+  { maId: 2, startH: 11, startM: 0,  dauerMin: 60,  kunde: 'Opel Astra', arbeit: 'TÜV-Vorbereitung', status: 'arbeit' },
+  { maId: 2, startH: 14, startM: 0,  dauerMin: 75,  kunde: 'Renault', arbeit: 'AU', status: 'geplant' },
+  { maId: 2, startH: 16, startM: 0,  dauerMin: 90,  kunde: 'Peugeot 308', arbeit: 'Achsvermessung', status: 'geplant' },
+
+  { maId: 3, startH: 9,  startM: 0,  dauerMin: 180, kunde: 'Fiat Ducato', arbeit: 'Großinspektion', status: 'arbeit' },
+  { maId: 3, startH: 14, startM: 0,  dauerMin: 60,  kunde: 'Smart', arbeit: 'Klimaservice', status: 'geplant' },
+
+  { maId: 4, startH: 8,  startM: 0,  dauerMin: 45,  kunde: 'Mini', arbeit: 'Wartung', status: 'arbeit' },
+  { maId: 4, startH: 9,  startM: 0,  dauerMin: 90,  kunde: 'Tesla M3', arbeit: 'HV-Check', status: 'arbeit' },
+  { maId: 4, startH: 11, startM: 30, dauerMin: 30,  kunde: 'Citroën', arbeit: 'Lampe', status: 'geplant' },
+  { maId: 4, startH: 14, startM: 15, dauerMin: 105, kunde: 'Hyundai i30', arbeit: 'Steuerkette', status: 'wartend' },
+  { maId: 4, startH: 16, startM: 30, dauerMin: 60,  kunde: 'Kia Sportage', arbeit: 'Service', status: 'geplant' },
+];
+
+const container = document.getElementById('container');
+const headerEl = document.getElementById('timelineHours');
+const bodyEl = document.getElementById('timelineBody');
+const liveClock = document.getElementById('liveClock');
+const fakeTimeInput = document.getElementById('fakeTime');
+
+function getPxPerHour() {
+  return parseInt(getComputedStyle(document.documentElement).getPropertyValue('--timeline-px-per-hour'));
+}
+
+function buildHeader() {
+  headerEl.innerHTML = '';
+  for (let h = START_HOUR; h <= END_HOUR; h++) {
+    const full = document.createElement('div');
+    full.className = 'timeline-hour timeline-hour-full';
+    full.textContent = `${h}:00`;
+    headerEl.appendChild(full);
+    if (h < END_HOUR) {
+      const half = document.createElement('div');
+      half.className = 'timeline-hour timeline-hour-half';
+      half.textContent = `${h}:30`;
+      headerEl.appendChild(half);
+    }
+  }
+}
+
+function buildBody() {
+  bodyEl.innerHTML = '';
+  MITARBEITER.forEach(ma => {
+    const row = document.createElement('div');
+    row.className = 'timeline-row';
+
+    const label = document.createElement('div');
+    label.className = 'timeline-mitarbeiter';
+    label.innerHTML = `<div class="name">${ma.name}</div><div class="meta">${ma.kapazitaet}</div>`;
+    row.appendChild(label);
+
+    const track = document.createElement('div');
+    track.className = 'timeline-track';
+    track.dataset.maId = ma.id;
+    row.appendChild(track);
+    bodyEl.appendChild(row);
+  });
+  placeTermine();
+}
+
+function placeTermine() {
+  const pxH = getPxPerHour();
+  const pxMin = pxH / 60;
+  TERMINE.forEach(t => {
+    const track = bodyEl.querySelector(`.timeline-track[data-ma-id="${t.maId}"]`);
+    if (!track) return;
+    const offsetMin = (t.startH - START_HOUR) * 60 + t.startM;
+    const left = offsetMin * pxMin;
+    const width = t.dauerMin * pxMin - 2;
+    const card = document.createElement('div');
+    card.className = `termin-mini-card s-${t.status}`;
+    card.style.left = `${left}px`;
+    card.style.width = `${width}px`;
+    card.innerHTML = `<div class="kunde">${t.kunde}</div><div class="arbeit">${t.arbeit} · ${t.dauerMin}′</div>`;
+    card.title = `${t.kunde} – ${t.arbeit} (${t.dauerMin} Min)`;
+    track.appendChild(card);
+  });
+}
+
+function updateNow() {
+  const [hh, mm] = fakeTimeInput.value.split(':').map(Number);
+  const pxH = getPxPerHour();
+  const pxMin = pxH / 60;
+
+  // Live-Uhr
+  liveClock.textContent = `${String(hh).padStart(2,'0')}:${String(mm).padStart(2,'0')}`;
+  liveClock.classList.toggle('hidden', !document.getElementById('cb-clock').checked);
+
+  // Body-Linien entfernen + neu zeichnen
+  document.querySelectorAll('.timeline-now-line, .now-marker-header').forEach(e => e.remove());
+  if (hh < START_HOUR || hh > END_HOUR) return;
+
+  const offsetMin = (hh - START_HOUR) * 60 + mm;
+  const leftPx = offsetMin * pxMin;
+
+  // Body-Linie in jedem Track
+  bodyEl.querySelectorAll('.timeline-track').forEach(track => {
+    const line = document.createElement('div');
+    line.className = 'timeline-now-line';
+    line.style.left = `${leftPx}px`;
+    track.appendChild(line);
+  });
+
+  // Header-Marker
+  if (document.getElementById('cb-headermarker').checked) {
+    const marker = document.createElement('div');
+    marker.className = 'now-marker-header';
+    marker.style.left = `${leftPx}px`;
+    marker.innerHTML = `
+      <div class="pin">${String(hh).padStart(2,'0')}:${String(mm).padStart(2,'0')}</div>
+      <div class="arrow"></div>
+    `;
+    headerEl.appendChild(marker);
+  }
+}
+
+function applyFeatures() {
+  container.classList.toggle('feature-grid',       document.getElementById('cb-grid').checked);
+  container.classList.toggle('feature-headerhier', document.getElementById('cb-headerhier').checked);
+  container.classList.toggle('feature-zebra',      document.getElementById('cb-zebra').checked);
+  rebuild();
+}
+
+function rebuild() {
+  buildHeader();
+  buildBody();
+  updateNow();
+}
+
+// Zoom
+document.querySelectorAll('[data-zoom]').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('[data-zoom]').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    document.documentElement.style.setProperty('--timeline-px-per-hour', `${btn.dataset.zoom}px`);
+    rebuild();
+  });
+});
+
+// Checkboxen
+['cb-grid','cb-headermarker','cb-headerhier','cb-zebra','cb-clock'].forEach(id => {
+  document.getElementById(id).addEventListener('change', applyFeatures);
+});
+
+// Fake-Time
+fakeTimeInput.addEventListener('input', updateNow);
+
+// Scroll-to-now
+document.getElementById('btn-now-scroll').addEventListener('click', () => {
+  const [hh, mm] = fakeTimeInput.value.split(':').map(Number);
+  const pxH = getPxPerHour();
+  const offsetMin = (hh - START_HOUR) * 60 + mm;
+  const leftPx = offsetMin * pxH / 60 + 120; // + Label-Breite
+  container.scrollTo({ left: leftPx - container.clientWidth / 2, behavior: 'smooth' });
+});
+
+// Init
+applyFeatures();
+</script>
+</body>
+</html>

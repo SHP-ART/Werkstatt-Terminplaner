@@ -27288,30 +27288,40 @@ class App {
   }
 
   addTimelineNowLine(startHour, endHour) {
-    // Alte Linien entfernen
-    document.querySelectorAll('.timeline-now-line').forEach(line => line.remove());
-    
+    // Alte Linien/Marker entfernen
+    document.querySelectorAll('.timeline-now-line, .timeline-now-marker-header').forEach(line => line.remove());
+
     // Vorherigen Interval stoppen falls vorhanden
     if (this.nowLineInterval) {
       clearInterval(this.nowLineInterval);
       this.nowLineInterval = null;
     }
-    
+
+    // Start-/End-Stunden für scrollTimelineToNow merken
+    this._timelineStartHour = startHour;
+    this._timelineEndHour = endHour;
+
     const updateNowLine = () => {
-      // Alte Linien entfernen
-      document.querySelectorAll('.timeline-now-line').forEach(line => line.remove());
-      
+      // Alte Linien/Marker entfernen
+      document.querySelectorAll('.timeline-now-line, .timeline-now-marker-header').forEach(line => line.remove());
+
       const now = new Date();
       const currentHour = now.getHours();
       const currentMinute = now.getMinutes();
-      
+
+      // Live-Uhr immer aktualisieren (auch außerhalb sichtbarer Stunden)
+      const clockEl = document.getElementById('timelineLiveClock');
+      if (clockEl) {
+        clockEl.textContent = `${String(currentHour).padStart(2, '0')}:${String(currentMinute).padStart(2, '0')}`;
+      }
+
       // Nur anzeigen wenn innerhalb der sichtbaren Stunden
       if (currentHour < startHour || currentHour > endHour) return;
-      
+
       const pixelPerHour = 100; // Muss mit anderen Timeline-Elementen übereinstimmen
       const pixelPerMinute = pixelPerHour / 60;
       const leftPx = ((currentHour - startHour) * 60 + currentMinute) * pixelPerMinute;
-      
+
       // Füge Linie zu jeder Timeline-Track hinzu
       document.querySelectorAll('.timeline-track').forEach(track => {
         const line = document.createElement('div');
@@ -27319,13 +27329,41 @@ class App {
         line.style.left = `${leftPx}px`;
         track.appendChild(line);
       });
+
+      // Header-Marker (Pin mit Uhrzeit + Pfeil) im Stunden-Header
+      const hoursHeader = document.getElementById('timelineHours');
+      if (hoursHeader) {
+        const marker = document.createElement('div');
+        marker.className = 'timeline-now-marker-header';
+        marker.style.left = `${leftPx}px`;
+        marker.innerHTML = `<div class="pin">${String(currentHour).padStart(2, '0')}:${String(currentMinute).padStart(2, '0')}</div><div class="arrow"></div>`;
+        hoursHeader.appendChild(marker);
+      }
     };
-    
+
     // Initial zeichnen
     updateNowLine();
-    
+
     // Alle 60 Sekunden aktualisieren
     this.nowLineInterval = setInterval(updateNowLine, 60000);
+  }
+
+  scrollTimelineToNow() {
+    const container = document.querySelector('.planning-layout .timeline-container');
+    if (!container) return;
+    const startHour = this._timelineStartHour ?? 8;
+    const endHour = this._timelineEndHour ?? 18;
+    const now = new Date();
+    let h = now.getHours();
+    let m = now.getMinutes();
+    // Wenn außerhalb der Sichtbaren Stunden: an den Rand scrollen
+    if (h < startHour) { h = startHour; m = 0; }
+    if (h > endHour) { h = endHour; m = 0; }
+    const pixelPerHour = 100;
+    const labelWidth = 120; // .timeline-label
+    const offsetMin = (h - startHour) * 60 + m;
+    const leftPx = labelWidth + offsetMin * (pixelPerHour / 60);
+    container.scrollTo({ left: leftPx - container.clientWidth / 2, behavior: 'smooth' });
   }
 
   createTerminMiniCard(termin, options = {}) {
