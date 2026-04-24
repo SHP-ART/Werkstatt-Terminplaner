@@ -15336,6 +15336,17 @@ class App {
             </button>
             <span id="schnellStartzeitHinweis" style="font-size: 0.78em; color: #16a34a; display: none;">✅ Geändert – Speichern nicht vergessen!</span>
           </div>
+          <div class="detail-row" style="align-items: center; gap: 6px; flex-wrap: wrap;">
+            <span class="detail-label">🏷️</span>
+            <span style="font-size: 0.85em; color: #555;">Interne Nr.:</span>
+            <input type="text" id="schnellStatusInterneNr" value="${(termin.interne_auftragsnummer || '').replace(/"/g, '&quot;')}" placeholder="optional"
+              style="border: 1px solid #ccc; border-radius: 6px; padding: 3px 7px; font-size: 0.9em; flex: 1; min-width: 120px;">
+            <button data-action="interne-nr-setzen" class="btn-schnell-startzeit"
+              style="padding: 3px 10px; font-size: 0.82em; border-radius: 6px; border: none; background: #2563eb; color: #fff; cursor: pointer; white-space: nowrap;">
+              ✓ Übernehmen
+            </button>
+            <span id="schnellInterneNrHinweis" style="font-size: 0.78em; color: #16a34a; display: none;">✅ Gespeichert</span>
+          </div>
         </div>
         
         ${statusAktionen}
@@ -15405,6 +15416,24 @@ class App {
           await this.moveTerminToMitarbeiterWithTime(terminId, mitarbeiterId, lehrlingId, type, neueStartzeit);
           const hinweis = document.getElementById('schnellStartzeitHinweis');
           if (hinweis) hinweis.style.display = 'inline';
+        } else if (action === 'interne-nr-setzen') {
+          const neueInterneNr = (document.getElementById('schnellStatusInterneNr')?.value || '').trim();
+          try {
+            await TermineService.update(terminId, { interne_auftragsnummer: neueInterneNr || null });
+            if (this.termineById[terminId]) {
+              this.termineById[terminId].interne_auftragsnummer = neueInterneNr || null;
+            }
+            if (termin) termin.interne_auftragsnummer = neueInterneNr || null;
+            const hinweisInt = document.getElementById('schnellInterneNrHinweis');
+            if (hinweisInt) {
+              hinweisInt.style.display = 'inline';
+              setTimeout(() => { if (hinweisInt) hinweisInt.style.display = 'none'; }, 2000);
+            }
+            this.showToast('🏷️ Interne Auftragsnummer gespeichert', 'success');
+          } catch (err) {
+            console.error('Fehler beim Speichern der internen Auftragsnummer:', err);
+            this.showToast('❌ Speichern fehlgeschlagen', 'error');
+          }
         } else if (action === 'abgeschlossen') {
           const zeit = parseInt(btn.dataset.zeit) || null;
           this.setzeSchnellStatus(terminId, 'abgeschlossen', zeit);
