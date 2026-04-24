@@ -8,9 +8,14 @@ module.exports = {
     console.log('Migration 040: Recreate termine mit datum als nullable...');
 
     await new Promise((resolve, reject) => {
-      db.serialize(() => {
-        db.run(`ALTER TABLE termine RENAME TO termine_old_040`, (err) => {
-          if (err) return reject(err);
+      db.run(`ALTER TABLE termine RENAME TO termine_old_040`, (err) => {
+        if (err) return reject(err);
+
+        // Spalten der alten Tabelle dynamisch ermitteln — kein hardcodierter Spaltenkatalog
+        db.all('PRAGMA table_info(termine_old_040)', [], (pragmaErr, pragmaRows) => {
+          if (pragmaErr) return reject(pragmaErr);
+
+          const existingCols = pragmaRows.map(r => r.name);
 
           db.run(`
             CREATE TABLE termine (
@@ -71,20 +76,8 @@ module.exports = {
           `, (err2) => {
             if (err2) return reject(err2);
 
-            const cols = [
-              'id', 'termin_nr', 'kunde_id', 'kunde_name', 'kunde_telefon', 'kennzeichen',
-              'arbeit', 'umfang', 'geschaetzte_zeit', 'tatsaechliche_zeit', 'datum', 'status',
-              'abholung_typ', 'abholung_details', 'abholung_zeit', 'bring_zeit', 'kontakt_option',
-              'kilometerstand', 'ersatzauto', 'erstellt_am', 'abholung_datum', 'arbeitszeiten_details',
-              'mitarbeiter_id', 'geloescht_am', 'dringlichkeit', 'vin', 'fahrzeugtyp', 'notizen',
-              'ersatzauto_tage', 'ersatzauto_bis_datum', 'ersatzauto_bis_zeit', 'ist_schwebend',
-              'schwebend_prioritaet', 'parent_termin_id', 'split_teil', 'muss_bearbeitet_werden',
-              'erweiterung_von_id', 'ist_erweiterung', 'erweiterung_typ', 'teile_status',
-              'interne_auftragsnummer', 'startzeit', 'endzeit_berechnet', 'fertigstellung_zeit',
-              'ki_training_exclude', 'ki_training_note', 'verschoben_von_datum', 'nacharbeit_start_zeit',
-              'ist_wiederholung', 'lehrling_id', 'unterbrochen_am', 'unterbrochen_grund'
-            ];
-            const colList = cols.join(', ');
+            // Nur Spalten kopieren die tatsächlich in der alten Tabelle existieren
+            const colList = existingCols.join(', ');
             db.run(`INSERT INTO termine (${colList}) SELECT ${colList} FROM termine_old_040`, (err3) => {
               if (err3) return reject(err3);
 
@@ -110,9 +103,14 @@ module.exports = {
     console.log('Migration 040: Rollback — datum wieder NOT NULL setzen');
     // Alle Termine mit datum=NULL würden verloren gehen — daher nur mit Vorsicht
     await new Promise((resolve, reject) => {
-      db.serialize(() => {
-        db.run(`ALTER TABLE termine RENAME TO termine_old_040r`, (err) => {
-          if (err) return reject(err);
+      db.run(`ALTER TABLE termine RENAME TO termine_old_040r`, (err) => {
+        if (err) return reject(err);
+
+        // Spalten der alten Tabelle dynamisch ermitteln
+        db.all('PRAGMA table_info(termine_old_040r)', [], (pragmaErr, pragmaRows) => {
+          if (pragmaErr) return reject(pragmaErr);
+
+          const existingCols = pragmaRows.map(r => r.name);
 
           db.run(`
             CREATE TABLE termine (
@@ -173,21 +171,9 @@ module.exports = {
           `, (err2) => {
             if (err2) return reject(err2);
 
-            // Nur Termine mit datum kopieren (NULL-Termine gehen verloren)
-            const cols = [
-              'id', 'termin_nr', 'kunde_id', 'kunde_name', 'kunde_telefon', 'kennzeichen',
-              'arbeit', 'umfang', 'geschaetzte_zeit', 'tatsaechliche_zeit', 'datum', 'status',
-              'abholung_typ', 'abholung_details', 'abholung_zeit', 'bring_zeit', 'kontakt_option',
-              'kilometerstand', 'ersatzauto', 'erstellt_am', 'abholung_datum', 'arbeitszeiten_details',
-              'mitarbeiter_id', 'geloescht_am', 'dringlichkeit', 'vin', 'fahrzeugtyp', 'notizen',
-              'ersatzauto_tage', 'ersatzauto_bis_datum', 'ersatzauto_bis_zeit', 'ist_schwebend',
-              'schwebend_prioritaet', 'parent_termin_id', 'split_teil', 'muss_bearbeitet_werden',
-              'erweiterung_von_id', 'ist_erweiterung', 'erweiterung_typ', 'teile_status',
-              'interne_auftragsnummer', 'startzeit', 'endzeit_berechnet', 'fertigstellung_zeit',
-              'ki_training_exclude', 'ki_training_note', 'verschoben_von_datum', 'nacharbeit_start_zeit',
-              'ist_wiederholung', 'lehrling_id', 'unterbrochen_am', 'unterbrochen_grund'
-            ];
-            const colList = cols.join(', ');
+            // Nur Spalten kopieren die tatsächlich in der alten Tabelle existieren
+            // Termine ohne datum werden weggelassen (waren Split-Platzhalter)
+            const colList = existingCols.join(', ');
             db.run(
               `INSERT INTO termine (${colList}) SELECT ${colList} FROM termine_old_040r WHERE datum IS NOT NULL`,
               (err3) => {
