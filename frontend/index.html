@@ -3600,6 +3600,23 @@
                     </div>
                 </div>
 
+                <!-- Unterbrochene Aufträge (aufgeteilte Termine, die auf Neuplanung warten) -->
+                <div class="ueberfaellige-panel" style="border-left: 4px solid #e65100;">
+                    <div class="ueberfaellige-header">
+                        <h3>✂️ Unterbrochene Aufträge</h3>
+                        <div class="ueberfaellige-controls">
+                            <span id="unterbrocheneCount" class="ueberfaellige-count">0 Aufträge</span>
+                            <button class="btn btn-sm btn-secondary" onclick="app.loadUnterbrocheneAuftraege()" title="Aktualisieren">
+                                🔄
+                            </button>
+                        </div>
+                    </div>
+                    <p class="ueberfaellige-hint">Aufgeteilte Termine (Teil 2), die noch auf Einplanung warten.</p>
+                    <div id="unterbrocheneAuftraege" class="ueberfaellige-container">
+                        <div class="empty-state">Keine unterbrochenen Aufträge</div>
+                    </div>
+                </div>
+
                 <!-- Überfällige Termine (aus Vortagen, nicht abgeschlossen) -->
                 <div class="ueberfaellige-panel">
                     <div class="ueberfaellige-header">

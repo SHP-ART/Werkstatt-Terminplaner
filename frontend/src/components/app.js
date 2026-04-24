@@ -1872,8 +1872,14 @@ class App {
           'geplant': '#17a2b8', 
           'in_arbeit': '#007bff',
           'abgeschlossen': '#28a745',
-          'storniert': '#dc3545'
+          'storniert': '#dc3545',
+          'unterbrochen': '#e65100'
         }[termin.status] || '#6c757d';
+
+        // Split-Termine: Zeitkorrektur-Button
+        const splitZeitBtn = termin.split_teil === 1 && termin.status === 'unterbrochen'
+          ? `<button onclick="app.showTerminDetails(${termin.id})" title="Tats\u00e4chliche Zeit korrigieren" style="border:none;background:#fff3e0;color:#e65100;border-radius:4px;padding:1px 6px;font-size:11px;cursor:pointer;margin-left:6px;">✏️ Zeit</button>`
+          : '';
         
         html += `
           <div style="padding: 8px; margin-bottom: 6px; background: #fff; border-radius: 6px; border: 1px solid #dee2e6;">
@@ -1882,7 +1888,7 @@ class App {
                 ${termin.termin_nr || '-'}
               </div>
               <div style="display: flex; gap: 8px; font-size: 0.85em;">
-                <span style="color: ${statusFarbe}; font-weight: 600;">${termin.status || '-'}</span>
+                <span style="color: ${statusFarbe}; font-weight: 600;">${termin.status || '-'}</span>${splitZeitBtn}
               </div>
             </div>
             <div style="color: #555; font-size: 0.9em; margin-top: 4px;">
@@ -16087,7 +16093,7 @@ class App {
     const block = document.getElementById(`timeline-termin-${terminId}`);
     if (block) {
       // Alte Status-Klassen entfernen
-      block.classList.remove('status-geplant', 'status-in_arbeit', 'status-in-arbeit', 'status-abgeschlossen');
+      block.classList.remove('status-geplant', 'status-in_arbeit', 'status-in-arbeit', 'status-abgeschlossen', 'status-unterbrochen');
       // Neue Status-Klasse hinzufügen
       block.classList.add(`status-${statusKey}`);
       // Inline-Styles direkt setzen um CSS zu überschreiben
@@ -16101,7 +16107,7 @@ class App {
     
     // Auch Arbeit-Blöcke aktualisieren
     document.querySelectorAll(`[id^="timeline-arbeit-${terminId}-"]`).forEach(arbeitBlock => {
-      arbeitBlock.classList.remove('status-geplant', 'status-in_arbeit', 'status-in-arbeit', 'status-abgeschlossen');
+      arbeitBlock.classList.remove('status-geplant', 'status-in_arbeit', 'status-in-arbeit', 'status-abgeschlossen', 'status-unterbrochen');
       arbeitBlock.classList.add(`status-${statusKey}`);
       // Inline-Styles direkt setzen um CSS zu überschreiben
       if (statusFarben[statusKey]) {
@@ -21747,6 +21753,7 @@ class App {
       if (arbeit.status === 'in_arbeit') statusClass = 'status-in-arbeit';
       else if (arbeit.status === 'abgeschlossen') statusClass = 'status-abgeschlossen';
       else if (arbeit.status === 'wartend') statusClass = 'status-wartend';
+      else if (arbeit.status === 'unterbrochen') statusClass = 'status-unterbrochen';
       
       // Schwebend-Klasse
       const schwebendClass = arbeit.istSchwebend ? 'schwebend' : '';
@@ -23262,6 +23269,7 @@ class App {
 
       // 9. Überfällige Termine laden und rendern
       this.loadUeberfaelligeTermine();
+      this.loadUnterbrocheneAuftraege();
 
       // Kapazitäten einfärben - Mitarbeiter
       mitarbeiterListe.forEach(ma => {
@@ -23667,6 +23675,79 @@ class App {
   // =============================================================================
   // ÜBERFÄLLIGE TERMINE (aus Vortagen, nicht abgeschlossen)
   // =============================================================================
+
+  /**
+   * Lädt unterbrochene Aufträge (Teil-2-Termine ohne Datum, warten auf Einplanung)
+   */
+  async loadUnterbrocheneAuftraege() {
+    const container = document.getElementById('unterbrocheneAuftraege');
+    const countBadge = document.getElementById('unterbrocheneCount');
+    if (!container) return;
+
+    try {
+      const termine = await ApiService.get('/termine');
+      const unterbrochen = termine.filter(t =>
+        t.split_teil === 2 &&
+        !t.datum &&
+        t.status === 'geplant' &&
+        !t.geloescht
+      );
+
+      if (countBadge) {
+        countBadge.textContent = `${unterbrochen.length} Auftrag${unterbrochen.length !== 1 ? 'träge' : ''}`;
+      }
+
+      container.innerHTML = '';
+      if (!unterbrochen.length) {
+        container.innerHTML = '<div class="empty-state">✅ Keine unterbrochenen Aufträge</div>';
+        return;
+      }
+
+      const grundLabels = {
+        teil_fehlt: '⏳ Teil fehlt',
+        rueckfrage_kunde: '❓ Rückfrage Kunde',
+        vorrang: '🔀 Vorrang',
+        sonstiges: '📝 Sonstiges'
+      };
+
+      unterbrochen.forEach(termin => {
+        const card = document.createElement('div');
+        card.className = 'ueberfaelliger-termin';
+        card.style.borderLeft = '4px solid #e65100';
+        card.dataset.terminId = termin.id;
+
+        const grundBadge = termin.unterbrochen_grund
+          ? `<span style="background:#fff3e0;color:#e65100;border:1px solid #ffcc02;border-radius:4px;padding:1px 6px;font-size:0.75em;">${grundLabels[termin.unterbrochen_grund] || termin.unterbrochen_grund}</span>`
+          : '';
+        const richtzeit = termin.geschaetzte_zeit ? `${termin.geschaetzte_zeit} Min.` : '—';
+
+        card.innerHTML = `
+          <div class="ueberfaelliger-termin-info">
+            <div class="ueberfaelliger-termin-header">
+              <span class="ueberfaelliger-termin-kunde">${this.escapeHtml(termin.kunde_name || 'Unbekannt')} ${grundBadge}</span>
+              <span class="ueberfaelliger-termin-datum">🕐 Richtzeit: ${richtzeit}</span>
+            </div>
+            <div class="ueberfaelliger-termin-details">
+              <span class="ueberfaelliger-termin-kennzeichen">${this.escapeHtml(termin.kennzeichen || '')}</span>
+              <span class="ueberfaelliger-termin-arbeiten">${this.escapeHtml(termin.arbeiten || 'Keine Arbeiten')}</span>
+            </div>
+          </div>
+          <div class="ueberfaelliger-termin-actions">
+            <button class="btn btn-einplanen" onclick="app.neuEinplanenUeberfaelligenTermin(${termin.id})" title="Einplanen">
+              📅 Einplanen
+            </button>
+            <button class="btn btn-details" onclick="app.showTerminDetails(${termin.id})" title="Details">
+              🔍
+            </button>
+          </div>
+        `;
+        container.appendChild(card);
+      });
+    } catch (error) {
+      console.error('Fehler beim Laden unterbrochener Aufträge:', error);
+      container.innerHTML = '<div class="empty-state">Fehler beim Laden</div>';
+    }
+  }
 
   /**
    * Lädt überfällige Termine (aus vergangenen Tagen, die noch nicht abgeschlossen sind)
@@ -31433,10 +31514,14 @@ class App {
         ? `<span style="color:var(--danger,#dc3545);font-weight:600;">■ ${a.stempel_ende}</span>`
         : '<span class="text-muted">—</span>';
 
-      const rowStyle = pausiertAktiv ? ' style="background:#fffbe6;"' : '';
+      const rowStyle = pausiertAktiv ? ' style="background:#fffbe6;"' : (a.status === 'unterbrochen' ? ' style="background:#fff3e0;"' : '');
       // Tagesübergreifend laufender Termin (z.B. gestern gestartet)?
       const _heuteIso = new Date().toISOString().slice(0,10);
       let terminNrZelle = this.escapeHtml(a.termin_nr || '');
+      // Unterbrochener Termin (Teil 1 nach Split) – Badge anzeigen
+      if (a.status === 'unterbrochen') {
+        terminNrZelle += ` <span title="Auftrag unterbrochen – Teil 2 wartet in der Planung" style="display:inline-block;margin-left:4px;background:#fff3e0;color:#e65100;border:1px solid #ffb74d;border-radius:10px;padding:1px 7px;font-size:11px;font-weight:600;">⏸ Teil 1</span>`;
+      }
       // Variante 1: Termin selbst hat ein anderes Datum als heute (echte tagesübergreifende Termine)
       // Variante 2: Folgetermin (parent_datum gesetzt) – ursprünglicher Beginn am Vortag
       const seitDatum = a.parent_datum || (a.termin_datum && a.termin_datum !== _heuteIso ? a.termin_datum : null);
