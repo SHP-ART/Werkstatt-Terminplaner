@@ -227,6 +227,8 @@ class StempelzeitenController {
           t.tatsaechliche_zeit,
           t.startzeit,
           t.status,
+          t.split_teil,
+          t.unterbrochen_grund,
           t.datum                  AS termin_datum,
           t.parent_termin_id,
           p.datum                  AS parent_datum,
@@ -240,6 +242,25 @@ class StempelzeitenController {
           AND t.status NOT IN ('storniert')
         ORDER BY t.id
       `, [datum, ...tagesUebergreifendParams]);
+
+      // Split-Partner für unterbrochene Termine (split_teil=1) laden
+      const unterbrocheneIds = alleTermine
+        .filter(t => t.split_teil === 1 && t.status === 'unterbrochen')
+        .map(t => t.termin_id);
+      if (unterbrocheneIds.length > 0) {
+        for (const tid of unterbrocheneIds) {
+          const partner = await getAsync(
+            `SELECT id, termin_nr, arbeit, geschaetzte_zeit, datum, status, unterbrochen_grund
+               FROM termine
+              WHERE parent_termin_id = ? AND split_teil = 2 AND geloescht_am IS NULL LIMIT 1`,
+            [tid]
+          );
+          if (partner) {
+            const t = alleTermine.find(x => x.termin_id === tid);
+            if (t) t._split_partner = partner;
+          }
+        }
+      }
 
       const stempelRows = await allAsync(`
         SELECT
@@ -524,7 +545,8 @@ class StempelzeitenController {
           ist_min: istNetto,
           ist_brutto_min: rawIst,
           pause_abzug_min: pauseAbzug,
-          pause_details: pauseDetails
+          pause_details: pauseDetails,
+          split_partner: t._split_partner || null
         });
       }
 
@@ -566,7 +588,8 @@ class StempelzeitenController {
             ist_min: istNetto,
             ist_brutto_min: fb.ist_min,
             pause_abzug_min: pauseAbzug,
-            pause_details: pauseDetails
+            pause_details: pauseDetails,
+            split_partner: t._split_partner || null
           });
         }
       }
@@ -592,7 +615,8 @@ class StempelzeitenController {
               arbeit: t.termin_arbeit || '', richtwert_min: rw,
               geschaetzte_min: t.geschaetzte_zeit,
               plan_start: planP.plan_start, plan_ende: planP.plan_ende,
-              stempel_start: fbStempelStart, stempel_ende: fbStempelEnde, ist_min: fb.ist_min
+              stempel_start: fbStempelStart, stempel_ende: fbStempelEnde, ist_min: fb.ist_min,
+              split_partner: t._split_partner || null
             };
           })
         });

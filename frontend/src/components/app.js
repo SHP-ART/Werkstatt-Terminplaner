@@ -23736,6 +23736,9 @@ class App {
             <button class="btn btn-einplanen" onclick="app.neuEinplanenUeberfaelligenTermin(${termin.id})" title="Einplanen">
               📅 Einplanen
             </button>
+            <button class="btn btn-sm" onclick="app.unterbrocheneRichtzeitAnpassen(${termin.id}, ${termin.geschaetzte_zeit || 30})" title="Richtzeit anpassen" style="background:#f0f0f0;border:none;cursor:pointer;padding:4px 8px;border-radius:4px;">
+              ✏️ Richtzeit
+            </button>
             <button class="btn btn-details" onclick="app.showTerminDetails(${termin.id})" title="Details">
               🔍
             </button>
@@ -23746,6 +23749,33 @@ class App {
     } catch (error) {
       console.error('Fehler beim Laden unterbrochener Aufträge:', error);
       container.innerHTML = '<div class="empty-state">Fehler beim Laden</div>';
+    }
+  }
+
+  async unterbrocheneRichtzeitAnpassen(terminId, aktuelleMin) {
+    const eingabe = prompt(`Neue Richtzeit in Minuten (aktuell: ${aktuelleMin} min):`, aktuelleMin);
+    if (!eingabe || isNaN(parseInt(eingabe))) return;
+    const neueMin = Math.max(1, parseInt(eingabe));
+    try {
+      await ApiService.put(`/termine/${terminId}`, { geschaetzte_zeit: neueMin });
+      await this.loadUnterbrocheneAuftraege();
+    } catch (e) {
+      alert('Fehler beim Aktualisieren der Richtzeit.');
+    }
+  }
+
+  async zeitkorrekturPauseSplit(terminId, aktuelleMin) {
+    const eingabe = prompt(`Gearbeitete Zeit korrigieren (aktuell: ${aktuelleMin} min):`, aktuelleMin);
+    if (!eingabe || isNaN(parseInt(eingabe))) return;
+    const neueMin = Math.max(1, parseInt(eingabe));
+    try {
+      await ApiService.put(`/termine/${terminId}`, {
+        tatsaechliche_zeit: neueMin,
+        geschaetzte_zeit: neueMin
+      });
+      await this.loadZeitstempelung();
+    } catch (e) {
+      alert('Fehler beim Korrigieren der Zeit.');
     }
   }
 
@@ -31532,7 +31562,14 @@ class App {
         const titleTxt = `Auftrag l\u00e4uft seit ${dStr}${seitZeit ? ' ' + seitZeit : ''}` + (a.vortags_min ? ` (+${a.vortags_min} Min am Vortag gearbeitet)` : '');
         terminNrZelle += ` <span title="${titleTxt}" style="display:inline-block;margin-left:4px;background:#fff3cd;color:#856404;border:1px solid #ffc107;border-radius:10px;padding:1px 7px;font-size:11px;font-weight:600;">⏳ seit ${dStr}${seitZeit ? ' ' + seitZeit : ''}</span>`;
       }
-      return `
+      // Task 9: Zeitkorrektur-Button für unterbrochene Teil-1-Termine
+      const korrekturBtn = a.termin_status === 'unterbrochen'
+        ? ` <button onclick="window.app.zeitkorrekturPauseSplit(${a.termin_id}, ${a.ist_min || 0})"
+                    title="Gearbeitete Zeit korrigieren"
+                    style="border:none;background:none;cursor:pointer;color:#888;font-size:11px;padding:0 2px;margin-left:3px;">✏️</button>`
+        : '';
+
+      const hauptZeile = `
         <tr${rowStyle}>
           <td>${terminNrZelle}</td>
           <td>${this.escapeHtml(a.interne_auftragsnummer || '')}</td>
@@ -31544,9 +31581,44 @@ class App {
           <td class="text-success">${startCell}</td>
           <td class="text-danger">${endeCell}</td>
           <td class="text-warning">${richtwertMin ? richtwertMin + ' Min' : '—'}</td>
-          <td>${istText}${pauseBadge}</td>
+          <td>${istText}${pauseBadge}${korrekturBtn}</td>
         </tr>
       `;
+
+      // Task 8: Split-Partner als eingerückte Folgezeile
+      let partnerZeile = '';
+      if (a.split_partner) {
+        const sp = a.split_partner;
+        const spDatumStr = sp.datum ? (() => {
+          const d = new Date(sp.datum);
+          return `${String(d.getDate()).padStart(2,'0')}.${String(d.getMonth()+1).padStart(2,'0')}.${d.getFullYear()}`;
+        })() : null;
+        const spDatumBadge = spDatumStr
+          ? `<span style="background:#e8f5e9;color:#388e3c;border:1px solid #a5d6a7;border-radius:10px;padding:1px 7px;font-size:11px;">📅 ${spDatumStr}</span>`
+          : `<span style="background:#fce4ec;color:#c62828;border:1px solid #ef9a9a;border-radius:10px;padding:1px 7px;font-size:11px;">📅 noch offen</span>`;
+        partnerZeile = `
+          <tr style="background:#fff8f0;border-left:3px solid #ff9800;">
+            <td style="padding-left:20px;color:#888;font-size:12px;">${this.escapeHtml(sp.termin_nr || '')} ✂️</td>
+            <td></td>
+            <td></td>
+            <td></td>
+            <td style="color:#888;font-size:12px;">${this.escapeHtml(sp.arbeit || '')} ${spDatumBadge}</td>
+            <td><span class="text-muted">—</span></td>
+            <td><span class="text-muted">—</span></td>
+            <td><span class="text-muted">—</span></td>
+            <td><span class="text-muted">—</span></td>
+            <td style="color:#e65100;">
+              ${sp.geschaetzte_zeit ? sp.geschaetzte_zeit + ' Min' : '—'}
+              <button onclick="window.app.unterbrocheneRichtzeitAnpassen(${sp.id}, ${sp.geschaetzte_zeit || 30})"
+                      title="Richtzeit anpassen"
+                      style="border:none;background:none;cursor:pointer;color:#888;font-size:11px;padding:0 2px;margin-left:2px;">✏️</button>
+            </td>
+            <td><span class="text-muted">—</span></td>
+          </tr>
+        `;
+      }
+
+      return hauptZeile + partnerZeile;
     }).join('');
 
     // Tagesstempel-Info: editierbare Zeitfelder (24h), immer sichtbar
