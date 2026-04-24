@@ -25616,25 +25616,21 @@ class App {
         newHour = Math.floor(snappedMinutes / 60);
         newMinute = snappedMinutes % 60;
         this.showToast(`⏱️ ${String(newHour).padStart(2, '0')}:${String(newMinute).padStart(2, '0')} (nach Mittagspause verschoben)`, 'info');
-      } else if (kollisionCheck.naheTermine && kollisionCheck.naheTermine.length > 0) {
-        // Smart-Anhängen bei nahen Terminen
+      } else if (kollisionCheck.hatKollision && kollisionCheck.typ === 'termin' && kollisionCheck.naheTermine && kollisionCheck.naheTermine.length > 0) {
+        // Smart-Anhängen NUR bei echter Termin-Überlappung (Drop direkt auf anderen Termin)
         const termineVorher = kollisionCheck.naheTermine.filter(t => t.position === 'vorher');
         if (termineVorher.length > 0) {
           termineVorher.sort((a, b) => a.abstand - b.abstand);
           const naechsterVorher = termineVorher[0];
-          const NAHE_GRENZE = 45;
           const AUFRAEUMPAUSE = 10; // 10 Minuten Puffer
-          
-          if (naechsterVorher.abstand < NAHE_GRENZE && naechsterVorher.abstand > 0) {
-            const mitPuffer = Math.ceil((naechsterVorher.terminEnd + AUFRAEUMPAUSE) / raster) * raster;
-            // Prüfe ob Position mit Puffer frei ist
-            const pufferCheck = this.checkDropKollision(element, mitPuffer, dauer, terminId, excludeArbeitIdx);
-            if (!pufferCheck.hatKollision) {
-              snappedMinutes = mitPuffer;
-              newHour = Math.floor(snappedMinutes / 60);
-              newMinute = snappedMinutes % 60;
-              this.showToast(`⏱️ ${String(newHour).padStart(2, '0')}:${String(newMinute).padStart(2, '0')} (an vorherigen Termin angehängt mit 10 Min Puffer)`, 'info');
-            }
+          const mitPuffer = Math.ceil((naechsterVorher.terminEnd + AUFRAEUMPAUSE) / raster) * raster;
+          // Prüfe ob Position mit Puffer frei ist
+          const pufferCheck = this.checkDropKollision(element, mitPuffer, dauer, terminId, excludeArbeitIdx);
+          if (!pufferCheck.hatKollision) {
+            snappedMinutes = mitPuffer;
+            newHour = Math.floor(snappedMinutes / 60);
+            newMinute = snappedMinutes % 60;
+            this.showToast(`⏱️ ${String(newHour).padStart(2, '0')}:${String(newMinute).padStart(2, '0')} (an vorherigen Termin angehängt mit 10 Min Puffer)`, 'info');
           }
         }
       }
