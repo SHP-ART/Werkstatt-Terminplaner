@@ -86,7 +86,34 @@ function runMigration(db, migration, progressCallback = null, options = {}) {
       broadcastMigrationProgress(migration.version, progress, step);
     };
 
-    // Starte Transaktion
+    // Starte Transaktion (außer wenn Migration selbst die Transaktion verwaltet)
+    if (migration.skipTransaction) {
+      reportProgress(10, 'Migration ohne System-Transaktion (skipTransaction=true)');
+      
+      migration.up(db)
+        .then(() => {
+          reportProgress(90, 'Migration abgeschlossen');
+          const duration = Date.now() - startTime;
+          console.log(`${logPrefix} ✅ Migration ${migration.version} erfolgreich: ${migration.description} (${duration}ms)`);
+          logMigration('COMPLETED', migration.version, migration.description, null, duration);
+          reportProgress(100, 'Erfolgreich abgeschlossen');
+          resolve({
+            version: migration.version,
+            description: migration.description,
+            duration,
+            dryRun: false,
+            status: 'success'
+          });
+        })
+        .catch((err) => {
+          console.error(`${logPrefix} ❌ Migration ${migration.version} fehlgeschlagen:`, err);
+          const duration = Date.now() - startTime;
+          logMigration('FAILED', migration.version, migration.description, err, duration);
+          reject(err);
+        });
+      return;
+    }
+
     db.run('BEGIN TRANSACTION', (err) => {
       if (err) {
         console.error(`${logPrefix} ❌ Fehler beim Starten der Transaktion:`, err);
