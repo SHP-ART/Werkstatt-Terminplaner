@@ -254,13 +254,36 @@ ssh root@100.124.168.108 "journalctl -u werkstatt-terminplaner -n 50"
 # 2. Build
 cd electron-intern-tablet ; npm run build ; cd ..
 
-# 3. Installer hochladen
-scp "electron-intern-tablet\dist\Werkstatt-Intern-Setup-X.X.X-ia32.exe" root@100.124.168.108:/opt/werkstatt-upload/
+# 3. Installer ins korrekte Verzeichnis hochladen (WICHTIG: direkt ins tablet-updates Verzeichnis!)
+scp "electron-intern-tablet\dist\Werkstatt-Intern-Setup-X.X.X-ia32.exe" root@100.124.168.108:/opt/werkstatt-terminplaner/backend/tablet-updates/
 
-# 4. Update registrieren
-$json = '{"version":"X.X.X","filePath":"/opt/werkstatt-upload/Werkstatt-Intern-Setup-X.X.X-ia32.exe","releaseNotes":"Beschreibung"}'
-$json | ssh root@100.124.168.108 'cat > /tmp/update.json && curl -s -X POST http://localhost:3001/api/tablet-update/register -H "Content-Type: application/json" -d @/tmp/update.json'
+# 4. Update registrieren (API-Key aus /etc/werkstatt-terminplaner/.env)
+# Der Endpunkt POST /api/tablet-update/register braucht x-api-key Header.
+# Einfachste Methode: Node-Skript lokal erstellen, hochladen, ausführen:
+@'
+const http = require('http');
+const body = JSON.stringify({
+  version: 'X.X.X',
+  filePath: '/opt/werkstatt-terminplaner/backend/tablet-updates/Werkstatt-Intern-Setup-X.X.X-ia32.exe',
+  releaseNotes: 'Beschreibung'
+});
+const req = http.request({
+  hostname: 'localhost', port: 3001,
+  path: '/api/tablet-update/register', method: 'POST',
+  headers: { 'Content-Type': 'application/json', 'x-api-key': 'API_KEY_HIER', 'Content-Length': Buffer.byteLength(body) }
+}, res => { let d=''; res.on('data',c=>d+=c); res.on('end',()=>{ console.log(d); process.exit(0); }); });
+req.write(body); req.end();
+'@ | Set-Content _reg.js
+scp _reg.js root@100.124.168.108:/tmp/reg.js
+ssh root@100.124.168.108 "node /tmp/reg.js ; rm /tmp/reg.js"
+Remove-Item _reg.js
 ```
+
+**Wichtige Hinweise zum Tablet-Update:**
+- Installer **muss** in `/opt/werkstatt-terminplaner/backend/tablet-updates/` liegen — andere Pfade werden vom Backend abgelehnt (`Ungültiger Dateipfad`)
+- API-Key steht in `/etc/werkstatt-terminplaner/.env` (Zeile `API_KEY=...`)
+- `curl` mit mehreren `-H` Flags funktioniert via SSH nicht zuverlässig wegen Shell-Quoting — Node-Skript-Methode (oben) ist die robuste Alternative
+- `filePath` im JSON muss der absolute Pfad auf dem Server sein, **nicht** `/opt/werkstatt-upload/`
 
 ### Umgebungsvariablen Produktion
 Kritische `.env`-Variablen auf dem Server:
