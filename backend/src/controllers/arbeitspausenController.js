@@ -97,12 +97,24 @@ class ArbeitspausenController {
       }
 
       const aktivePause = await ArbeitspausenController.dbGet(
-        `SELECT id FROM arbeitspausen WHERE termin_id = ? AND beendet_am IS NULL`,
+        `SELECT id, gestartet_am FROM arbeitspausen WHERE termin_id = ? AND beendet_am IS NULL`,
         [termin_id]
       );
 
       if (!aktivePause) {
         return res.status(404).json({ error: 'Keine aktive Arbeitspause für diesen Termin' });
+      }
+
+      // Wenn die Pause weniger als 5 Sekunden gedauert hat, war es vermutlich
+      // ein Fehlklick → komplett löschen statt 0-Min-Eintrag zu speichern.
+      const startMs = aktivePause.gestartet_am ? Date.parse(aktivePause.gestartet_am) : NaN;
+      const dauerMs = !isNaN(startMs) ? Date.now() - startMs : null;
+      if (dauerMs !== null && dauerMs < 5000) {
+        await ArbeitspausenController.dbRun(
+          `DELETE FROM arbeitspausen WHERE id = ?`,
+          [aktivePause.id]
+        );
+        return res.json({ success: true, deleted: true, reason: 'kurzklick' });
       }
 
       await ArbeitspausenController.dbRun(

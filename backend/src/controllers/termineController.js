@@ -957,7 +957,53 @@ class TermineController {
           oldDatum: termin.datum || null
         });
       }
-      
+
+      // ============================================================
+      // ABSCHLUSS-AUFRÄUMEN: Beim Wechsel auf abgeschlossen/storniert
+      // alle offenen Stempel, Arbeitspausen und Arbeitsunterbrechungen
+      // für diesen Termin schließen. Sonst zeigt die Zeitstempelung
+      // "laufend…" obwohl der Termin längst fertig ist.
+      // ============================================================
+      if ((neuerStatus === 'abgeschlossen' || neuerStatus === 'storniert') &&
+          termin.status !== neuerStatus) {
+        try {
+          const { runAsync } = require('../utils/dbHelper');
+          const jetzt = new Date();
+          const hhmm = String(jetzt.getHours()).padStart(2, '0') + ':' +
+                       String(jetzt.getMinutes()).padStart(2, '0');
+          const isoNow = jetzt.toISOString();
+
+          const r1 = await runAsync(
+            `UPDATE termine_arbeiten
+                SET stempel_ende = ?
+              WHERE termin_id = ?
+                AND stempel_start IS NOT NULL AND stempel_start != ''
+                AND (stempel_ende IS NULL OR stempel_ende = '')`,
+            [hhmm, req.params.id]
+          );
+          const r2 = await runAsync(
+            `UPDATE arbeitspausen
+                SET beendet_am = ?
+              WHERE termin_id = ? AND beendet_am IS NULL`,
+            [isoNow, req.params.id]
+          );
+          const r3 = await runAsync(
+            `UPDATE arbeitsunterbrechungen
+                SET ende_zeit = ?
+              WHERE termin_id = ? AND ende_zeit IS NULL`,
+            [hhmm, req.params.id]
+          );
+          const c1 = (r1 && r1.changes) || 0;
+          const c2 = (r2 && r2.changes) || 0;
+          const c3 = (r3 && r3.changes) || 0;
+          if (c1 + c2 + c3 > 0) {
+            console.log(`[Abschluss-Aufräumen] Termin ${req.params.id}: ${c1} Stempel + ${c2} Pause(n) + ${c3} Unterbrechung(en) geschlossen`);
+          }
+        } catch (closeErr) {
+          console.warn(`[Abschluss-Aufräumen] Fehler bei Termin ${req.params.id}:`, closeErr.message);
+        }
+      }
+
       // 🚗 AUTO-SPEICHERUNG: Fahrzeugdaten in fahrzeuge-Tabelle speichern (bei VIN-Update)
       const vinUpdate = req.body.vin || updateData.vin;
       const kennzeichenUpdate = req.body.kennzeichen || updateData.kennzeichen || termin.kennzeichen;
