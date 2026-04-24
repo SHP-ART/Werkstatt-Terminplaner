@@ -8,10 +8,6 @@ module.exports = {
     console.log('Migration 040: Recreate termine mit datum als nullable...');
 
     await new Promise((resolve, reject) => {
-      // FK-Enforcement während Table-Recreate deaktivieren (SQLite-Empfehlung)
-      db.run('PRAGMA foreign_keys = OFF', (fkErr) => {
-        if (fkErr) return reject(fkErr);
-
       db.run(`ALTER TABLE termine RENAME TO termine_old_040`, (err) => {
         if (err) return reject(err);
 
@@ -21,6 +17,9 @@ module.exports = {
 
           const existingCols = pragmaRows.map(r => r.name);
 
+          // Keine FK-Constraints in der neuen Tabelle — SQLite ignoriert PRAGMA foreign_keys = OFF
+          // innerhalb von Transaktionen (was der Migrations-Runner verwendet).
+          // FK-Enforcement war ohnehin nie aktiv (PRAGMA foreign_keys = OFF per Default).
           db.run(`
             CREATE TABLE termine (
               id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -72,10 +71,9 @@ module.exports = {
               verschoben_von_datum TEXT,
               nacharbeit_start_zeit TEXT,
               ist_wiederholung INTEGER DEFAULT 0,
-              lehrling_id INTEGER REFERENCES lehrlinge(id),
+              lehrling_id INTEGER,
               unterbrochen_am DATETIME,
-              unterbrochen_grund TEXT,
-              FOREIGN KEY (kunde_id) REFERENCES kunden(id)
+              unterbrochen_grund TEXT
             )
           `, (err2) => {
             if (err2) return reject(err2);
@@ -87,17 +85,12 @@ module.exports = {
 
               db.run(`DROP TABLE termine_old_040`, (err4) => {
                 if (err4) return reject(err4);
-
-                db.run('PRAGMA foreign_keys = ON', (fkErr2) => {
-                  if (fkErr2) return reject(fkErr2);
-                  console.log('✓ Migration 040: datum-Spalte ist jetzt nullable, alle Daten übertragen');
-                  resolve();
-                });
+                console.log('✓ Migration 040: datum-Spalte ist jetzt nullable, alle Daten übertragen');
+                resolve();
               });
             });
           });
         });
-      });
       });
     });
 
@@ -112,9 +105,6 @@ module.exports = {
     console.log('Migration 040: Rollback — datum wieder NOT NULL setzen');
     // Alle Termine mit datum=NULL würden verloren gehen — daher nur mit Vorsicht
     await new Promise((resolve, reject) => {
-      db.run('PRAGMA foreign_keys = OFF', (fkErr) => {
-        if (fkErr) return reject(fkErr);
-
       db.run(`ALTER TABLE termine RENAME TO termine_old_040r`, (err) => {
         if (err) return reject(err);
 
@@ -175,10 +165,9 @@ module.exports = {
               verschoben_von_datum TEXT,
               nacharbeit_start_zeit TEXT,
               ist_wiederholung INTEGER DEFAULT 0,
-              lehrling_id INTEGER REFERENCES lehrlinge(id),
+              lehrling_id INTEGER,
               unterbrochen_am DATETIME,
-              unterbrochen_grund TEXT,
-              FOREIGN KEY (kunde_id) REFERENCES kunden(id)
+              unterbrochen_grund TEXT
             )
           `, (err2) => {
             if (err2) return reject(err2);
@@ -192,16 +181,12 @@ module.exports = {
                 if (err3) return reject(err3);
                 db.run(`DROP TABLE termine_old_040r`, (err4) => {
                   if (err4) return reject(err4);
-                  db.run('PRAGMA foreign_keys = ON', (fkErr2) => {
-                    if (fkErr2) return reject(fkErr2);
-                    resolve();
-                  });
+                  resolve();
                 });
               }
             );
           });
         });
-      });
       });
     });
   }
