@@ -2327,7 +2327,10 @@
 
         bodyContent = `
           <div class="auftrag-info ${istVerschoben ? 'termin-verschoben' : ''} ${istVerspaetet ? 'termin-verspaetet' : ''}">
-            <div class="auftrag-label">🔧 Aktueller Auftrag ${badges}</div>
+            <div class="auftrag-label" style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;">
+              <span>🔧 Aktueller Auftrag ${badges}</span>
+              <span class="intern-arbeit-pause-actions-inline">${pauseButtonHtml}</span>
+            </div>
             <div class="auftrag-nr">${escapeHtml(aktuellerAuftrag.termin_nr) || '-'}${interneNrAktuell ? ` <span class="auftrag-interne-nr">· ${interneNrAktuell}</span>` : ''}</div>
             <div class="auftrag-kunde">${escapeHtml(aktuellerAuftrag.kunde_name) || '-'}</div>
             <div class="auftrag-kennzeichen">${escapeHtml(aktuellerAuftrag.kennzeichen) || '-'}</div>
@@ -2372,10 +2375,6 @@
               </div>
             </div>
           ` : ''}
-
-          <div class="intern-arbeit-pause-actions" style="padding:8px 0 0;">
-            ${pauseButtonHtml}
-          </div>
         `;
       } else if (naechsterAuftrag) {
         // Interne Auftragsnummer priorisieren, wenn verfügbar
