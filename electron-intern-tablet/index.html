@@ -775,6 +775,46 @@
       transform: translateY(-1px) scale(0.98);
     }
 
+        .nachstempel-overlay {
+            position: fixed; inset: 0; background: rgba(0,0,0,0.72);
+            z-index: 10000; display: flex; align-items: center; justify-content: center;
+        }
+        .nachstempel-dialog {
+            background: #fff; border-radius: 12px; padding: 28px 32px;
+            min-width: 420px; max-width: 640px; box-shadow: 0 10px 40px rgba(0,0,0,0.4);
+        }
+        .nachstempel-dialog h2 {
+            margin: 0 0 6px 0; font-size: 22px; color: #111827;
+        }
+        .nachstempel-dialog .sub {
+            margin: 0 0 18px 0; color: #6b7280; font-size: 14px;
+        }
+        .nachstempel-dialog .frage {
+            margin: 16px 0 10px; font-size: 16px; color: #1f2937; font-weight: 600;
+        }
+        .nachstempel-dialog .btn-row {
+            display: flex; gap: 12px; margin-top: 6px; flex-wrap: wrap;
+        }
+        .nachstempel-dialog .btn-ja, .nachstempel-dialog .btn-nein,
+        .nachstempel-dialog .btn-save {
+            flex: 1; min-width: 140px; padding: 14px 20px; border: none;
+            border-radius: 8px; font-size: 16px; font-weight: 600; cursor: pointer;
+        }
+        .nachstempel-dialog .btn-ja, .nachstempel-dialog .btn-save { background: #22c55e; color: #fff; }
+        .nachstempel-dialog .btn-nein { background: #ef4444; color: #fff; }
+        .nachstempel-dialog .btn-abbrechen {
+            background: none; border: none; color: #6b7280; padding: 8px 14px;
+            cursor: pointer; text-decoration: underline; font-size: 14px;
+        }
+        .nachstempel-dialog .zeit-input {
+            display: inline-block; padding: 10px 14px; font-size: 18px;
+            border: 2px solid #d1d5db; border-radius: 6px; width: 100px; text-align: center;
+        }
+        .nachstempel-dialog .footer {
+            display: flex; justify-content: space-between; align-items: center;
+            margin-top: 20px; padding-top: 14px; border-top: 1px solid #e5e7eb;
+        }
+
     .tablet-btn-gehen {
       background: linear-gradient(135deg, #c62828 0%, #ef5350 100%);
       color: white;
@@ -3046,6 +3086,166 @@
         alert('Fehler beim Fortsetzen der Arbeit.');
       }
     }
+
+        function _formatDatumDE(isoDatum) {
+            const [j, m, t] = isoDatum.split('-');
+            const d = new Date(`${isoDatum}T00:00:00`);
+            const wt = ['So.','Mo.','Di.','Mi.','Do.','Fr.','Sa.'][d.getDay()];
+            return `${wt}, ${t}.${m}.${j}`;
+        }
+
+        async function showNachstempelDialog(check) {
+            return new Promise((resolve) => {
+                const overlay = document.createElement('div');
+                overlay.className = 'nachstempel-overlay';
+                const dlg = document.createElement('div');
+                dlg.className = 'nachstempel-dialog';
+
+                const datumFormatiert = _formatDatumDE(check.datum);
+                const personName = (check.person && check.person.name) || '';
+                const istRot = check.status === 'rot';
+
+                if (istRot) {
+                    dlg.innerHTML = `
+                        <h2>Nachstempelung</h2>
+                        <p class="sub">${personName} — ${datumFormatiert}</p>
+                        <p class="frage">Gestern ist keine Zeit erfasst. Warst du da?</p>
+                        <div class="btn-row">
+                            <button class="btn-ja">Ja</button>
+                            <button class="btn-nein">Nein, freier Tag</button>
+                        </div>
+                        <div class="footer">
+                            <button class="btn-abbrechen">Später entscheiden</button>
+                        </div>
+                    `;
+                    overlay.appendChild(dlg);
+                    document.body.appendChild(overlay);
+
+                    dlg.querySelector('.btn-nein').onclick = async () => {
+                        await _nachstempelSave(check, 'nicht_anwesend', null, null, null);
+                        overlay.remove(); resolve();
+                    };
+                    dlg.querySelector('.btn-ja').onclick = () => {
+                        overlay.remove();
+                        _zeigeZeitDialog(check, true).then(resolve);
+                    };
+                    dlg.querySelector('.btn-abbrechen').onclick = async () => {
+                        await _nachstempelDismiss(check);
+                        overlay.remove(); resolve();
+                    };
+                    return;
+                }
+
+                _zeigeZeitDialog(check, false).then(resolve);
+            });
+        }
+
+        async function _zeigeZeitDialog(check, istRotFall) {
+            return new Promise((resolve) => {
+                const overlay = document.createElement('div');
+                overlay.className = 'nachstempel-overlay';
+                const dlg = document.createElement('div');
+                dlg.className = 'nachstempel-dialog';
+
+                const datumFormatiert = _formatDatumDE(check.datum);
+                const personName = (check.person && check.person.name) || '';
+                const fehltKommen = !!check.fehlt.kommen || istRotFall;
+                const fehltGehen  = !!check.fehlt.gehen  || istRotFall;
+                const fehltMittag = !!check.fehlt.mittag || istRotFall;
+                const kommenDefault = check.defaults.kommen_zeit;
+                const gehenDefault  = check.defaults.gehen_zeit;
+                const nurMittag = !fehltKommen && !fehltGehen && fehltMittag;
+
+                let html = `<h2>Nachstempelung für ${datumFormatiert}</h2><p class="sub">${personName}</p>`;
+
+                if (fehltKommen) {
+                    html += `<p class="frage">🕘 Wann hast du angefangen?</p>
+                             <input type="time" class="np-kommen zeit-input" value="${kommenDefault}">`;
+                }
+                if (fehltGehen) {
+                    html += `<p class="frage">🕘 Wann bist du Feierabend gegangen?</p>
+                             <input type="time" class="np-gehen zeit-input" value="${gehenDefault}">`;
+                }
+                if (fehltMittag) {
+                    html += `<p class="frage">🍽 Hast du Mittag gemacht?</p>`;
+                    if (nurMittag) {
+                        html += `<div class="btn-row">
+                                   <button class="btn-ja np-mittag-ja">Ja</button>
+                                   <button class="btn-nein np-mittag-nein">Nein</button>
+                                 </div>`;
+                    } else {
+                        html += `<div class="btn-row">
+                                   <label><input type="radio" name="mittag" value="ja" checked> Ja</label>
+                                   <label><input type="radio" name="mittag" value="nein"> Nein</label>
+                                 </div>`;
+                    }
+                }
+
+                html += `<div class="footer">
+                           <button class="btn-abbrechen">Abbrechen</button>
+                           ${nurMittag ? '' : '<button class="btn-save">Speichern</button>'}
+                         </div>`;
+
+                dlg.innerHTML = html;
+                overlay.appendChild(dlg);
+                document.body.appendChild(overlay);
+
+                const sammleUndSpeichern = async (mittagGemacht) => {
+                    const kommenInput = dlg.querySelector('.np-kommen');
+                    const gehenInput  = dlg.querySelector('.np-gehen');
+                    const kommen = (fehltKommen && kommenInput) ? kommenInput.value : null;
+                    const gehen  = (fehltGehen  && gehenInput)  ? gehenInput.value  : null;
+                    await _nachstempelSave(check, 'anwesend', kommen, gehen, mittagGemacht);
+                    overlay.remove(); resolve();
+                };
+
+                if (nurMittag) {
+                    dlg.querySelector('.np-mittag-ja').onclick = () => sammleUndSpeichern(true);
+                    dlg.querySelector('.np-mittag-nein').onclick = () => sammleUndSpeichern(false);
+                } else {
+                    dlg.querySelector('.btn-save').onclick = async () => {
+                        let mittag = null;
+                        if (fehltMittag) {
+                            const sel = dlg.querySelector('input[name="mittag"]:checked');
+                            mittag = sel ? (sel.value === 'ja') : true;
+                        }
+                        await sammleUndSpeichern(mittag);
+                    };
+                }
+
+                dlg.querySelector('.btn-abbrechen').onclick = async () => {
+                    await _nachstempelDismiss(check);
+                    overlay.remove(); resolve();
+                };
+            });
+        }
+
+        async function _nachstempelSave(check, antwort, kommen, gehen, mittag) {
+            try {
+                const body = {
+                    datum: check.datum,
+                    antwort,
+                    kommen_zeit: kommen || null,
+                    gehen_zeit: gehen || null,
+                    mittag_gemacht: mittag
+                };
+                body[check.person.typ === 'mitarbeiter' ? 'mitarbeiter_id' : 'lehrling_id'] = check.person.id;
+                await ApiService.post('/tagesstempel/nachstempel', body);
+            } catch (e) {
+                console.error('[Nachstempel-Save] Fehler:', e);
+                alert('Speichern fehlgeschlagen');
+            }
+        }
+
+        async function _nachstempelDismiss(check) {
+            try {
+                const body = { datum: check.datum };
+                body[check.person.typ === 'mitarbeiter' ? 'mitarbeiter_id' : 'lehrling_id'] = check.person.id;
+                await ApiService.post('/tagesstempel/nachstempel/dismiss', body);
+            } catch (e) {
+                console.error('[Nachstempel-Dismiss] Fehler:', e);
+            }
+        }
 
     // ========== TAGESSTEMPEL ==========
     async function tagesstempelKommen(personId, typ) {
