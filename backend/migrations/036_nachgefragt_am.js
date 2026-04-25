@@ -1,4 +1,4 @@
-const { safeRun } = require('./helpers');
+const { safeRun, runSQL } = require('./helpers');
 
 const migration = {
   version: 36,
@@ -38,8 +38,8 @@ async function up(db) {
       SELECT id, mitarbeiter_id, lehrling_id, datum, kommen_zeit, gehen_zeit, kommen_quelle, gehen_quelle, nachgefragt_am, erstellt_am
       FROM tagesstempel
     `);
-    await safeRun(db, `DROP TABLE tagesstempel`);
-    await safeRun(db, `ALTER TABLE tagesstempel_new RENAME TO tagesstempel`);
+    await runSQL(db, `DROP TABLE tagesstempel`);
+    await runSQL(db, `ALTER TABLE tagesstempel_new RENAME TO tagesstempel`);
     await safeRun(db, `CREATE UNIQUE INDEX IF NOT EXISTS idx_tagesstempel_ma_datum ON tagesstempel(mitarbeiter_id, datum) WHERE mitarbeiter_id IS NOT NULL`);
     await safeRun(db, `CREATE UNIQUE INDEX IF NOT EXISTS idx_tagesstempel_ll_datum ON tagesstempel(lehrling_id, datum) WHERE lehrling_id IS NOT NULL`);
   }
