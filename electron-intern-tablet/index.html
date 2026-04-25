@@ -3253,6 +3253,18 @@
         const body = typ === 'lehrling' ? { lehrling_id: personId } : { mitarbeiter_id: personId };
         await ApiService.post('/tagesstempel/kommen', body);
         await loadTeamUebersicht();
+
+        // Nachstempel-Check fuer letzten Soll-Tag (nie blockierend)
+        try {
+          const queryParam = typ === 'lehrling' ? `lehrling_id=${personId}` : `mitarbeiter_id=${personId}`;
+          const check = await ApiService.get(`/tagesstempel/nachstempel-check?${queryParam}`);
+          if (check && check.nachstempel_noetig) {
+            await showNachstempelDialog(check);
+            await loadTeamUebersicht();
+          }
+        } catch (checkErr) {
+          console.error('[Nachstempel-Check] Fehler (ignoriert):', checkErr);
+        }
       } catch (e) {
         console.error('[Tagesstempel-Kommen] Fehler:', e);
         showToast('Fehler beim Erfassen des Arbeitsbeginns', 'error');
