@@ -1,6 +1,6 @@
 // backend/tests/nachstempel.test.js
 const { createTestDb, closeTestDb, dbRun, dbGet, dbAll } = require('./helpers/testSetup');
-const migration036 = require('../migrations/036_nachgefragt_am');
+const migration042 = require('../migrations/042_nachgefragt_am');
 
 // Voraussetzung: tagesstempel-Tabelle existiert in Test-DB im ALTEN Schema (NOT NULL kommen_zeit)
 async function ensureTagesstempelTable(db) {
@@ -18,7 +18,7 @@ async function ensureTagesstempelTable(db) {
   )`);
 }
 
-describe('Migration 036 — nachgefragt_am', () => {
+describe('Migration 042 — nachgefragt_am', () => {
   let db;
   beforeEach(async () => {
     db = await createTestDb();
@@ -29,7 +29,7 @@ describe('Migration 036 — nachgefragt_am', () => {
   afterEach(async () => { await closeTestDb(db); });
 
   test('fügt nachgefragt_am Spalte hinzu', async () => {
-    await migration036.up(db);
+    await migration042.up(db);
     const cols = await dbAll(db, `PRAGMA table_info(tagesstempel)`);
     const nachgefragt = cols.find(c => c.name === 'nachgefragt_am');
     expect(nachgefragt).toBeDefined();
@@ -37,7 +37,7 @@ describe('Migration 036 — nachgefragt_am', () => {
   });
 
   test('macht kommen_zeit nullable', async () => {
-    await migration036.up(db);
+    await migration042.up(db);
     const cols = await dbAll(db, `PRAGMA table_info(tagesstempel)`);
     const kommen = cols.find(c => c.name === 'kommen_zeit');
     expect(kommen.notnull).toBe(0);
@@ -46,7 +46,7 @@ describe('Migration 036 — nachgefragt_am', () => {
   test('initialisiert nachgefragt_am = erstellt_am für Bestand', async () => {
     await dbRun(db, `INSERT INTO tagesstempel (mitarbeiter_id, datum, kommen_zeit, erstellt_am)
                      VALUES (1, '2026-04-23', '07:00', '2026-04-23 07:00:00')`);
-    await migration036.up(db);
+    await migration042.up(db);
     const row = await dbGet(db, `SELECT nachgefragt_am, erstellt_am FROM tagesstempel WHERE mitarbeiter_id = 1`);
     expect(row.nachgefragt_am).toBe(row.erstellt_am);
   });

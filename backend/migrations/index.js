@@ -57,6 +57,7 @@ const migrations = [
   require('./039_termin_unterbrochen'),           // Version 39 - unterbrochen_am + unterbrochen_grund
   require('./040_relax_termine_datum_nullable'),   // Version 40 - termine.datum NOT NULL → nullable (Split-Termine ohne Datum)
   require('./041_fix_dangling_fk_termine_old_040'), // Version 41 - Reparatur: FK-References auf termine_old_040 zurück auf termine biegen
+  require('./042_nachgefragt_am'), // Version 42 - Tagesstempel: nachgefragt_am + kommen_zeit nullable für Nachstempel-Feature
 ];
 
 /**

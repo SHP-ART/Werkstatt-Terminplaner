@@ -1,12 +1,12 @@
 const { safeRun, runSQL } = require('./helpers');
 
 const migration = {
-  version: 36,
+  version: 42,
   description: 'Tagesstempel: nachgefragt_am + kommen_zeit nullable für Nachstempel-Feature'
 };
 
 async function up(db) {
-  console.log('Migration 036: Füge nachgefragt_am hinzu + kommen_zeit nullable...');
+  console.log('Migration 042: Füge nachgefragt_am hinzu + kommen_zeit nullable...');
 
   // 1. Neue Spalte hinzufügen (idempotent: safeRun ignoriert duplicate column)
   await safeRun(db, `ALTER TABLE tagesstempel ADD COLUMN nachgefragt_am TEXT DEFAULT NULL`);
@@ -47,12 +47,12 @@ async function up(db) {
   // 3. Bestand initialisieren (nur NULL-Werte)
   await safeRun(db, `UPDATE tagesstempel SET nachgefragt_am = erstellt_am WHERE nachgefragt_am IS NULL`);
 
-  console.log('Migration 036 abgeschlossen');
+  console.log('Migration 042 abgeschlossen');
 }
 
 async function down(db) {
   // SQLite unterstützt kein DROP COLUMN vor 3.35 — Spalte bleibt bestehen
-  console.log('Migration 036 rückgängig (nachgefragt_am bleibt, kommen_zeit bleibt nullable)');
+  console.log('Migration 042 rückgängig (nachgefragt_am bleibt, kommen_zeit bleibt nullable)');
 }
 
 migration.up = up;
