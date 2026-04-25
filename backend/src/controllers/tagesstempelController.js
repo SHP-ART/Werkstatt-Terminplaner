@@ -1,6 +1,8 @@
 const { getAsync, allAsync, runAsync } = require('../utils/dbHelper');
 const { broadcastEvent } = require('../utils/websocket');
 const TermineModel = require('../models/termineModel');
+const ArbeitszeitenPlanModel = require('../models/arbeitszeitenPlanModel');
+const { berechneTagesStatus } = require('../utils/tagesstatus');
 
 function getJetztZeit() {
   const n = new Date();
@@ -643,6 +645,101 @@ class TagesstempelController {
       res.json({ success: true });
     } catch (err) {
       console.error('[Pause-Update] Fehler:', err);
+      res.status(500).json({ error: err.message });
+    }
+  }
+
+  /**
+   * GET /api/tagesstempel/nachstempel-check?mitarbeiter_id=X|lehrling_id=Y
+   * Prüft ob der letzte Soll-Tag der Person eine Nachstempelung braucht.
+   */
+  static async nachstempelCheck(req, res) {
+    try {
+      const mid = req.query.mitarbeiter_id ? Number(req.query.mitarbeiter_id) : null;
+      const lid = req.query.lehrling_id ? Number(req.query.lehrling_id) : null;
+      if (!mid && !lid) {
+        return res.status(400).json({ error: 'mitarbeiter_id oder lehrling_id erforderlich' });
+      }
+
+      const person = mid
+        ? await getAsync(`SELECT id, name, mittagspause_start FROM mitarbeiter WHERE id = ? AND aktiv = 1`, [mid])
+        : await getAsync(`SELECT id, name, mittagspause_start FROM lehrlinge WHERE id = ? AND aktiv = 1`, [lid]);
+      if (!person) return res.status(404).json({ error: 'Person nicht gefunden' });
+
+      const heute = new Date();
+      heute.setHours(0, 0, 0, 0);
+
+      let letzterSollTag = null;
+      let letzterPlan = null;
+
+      // Bis zu 30 Tage zurueckgehen, ersten Soll-Tag finden, der keine Abwesenheit hat
+      for (let i = 1; i <= 30; i++) {
+        const d = new Date(heute);
+        d.setDate(d.getDate() - i);
+        const datStr = d.toISOString().slice(0, 10);
+        const plan = await ArbeitszeitenPlanModel.getForDate(mid, lid, datStr);
+        if (!plan || plan.ist_frei || !plan.arbeitsstunden || plan.arbeitsstunden <= 0) continue;
+
+        const abw = await getAsync(
+          `SELECT typ FROM abwesenheiten
+            WHERE ${mid ? 'mitarbeiter_id = ?' : 'lehrling_id = ?'}
+              AND datum_von <= ? AND datum_bis >= ?
+              AND typ IN ('urlaub','krank','lehrgang')`,
+          [mid || lid, datStr, datStr]
+        );
+        if (abw) continue;
+
+        letzterSollTag = datStr;
+        letzterPlan = plan;
+        break;
+      }
+
+      if (!letzterSollTag) {
+        return res.json({ nachstempel_noetig: false });
+      }
+
+      const stempel = mid
+        ? await getAsync(`SELECT kommen_zeit, gehen_zeit, nachgefragt_am FROM tagesstempel WHERE mitarbeiter_id = ? AND datum = ?`, [mid, letzterSollTag])
+        : await getAsync(`SELECT kommen_zeit, gehen_zeit, nachgefragt_am FROM tagesstempel WHERE lehrling_id = ? AND datum = ?`, [lid, letzterSollTag]);
+
+      if (stempel && stempel.nachgefragt_am) {
+        return res.json({ nachstempel_noetig: false });
+      }
+
+      const pause = mid
+        ? await getAsync(`SELECT id FROM pause_tracking WHERE mitarbeiter_id = ? AND datum = ? AND abgeschlossen = 1 AND pause_ende_zeit IS NOT NULL`, [mid, letzterSollTag])
+        : await getAsync(`SELECT id FROM pause_tracking WHERE lehrling_id = ? AND datum = ? AND abgeschlossen = 1 AND pause_ende_zeit IS NOT NULL`, [lid, letzterSollTag]);
+
+      const statusInfo = berechneTagesStatus({
+        sollMin: Math.round((letzterPlan.arbeitsstunden || 0) * 60),
+        abwTyp: null,
+        hatKommen: !!(stempel && stempel.kommen_zeit),
+        hatGehen:  !!(stempel && stempel.gehen_zeit),
+        hatMittag: !!pause
+      });
+
+      if (statusInfo.status === 'gruen' || statusInfo.status === 'kein_punkt' || statusInfo.status === 'blau') {
+        return res.json({ nachstempel_noetig: false });
+      }
+
+      const einstellungen = await getAsync(`SELECT mittagspause_minuten FROM werkstatt_einstellungen WHERE id = 1`);
+      const mittagspauseMinuten = (einstellungen && einstellungen.mittagspause_minuten) || 30;
+
+      return res.json({
+        nachstempel_noetig: true,
+        datum: letzterSollTag,
+        status: statusInfo.status,
+        fehlt: statusInfo.fehlt,
+        defaults: {
+          kommen_zeit: letzterPlan.arbeitszeit_start || '07:00',
+          gehen_zeit:  letzterPlan.arbeitszeit_ende  || '16:00',
+          mittagspause_start: person.mittagspause_start || '12:00',
+          mittagspause_minuten: mittagspauseMinuten
+        },
+        person: { typ: mid ? 'mitarbeiter' : 'lehrling', id: person.id, name: person.name }
+      });
+    } catch (err) {
+      console.error('[Nachstempel-Check] Fehler:', err);
       res.status(500).json({ error: err.message });
     }
   }
