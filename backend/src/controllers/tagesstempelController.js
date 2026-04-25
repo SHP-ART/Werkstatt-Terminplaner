@@ -743,6 +743,146 @@ class TagesstempelController {
       res.status(500).json({ error: err.message });
     }
   }
+
+  /**
+   * POST /api/tagesstempel/nachstempel
+   * Body: { mitarbeiter_id|lehrling_id, datum, antwort, kommen_zeit, gehen_zeit, mittag_gemacht }
+   *
+   * antwort: 'anwesend' | 'nicht_anwesend'
+   * Bei 'nicht_anwesend' (rot, freier Tag): Platzhalter-Eintrag, keine Zeiten, kein Mittag
+   * Bei 'anwesend': fehlende Zeiten setzen, Mittag eintragen wenn mittag_gemacht === true
+   *
+   * Pause-Start wird gekappt, damit Pause vollständig in der Arbeitszeit liegt:
+   *   pause_start = MIN(mittagspause_start, gehen_zeit - mittagspause_minuten)
+   */
+  static async nachstempel(req, res) {
+    try {
+      const { mitarbeiter_id, lehrling_id, datum, antwort, kommen_zeit, gehen_zeit, mittag_gemacht } = req.body;
+      if (!mitarbeiter_id && !lehrling_id) return res.status(400).json({ error: 'Person-ID erforderlich' });
+      if (!datum) return res.status(400).json({ error: 'datum erforderlich' });
+      const ZEIT_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
+      if (kommen_zeit && !ZEIT_RE.test(kommen_zeit)) return res.status(400).json({ error: 'Ungültige kommen_zeit' });
+      if (gehen_zeit  && !ZEIT_RE.test(gehen_zeit))  return res.status(400).json({ error: 'Ungültige gehen_zeit' });
+
+      const existing = mitarbeiter_id
+        ? await getAsync(`SELECT id, kommen_zeit, gehen_zeit FROM tagesstempel WHERE mitarbeiter_id = ? AND datum = ?`, [mitarbeiter_id, datum])
+        : await getAsync(`SELECT id, kommen_zeit, gehen_zeit FROM tagesstempel WHERE lehrling_id = ? AND datum = ?`, [lehrling_id, datum]);
+
+      if (existing) {
+        const sets = [];
+        const params = [];
+        if (kommen_zeit !== null && kommen_zeit !== undefined) {
+          sets.push('kommen_zeit = ?', "kommen_quelle = 'manuell'");
+          params.push(kommen_zeit);
+        }
+        if (gehen_zeit !== null && gehen_zeit !== undefined) {
+          sets.push('gehen_zeit = ?', "gehen_quelle = 'manuell'");
+          params.push(gehen_zeit);
+        }
+        sets.push("nachgefragt_am = datetime('now')");
+        params.push(existing.id);
+        await runAsync(`UPDATE tagesstempel SET ${sets.join(', ')} WHERE id = ?`, params);
+      } else {
+        if (mitarbeiter_id) {
+          await runAsync(
+            `INSERT INTO tagesstempel (mitarbeiter_id, datum, kommen_zeit, gehen_zeit, kommen_quelle, gehen_quelle, nachgefragt_am, erstellt_am)
+             VALUES (?, ?, ?, ?, CASE WHEN ? IS NOT NULL THEN 'manuell' END, CASE WHEN ? IS NOT NULL THEN 'manuell' END, datetime('now'), datetime('now'))`,
+            [mitarbeiter_id, datum, kommen_zeit || null, gehen_zeit || null, kommen_zeit || null, gehen_zeit || null]
+          );
+        } else {
+          await runAsync(
+            `INSERT INTO tagesstempel (lehrling_id, datum, kommen_zeit, gehen_zeit, kommen_quelle, gehen_quelle, nachgefragt_am, erstellt_am)
+             VALUES (?, ?, ?, ?, CASE WHEN ? IS NOT NULL THEN 'manuell' END, CASE WHEN ? IS NOT NULL THEN 'manuell' END, datetime('now'), datetime('now'))`,
+            [lehrling_id, datum, kommen_zeit || null, gehen_zeit || null, kommen_zeit || null, gehen_zeit || null]
+          );
+        }
+      }
+
+      // Mittag eintragen falls explizit Ja
+      if (mittag_gemacht === true) {
+        const person = mitarbeiter_id
+          ? await getAsync(`SELECT mittagspause_start FROM mitarbeiter WHERE id = ?`, [mitarbeiter_id])
+          : await getAsync(`SELECT mittagspause_start FROM lehrlinge WHERE id = ?`, [lehrling_id]);
+        const einst = await getAsync(`SELECT mittagspause_minuten FROM werkstatt_einstellungen WHERE id = 1`);
+        const minuten = (einst && einst.mittagspause_minuten) || 30;
+        const planStart = (person && person.mittagspause_start) || '12:00';
+
+        // Aktuelle gehen_zeit (entweder neu eingetragen oder bestehend)
+        const aktuelleGehenZeit = gehen_zeit || (existing && existing.gehen_zeit) || null;
+        const zuMin = (s) => { const [h, m] = s.split(':').map(Number); return h * 60 + m; };
+        const ausMin = (m) => `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
+
+        let pauseStartMin = zuMin(planStart);
+        if (aktuelleGehenZeit) {
+          const maxStart = zuMin(aktuelleGehenZeit) - minuten;
+          if (maxStart < pauseStartMin) pauseStartMin = maxStart;
+        }
+        pauseStartMin = Math.max(0, pauseStartMin);
+        const pauseStart = ausMin(pauseStartMin);
+        const pauseEnde = ausMin(pauseStartMin + minuten);
+
+        await runAsync(
+          `INSERT INTO pause_tracking (mitarbeiter_id, lehrling_id, datum, pause_start_zeit, pause_ende_zeit, abgeschlossen, erstellt_am)
+           VALUES (?, ?, ?, ?, ?, 1, datetime('now'))`,
+          [mitarbeiter_id || null, lehrling_id || null, datum, pauseStart, pauseEnde]
+        );
+      }
+
+      broadcastEvent('tagesstempel.nachgestempelt', {
+        mitarbeiter_id: mitarbeiter_id || null,
+        lehrling_id: lehrling_id || null,
+        datum,
+        antwort
+      });
+      res.json({ success: true });
+    } catch (err) {
+      console.error('[Nachstempel] Fehler:', err);
+      res.status(500).json({ error: err.message });
+    }
+  }
+
+  /**
+   * POST /api/tagesstempel/nachstempel/dismiss
+   * Body: { mitarbeiter_id|lehrling_id, datum }
+   *
+   * Setzt nur nachgefragt_am, ohne andere Felder zu aendern.
+   * Falls noch kein tagesstempel-Eintrag existiert: Platzhalter anlegen.
+   */
+  static async nachstempelDismiss(req, res) {
+    try {
+      const { mitarbeiter_id, lehrling_id, datum } = req.body;
+      if (!mitarbeiter_id && !lehrling_id) return res.status(400).json({ error: 'Person-ID erforderlich' });
+      if (!datum) return res.status(400).json({ error: 'datum erforderlich' });
+
+      const existing = mitarbeiter_id
+        ? await getAsync(`SELECT id FROM tagesstempel WHERE mitarbeiter_id = ? AND datum = ?`, [mitarbeiter_id, datum])
+        : await getAsync(`SELECT id FROM tagesstempel WHERE lehrling_id = ? AND datum = ?`, [lehrling_id, datum]);
+
+      if (existing) {
+        await runAsync(`UPDATE tagesstempel SET nachgefragt_am = datetime('now') WHERE id = ?`, [existing.id]);
+      } else {
+        if (mitarbeiter_id) {
+          await runAsync(
+            `INSERT INTO tagesstempel (mitarbeiter_id, datum, kommen_zeit, gehen_zeit, nachgefragt_am, erstellt_am)
+             VALUES (?, ?, NULL, NULL, datetime('now'), datetime('now'))`,
+            [mitarbeiter_id, datum]
+          );
+        } else {
+          await runAsync(
+            `INSERT INTO tagesstempel (lehrling_id, datum, kommen_zeit, gehen_zeit, nachgefragt_am, erstellt_am)
+             VALUES (?, ?, NULL, NULL, datetime('now'), datetime('now'))`,
+            [lehrling_id, datum]
+          );
+        }
+      }
+
+      broadcastEvent('tagesstempel.nachgefragt', { mitarbeiter_id: mitarbeiter_id || null, lehrling_id: lehrling_id || null, datum });
+      res.json({ success: true });
+    } catch (err) {
+      console.error('[Nachstempel-Dismiss] Fehler:', err);
+      res.status(500).json({ error: err.message });
+    }
+  }
 }
 
 module.exports = TagesstempelController;
