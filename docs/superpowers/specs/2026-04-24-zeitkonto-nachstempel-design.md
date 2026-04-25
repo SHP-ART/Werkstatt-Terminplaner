@@ -370,3 +370,4 @@ Vor jedem Commit: `grep -c "data-tab=" frontend/index.html` prüft, dass alle 11
 
 - Beobachten ob 30-Tage-Limit für Nachstempel-Check richtig ist (evtl. auf 14 Tage reduzieren nach 2 Wochen Betrieb)
 - Überlegen ob eine Monats-Zusammenfassung ("5× gelb, 2× rot") im Zeitkonto sinnvoll wird, sobald das Feature läuft
+- **Erweiterung: Auftragsnummer bei Überstunden**: Wenn der Nachstempel-Dialog eine Gehen-Zeit größer als das geplante `arbeitszeit_ende` einträgt (oder Kommen früher als `arbeitszeit_start`), zusätzlich abfragen "An welcher internen Auftragsnummer hast du länger gearbeitet?" für Chef-Nachvollziehbarkeit. Offene Designentscheidungen: Schwellwert (jede Minute / ab 15 Min?), Eingabe-Form (Dropdown der gestrigen Termine vs. Freitext), Mehrfachzuordnung bei mehreren Aufträgen, Speicherort (neue Spalte vs. neue Tabelle), Sichtbarkeit im Zeitkonto. Erst nach Live-Test der Grundfunktion entscheiden.
