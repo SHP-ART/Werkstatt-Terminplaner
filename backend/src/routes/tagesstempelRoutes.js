@@ -13,5 +13,8 @@ router.delete('/:id', TagesstempelController.deleteTagesstempel);
 router.patch('/unterbrechung/:id', TagesstempelController.updateUnterbrechung);
 router.post('/pause', TagesstempelController.createPause);
 router.patch('/pause/:id', TagesstempelController.updatePause);
+router.get('/nachstempel-check', TagesstempelController.nachstempelCheck);
+router.post('/nachstempel', TagesstempelController.nachstempel);
+router.post('/nachstempel/dismiss', TagesstempelController.nachstempelDismiss);
 
 module.exports = router;
