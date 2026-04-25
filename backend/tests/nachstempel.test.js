@@ -51,3 +51,68 @@ describe('Migration 036 — nachgefragt_am', () => {
     expect(row.nachgefragt_am).toBe(row.erstellt_am);
   });
 });
+
+const { berechneTagesStatus } = require('../src/utils/tagesstatus');
+
+describe('berechneTagesStatus — Ampel-Regeln', () => {
+  // Regel 1: kein Soll-Tag, keine Abwesenheit
+  test('Regel 1: kein Soll + keine Abwesenheit → kein_punkt', () => {
+    expect(berechneTagesStatus({ sollMin: 0, abwTyp: null, hatKommen: false, hatGehen: false, hatMittag: false }))
+      .toEqual({ status: 'kein_punkt', fehlt: { kommen: false, gehen: false, mittag: false } });
+  });
+
+  // Regel 2: Abwesenheit
+  test('Regel 2: Urlaub → blau', () => {
+    expect(berechneTagesStatus({ sollMin: 480, abwTyp: 'urlaub', hatKommen: false, hatGehen: false, hatMittag: false }))
+      .toEqual({ status: 'blau', fehlt: { kommen: false, gehen: false, mittag: false } });
+  });
+  test('Regel 2: Krank → blau', () => {
+    expect(berechneTagesStatus({ sollMin: 480, abwTyp: 'krank', hatKommen: false, hatGehen: false, hatMittag: false }).status).toBe('blau');
+  });
+  test('Regel 2: Lehrgang → blau', () => {
+    expect(berechneTagesStatus({ sollMin: 480, abwTyp: 'lehrgang', hatKommen: false, hatGehen: false, hatMittag: false }).status).toBe('blau');
+  });
+
+  // Regel 3: Soll, aber nichts gestempelt
+  test('Regel 3: Soll ohne jede Stempelung → rot, alles fehlt', () => {
+    expect(berechneTagesStatus({ sollMin: 480, abwTyp: null, hatKommen: false, hatGehen: false, hatMittag: false }))
+      .toEqual({ status: 'rot', fehlt: { kommen: true, gehen: true, mittag: true } });
+  });
+
+  // Regel 4: Alles vorhanden
+  test('Regel 4: alles gestempelt → gruen', () => {
+    expect(berechneTagesStatus({ sollMin: 480, abwTyp: null, hatKommen: true, hatGehen: true, hatMittag: true }))
+      .toEqual({ status: 'gruen', fehlt: { kommen: false, gehen: false, mittag: false } });
+  });
+
+  // Regel 5: nur Kommen fehlt
+  test('Regel 5: Kommen fehlt (mit Mittag) → orange', () => {
+    expect(berechneTagesStatus({ sollMin: 480, abwTyp: null, hatKommen: false, hatGehen: true, hatMittag: true }))
+      .toEqual({ status: 'orange', fehlt: { kommen: true, gehen: false, mittag: false } });
+  });
+  test('Regel 5: Kommen + Mittag fehlen → orange, beide in fehlt', () => {
+    expect(berechneTagesStatus({ sollMin: 480, abwTyp: null, hatKommen: false, hatGehen: true, hatMittag: false }))
+      .toEqual({ status: 'orange', fehlt: { kommen: true, gehen: false, mittag: true } });
+  });
+
+  // Regel 6: nur Gehen fehlt
+  test('Regel 6: Gehen fehlt (mit Mittag) → orange', () => {
+    expect(berechneTagesStatus({ sollMin: 480, abwTyp: null, hatKommen: true, hatGehen: false, hatMittag: true }))
+      .toEqual({ status: 'orange', fehlt: { kommen: false, gehen: true, mittag: false } });
+  });
+  test('Regel 6: Gehen + Mittag fehlen → orange, beide in fehlt', () => {
+    expect(berechneTagesStatus({ sollMin: 480, abwTyp: null, hatKommen: true, hatGehen: false, hatMittag: false }))
+      .toEqual({ status: 'orange', fehlt: { kommen: false, gehen: true, mittag: true } });
+  });
+
+  // Regel 7: nur Mittag fehlt
+  test('Regel 7: nur Mittag fehlt → gelb', () => {
+    expect(berechneTagesStatus({ sollMin: 480, abwTyp: null, hatKommen: true, hatGehen: true, hatMittag: false }))
+      .toEqual({ status: 'gelb', fehlt: { kommen: false, gehen: false, mittag: true } });
+  });
+
+  // Edge Case
+  test('Edge: kein Soll aber gestempelt → kein_punkt (nicht bewertet)', () => {
+    expect(berechneTagesStatus({ sollMin: 0, abwTyp: null, hatKommen: true, hatGehen: true, hatMittag: true }).status).toBe('kein_punkt');
+  });
+});
