@@ -31180,6 +31180,21 @@ class App {
 
     const abwLabel = { urlaub: '🏖️ Urlaub', krank: '🤒 Krank', berufsschule: '🏫 Berufsschule', lehrgang: '📚 Lehrgang' };
 
+    const STATUS_FARBEN = {
+      gruen:  '#22c55e',
+      gelb:   '#eab308',
+      orange: '#f97316',
+      rot:    '#ef4444',
+      blau:   '#3b82f6'
+    };
+    const STATUS_TOOLTIP = {
+      gruen:  'Alles gestempelt',
+      gelb:   'Mittag fehlt',
+      orange: 'Kommen oder Feierabend fehlt',
+      rot:    'Nicht gestempelt',
+      blau:   'Abwesenheit (Urlaub/Krank/Lehrgang)'
+    };
+
     const zeitZuMin = s => {
       if (!s) return null;
       let hh, mm;
@@ -31237,7 +31252,12 @@ class App {
           ubHtml = `<span style="color:#e57c00;font-size:11px;margin-left:4px;" title="${ubDetails}">⏸ ${ubs.length}× ${minToStr(t.ub_gesamt_min)}</span>`;
         }
 
+        const statusDotHtml = (t.status && t.status !== 'kein_punkt' && STATUS_FARBEN[t.status])
+          ? `<span class="status-dot" data-datum="${t.datum}" data-pidx="${idx}" style="display:inline-block;width:12px;height:12px;border-radius:50%;background:${STATUS_FARBEN[t.status]};cursor:${(t.status === 'gelb' || t.status === 'orange' || t.status === 'rot') ? 'pointer' : 'default'};" title="${STATUS_TOOLTIP[t.status]}"></span>`
+          : '';
+
         return `<tr style="font-size:12px;${nichtGestempelt ? 'opacity:0.6;' : ''}">
+          <td style="padding:3px 4px;text-align:center;">${statusDotHtml}</td>
           <td style="padding:3px 8px;white-space:nowrap;color:#888;">${wt} ${dStr}</td>
           <td style="padding:3px 8px;text-align:right;">${kommenHtml}</td>
           <td style="padding:3px 8px;text-align:right;">${gehenHtml}</td>
@@ -31271,6 +31291,7 @@ class App {
             <table style="width:100%;border-collapse:collapse;">
               <thead>
                 <tr style="font-size:11px;color:#888;background:#f9fafb;">
+                  <th style="padding:4px 4px;text-align:center;width:22px;"></th>
                   <th style="padding:4px 8px;text-align:left;">Tag</th>
                   <th style="padding:4px 8px;text-align:right;">↑ Kommen</th>
                   <th style="padding:4px 8px;text-align:right;">↓ Gehen</th>
