@@ -31333,6 +31333,89 @@ class App {
         }
       });
     });
+
+    container.querySelectorAll('.status-dot').forEach(dot => {
+      dot.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const datum = dot.dataset.datum;
+        const pidx = Number(dot.dataset.pidx);
+        const person = daten[pidx];
+        if (!person || !datum) return;
+        this.openNachstempelPanel(dot, person, datum);
+      });
+    });
+  }
+
+  openNachstempelPanel(dotEl, person, datum) {
+    document.querySelectorAll('.nachstempel-panel').forEach(p => p.remove());
+
+    const row = dotEl.closest('tr');
+    if (!row) return;
+
+    const tag = person.tage.find(t => t.datum === datum);
+    if (!tag) return;
+
+    const personId = person.id;
+    const typ = person.typ; // 'mitarbeiter' | 'lehrling'
+
+    const kommenDefault = (tag.soll_start || '07:00').substring(0, 5);
+    const gehenDefault  = (tag.soll_ende  || '16:00').substring(0, 5);
+    const kommenWert = tag.kommen_zeit ? tag.kommen_zeit.substring(0, 5) : kommenDefault;
+    const gehenWert  = tag.gehen_zeit  ? tag.gehen_zeit.substring(0, 5)  : gehenDefault;
+
+    // Mittag-Checkbox: angeklickt wenn Mittag NICHT fehlt (also schon vorhanden ODER nicht erforderlich)
+    const mittagFehlt = !!(tag.fehlt && tag.fehlt.mittag);
+    const mittagChecked = !mittagFehlt;
+
+    // Anzahl der Spalten der Tagestabelle (mit Status-Punkt-Spalte = 8)
+    const colspan = 8;
+
+    const panel = document.createElement('tr');
+    panel.className = 'nachstempel-panel';
+    panel.innerHTML = `
+      <td colspan="${colspan}" style="background:#fef9c3;padding:10px 14px;border-top:1px solid #fcd34d;">
+        <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:end;font-size:12px;">
+          <div><label style="display:block;color:#78350f;font-weight:600;margin-bottom:2px;">Kommen:</label>
+            <input type="time" class="np-kommen" value="${kommenWert}" style="padding:4px 6px;font-size:13px;">
+          </div>
+          <div><label style="display:block;color:#78350f;font-weight:600;margin-bottom:2px;">Gehen:</label>
+            <input type="time" class="np-gehen" value="${gehenWert}" style="padding:4px 6px;font-size:13px;">
+          </div>
+          <div style="align-self:center;">
+            <label style="color:#78350f;font-weight:600;">
+              <input type="checkbox" class="np-mittag" ${mittagChecked ? 'checked' : ''} style="vertical-align:middle;"> Mittag gemacht
+            </label>
+          </div>
+          <button class="np-speichern" style="padding:6px 14px;background:#22c55e;color:#fff;border:none;border-radius:4px;cursor:pointer;font-weight:600;">Speichern</button>
+          <button class="np-abbrechen" style="padding:6px 14px;background:#e5e7eb;border:none;border-radius:4px;cursor:pointer;">Abbrechen</button>
+        </div>
+      </td>
+    `;
+    row.parentNode.insertBefore(panel, row.nextSibling);
+
+    panel.querySelector('.np-abbrechen').addEventListener('click', () => panel.remove());
+
+    panel.querySelector('.np-speichern').addEventListener('click', async () => {
+      const kommen = panel.querySelector('.np-kommen').value;
+      const gehen  = panel.querySelector('.np-gehen').value;
+      const mittag = panel.querySelector('.np-mittag').checked;
+      try {
+        const body = {
+          datum,
+          antwort: 'anwesend',
+          mittag_gemacht: mittag,
+          kommen_zeit: kommen || null,
+          gehen_zeit: gehen || null
+        };
+        body[typ === 'mitarbeiter' ? 'mitarbeiter_id' : 'lehrling_id'] = personId;
+        await ApiService.post('/tagesstempel/nachstempel', body);
+        panel.remove();
+        if (typeof this.loadZeitkonto === 'function') this.loadZeitkonto();
+      } catch (err) {
+        console.error('[Nachstempel-Inline] Fehler:', err);
+        alert('Speichern fehlgeschlagen: ' + (err.message || 'unbekannt'));
+      }
+    });
   }
 
   async loadPausenReport() {
