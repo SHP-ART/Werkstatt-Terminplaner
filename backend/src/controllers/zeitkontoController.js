@@ -13,6 +13,7 @@
 const { getAsync, allAsync } = require('../utils/dbHelper');
 const ArbeitszeitenPlanModel = require('../models/arbeitszeitenPlanModel');
 const { asyncHandler } = require('../middleware/errorHandler');
+const { berechneTagesStatus } = require('../utils/tagesstatus');
 
 // ISO-Timestamp oder HH:MM → Minuten seit Mitternacht
 function zeitZuMinuten(s) {
@@ -66,7 +67,7 @@ class ZeitkontoController {
 
     // Tagesstempel für den gesamten Zeitraum laden (einmalig)
     const stempelRows = await allAsync(
-      `SELECT ts.mitarbeiter_id, ts.lehrling_id, ts.datum, ts.kommen_zeit, ts.gehen_zeit
+      `SELECT ts.mitarbeiter_id, ts.lehrling_id, ts.datum, ts.kommen_zeit, ts.gehen_zeit, ts.nachgefragt_am
        FROM tagesstempel ts
        WHERE ts.datum >= ? AND ts.datum <= ?`,
       [von, bis]
@@ -116,7 +117,7 @@ class ZeitkontoController {
 
     // Mittagspausen für den Zeitraum
     const pauseRows = await allAsync(
-      `SELECT mitarbeiter_id, lehrling_id, datum, pause_start_zeit, pause_ende_zeit
+      `SELECT mitarbeiter_id, lehrling_id, datum, pause_start_zeit, pause_ende_zeit, abgeschlossen
        FROM pause_tracking
        WHERE datum >= ? AND datum <= ? AND abgeschlossen = 1 AND pause_ende_zeit IS NOT NULL`,
       [von, bis]
@@ -127,6 +128,15 @@ class ZeitkontoController {
       if (!pauseMap[key]) pauseMap[key] = [];
       pauseMap[key].push(p);
     });
+
+    // Map: { 'm_5_2026-04-23': true, ... } — abgeschlossene Mittagspause vorhanden?
+    const hatMittagMap = {};
+    pauseRows
+      .filter(p => p.abgeschlossen === 1 && p.pause_start_zeit && p.pause_ende_zeit)
+      .forEach(p => {
+        const key = (p.mitarbeiter_id ? `m_${p.mitarbeiter_id}` : `l_${p.lehrling_id}`) + '_' + p.datum;
+        hatMittagMap[key] = true;
+      });
 
     // Abwesenheiten für den Zeitraum (personen-bezogen)
     const abwRows = await allAsync(
@@ -219,6 +229,14 @@ class ZeitkontoController {
           .sort((a, b) => (a.start || '').localeCompare(b.start || ''));
         const ubGesamtMin = unterbrechungen.reduce((s, u) => s + u.dauer_min, 0);
 
+        const statusInfo = berechneTagesStatus({
+          sollMin,
+          abwTyp,
+          hatKommen: !!(stempel && stempel.kommen_zeit),
+          hatGehen:  !!(stempel && stempel.gehen_zeit),
+          hatMittag: !!hatMittagMap[stempelKey]
+        });
+
         return {
           datum,
           soll_min: sollMin,
@@ -231,7 +249,10 @@ class ZeitkontoController {
           soll_start: plan ? plan.arbeitszeit_start : null,
           soll_ende: plan ? plan.arbeitszeit_ende : null,
           unterbrechungen,
-          ub_gesamt_min: ubGesamtMin
+          ub_gesamt_min: ubGesamtMin,
+          status: statusInfo.status,
+          fehlt: statusInfo.fehlt,
+          nachgefragt_am: stempel ? stempel.nachgefragt_am : null
         };
       }));
 
