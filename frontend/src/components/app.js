@@ -853,6 +853,16 @@ class App {
         this.loadZeitstempelung();
       }
     }
+
+    if (eventName === 'tagesstempel.nachgestempelt' || eventName === 'tagesstempel.nachgefragt') {
+      const ztPanelZeitkonto = document.getElementById('ztPanelZeitkonto');
+      if (ztPanelZeitkonto && ztPanelZeitkonto.style.display !== 'none' && typeof this.loadZeitkonto === 'function') {
+        this.loadZeitkonto();
+      }
+      if (document.getElementById('zeitstempelung')?.classList.contains('active')) {
+        this.loadZeitstempelung();
+      }
+    }
   }
 
   handleRealtimeKundenEvent(eventName, data) {
