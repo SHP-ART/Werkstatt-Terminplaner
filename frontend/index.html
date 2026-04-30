@@ -3847,6 +3847,7 @@
                 <button id="ztSubTabStempel" class="zt-sub-tab zt-sub-tab-active" style="padding:7px 18px;font-size:13px;font-weight:600;border:none;background:none;cursor:pointer;border-bottom:2px solid #3b82f6;margin-bottom:-2px;color:#3b82f6;">⏱️ Stempelzeiten</button>
                 <button id="ztSubTabZeitkonto" class="zt-sub-tab" style="padding:7px 18px;font-size:13px;font-weight:600;border:none;background:none;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-2px;color:#666;">📊 Zeitkonto</button>
                 <button id="ztSubTabPausen" class="zt-sub-tab" style="padding:7px 18px;font-size:13px;font-weight:600;border:none;background:none;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-2px;color:#666;">☕ Pausen-Report</button>
+                <button id="ztSubTabKorrekturen" class="zt-sub-tab" style="padding:7px 18px;font-size:13px;font-weight:600;border:none;background:none;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-2px;color:#666;">✏️ Korrekturen</button>
             </div>
 
             <!-- Panel: Stempelzeiten -->
@@ -3905,6 +3906,32 @@
                 </div>
                 <div id="pausenReportContainer">
                     <p style="color:#aaa;font-size:13px;">Klicken Sie auf „Aktualisieren" um Pausen zu laden…</p>
+                </div>
+            </div>
+
+            <!-- Panel: Korrekturen -->
+            <div id="ztPanelKorrekturen" style="display:none;">
+                <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:12px;">
+                    <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
+                        <input type="date" id="korrekturenVon" class="modern-date-input" style="height:26px;font-size:12px;padding:1px 5px;">
+                        <span style="font-size:13px;color:#666;">–</span>
+                        <input type="date" id="korrekturenBis" class="modern-date-input" style="height:26px;font-size:12px;padding:1px 5px;">
+                        <button class="btn btn-sm btn-outline-secondary" onclick="window.app.loadKorrekturen()">↻ Laden</button>
+                    </div>
+                    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+                        <label style="font-size:12px;color:#555;white-space:nowrap;cursor:pointer;">
+                            <input type="checkbox" id="korrekturenNurProbleme" checked onchange="window.app.loadKorrekturen()"> Nur Probleme
+                        </label>
+                        <select id="korrekturenFilter" style="font-size:12px;padding:2px 6px;border:1px solid #ccc;border-radius:4px;" onchange="window.app.loadKorrekturen()">
+                            <option value="">Alle Probleme</option>
+                            <option value="fehlt_kommen">Kommen fehlt</option>
+                            <option value="fehlt_gehen">Gehen fehlt</option>
+                            <option value="abweichung">Abweichung &gt;30 min</option>
+                        </select>
+                    </div>
+                </div>
+                <div id="korrekturenContainer">
+                    <p style="color:#aaa;font-size:13px;">Zeitraum wählen und auf „Laden" klicken…</p>
                 </div>
             </div>
         </template>

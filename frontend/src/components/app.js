@@ -1015,13 +1015,15 @@ class App {
     const subTabStempel = document.getElementById('ztSubTabStempel');
     const subTabZeitkonto = document.getElementById('ztSubTabZeitkonto');
     const subTabPausen = document.getElementById('ztSubTabPausen');
+    const subTabKorrekturen = document.getElementById('ztSubTabKorrekturen');
     const switchZtSubTab = (active) => {
       const panels = {
         stempel: document.getElementById('ztPanelStempel'),
         zeitkonto: document.getElementById('ztPanelZeitkonto'),
         pausen: document.getElementById('ztPanelPausen'),
+        korrekturen: document.getElementById('ztPanelKorrekturen'),
       };
-      const tabs = { stempel: subTabStempel, zeitkonto: subTabZeitkonto, pausen: subTabPausen };
+      const tabs = { stempel: subTabStempel, zeitkonto: subTabZeitkonto, pausen: subTabPausen, korrekturen: subTabKorrekturen };
       Object.entries(panels).forEach(([k, el]) => { if (el) el.style.display = (k === active) ? '' : 'none'; });
       Object.entries(tabs).forEach(([k, el]) => {
         if (!el) return;
@@ -1046,11 +1048,21 @@ class App {
           bisEl3.value = new Date(h.getFullYear(), h.getMonth() + 1, 0).toISOString().substring(0, 10);
         }
         this.loadPausenReport();
+      } else if (active === 'korrekturen') {
+        const vonEl4 = document.getElementById('korrekturenVon');
+        const bisEl4 = document.getElementById('korrekturenBis');
+        if (vonEl4 && !vonEl4.value) {
+          const h = new Date();
+          vonEl4.value = new Date(h.getFullYear(), h.getMonth(), 1).toISOString().substring(0, 10);
+          bisEl4.value = new Date(h.getFullYear(), h.getMonth() + 1, 0).toISOString().substring(0, 10);
+        }
+        this.loadKorrekturen();
       }
     };
     this.bindEventListenerOnce(subTabStempel, 'click', () => switchZtSubTab('stempel'), 'ZtSubTabStempel');
     this.bindEventListenerOnce(subTabZeitkonto, 'click', () => switchZtSubTab('zeitkonto'), 'ZtSubTabZeitkonto');
     this.bindEventListenerOnce(subTabPausen, 'click', () => switchZtSubTab('pausen'), 'ZtSubTabPausen');
+    this.bindEventListenerOnce(subTabKorrekturen, 'click', () => switchZtSubTab('korrekturen'), 'ZtSubTabKorrekturen');
 
     const planungPrevTag = document.getElementById('planungPrevTag');
     const planungNextTag = document.getElementById('planungNextTag');
@@ -31416,6 +31428,193 @@ class App {
         alert('Speichern fehlgeschlagen: ' + (err.message || 'unbekannt'));
       }
     });
+  }
+
+  async loadKorrekturen() {
+    const von = document.getElementById('korrekturenVon')?.value;
+    const bis = document.getElementById('korrekturenBis')?.value;
+    const container = document.getElementById('korrekturenContainer');
+    if (!container) return;
+    if (!von || !bis) {
+      container.innerHTML = '<p style="color:#aaa;font-size:13px;">Zeitraum wählen und auf „Laden" klicken…</p>';
+      return;
+    }
+    const nurProbleme = document.getElementById('korrekturenNurProbleme')?.checked ?? true;
+    const filter = document.getElementById('korrekturenFilter')?.value || '';
+    container.innerHTML = '<p class="loading-text" style="font-size:13px;">Lade Daten…</p>';
+    try {
+      // Zeitkonto-Daten als Basis laden (enthält tagesstempel + Status)
+      const daten = await ApiService.get(`/zeitkonto?von=${von}&bis=${bis}`);
+      if (!daten || daten.length === 0) {
+        container.innerHTML = '<p style="color:#aaa;font-size:13px;">Keine Daten im gewählten Zeitraum.</p>';
+        return;
+      }
+
+      const _z2m = z => {
+        if (!z) return null;
+        const s = z.substring(0, 5);
+        const [h, m] = s.split(':').map(Number);
+        return h * 60 + m;
+      };
+      const _m2hhmm = m => `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
+
+      // Alle Tage mit Problem-Klassifizierung aufbauen
+      const zeilen = [];
+      for (const person of daten) {
+        for (const tag of person.tage) {
+          if (tag.soll_min === 0) continue; // Kein Arbeitstag (Wochenende ohne Soll)
+          if (tag.abwesenheit) continue;    // Urlaub/Krank etc. – kein Stempel nötig
+
+          const kommenMin = _z2m(tag.kommen_zeit);
+          const gehenMin  = _z2m(tag.gehen_zeit);
+          const sollStart = _z2m(tag.soll_start);
+          const sollEnde  = _z2m(tag.soll_ende);
+
+          const probleme = [];
+          if (!tag.kommen_zeit) probleme.push({ typ: 'fehlt_kommen', label: 'Kommen fehlt', farbe: '#ef4444' });
+          if (!tag.gehen_zeit && tag.kommen_zeit) probleme.push({ typ: 'fehlt_gehen', label: 'Gehen fehlt', farbe: '#f97316' });
+          if (kommenMin !== null && sollStart !== null && Math.abs(kommenMin - sollStart) > 30) {
+            const diff = kommenMin - sollStart;
+            probleme.push({ typ: 'abweichung', label: `Kommen ${diff > 0 ? '+' : ''}${diff} min`, farbe: '#eab308' });
+          }
+          if (gehenMin !== null && sollEnde !== null && Math.abs(gehenMin - sollEnde) > 30) {
+            const diff = gehenMin - sollEnde;
+            probleme.push({ typ: 'abweichung', label: `Gehen ${diff > 0 ? '+' : ''}${diff} min`, farbe: '#eab308' });
+          }
+
+          if (nurProbleme && probleme.length === 0) continue;
+          if (filter && !probleme.some(p => p.typ === filter)) continue;
+
+          zeilen.push({ person, tag, probleme });
+        }
+      }
+
+      if (zeilen.length === 0) {
+        container.innerHTML = `<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:40px;color:#aaa;font-size:14px;gap:8px;">
+          <span style="font-size:32px;">✅</span>
+          <span>Keine Probleme im gewählten Zeitraum gefunden.</span>
+        </div>`;
+        return;
+      }
+
+      const rows = zeilen.map(({ person, tag, probleme }) => {
+        const d = new Date(tag.datum + 'T00:00:00');
+        const wt = ['So', 'Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa'][d.getDay()];
+        const dStr = d.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: '2-digit' });
+
+        const kommenVal = tag.kommen_zeit ? tag.kommen_zeit.substring(0, 5) : '';
+        const gehenVal  = tag.gehen_zeit  ? tag.gehen_zeit.substring(0, 5)  : '';
+        const sollStartStr = tag.soll_start ? tag.soll_start.substring(0, 5) : '—';
+        const sollEndeStr  = tag.soll_ende  ? tag.soll_ende.substring(0, 5)  : '—';
+
+        const rowId = `korr-${person.id}-${person.typ}-${tag.datum}`;
+        const midArg = person.typ === 'mitarbeiter' ? person.id : 'null';
+        const lidArg = person.typ === 'lehrling'    ? person.id : 'null';
+
+        const problemBadges = probleme.map(p =>
+          `<span style="background:${p.farbe}18;color:${p.farbe};border:1px solid ${p.farbe}40;border-radius:10px;padding:1px 7px;font-size:11px;font-weight:600;white-space:nowrap;">${p.label}</span>`
+        ).join(' ');
+
+        const inputStyle = 'width:54px;font-size:13px;border:1px solid #ccc;border-radius:3px;padding:2px 4px;text-align:center;font-family:monospace;';
+
+        return `<tr id="${rowId}" style="border-bottom:1px solid #f0f0f0;">
+          <td style="padding:7px 10px;white-space:nowrap;font-size:12px;color:#888;">${wt} ${dStr}</td>
+          <td style="padding:7px 10px;font-weight:600;font-size:13px;">${this._escapeHtml(person.name)}</td>
+          <td style="padding:7px 10px;font-size:12px;color:#888;">${sollStartStr} – ${sollEndeStr}</td>
+          <td style="padding:7px 10px;">
+            <input type="text" value="${kommenVal}" placeholder="HH:MM" maxlength="5"
+              style="${inputStyle}${!kommenVal ? 'border-color:#ef4444;background:#fff5f5;' : ''}"
+              data-field="kommen" data-rowid="${rowId}"
+              onchange="window.app._korrekturZeitChange(this, ${midArg}, ${lidArg}, '${tag.datum}', 'kommen_zeit')">
+          </td>
+          <td style="padding:7px 10px;">
+            <input type="text" value="${gehenVal}" placeholder="HH:MM" maxlength="5"
+              style="${inputStyle}${!gehenVal && kommenVal ? 'border-color:#f97316;background:#fff8f0;' : ''}"
+              data-field="gehen" data-rowid="${rowId}"
+              onchange="window.app._korrekturZeitChange(this, ${midArg}, ${lidArg}, '${tag.datum}', 'gehen_zeit')">
+          </td>
+          <td style="padding:7px 10px;">${problemBadges}</td>
+          <td style="padding:7px 10px;">
+            <button id="${rowId}-speichern" onclick="window.app._korrekturSpeichern('${rowId}', ${midArg}, ${lidArg}, '${tag.datum}')"
+              style="display:none;padding:3px 10px;background:#22c55e;color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:12px;font-weight:600;">
+              ✓ Speichern
+            </button>
+          </td>
+        </tr>`;
+      }).join('');
+
+      container.innerHTML = `
+        <div style="font-size:12px;color:#666;margin-bottom:8px;">${zeilen.length} Eintr${zeilen.length === 1 ? 'ag' : 'äge'}${nurProbleme ? ' mit Problemen' : ''} gefunden</div>
+        <div style="overflow-x:auto;border:1px solid #e5e7eb;border-radius:8px;">
+          <table style="width:100%;border-collapse:collapse;">
+            <thead style="background:#f9fafb;">
+              <tr>
+                <th style="padding:7px 10px;text-align:left;font-size:11px;color:#666;white-space:nowrap;">Datum</th>
+                <th style="padding:7px 10px;text-align:left;font-size:11px;color:#666;">Person</th>
+                <th style="padding:7px 10px;text-align:left;font-size:11px;color:#666;white-space:nowrap;">Soll</th>
+                <th style="padding:7px 10px;text-align:left;font-size:11px;color:#666;">↑ Kommen</th>
+                <th style="padding:7px 10px;text-align:left;font-size:11px;color:#666;">↓ Gehen</th>
+                <th style="padding:7px 10px;text-align:left;font-size:11px;color:#666;">Problem</th>
+                <th style="padding:7px 10px;"></th>
+              </tr>
+            </thead>
+            <tbody>${rows}</tbody>
+          </table>
+        </div>`;
+
+      // Änderungen merken pro Zeile
+      this._korrekturenPending = {};
+
+    } catch (err) {
+      container.innerHTML = `<p style="color:#e55;font-size:13px;">Fehler: ${err.message}</p>`;
+    }
+  }
+
+  _korrekturZeitChange(inputEl, mitarbeiterId, lehrlingId, datum, feld) {
+    const rowId = inputEl.dataset.rowid;
+    if (!this._korrekturenPending) this._korrekturenPending = {};
+    if (!this._korrekturenPending[rowId]) this._korrekturenPending[rowId] = {};
+    this._korrekturenPending[rowId][feld] = inputEl.value || null;
+    // Speichern-Button einblenden
+    const btn = document.getElementById(`${rowId}-speichern`);
+    if (btn) btn.style.display = 'inline-block';
+    // Input-Stil aktualisieren
+    inputEl.style.borderColor = '#3b82f6';
+    inputEl.style.background = '#eff6ff';
+  }
+
+  async _korrekturSpeichern(rowId, mitarbeiterId, lehrlingId, datum) {
+    const btn = document.getElementById(`${rowId}-speichern`);
+    const aenderungen = this._korrekturenPending?.[rowId] || {};
+    if (Object.keys(aenderungen).length === 0) return;
+
+    if (btn) { btn.textContent = '…'; btn.disabled = true; }
+
+    try {
+      const body = { datum };
+      if (mitarbeiterId) body.mitarbeiter_id = mitarbeiterId;
+      if (lehrlingId)    body.lehrling_id    = lehrlingId;
+      if ('kommen_zeit' in aenderungen) body.kommen_zeit = aenderungen.kommen_zeit;
+      if ('gehen_zeit'  in aenderungen) body.gehen_zeit  = aenderungen.gehen_zeit;
+
+      await ApiService.patch('/tagesstempel/zeiten', body);
+
+      // Row visuell als gespeichert markieren
+      const row = document.getElementById(rowId);
+      if (row) {
+        row.style.background = '#f0fdf4';
+        row.querySelectorAll('input[type="text"]').forEach(inp => {
+          inp.style.borderColor = '#22c55e';
+          inp.style.background = '#f0fdf4';
+        });
+      }
+      if (btn) { btn.textContent = '✓ Gespeichert'; btn.style.background = '#86efac'; btn.style.color = '#166534'; }
+      delete this._korrekturenPending[rowId];
+
+    } catch (err) {
+      if (btn) { btn.textContent = '✓ Speichern'; btn.disabled = false; }
+      this.showToast('Fehler beim Speichern: ' + (err.message || 'unbekannt'), 'error');
+    }
   }
 
   async loadPausenReport() {
