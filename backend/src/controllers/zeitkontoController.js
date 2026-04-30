@@ -191,7 +191,7 @@ class ZeitkontoController {
         const stempelKey = personKey + '_' + datum;
         const stempel = stempelMap[stempelKey];
 
-        if (abwTyp && (abwTyp === 'urlaub' || abwTyp === 'krank' || abwTyp === 'lehrgang')) {
+        if (abwTyp && (abwTyp === 'urlaub' || abwTyp === 'krank' || abwTyp === 'lehrgang' || abwTyp === 'berufsschule')) {
           // Abwesenheit → Ist = Soll
           istMin = sollMin;
         } else if (stempel && stempel.kommen_zeit && stempel.gehen_zeit) {

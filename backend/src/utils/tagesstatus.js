@@ -13,7 +13,7 @@
  * @returns {{status: string, fehlt: {kommen: boolean, gehen: boolean, mittag: boolean}}}
  */
 function berechneTagesStatus({ sollMin, abwTyp, hatKommen, hatGehen, hatMittag }) {
-  const istAbwesenheit = abwTyp === 'urlaub' || abwTyp === 'krank' || abwTyp === 'lehrgang';
+  const istAbwesenheit = abwTyp === 'urlaub' || abwTyp === 'krank' || abwTyp === 'lehrgang' || abwTyp === 'berufsschule';
 
   // Regel 2: Abwesenheit gewinnt immer
   if (istAbwesenheit) {
