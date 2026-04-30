@@ -682,7 +682,7 @@ class TagesstempelController {
           `SELECT typ FROM abwesenheiten
             WHERE ${mid ? 'mitarbeiter_id = ?' : 'lehrling_id = ?'}
               AND datum_von <= ? AND datum_bis >= ?
-              AND typ IN ('urlaub','krank','lehrgang')`,
+              AND typ IN ('urlaub','krank','lehrgang','berufsschule')`,
           [mid || lid, gesternStr, gesternStr]
         );
         if (!abw) {
