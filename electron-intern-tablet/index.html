@@ -810,6 +810,20 @@
             display: inline-block; padding: 10px 14px; font-size: 18px;
             border: 2px solid #d1d5db; border-radius: 6px; width: 100px; text-align: center;
         }
+        .nachstempel-dialog .zeit-picker {
+            display: inline-flex; align-items: center; gap: 6px; margin: 4px 0;
+        }
+        .nachstempel-dialog .zeit-picker select {
+            font-size: 22px; padding: 10px 8px; border: 2px solid #d1d5db;
+            border-radius: 6px; background: #fff; color: #111827; cursor: pointer;
+            min-width: 72px; text-align: center; -webkit-appearance: none;
+        }
+        .nachstempel-dialog .zeit-picker select:focus {
+            border-color: #1976d2; outline: none;
+        }
+        .nachstempel-dialog .zeit-sep {
+            font-size: 28px; font-weight: bold; color: #374151; line-height: 1;
+        }
         .nachstempel-dialog .footer {
             display: flex; justify-content: space-between; align-items: center;
             margin-top: 20px; padding-top: 14px; border-top: 1px solid #e5e7eb;
@@ -3140,6 +3154,19 @@
             });
         }
 
+        function _createZeitPicker(defaultVal, cssClass) {
+            const [defH, defM] = (defaultVal || '07:00').split(':');
+            const stunden = Array.from({length: 24}, (_, i) => {
+                const v = String(i).padStart(2, '0');
+                return `<option value="${v}"${v === defH ? ' selected' : ''}>${v}</option>`;
+            }).join('');
+            const minuten = Array.from({length: 60}, (_, i) => {
+                const v = String(i).padStart(2, '0');
+                return `<option value="${v}"${v === defM ? ' selected' : ''}>${v}</option>`;
+            }).join('');
+            return `<div class="zeit-picker ${cssClass}"><select class="zeit-std">${stunden}</select><span class="zeit-sep">:</span><select class="zeit-min">${minuten}</select></div>`;
+        }
+
         async function _zeigeZeitDialog(check, istRotFall) {
             return new Promise((resolve) => {
                 const overlay = document.createElement('div');
@@ -3156,15 +3183,22 @@
                 const gehenDefault  = check.defaults.gehen_zeit;
                 const nurMittag = !fehltKommen && !fehltGehen && fehltMittag;
 
-                let html = `<h2>Nachstempelung für ${datumFormatiert}</h2><p class="sub">${personName}</p>`;
+                const vorhandenesKommen = (!fehltKommen && check.vorhandenes && check.vorhandenes.kommen_zeit) ? check.vorhandenes.kommen_zeit.substring(0, 5) : null;
+                const vorhandenesGehen  = (!fehltGehen  && check.vorhandenes && check.vorhandenes.gehen_zeit)  ? check.vorhandenes.gehen_zeit.substring(0, 5)  : null;
+                let subText = personName;
+                if (vorhandenesKommen && vorhandenesGehen) subText += ` — ✅ ${vorhandenesKommen}–${vorhandenesGehen} Uhr`;
+                else if (vorhandenesKommen) subText += ` — ✅ Kommen: ${vorhandenesKommen} Uhr`;
+                else if (vorhandenesGehen)  subText += ` — ✅ Gehen: ${vorhandenesGehen} Uhr`;
+
+                let html = `<h2>Nachstempelung für ${datumFormatiert}</h2><p class="sub">${subText}</p>`;
 
                 if (fehltKommen) {
                     html += `<p class="frage">🕘 Wann hast du angefangen?</p>
-                             <input type="time" class="np-kommen zeit-input" value="${kommenDefault}">`;
+                             ${_createZeitPicker(kommenDefault, 'np-kommen')}`;
                 }
                 if (fehltGehen) {
                     html += `<p class="frage">🕘 Wann bist du Feierabend gegangen?</p>
-                             <input type="time" class="np-gehen zeit-input" value="${gehenDefault}">`;
+                             ${_createZeitPicker(gehenDefault, 'np-gehen')}`;
                 }
                 if (fehltMittag) {
                     html += `<p class="frage">🍽 Hast du Mittag gemacht?</p>`;
@@ -3191,10 +3225,14 @@
                 document.body.appendChild(overlay);
 
                 const sammleUndSpeichern = async (mittagGemacht) => {
-                    const kommenInput = dlg.querySelector('.np-kommen');
-                    const gehenInput  = dlg.querySelector('.np-gehen');
-                    const kommen = (fehltKommen && kommenInput) ? kommenInput.value : null;
-                    const gehen  = (fehltGehen  && gehenInput)  ? gehenInput.value  : null;
+                    const kommenPicker = dlg.querySelector('.np-kommen');
+                    const gehenPicker  = dlg.querySelector('.np-gehen');
+                    const kommen = (fehltKommen && kommenPicker)
+                        ? kommenPicker.querySelector('.zeit-std').value + ':' + kommenPicker.querySelector('.zeit-min').value
+                        : null;
+                    const gehen  = (fehltGehen  && gehenPicker)
+                        ? gehenPicker.querySelector('.zeit-std').value + ':' + gehenPicker.querySelector('.zeit-min').value
+                        : null;
                     await _nachstempelSave(check, 'anwesend', kommen, gehen, mittagGemacht);
                     overlay.remove(); resolve();
                 };

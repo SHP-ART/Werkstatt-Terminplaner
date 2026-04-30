@@ -730,6 +730,10 @@ class TagesstempelController {
         datum: letzterSollTag,
         status: statusInfo.status,
         fehlt: statusInfo.fehlt,
+        vorhandenes: {
+          kommen_zeit: stempel ? stempel.kommen_zeit : null,
+          gehen_zeit:  stempel ? stempel.gehen_zeit  : null
+        },
         defaults: {
           kommen_zeit: letzterPlan.arbeitszeit_start || '07:00',
           gehen_zeit:  letzterPlan.arbeitszeit_ende  || '16:00',
