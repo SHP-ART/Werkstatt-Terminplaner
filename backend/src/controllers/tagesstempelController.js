@@ -718,7 +718,7 @@ class TagesstempelController {
         hatMittag: !!pause
       });
 
-      if (statusInfo.status === 'gruen' || statusInfo.status === 'kein_punkt' || statusInfo.status === 'blau') {
+      if (statusInfo.status !== 'rot') {
         return res.json({ nachstempel_noetig: false });
       }
 
