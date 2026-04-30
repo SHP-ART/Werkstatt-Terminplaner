@@ -672,26 +672,23 @@ class TagesstempelController {
       let letzterSollTag = null;
       let letzterPlan = null;
 
-      // Bis zu 30 Tage zurueckgehen, ersten Soll-Tag finden, der keine Abwesenheit hat
-      for (let i = 1; i <= 30; i++) {
-        const d = new Date(heute);
-        d.setDate(d.getDate() - i);
-        const datStr = d.toISOString().slice(0, 10);
-        const plan = await ArbeitszeitenPlanModel.getForDate(mid, lid, datStr);
-        if (!plan || plan.ist_frei || !plan.arbeitsstunden || plan.arbeitsstunden <= 0) continue;
-
+      // Nur den unmittelbaren Vortag pruefen
+      const gestern = new Date(heute);
+      gestern.setDate(gestern.getDate() - 1);
+      const gesternStr = gestern.toISOString().slice(0, 10);
+      const planGestern = await ArbeitszeitenPlanModel.getForDate(mid, lid, gesternStr);
+      if (planGestern && !planGestern.ist_frei && planGestern.arbeitsstunden > 0) {
         const abw = await getAsync(
           `SELECT typ FROM abwesenheiten
             WHERE ${mid ? 'mitarbeiter_id = ?' : 'lehrling_id = ?'}
               AND datum_von <= ? AND datum_bis >= ?
               AND typ IN ('urlaub','krank','lehrgang')`,
-          [mid || lid, datStr, datStr]
+          [mid || lid, gesternStr, gesternStr]
         );
-        if (abw) continue;
-
-        letzterSollTag = datStr;
-        letzterPlan = plan;
-        break;
+        if (!abw) {
+          letzterSollTag = gesternStr;
+          letzterPlan = planGestern;
+        }
       }
 
       if (!letzterSollTag) {
