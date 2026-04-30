@@ -38377,6 +38377,55 @@ App.prototype._checkFeierabendUeberlauf = async function(terminId, terminDaten, 
 // Tablet-Steuerung
 // ===============================
 
+App.prototype.loadTabletVersionInfo = async function() {
+  const container = document.getElementById('tabletVersionInfo');
+  if (!container) return;
+  try {
+    const [checkData, tablets] = await Promise.all([
+      ApiService.get('/tablet-update/check?version=0.0.0').catch(() => null),
+      ApiService.get('/tablet-update/status').catch(() => [])
+    ]);
+    const verfuegbar = checkData?.latestVersion || '—';
+    const liste = Array.isArray(tablets) ? tablets : [];
+
+    const _zeitVor = (iso) => {
+      if (!iso) return 'unbekannt';
+      const diff = Math.floor((Date.now() - new Date(iso + 'Z').getTime()) / 60000);
+      if (diff < 2)  return 'gerade eben';
+      if (diff < 60) return `vor ${diff} Min.`;
+      const h = Math.floor(diff / 60);
+      if (h < 24)   return `vor ${h} Std.`;
+      return `vor ${Math.floor(h / 24)} Tag(en)`;
+    };
+
+    let rows = `<tr>
+      <td style="padding:7px 0;color:#666;width:170px;vertical-align:top;">📦 Verfügbar (Server):</td>
+      <td style="font-weight:600;color:#1976d2;">v${verfuegbar}</td>
+    </tr>`;
+
+    if (liste.length === 0) {
+      rows += `<tr><td style="padding:7px 0;color:#666;">📱 Installiert:</td><td style="color:#999;font-size:13px;">Noch kein Tablet verbunden</td></tr>`;
+    } else {
+      liste.forEach(t => {
+        const aktuell = t.version === verfuegbar;
+        const name = t.hostname || t.ip || 'Tablet';
+        rows += `<tr>
+          <td style="padding:7px 0;color:#666;vertical-align:top;">📱 ${this.escapeHtml(name)}:</td>
+          <td>
+            <span style="font-weight:600;color:${aktuell ? '#28a745' : '#dc3545'};">v${t.version}</span>
+            ${aktuell ? ' <span style="color:#28a745;font-size:12px;">✅ aktuell</span>' : ' <span style="color:#dc3545;font-size:12px;">⬆️ Update verfügbar</span>'}
+            <span style="color:#aaa;font-size:12px;margin-left:8px;">${_zeitVor(t.last_seen)}</span>
+          </td>
+        </tr>`;
+      });
+    }
+
+    container.innerHTML = `<table style="width:100%;border-collapse:collapse;font-size:14px;"><tbody>${rows}</tbody></table>`;
+  } catch (e) {
+    container.innerHTML = '<p style="color:#999;font-size:13px;">Versionsinformation nicht verfügbar</p>';
+  }
+};
+
 App.prototype.loadTabletEinstellungen = async function() {
   try {
     const einstellungen = await TabletService.getEinstellungen();
@@ -38390,6 +38439,9 @@ App.prototype.loadTabletEinstellungen = async function() {
     
     // Status anzeigen
     this.updateTabletDisplayStatus(einstellungen.manueller_display_status || 'auto');
+
+    // Versionsinfo laden
+    this.loadTabletVersionInfo();
     
     // Event Listener für Formular
     const form = document.getElementById('tabletDisplayForm');

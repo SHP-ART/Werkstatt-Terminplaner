@@ -115,7 +115,7 @@ class TabletUpdateController {
    */
   static async getUpdateStatus(req, res) {
     try {
-      const tablets = await TabletUpdateModel.getConnectedTablets();
+      const tablets = await TabletUpdateModel.getAllTablets();
       res.json(tablets);
     } catch (error) {
       console.error('Fehler beim Abrufen des Update-Status:', error);

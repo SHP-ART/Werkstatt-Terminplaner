@@ -17,7 +17,7 @@ router.post('/report-status', TabletUpdateController.reportStatus);
 // Registriere neues Update — verhindert fremde Update-Einschleusung
 router.post('/register', requireAuth, TabletUpdateController.registerUpdate);
 
-// Update-Status aller Tablets abrufen — enthält Hostnames/IPs
-router.get('/status', requireAuth, TabletUpdateController.getUpdateStatus);
+// Update-Status aller Tablets abrufen
+router.get('/status', TabletUpdateController.getUpdateStatus);
 
 module.exports = router;
