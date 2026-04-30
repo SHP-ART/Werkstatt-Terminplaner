@@ -5,6 +5,7 @@
 
 const { body, param, query, validationResult } = require('express-validator');
 const { ValidationError } = require('../utils/errors');
+const { ABWESENHEITS_TYPEN } = require('../utils/tagesstatus');
 
 /**
  * Middleware: Validierungsergebnisse prüfen und Fehler werfen
@@ -285,7 +286,7 @@ const validateAbwesenheit = [
   body('typ')
     .trim()
     .notEmpty().withMessage('Typ ist erforderlich')
-    .isIn(['urlaub', 'krank', 'sonstiges']).withMessage('Typ muss urlaub, krank oder sonstiges sein'),
+    .isIn(ABWESENHEITS_TYPEN).withMessage(`Typ muss einer von ${ABWESENHEITS_TYPEN.join(', ')} sein`),
   body('von_datum')
     .trim()
     .notEmpty().withMessage('Von-Datum ist erforderlich')

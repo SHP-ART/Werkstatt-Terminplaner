@@ -13,7 +13,7 @@
 const { getAsync, allAsync } = require('../utils/dbHelper');
 const ArbeitszeitenPlanModel = require('../models/arbeitszeitenPlanModel');
 const { asyncHandler } = require('../middleware/errorHandler');
-const { berechneTagesStatus } = require('../utils/tagesstatus');
+const { berechneTagesStatus, ABWESENHEITS_TYPEN } = require('../utils/tagesstatus');
 
 // ISO-Timestamp oder HH:MM → Minuten seit Mitternacht
 function zeitZuMinuten(s) {
@@ -191,7 +191,7 @@ class ZeitkontoController {
         const stempelKey = personKey + '_' + datum;
         const stempel = stempelMap[stempelKey];
 
-        if (abwTyp && (abwTyp === 'urlaub' || abwTyp === 'krank' || abwTyp === 'lehrgang' || abwTyp === 'berufsschule')) {
+        if (abwTyp && ABWESENHEITS_TYPEN.includes(abwTyp)) {
           // Abwesenheit → Ist = Soll
           istMin = sollMin;
         } else if (stempel && stempel.kommen_zeit && stempel.gehen_zeit) {

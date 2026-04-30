@@ -1,4 +1,5 @@
 const AbwesenheitenModel = require('../models/abwesenheitenModel');
+const { ABWESENHEITS_TYPEN } = require('../utils/tagesstatus');
 
 class AbwesenheitenController {
   // Legacy-Methoden für alte Abwesenheiten-Tabelle
@@ -93,9 +94,8 @@ class AbwesenheitenController {
         return res.status(400).json({ error: 'Entweder mitarbeiter_id oder lehrling_id muss angegeben werden' });
       }
 
-      const validTypes = ['urlaub', 'krank', 'berufsschule', 'lehrgang'];
-      if (!validTypes.includes(typ)) {
-        return res.status(400).json({ error: `typ muss einer von ${validTypes.join(', ')} sein` });
+      if (!ABWESENHEITS_TYPEN.includes(typ)) {
+        return res.status(400).json({ error: `typ muss einer von ${ABWESENHEITS_TYPEN.join(', ')} sein` });
       }
 
       const result = await AbwesenheitenModel.create(req.body);
@@ -115,9 +115,8 @@ class AbwesenheitenController {
 
       // Typ-Validierung wenn angegeben
       if (typ) {
-        const validTypes = ['urlaub', 'krank', 'berufsschule', 'lehrgang'];
-        if (!validTypes.includes(typ)) {
-          return res.status(400).json({ error: `typ muss einer von ${validTypes.join(', ')} sein` });
+        if (!ABWESENHEITS_TYPEN.includes(typ)) {
+          return res.status(400).json({ error: `typ muss einer von ${ABWESENHEITS_TYPEN.join(', ')} sein` });
         }
       }
 

@@ -48,10 +48,12 @@ const TERMIN_DRINGLICHKEIT = {
 // ABWESENHEITS-TYPEN
 // =============================================================================
 
+// Vollständige Liste → utils/tagesstatus.js ABWESENHEITS_TYPEN ist führend
 const ABWESENHEIT_TYP = {
   URLAUB: 'urlaub',
   KRANK: 'krank',
-  SONSTIGES: 'sonstiges'
+  LEHRGANG: 'lehrgang',
+  BERUFSSCHULE: 'berufsschule'
 };
 
 // =============================================================================

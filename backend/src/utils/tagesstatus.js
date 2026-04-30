@@ -6,14 +6,16 @@
 /**
  * @param {object} input
  * @param {number} input.sollMin - Soll-Minuten laut Dienstplan (0 = kein Arbeitstag)
- * @param {string|null} input.abwTyp - 'urlaub' | 'krank' | 'lehrgang' | andere | null
+ * @param {string|null} input.abwTyp - 'urlaub' | 'krank' | 'lehrgang' | 'berufsschule' | andere | null
  * @param {boolean} input.hatKommen
  * @param {boolean} input.hatGehen
  * @param {boolean} input.hatMittag
  * @returns {{status: string, fehlt: {kommen: boolean, gehen: boolean, mittag: boolean}}}
  */
+const ABWESENHEITS_TYPEN = ['urlaub', 'krank', 'lehrgang', 'berufsschule'];
+
 function berechneTagesStatus({ sollMin, abwTyp, hatKommen, hatGehen, hatMittag }) {
-  const istAbwesenheit = abwTyp === 'urlaub' || abwTyp === 'krank' || abwTyp === 'lehrgang' || abwTyp === 'berufsschule';
+  const istAbwesenheit = ABWESENHEITS_TYPEN.includes(abwTyp);
 
   // Regel 2: Abwesenheit gewinnt immer
   if (istAbwesenheit) {
@@ -51,4 +53,4 @@ function berechneTagesStatus({ sollMin, abwTyp, hatKommen, hatGehen, hatMittag }
   return { status: 'gelb', fehlt: { kommen: false, gehen: false, mittag: true } };
 }
 
-module.exports = { berechneTagesStatus };
+module.exports = { berechneTagesStatus, ABWESENHEITS_TYPEN };
