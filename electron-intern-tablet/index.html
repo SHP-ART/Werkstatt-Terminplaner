@@ -1387,13 +1387,37 @@
      */
     async function berechneVerbleibendeWartezeit() {
       try {
-        const heute = new Date().toISOString().slice(0, 10);
-        const data = await ApiService.get(`/tagesstempel?datum=${heute}`);
+        const heute = formatDateLocal(new Date());
+        const [data, abwesenheiten] = await Promise.all([
+          ApiService.get(`/tagesstempel?datum=${heute}`),
+          ApiService.get(`/abwesenheiten/datum/${heute}`).catch(() => [])
+        ]);
         const stempel = (data && data.stempel) || data || [];
         if (!Array.isArray(stempel) || stempel.length === 0) return 0; // niemand da -> sofort
 
-        // Nur Personen die heute "Kommen" gestempelt haben sind relevant
-        const aktive = stempel.filter(s => s.kommen_zeit);
+        const abwesendePersonen = new Set();
+        (Array.isArray(abwesenheiten) ? abwesenheiten : []).forEach(abw => {
+          if (abw.mitarbeiter_id) abwesendePersonen.add(`mitarbeiter_${abw.mitarbeiter_id}`);
+          if (abw.lehrling_id) abwesendePersonen.add(`lehrling_${abw.lehrling_id}`);
+        });
+
+        const offeneAbwesenheitsUnterbrechungen = new Set();
+        ((data && data.unterbrechungen) || []).forEach(u => {
+          const grund = String(u.grund || '').toLowerCase();
+          if (u.ende_zeit || !grund.includes('abwesend')) return;
+          if (u.mitarbeiter_id) offeneAbwesenheitsUnterbrechungen.add(`mitarbeiter_${u.mitarbeiter_id}`);
+          if (u.lehrling_id) offeneAbwesenheitsUnterbrechungen.add(`lehrling_${u.lehrling_id}`);
+        });
+
+        const personKey = (s) => s.mitarbeiter_id ? `mitarbeiter_${s.mitarbeiter_id}` : `lehrling_${s.lehrling_id}`;
+
+        // Nur Personen die heute "Kommen" gestempelt haben und wirklich anwesend
+        // arbeiten, duerfen den Bildschirmschoner blockieren.
+        const aktive = stempel.filter(s => {
+          if (!s.kommen_zeit) return false;
+          const key = personKey(s);
+          return !abwesendePersonen.has(key) && !offeneAbwesenheitsUnterbrechungen.has(key);
+        });
         if (aktive.length === 0) return 0;
 
         // Wenn noch jemand offen ist (kein gehen_zeit) -> 30s warten und neu pruefen
@@ -1524,16 +1548,14 @@
           if (einstellungen.manueller_display_status) {
             if (einstellungen.manueller_display_status === 'an') {
               // Display sofort einschalten
-              const overlay = document.getElementById('displayOffOverlay');
-              if (overlay) overlay.classList.remove('active');
+              handleDisplayStatusChange(false);
               // Informiere Electron-Main-Process: Display EINSCHALTEN
               if (window.electronAPI && window.electronAPI.setDisplayManual) {
                 window.electronAPI.setDisplayManual(false);
               }
             } else if (einstellungen.manueller_display_status === 'aus') {
               // Display sofort ausschalten
-              const overlay = document.getElementById('displayOffOverlay');
-              if (overlay) overlay.classList.add('active');
+              handleDisplayStatusChange(true);
               // Informiere Electron-Main-Process: Display AUSSCHALTEN
               if (window.electronAPI && window.electronAPI.setDisplayManual) {
                 window.electronAPI.setDisplayManual(true);
