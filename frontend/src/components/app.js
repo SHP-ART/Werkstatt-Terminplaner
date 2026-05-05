@@ -1,3 +1,10 @@
+import {
+  formatDateLocal,
+  formatMinutesToHours,
+  getKalenderwoche,
+  getToday
+} from '../shared/formatters.js';
+
 class App {
   constructor() {
     this.kundenCache = [];
@@ -61,26 +68,17 @@ class App {
     if (this.testDatum) {
       return new Date(this.testDatum + 'T12:00:00');
     }
-    return new Date();
+    return getToday();
   }
 
   // Hilfsfunktion: Datum lokal formatieren (YYYY-MM-DD) ohne Zeitzonenkonvertierung
   formatDateLocal(date) {
-    const d = date instanceof Date ? date : new Date(date);
-    const year = d.getFullYear();
-    const month = String(d.getMonth() + 1).padStart(2, '0');
-    const day = String(d.getDate()).padStart(2, '0');
-    return `${year}-${month}-${day}`;
+    return formatDateLocal(date);
   }
 
   // Hilfsfunktion: Kalenderwoche berechnen (ISO 8601)
   getKalenderwoche(date) {
-    const d = date instanceof Date ? new Date(date) : new Date(date);
-    d.setHours(0, 0, 0, 0);
-    // Donnerstag dieser Woche bestimmt das Jahr der KW
-    d.setDate(d.getDate() + 3 - (d.getDay() + 6) % 7);
-    const week1 = new Date(d.getFullYear(), 0, 4);
-    return 1 + Math.round(((d - week1) / 86400000 - 3 + (week1.getDay() + 6) % 7) / 7);
+    return getKalenderwoche(date);
   }
 
   // Prüft, ob ein Lehrling an einem bestimmten Datum in der Berufsschule ist
@@ -17642,8 +17640,7 @@ class App {
   }
 
   formatMinutesToHours(minuten) {
-    const hours = (Number(minuten) || 0) / 60;
-    return `${hours.toFixed(1)} h`;
+    return formatMinutesToHours(minuten);
   }
 
   async handleWerkstattSettingsSubmit(e) {
