@@ -4,6 +4,12 @@ import {
   getKalenderwoche,
   getToday
 } from '../shared/formatters.js';
+import {
+  bindEventListenerOnce,
+  escapeHtml,
+  escapeSelector,
+  setTextIfExists
+} from '../shared/dom.js';
 
 class App {
   constructor() {
@@ -208,10 +214,7 @@ class App {
   }
 
   escapeSelector(value) {
-    if (window.CSS && CSS.escape) {
-      return CSS.escape(value);
-    }
-    return String(value).replace(/["'\\]/g, '\\$&');
+    return escapeSelector(value);
   }
 
   saveTabState(tabName) {
@@ -378,11 +381,7 @@ class App {
   }
 
   bindEventListenerOnce(element, event, handler, key) {
-    if (!element) return;
-    const datasetKey = `bound${key}`;
-    if (element.dataset[datasetKey]) return;
-    element.addEventListener(event, handler);
-    element.dataset[datasetKey] = 'true';
+    return bindEventListenerOnce(element, event, handler, key);
   }
 
   initSubTabsFor(container) {
@@ -643,8 +642,7 @@ class App {
   }
 
   _setTextIfExists(id, text) {
-    const el = document.getElementById(id);
-    if (el) el.textContent = text;
+    return setTextIfExists(id, text);
   }
 
   _startServerInfoAutoRefresh() {
@@ -20746,10 +20744,7 @@ class App {
 
   // Hilfsmethode zum Escapen von HTML
   escapeHtml(text) {
-    if (!text) return '';
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
+    return escapeHtml(text);
   }
 
   // ==========================================
@@ -28013,7 +28008,7 @@ class App {
   }
 
   _escapeHtml(str) {
-    return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    return escapeHtml(str);
   }
 
   async checkKIStatus(showToast = false) {
