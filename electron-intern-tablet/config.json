@@ -5,7 +5,7 @@
   "refreshInterval": 30,
   "autostart": true,
   "displayOffTime": "18:10",
-  "displayOnTime": "07:30",
+  "displayOnTime": "08:00",
   "manuellerDisplayStatus": "an",
   "blockWindowsShortcuts": true,
   "autoInstallUpdates": true,

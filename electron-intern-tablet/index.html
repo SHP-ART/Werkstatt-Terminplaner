@@ -1293,7 +1293,7 @@
       fullscreen: true,
       autostart: false,
       displayOffTime: '18:10',
-      displayOnTime: '07:30'
+      displayOnTime: '08:00'
     };
 
     // Lade gespeicherte Einstellungen
@@ -1346,103 +1346,145 @@
     let screensaverState = { x: 40, y: 40, vx: 2.2, vy: 1.6 };
 
     // ========== DISPLAY-STATUS mit Gehen-Stempel-Verzögerung ==========
-    // Aktiviert den Bildschirmschoner nicht sofort wenn Display-Aus-Zeit erreicht ist,
-    // sondern wartet bis ALLE aktiven Personen "Gehen" gestempelt haben UND mind. 5 Min
-    // seit dem letzten Gehen-Stempel vergangen sind. Re-Check alle 30 Sekunden.
-    let _displayShouldBeOff = false;       // Letzter Wunsch vom Electron-Main-Process
-    let _displayDelayTimer = null;          // Re-Check-Timer
-    const DISPLAY_DELAY_NACH_GEHEN_MS = 5 * 60 * 1000; // 5 Minuten
+    // Sobald niemand mehr angemeldet arbeitet, startet der Bildschirmschoner.
+    // Antippen zeigt die Ansicht kurz; ohne neue Anmeldung geht er wieder an.
+    let _displayShouldBeOff = false;        // Letzter Wunsch vom Electron-Main-Process
+    let _screensaverRetryTimer = null;      // Re-Check-Timer
+    let _screensaverWakeUntil = 0;          // Tippen pausiert den Screensaver kurz
+    let _latestTeamPresence = null;         // Letzter aus loadTeamUebersicht berechneter Status
+    const SCREENSAVER_WAKE_GRACE_MS = 30 * 1000;
+    const SCREENSAVER_MORNING_OFF_TIME = '08:00';
 
     async function handleDisplayStatusChange(shouldBeOff) {
       _displayShouldBeOff = shouldBeOff;
-      if (_displayDelayTimer) { clearTimeout(_displayDelayTimer); _displayDelayTimer = null; }
+      await evaluateScreensaverState();
+    }
 
+    function setScreensaverActive(active) {
       const overlay = document.getElementById('displayOffOverlay');
       if (!overlay) return;
 
-      if (!shouldBeOff) {
+      if (!active) {
         overlay.classList.remove('active');
         stopScreensaverAnimation();
         return;
       }
 
-      // Pruefe Gehen-Stempel; wenn noch zu frueh, retry in 30s
-      const wartezeitMs = await berechneVerbleibendeWartezeit();
-      if (wartezeitMs > 0) {
-        const minuten = Math.ceil(wartezeitMs / 60000);
-        console.log(`[Bildschirmschoner] Verzoegert um ${minuten} Min (jemand noch nicht gegangen oder <5min seit letztem Gehen)`);
-        _displayDelayTimer = setTimeout(() => handleDisplayStatusChange(_displayShouldBeOff), Math.min(wartezeitMs, 30000));
-        return;
-      }
-
-      // Alle gegangen + 5min vorbei => aktivieren
       overlay.classList.add('active');
       startScreensaverAnimation();
     }
 
-    /**
-     * Liefert die in ms verbleibende Wartezeit bis der Bildschirmschoner aktiviert
-     * werden darf. 0 = darf sofort aktiviert werden.
-     * Negativ-/Fehlerfall: 0 (Fail-Open, damit Bildschirmschoner nicht haengt).
-     */
-    async function berechneVerbleibendeWartezeit() {
+    function getCurrentTimeMinutes() {
+      const now = new Date();
+      return now.getHours() * 60 + now.getMinutes();
+    }
+
+    function timeToMinutes(timeStr) {
+      const [h, m] = String(timeStr || '00:00').substring(0, 5).split(':').map(Number);
+      if (isNaN(h) || isNaN(m)) return 0;
+      return h * 60 + m;
+    }
+
+    function isBeforeMorningScreensaverOff() {
+      return getCurrentTimeMinutes() < timeToMinutes(SCREENSAVER_MORNING_OFF_TIME);
+    }
+
+    function buildPresenceState(tagesstempelDaten, abwesenheiten) {
+      const stempel = (tagesstempelDaten && tagesstempelDaten.stempel) || [];
+      const unterbrechungen = (tagesstempelDaten && tagesstempelDaten.unterbrechungen) || [];
+
+      const abwesendePersonen = new Set();
+      (Array.isArray(abwesenheiten) ? abwesenheiten : []).forEach(abw => {
+        if (abw.mitarbeiter_id) abwesendePersonen.add(`mitarbeiter_${abw.mitarbeiter_id}`);
+        if (abw.lehrling_id) abwesendePersonen.add(`lehrling_${abw.lehrling_id}`);
+      });
+
+      const offeneAbwesenheitsUnterbrechungen = new Set();
+      unterbrechungen.forEach(u => {
+        const grund = String(u.grund || '').toLowerCase();
+        if (u.ende_zeit || !grund.includes('abwesend')) return;
+        if (u.mitarbeiter_id) offeneAbwesenheitsUnterbrechungen.add(`mitarbeiter_${u.mitarbeiter_id}`);
+        if (u.lehrling_id) offeneAbwesenheitsUnterbrechungen.add(`lehrling_${u.lehrling_id}`);
+      });
+
+      const personKey = (s) => s.mitarbeiter_id ? `mitarbeiter_${s.mitarbeiter_id}` : `lehrling_${s.lehrling_id}`;
+      const gestartete = Array.isArray(stempel) ? stempel.filter(s => s.kommen_zeit) : [];
+      const aktive = gestartete.filter(s => {
+        const key = personKey(s);
+        return !s.gehen_zeit &&
+          !abwesendePersonen.has(key) &&
+          !offeneAbwesenheitsUnterbrechungen.has(key);
+      });
+
+      return {
+        hasActiveWorker: aktive.length > 0,
+        hasAnyoneStartedToday: gestartete.length > 0,
+        activeCount: aktive.length
+      };
+    }
+
+    async function fetchPresenceState() {
+      const heute = formatDateLocal(new Date());
+      const [data, abwesenheiten] = await Promise.all([
+        ApiService.get(`/tagesstempel?datum=${heute}`).catch(() => ({ stempel: [], unterbrechungen: [] })),
+        ApiService.get(`/abwesenheiten/datum/${heute}`).catch(() => [])
+      ]);
+      return buildPresenceState(data, abwesenheiten);
+    }
+
+    function scheduleScreensaverRecheck(delayMs = 30000) {
+      if (_screensaverRetryTimer) clearTimeout(_screensaverRetryTimer);
+      _screensaverRetryTimer = setTimeout(() => {
+        _screensaverRetryTimer = null;
+        evaluateScreensaverState();
+      }, delayMs);
+    }
+
+    async function evaluateScreensaverState(options = {}) {
       try {
-        const heute = formatDateLocal(new Date());
-        const [data, abwesenheiten] = await Promise.all([
-          ApiService.get(`/tagesstempel?datum=${heute}`),
-          ApiService.get(`/abwesenheiten/datum/${heute}`).catch(() => [])
-        ]);
-        const stempel = (data && data.stempel) || data || [];
-        if (!Array.isArray(stempel) || stempel.length === 0) return 0; // niemand da -> sofort
-
-        const abwesendePersonen = new Set();
-        (Array.isArray(abwesenheiten) ? abwesenheiten : []).forEach(abw => {
-          if (abw.mitarbeiter_id) abwesendePersonen.add(`mitarbeiter_${abw.mitarbeiter_id}`);
-          if (abw.lehrling_id) abwesendePersonen.add(`lehrling_${abw.lehrling_id}`);
-        });
-
-        const offeneAbwesenheitsUnterbrechungen = new Set();
-        ((data && data.unterbrechungen) || []).forEach(u => {
-          const grund = String(u.grund || '').toLowerCase();
-          if (u.ende_zeit || !grund.includes('abwesend')) return;
-          if (u.mitarbeiter_id) offeneAbwesenheitsUnterbrechungen.add(`mitarbeiter_${u.mitarbeiter_id}`);
-          if (u.lehrling_id) offeneAbwesenheitsUnterbrechungen.add(`lehrling_${u.lehrling_id}`);
-        });
-
-        const personKey = (s) => s.mitarbeiter_id ? `mitarbeiter_${s.mitarbeiter_id}` : `lehrling_${s.lehrling_id}`;
-
-        // Nur Personen die heute "Kommen" gestempelt haben und wirklich anwesend
-        // arbeiten, duerfen den Bildschirmschoner blockieren.
-        const aktive = stempel.filter(s => {
-          if (!s.kommen_zeit) return false;
-          const key = personKey(s);
-          return !abwesendePersonen.has(key) && !offeneAbwesenheitsUnterbrechungen.has(key);
-        });
-        if (aktive.length === 0) return 0;
-
-        // Wenn noch jemand offen ist (kein gehen_zeit) -> 30s warten und neu pruefen
-        const nochOffen = aktive.filter(s => !s.gehen_zeit);
-        if (nochOffen.length > 0) return 30000;
-
-        // Letzten Gehen-Zeitpunkt finden
-        let letzterGehen = null;
-        for (const s of aktive) {
-          if (!s.gehen_zeit) continue;
-          const [h, m] = String(s.gehen_zeit).substring(0, 5).split(':').map(Number);
-          if (isNaN(h) || isNaN(m)) continue;
-          const dt = new Date();
-          dt.setHours(h, m, 0, 0);
-          if (!letzterGehen || dt > letzterGehen) letzterGehen = dt;
+        if (_screensaverRetryTimer) {
+          clearTimeout(_screensaverRetryTimer);
+          _screensaverRetryTimer = null;
         }
-        if (!letzterGehen) return 0;
 
-        const elapsed = Date.now() - letzterGehen.getTime();
-        const wartezeit = DISPLAY_DELAY_NACH_GEHEN_MS - elapsed;
-        return wartezeit > 0 ? wartezeit : 0;
+        if (options.forceOff) {
+          setScreensaverActive(false);
+          return;
+        }
+
+        if (_screensaverWakeUntil > Date.now()) {
+          setScreensaverActive(false);
+          scheduleScreensaverRecheck(_screensaverWakeUntil - Date.now());
+          return;
+        }
+
+        const presence = options.presence || _latestTeamPresence || await fetchPresenceState();
+        const beforeMorning = isBeforeMorningScreensaverOff();
+
+        let shouldBeActive = false;
+        if (options.forceOn) {
+          shouldBeActive = true;
+        } else if (presence.hasActiveWorker) {
+          shouldBeActive = false;
+        } else if (beforeMorning) {
+          shouldBeActive = true;
+        } else if (presence.hasAnyoneStartedToday) {
+          shouldBeActive = true;
+        } else if (_displayShouldBeOff) {
+          shouldBeActive = true;
+        }
+
+        setScreensaverActive(shouldBeActive);
       } catch (err) {
-        console.warn('[Bildschirmschoner] Fehler bei Stempel-Pruefung, aktiviere sofort:', err);
-        return 0;
+        console.warn('[Bildschirmschoner] Fehler bei Status-Pruefung:', err);
+        setScreensaverActive(false);
       }
+    }
+
+    function wakeScreensaverTemporarily() {
+      _screensaverWakeUntil = Date.now() + SCREENSAVER_WAKE_GRACE_MS;
+      setScreensaverActive(false);
+      scheduleScreensaverRecheck(SCREENSAVER_WAKE_GRACE_MS);
     }
 
     function startScreensaverAnimation() {
@@ -2884,6 +2926,8 @@
         }
         // Verbindung OK → Banner ausblenden
         _zeigeOfflineBanner(false);
+        _latestTeamPresence = buildPresenceState(tagesstempelDaten, abwesenheiten);
+        evaluateScreensaverState({ presence: _latestTeamPresence });
 
       } catch (error) {
         console.error('Fehler beim Laden:', error);
@@ -2963,7 +3007,7 @@
       document.getElementById('settingsFullscreen').checked = CONFIG.fullscreen !== false;
       document.getElementById('settingsAutostart').checked = CONFIG.autostart === true;
       document.getElementById('settingsDisplayOffTime').value = CONFIG.displayOffTime || '18:10';
-      document.getElementById('settingsDisplayOnTime').value = CONFIG.displayOnTime || '07:30';
+      document.getElementById('settingsDisplayOnTime').value = CONFIG.displayOnTime || '08:00';
 
       // Autostart-Option nur in Electron anzeigen
       document.getElementById('autostartOption').style.display = isElectron ? 'block' : 'none';
@@ -3495,6 +3539,8 @@
       document.getElementById('btnSettingsSave').addEventListener('click', saveSettings);
       document.getElementById('btnInstallUpdate')?.addEventListener('click', installUpdate);
       document.getElementById('btnDismissUpdate')?.addEventListener('click', dismissUpdate);
+      document.getElementById('displayOffOverlay')?.addEventListener('pointerdown', wakeScreensaverTemporarily);
+      setInterval(() => evaluateScreensaverState(), 30000);
 
       // Info anzeigen wenn im Browser
       if (!isElectron) {
