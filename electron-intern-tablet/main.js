@@ -320,10 +320,13 @@ async function downloadAndInstallUpdate() {
     //  5) Bei Fehlschlag: zweiter Versuch ohne /S (sichtbarer Installer als Fallback)
     const tempLog = path.join(tempDir, 'werkstatt-update-launcher.log');
     const batchPath = path.join(tempDir, 'werkstatt-update-launcher.bat');
+    const currentExePath = process.execPath;
     // Mögliche Installationspfade (per-user NSIS, productName "Werkstatt Intern")
     const exeName = 'Werkstatt Intern.exe';
+    const installPathCurrent = currentExePath;
     const installPathUser = `%LOCALAPPDATA%\\Programs\\werkstatt-intern\\${exeName}`;
     const installPathUserAlt = `%LOCALAPPDATA%\\Programs\\Werkstatt Intern\\${exeName}`;
+    const installPathUserProduct = `%LOCALAPPDATA%\\Programs\\werkstatt-intern-tablet\\${exeName}`;
     const installPathMachine = `%PROGRAMFILES%\\Werkstatt Intern\\${exeName}`;
     const installPathMachineX86 = `%PROGRAMFILES(X86)%\\Werkstatt Intern\\${exeName}`;
     const batchContent =
@@ -346,8 +349,10 @@ async function downloadAndInstallUpdate() {
       `ping 127.0.0.1 -n 9 -w 1000 > nul\r\n` +
       `echo [%date% %time%] Suche neue App... >> "${tempLog}"\r\n` +
       `set "APP_EXE="\r\n` +
-      `if exist "${installPathUser}" set "APP_EXE=${installPathUser}"\r\n` +
+      `if exist "${installPathCurrent}" set "APP_EXE=${installPathCurrent}"\r\n` +
+      `if not defined APP_EXE if exist "${installPathUser}" set "APP_EXE=${installPathUser}"\r\n` +
       `if not defined APP_EXE if exist "${installPathUserAlt}" set "APP_EXE=${installPathUserAlt}"\r\n` +
+      `if not defined APP_EXE if exist "${installPathUserProduct}" set "APP_EXE=${installPathUserProduct}"\r\n` +
       `if not defined APP_EXE if exist "${installPathMachine}" set "APP_EXE=${installPathMachine}"\r\n` +
       `if not defined APP_EXE if exist "${installPathMachineX86}" set "APP_EXE=${installPathMachineX86}"\r\n` +
       `if defined APP_EXE (\r\n` +
