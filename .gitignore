@@ -25,6 +25,7 @@ SMB-CREDENTIALS-LOCAL.md
 # Lokale Tool-Konfigurationen (Pfade, Berechtigungen, Sessions)
 .claude/
 .superpowers/
+.worktrees/
 
 # Clowdex Workflow-Dateien (lokal, nicht committen)
 CLAUDE.local.md
