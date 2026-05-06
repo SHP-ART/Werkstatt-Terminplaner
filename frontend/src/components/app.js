@@ -1,8 +1,11 @@
 import {
+  berechneEndzeit,
   formatDateLocal,
+  formatDateGerman,
   formatMinutesToHours,
   getKalenderwoche,
-  getToday
+  getToday,
+  naechsterArbeitstag
 } from '../shared/formatters.js';
 import {
   bindEventListenerOnce,
@@ -11,6 +14,7 @@ import {
   setTextIfExists
 } from '../shared/dom.js';
 import { showToast } from '../shared/notifications.js';
+import { normalizeKennzeichen, parseKennzeichen } from '../shared/licensePlate.js';
 import { installServerInfoFeature } from '../features/serverInfo/serverInfoFeature.js';
 import { installRealtimeFeature } from '../features/realtime/realtimeFeature.js';
 import { installAuslastungFeature } from '../features/auslastung/auslastungFeature.js';
@@ -8646,12 +8650,7 @@ class App {
 
   // Hilfsfunktion: Berechnet Endzeit aus Startzeit und Dauer
   berechneEndzeit(startzeit, dauerMinuten) {
-    if (!startzeit) return '08:00';
-    const [h, m] = startzeit.split(':').map(Number);
-    const gesamtMinuten = h * 60 + m + (dauerMinuten || 0);
-    const endH = Math.floor(gesamtMinuten / 60);
-    const endM = gesamtMinuten % 60;
-    return `${String(endH).padStart(2, '0')}:${String(endM).padStart(2, '0')}`;
+    return berechneEndzeit(startzeit, dauerMinuten);
   }
 
   // Hilfsfunktion: Berechnet effektive Arbeitszeit mit Nebenzeit
@@ -8671,21 +8670,12 @@ class App {
 
   // Hilfsfunktion: Nächster Arbeitstag (überspringt Samstag und Sonntag)
   naechsterArbeitstag(datum) {
-    const d = new Date(datum + 'T12:00:00');
-    d.setDate(d.getDate() + 1);
-    // Wochenende (Samstag und Sonntag) überspringen
-    while (d.getDay() === 0 || d.getDay() === 6) {
-      d.setDate(d.getDate() + 1);
-    }
-    return d.toISOString().split('T')[0];
+    return naechsterArbeitstag(datum);
   }
 
   // Hilfsfunktion: Formatiert Datum auf Deutsch
   formatDateGerman(datum) {
-    if (!datum) return '--';
-    const d = new Date(datum + 'T12:00:00');
-    const wochentage = ['So', 'Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa'];
-    return `${wochentage[d.getDay()]}, ${datum.split('-').reverse().join('.')}`;
+    return formatDateGerman(datum);
   }
 
   // ============================================
@@ -10602,65 +10592,12 @@ class App {
 
   // Kennzeichen normalisieren (ohne Leerzeichen und Bindestriche)
   normalizeKennzeichen(kz) {
-    return (kz || '').toUpperCase().replace(/[\s\-]/g, '');
+    return normalizeKennzeichen(kz);
   }
 
   // Kennzeichen in Teile zerlegen
   parseKennzeichen(kz) {
-    if (!kz) return { bezirk: '', buchstaben: '', nummer: '' };
-
-    const original = (kz || '').toUpperCase().trim();
-
-    // Methode 1: Versuche anhand von Trennzeichen (Bindestrich/Leerzeichen) zu parsen
-    // Format: "HY-D 107" oder "HY D 107" oder "HY-D107"
-    const mitTrennzeichen = original.match(/^([A-ZÄÖÜ]{1,3})[\s\-]+([A-ZÄÖÜ]{1,2})[\s\-]*(\d+[A-Z]?)$/);
-    if (mitTrennzeichen) {
-      return {
-        bezirk: mitTrennzeichen[1],
-        buchstaben: mitTrennzeichen[2],
-        nummer: mitTrennzeichen[3]
-      };
-    }
-
-    // Methode 2: Format mit nur einem Trennzeichen "HY-D107" oder "HY D107"
-    const einTrennzeichen = original.match(/^([A-ZÄÖÜ]{1,3})[\s\-]+([A-ZÄÖÜ]{1,2})(\d+[A-Z]?)$/);
-    if (einTrennzeichen) {
-      return {
-        bezirk: einTrennzeichen[1],
-        buchstaben: einTrennzeichen[2],
-        nummer: einTrennzeichen[3]
-      };
-    }
-
-    // Methode 3: Fallback für zusammengeschriebene Kennzeichen "HYD107"
-    // Hier müssen wir raten - nehme kürzestmöglichen Bezirk wenn Buchstaben folgen
-    const normalized = original.replace(/[\s\-]/g, '');
-
-    // Versuche zuerst 1-Buchstaben-Bezirk, dann 2, dann 3
-    for (let bezirkLen = 1; bezirkLen <= 3; bezirkLen++) {
-      const potBezirk = normalized.substring(0, bezirkLen);
-      const rest = normalized.substring(bezirkLen);
-
-      // Prüfe ob nach Bezirk noch 1-2 Buchstaben kommen (Kennungsbuchstaben)
-      const buchstabenMatch = rest.match(/^([A-ZÄÖÜ]{1,2})(\d+[A-Z]?)$/);
-      if (buchstabenMatch && /^[A-ZÄÖÜ]+$/.test(potBezirk)) {
-        return {
-          bezirk: potBezirk,
-          buchstaben: buchstabenMatch[1],
-          nummer: buchstabenMatch[2]
-        };
-      }
-    }
-
-    // Letzter Fallback: Alte greedy Methode
-    const bezirkMatch = normalized.match(/^([A-ZÄÖÜ]{1,3})/);
-    const bezirk = bezirkMatch ? bezirkMatch[1] : '';
-    const rest = normalized.substring(bezirk.length);
-    const buchstabenMatch = rest.match(/^([A-ZÄÖÜ]{1,2})/);
-    const buchstaben = buchstabenMatch ? buchstabenMatch[1] : '';
-    const nummer = rest.substring(buchstaben.length);
-
-    return { bezirk, buchstaben, nummer };
+    return parseKennzeichen(kz);
   }
 
   // Kennzeichen mit Highlight formatieren
