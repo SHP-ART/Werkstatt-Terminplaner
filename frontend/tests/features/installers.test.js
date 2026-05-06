@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { installBackupFeature } from '../../src/features/backup/backupFeature.js';
+import { installCalendarFeature } from '../../src/features/calendar/calendarFeature.js';
 import { installCustomersFeature } from '../../src/features/customers/customersFeature.js';
 import { installAbsenceFeature } from '../../src/features/absence/absenceFeature.js';
 import { installDashboardFeature } from '../../src/features/dashboard/dashboardFeature.js';
@@ -19,6 +20,7 @@ describe('feature installers', () => {
 
     installAbsenceFeature(TestApp);
     installBackupFeature(TestApp);
+    installCalendarFeature(TestApp);
     installCustomersFeature(TestApp);
     installDashboardFeature(TestApp);
     installReplacementCarsFeature(TestApp);
@@ -35,6 +37,12 @@ describe('feature installers', () => {
     expect(TestApp.prototype.handleAbwesenheitSubmit).toBeTypeOf('function');
     expect(TestApp.prototype.loadBackupStatus).toBeTypeOf('function');
     expect(TestApp.prototype.handleCreateBackup).toBeTypeOf('function');
+    expect(TestApp.prototype.loadKalender).toBeTypeOf('function');
+    expect(TestApp.prototype.loadKalenderTag).toBeTypeOf('function');
+    expect(TestApp.prototype.loadKalenderWoche).toBeTypeOf('function');
+    expect(TestApp.prototype.openKalenderNeuerTerminModal).toBeTypeOf('function');
+    expect(TestApp.prototype.handleKalenderTerminSubmit).toBeTypeOf('function');
+    expect(TestApp.prototype.handleNaechsterSlot).toBeTypeOf('function');
     expect(TestApp.prototype.loadKunden).toBeTypeOf('function');
     expect(TestApp.prototype.openFahrzeugVerwaltung).toBeTypeOf('function');
     expect(TestApp.prototype.loadDashboard).toBeTypeOf('function');
