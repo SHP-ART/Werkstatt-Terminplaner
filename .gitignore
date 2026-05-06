@@ -48,3 +48,5 @@ Task Board.md
 
 # Ignore exe files in node_modules
 node_modules/**/*.exe
+# Added by code-review-graph
+.code-review-graph/
