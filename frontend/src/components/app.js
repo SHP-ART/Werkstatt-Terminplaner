@@ -22,6 +22,9 @@ import { installTerminDetailsFeature } from '../features/termine/terminDetailsFe
 import { installTerminFormFeature } from '../features/termine/terminFormFeature.js';
 import { installPlanungFeature } from '../features/planung/planungFeature.js';
 import { installDragDropFeature } from '../features/planung/dragDropFeature.js';
+import { installShiftTemplatesFeature } from '../features/shiftTemplates/shiftTemplatesFeature.js';
+import { installStaffFeature } from '../features/staff/staffFeature.js';
+import { installWorkSchedulesFeature } from '../features/workSchedules/workSchedulesFeature.js';
 import { installAbsenceFeature } from '../features/absence/absenceFeature.js';
 import { installReplacementCarsFeature } from '../features/replacementCars/replacementCarsFeature.js';
 import { installTodayFeature } from '../features/today/todayFeature.js';
@@ -10001,289 +10004,19 @@ class App {
   }
 
 
-  async loadMitarbeiter() {
-    try {
-      const mitarbeiter = await MitarbeiterService.getAll();
-      const tbody = document.getElementById('mitarbeiterTable').getElementsByTagName('tbody')[0];
-      tbody.innerHTML = '';
 
-      if (mitarbeiter.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="5" class="loading">Keine Mitarbeiter vorhanden</td></tr>';
-        return;
-      }
 
-      mitarbeiter.forEach(ma => {
-        const row = tbody.insertRow();
-        row.innerHTML = `
-          <td><input type="text" id="mitarbeiter_name_${ma.id}" value="${ma.name || ''}" style="width: 150px; padding: 5px;"></td>
-          <td><input type="text" id="mitarbeiter_mittagspause_${ma.id}" value="${ma.mittagspause_start || '12:00'}" style="width: 70px; padding: 5px; text-align: center;" placeholder="HH:MM" pattern="[0-2][0-9]:[0-5][0-9]" maxlength="5" title="24h-Format (z.B. 12:00)" oninput="this.value = this.value.replace(/[^0-9:]/g, ''); if(this.value.length === 2 && !this.value.includes(':')) this.value += ':';"></td>
-          <td><input type="checkbox" id="mitarbeiter_nur_service_${ma.id}" ${ma.nur_service === 1 || ma.nur_service === true ? 'checked' : ''} title="Nur Service (Annahme/Rechnung)"></td>
-          <td><input type="checkbox" id="mitarbeiter_aktiv_${ma.id}" ${ma.aktiv !== 0 ? 'checked' : ''}></td>
-          <td>
-            <button class="btn btn-primary" onclick="app.saveMitarbeiter(${ma.id})" style="padding: 5px 10px;">💾</button>
-            <button class="btn btn-danger" onclick="app.deleteMitarbeiter(${ma.id})" style="padding: 5px 10px;">🗑️</button>
-          </td>
-        `;
-      });
-    } catch (error) {
-      console.error('Fehler beim Laden der Mitarbeiter:', error);
-    }
-  }
 
-  async loadLehrlinge() {
-    try {
-      const lehrlinge = await LehrlingeService.getAll();
-      const tbody = document.getElementById('lehrlingeTable').getElementsByTagName('tbody')[0];
-      tbody.innerHTML = '';
 
-      if (lehrlinge.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="6" class="loading">Keine Lehrlinge vorhanden</td></tr>';
-        return;
-      }
 
-      // Aktuelle KW berechnen für Anzeige
-      const aktuelleKW = this.getKalenderwoche(new Date());
 
-      lehrlinge.forEach(l => {
-        const row = tbody.insertRow();
-        // Berufsschul-Anzeige: nur lesend mit Status
-        const schulwochen = l.berufsschul_wochen || '';
-        const schulwochenArray = schulwochen.split(',').map(w => parseInt(w.trim(), 10)).filter(w => !isNaN(w));
-        const istInSchule = schulwochenArray.includes(aktuelleKW);
-        let schulAnzeige = schulwochen ? schulwochen : '<span style="color: #999;">-</span>';
-        if (istInSchule) {
-          schulAnzeige = `<span style="color: #1565c0; font-weight: bold;">📚 ${schulwochen}</span>`;
-        }
-        
-        row.innerHTML = `
-          <td><input type="text" id="lehrling_name_${l.id}" value="${l.name || ''}" style="width: 150px; padding: 5px;"></td>
-          <td><input type="number" id="lehrling_aufgabe_${l.id}" value="${l.aufgabenbewaeltigung_prozent || 100}" min="0" max="500" step="1" style="width: 70px; padding: 5px;"></td>
-          <td><input type="text" id="lehrling_mittagspause_${l.id}" value="${l.mittagspause_start || '12:00'}" style="width: 70px; padding: 5px; text-align: center;" placeholder="HH:MM" pattern="[0-2][0-9]:[0-5][0-9]" maxlength="5" title="24h-Format (z.B. 12:00)" oninput="this.value = this.value.replace(/[^0-9:]/g, ''); if(this.value.length === 2 && !this.value.includes(':')) this.value += ':';"></td>
-          <td style="text-align: center; cursor: pointer;" onclick="app.showSubTab('berufsschuleAbwesenheit')" title="Zum Bearbeiten: Klicken Sie hier oder gehen Sie zu Abwesenheiten → Berufsschule">${schulAnzeige}</td>
-          <td><input type="checkbox" id="lehrling_aktiv_${l.id}" ${l.aktiv !== 0 ? 'checked' : ''}></td>
-          <td>
-            <button class="btn btn-primary" onclick="app.saveLehrling(${l.id})" style="padding: 5px 10px;">💾</button>
-            <button class="btn btn-danger" onclick="app.deleteLehrling(${l.id})" style="padding: 5px 10px;">🗑️</button>
-          </td>
-        `;
-      });
-    } catch (error) {
-      console.error('Fehler beim Laden der Lehrlinge:', error);
-    }
-  }
 
-  addMitarbeiter() {
-    const tbody = document.getElementById('mitarbeiterTable').getElementsByTagName('tbody')[0];
-    const row = tbody.insertRow();
-    row.className = 'new-mitarbeiter-row';
-    row.innerHTML = `
-      <td><input type="text" id="new_mitarbeiter_name" placeholder="Name" style="width: 100%; padding: 5px;"></td>
-      <td><input type="text" id="new_mitarbeiter_mittagspause" value="12:00" style="width: 100%; padding: 5px; text-align: center;" placeholder="HH:MM" pattern="[0-2][0-9]:[0-5][0-9]" maxlength="5" title="24h-Format (z.B. 12:00)" oninput="this.value = this.value.replace(/[^0-9:]/g, ''); if(this.value.length === 2 && !this.value.includes(':')) this.value += ':';"></td>
-      <td><input type="checkbox" id="new_mitarbeiter_nur_service" title="Nur Service (Annahme/Rechnung)"></td>
-      <td><input type="checkbox" id="new_mitarbeiter_aktiv" checked></td>
-      <td>
-        <button class="btn btn-primary" onclick="app.saveNewMitarbeiter()">💾</button>
-        <button class="btn btn-secondary" onclick="app.cancelNewMitarbeiter()">❌</button>
-      </td>
-    `;
-  }
 
-  cancelNewMitarbeiter() {
-    const tbody = document.getElementById('mitarbeiterTable').getElementsByTagName('tbody')[0];
-    const newRow = tbody.querySelector('tr.new-mitarbeiter-row');
-    if (newRow) {
-      newRow.remove();
-    }
-  }
 
-  async saveNewMitarbeiter() {
-    const name = document.getElementById('new_mitarbeiter_name').value.trim();
-    const mittagspause = document.getElementById('new_mitarbeiter_mittagspause').value || '12:00';
-    const nurService = document.getElementById('new_mitarbeiter_nur_service').checked;
-    const aktiv = document.getElementById('new_mitarbeiter_aktiv').checked;
 
-    if (!name) {
-      alert('Bitte einen Namen eingeben.');
-      return;
-    }
 
-    try {
-      await MitarbeiterService.create({
-        name,
-        arbeitsstunden_pro_tag: 8,
-        mittagspause_start: mittagspause,
-        nur_service: nurService,
-        aktiv: aktiv ? 1 : 0
-      });
-      await this.loadMitarbeiter();
-      alert('Mitarbeiter hinzugefügt!');
-    } catch (error) {
-      console.error('Fehler beim Hinzufügen:', error);
-      alert('Fehler beim Hinzufügen des Mitarbeiters.');
-    }
-  }
 
-  async saveMitarbeiter(id) {
-    const name = document.getElementById(`mitarbeiter_name_${id}`).value.trim();
-    const mittagspause = document.getElementById(`mitarbeiter_mittagspause_${id}`).value || '12:00';
-    const nurService = document.getElementById(`mitarbeiter_nur_service_${id}`).checked;
-    const aktiv = document.getElementById(`mitarbeiter_aktiv_${id}`).checked;
 
-    if (!name) {
-      alert('Bitte einen Namen eingeben.');
-      return;
-    }
-
-    try {
-      await MitarbeiterService.update(id, {
-        name,
-        arbeitsstunden_pro_tag: 8,
-        wochenarbeitszeit_stunden: 40,
-        arbeitstage_pro_woche: 5,
-        pausenzeit_minuten: 30,
-        mittagspause_start: mittagspause,
-        nur_service: nurService,
-        aktiv: aktiv ? 1 : 0
-      });
-      await this.loadMitarbeiter();
-      this.showToast('Mitarbeiter aktualisiert!', 'success');
-      this.loadAuslastung();
-    } catch (error) {
-      console.error('Fehler beim Aktualisieren:', error);
-      this.showToast('Fehler beim Aktualisieren des Mitarbeiters.', 'error');
-    }
-  }
-
-  toggleSamstagFelder(id) {
-    const checkbox = document.getElementById(`mitarbeiter_samstag_aktiv_${id}`);
-    const isChecked = checkbox.checked;
-    document.getElementById(`mitarbeiter_samstag_start_${id}`).disabled = !isChecked;
-    document.getElementById(`mitarbeiter_samstag_ende_${id}`).disabled = !isChecked;
-    document.getElementById(`mitarbeiter_samstag_pause_${id}`).disabled = !isChecked;
-  }
-
-  toggleSamstagFelderLehrling(id) {
-    const checkbox = document.getElementById(`lehrling_samstag_aktiv_${id}`);
-    const isChecked = checkbox.checked;
-    document.getElementById(`lehrling_samstag_start_${id}`).disabled = !isChecked;
-    document.getElementById(`lehrling_samstag_ende_${id}`).disabled = !isChecked;
-    document.getElementById(`lehrling_samstag_pause_${id}`).disabled = !isChecked;
-  }
-
-  async deleteMitarbeiter(id) {
-    if (!confirm('Mitarbeiter wirklich löschen?')) {
-      return;
-    }
-
-    try {
-      await MitarbeiterService.delete(id);
-      await this.loadMitarbeiter();
-      alert('Mitarbeiter gelöscht!');
-      this.loadAuslastung();
-    } catch (error) {
-      console.error('Fehler beim Löschen:', error);
-      alert('Fehler beim Löschen des Mitarbeiters.');
-    }
-  }
-
-  addLehrling() {
-    const tbody = document.getElementById('lehrlingeTable').getElementsByTagName('tbody')[0];
-    const row = tbody.insertRow();
-    row.className = 'new-lehrling-row';
-    row.innerHTML = `
-      <td><input type="text" id="new_lehrling_name" placeholder="Name" style="width: 100%; padding: 5px;"></td>
-      <td><input type="number" id="new_lehrling_aufgabe" value="100" min="0" max="500" step="1" style="width: 100%; padding: 5px;"></td>
-      <td><input type="text" id="new_lehrling_mittagspause" value="12:00" style="width: 100%; padding: 5px; text-align: center;" placeholder="HH:MM" pattern="[0-2][0-9]:[0-5][0-9]" maxlength="5" title="24h-Format (z.B. 12:00)" oninput="this.value = this.value.replace(/[^0-9:]/g, ''); if(this.value.length === 2 && !this.value.includes(':')) this.value += ':';"></td>
-      <td style="text-align: center; color: #999;">-</td>
-      <td><input type="checkbox" id="new_lehrling_aktiv" checked></td>
-      <td>
-        <button class="btn btn-primary" onclick="app.saveNewLehrling()">💾</button>
-        <button class="btn btn-secondary" onclick="app.cancelNewLehrling()">❌</button>
-      </td>
-    `;
-  }
-
-  cancelNewLehrling() {
-    const tbody = document.getElementById('lehrlingeTable').getElementsByTagName('tbody')[0];
-    const newRow = tbody.querySelector('tr.new-lehrling-row');
-    if (newRow) {
-      newRow.remove();
-    }
-  }
-
-  async saveNewLehrling() {
-    const name = document.getElementById('new_lehrling_name').value.trim();
-    const aufgabe = parseFloat(document.getElementById('new_lehrling_aufgabe').value);
-    const mittagspause = document.getElementById('new_lehrling_mittagspause').value || '12:00';
-    // berufsschul_wochen wird später über den Abwesenheits-Tab gepflegt
-    const aktiv = document.getElementById('new_lehrling_aktiv').checked;
-
-    if (!name) {
-      alert('Bitte einen Namen eingeben.');
-      return;
-    }
-
-    try {
-      await LehrlingeService.create({
-        name,
-        aufgabenbewaeltigung_prozent: aufgabe || 100,
-        mittagspause_start: mittagspause,
-        aktiv: aktiv ? 1 : 0
-      });
-      await this.loadLehrlinge();
-      alert('Lehrling hinzugefügt!');
-    } catch (error) {
-      console.error('Fehler beim Hinzufügen:', error);
-      alert('Fehler beim Hinzufügen des Lehrlings.');
-    }
-  }
-
-  async saveLehrling(id) {
-    const name = document.getElementById(`lehrling_name_${id}`).value.trim();
-    const aufgabe = parseFloat(document.getElementById(`lehrling_aufgabe_${id}`).value);
-    const mittagspause = document.getElementById(`lehrling_mittagspause_${id}`).value || '12:00';
-    // berufsschul_wochen wird über den Abwesenheits-Tab gepflegt, nicht hier ändern
-    const aktiv = document.getElementById(`lehrling_aktiv_${id}`).checked;
-
-    if (!name) {
-      alert('Bitte einen Namen eingeben.');
-      return;
-    }
-
-    try {
-      await LehrlingeService.update(id, {
-        name,
-        aufgabenbewaeltigung_prozent: aufgabe || 100,
-        wochenarbeitszeit_stunden: 40,
-        arbeitstage_pro_woche: 5,
-        pausenzeit_minuten: 30,
-        mittagspause_start: mittagspause,
-        aktiv: aktiv ? 1 : 0
-      });
-      await this.loadLehrlinge();
-      this.showToast('Lehrling aktualisiert!', 'success');
-      this.loadAuslastung();
-    } catch (error) {
-      console.error('Fehler beim Aktualisieren:', error);
-      this.showToast('Fehler beim Aktualisieren des Lehrlings.', 'error');
-    }
-  }
-
-  async deleteLehrling(id) {
-    if (!confirm('Lehrling wirklich löschen?')) {
-      return;
-    }
-
-    try {
-      await LehrlingeService.delete(id);
-      await this.loadLehrlinge();
-      alert('Lehrling gelöscht!');
-      this.loadAuslastung();
-    } catch (error) {
-      console.error('Fehler beim Löschen:', error);
-      alert('Fehler beim Löschen des Lehrlings.');
-    }
-  }
 
   handleServerConfigSubmit(e) {
     e.preventDefault();
@@ -16331,566 +16064,54 @@ class App {
   /**
    * Lädt alle Mitarbeiter und Lehrlinge in das Dropdown zur Personenauswahl
    */
-  async loadArbeitszeitenPersonSelect() {
-    const select = document.getElementById('arbeitszeitenPersonSelect');
-    if (!select) return;
-
-    try {
-      const [mitarbeiter, lehrlinge] = await Promise.all([
-        MitarbeiterService.getAll(),
-        LehrlingeService.getAll()
-      ]);
-
-      select.innerHTML = '<option value="">-- Person wählen --</option>';
-
-      // Mitarbeiter hinzufügen
-      mitarbeiter.forEach(ma => {
-        const option = document.createElement('option');
-        option.value = `mitarbeiter_${ma.id}`;
-        option.textContent = `👤 ${ma.name}`;
-        select.appendChild(option);
-      });
-
-      // Lehrlinge hinzufügen
-      lehrlinge.forEach(l => {
-        const option = document.createElement('option');
-        option.value = `lehrling_${l.id}`;
-        option.textContent = `🎓 ${l.name}`;
-        select.appendChild(option);
-      });
-    } catch (error) {
-      console.error('Fehler beim Laden der Personen:', error);
-      this.showToast('Fehler beim Laden der Personen', 'error');
-    }
-  }
 
   /**
    * Lädt Arbeitszeiten für die ausgewählte Person
    */
-  async loadArbeitszeitenForPerson() {
-    const select = document.getElementById('arbeitszeitenPersonSelect');
-    const selectedValue = select?.value;
-
-    const wochenGrid = document.getElementById('arbeitszeitenWochenGrid');
-    const dateForm = document.getElementById('arbeitszeitenDateForm');
-
-    if (!selectedValue) {
-      wochenGrid.style.display = 'none';
-      dateForm.style.display = 'none';
-      return;
-    }
-
-    // Person-ID extrahieren
-    const [personType, personId] = selectedValue.split('_');
-    const queryParam = personType === 'mitarbeiter' 
-      ? `mitarbeiter_id=${personId}` 
-      : `lehrling_id=${personId}`;
-
-    try {
-      // Lade Schicht-Templates
-      await this.loadSchichtTemplates();
-      
-      // Lade Wochenmuster
-      const response = await fetch(`${CONFIG.API_URL}/arbeitszeiten-plan?${queryParam}`);
-      
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-      }
-      
-      const arbeitszeiten = await response.json();
-
-      // Setze Standard-Werte (8h Mo-Fr, 0h Sa+So)
-      for (let wochentag = 1; wochentag <= 7; wochentag++) {
-        const entry = arbeitszeiten.find(az => az.wochentag === wochentag && !az.datum_von);
-        
-        const stundenInput = document.getElementById(`wochentag_${wochentag}_stunden`);
-        const startInput = document.getElementById(`wochentag_${wochentag}_start`);
-        const endeInput = document.getElementById(`wochentag_${wochentag}_ende`);
-        const freiCheckbox = document.getElementById(`wochentag_${wochentag}_frei`);
-
-        if (entry) {
-          stundenInput.value = entry.arbeitsstunden || 0;
-          startInput.value = entry.arbeitszeit_start || '08:00';
-          endeInput.value = entry.arbeitszeit_ende || '16:30';
-          freiCheckbox.checked = entry.ist_frei === 1;
-        } else {
-          // Fallback zu Standard-Wochenarbeitszeit
-          stundenInput.value = wochentag <= 5 ? 8 : 0;
-          startInput.value = '08:00';
-          endeInput.value = wochentag <= 5 ? '16:30' : '08:00';
-          freiCheckbox.checked = wochentag > 5;
-        }
-
-        this.updateWochentagStundenStatus(wochentag);
-      }
-
-      // Lade Datum-spezifische Einträge
-      await this.loadArbeitszeitenDateList(personType, personId);
-
-      // Zeige UI
-      wochenGrid.style.display = 'block';
-      dateForm.style.display = 'block';
-
-      // Setze Mindestdatum auf heute
-      const heute = new Date().toISOString().split('T')[0];
-      document.getElementById('arbeitszeitenDatumVon').min = heute;
-      document.getElementById('arbeitszeitenDatumBis').min = heute;
-
-    } catch (error) {
-      console.error('Fehler beim Laden der Arbeitszeiten:', error);
-      this.showToast('Fehler beim Laden der Arbeitszeiten', 'error');
-    }
-  }
 
   /**
    * Lädt Datum-spezifische Arbeitszeiten-Einträge
    */
-  async loadArbeitszeitenDateList(personType, personId) {
-    const queryParam = personType === 'mitarbeiter' 
-      ? `mitarbeiter_id=${personId}` 
-      : `lehrling_id=${personId}`;
-
-    try {
-      // Lade alle zukünftigen Datums-Einträge (ab heute bis weit in die Zukunft)
-      const heute = new Date().toISOString().split('T')[0];
-      const bis = '2099-12-31';
-      const response = await fetch(`${CONFIG.API_URL}/arbeitszeiten-plan/range?${queryParam}&datum_von=${heute}&datum_bis=${bis}`);
-      
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`);
-      }
-      
-      const entries = await response.json();
-
-      const tbody = document.querySelector('#arbeitszeitenDateTable tbody');
-      tbody.innerHTML = '';
-
-      if (!entries || entries.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; color: #999;">Keine spezifischen Zeiträume definiert</td></tr>';
-        return;
-      }
-
-      entries.forEach(entry => {
-        const row = tbody.insertRow();
-        const istFrei = entry.ist_frei === 1;
-        
-        row.innerHTML = `
-          <td>${this.formatDatum(entry.datum_von)}</td>
-          <td>${entry.datum_bis ? this.formatDatum(entry.datum_bis) : '-'}</td>
-          <td>${istFrei ? '-' : entry.arbeitsstunden + ' h'}</td>
-          <td class="${istFrei ? 'arbeitszeiten-status-frei' : 'arbeitszeiten-status-arbeitszeit'}">
-            ${istFrei ? '🚫 Frei' : '✅ Arbeitszeit'}
-          </td>
-          <td>${entry.beschreibung || '-'}</td>
-          <td>
-            <button class="btn btn-danger btn-sm" onclick="app.deleteArbeitszeitenEntry(${entry.id})" title="Löschen">🗑️</button>
-          </td>
-        `;
-      });
-    } catch (error) {
-      console.error('Fehler beim Laden der Datumsliste:', error);
-    }
-  }
 
   /**
    * Speichert Wochenmuster für die ausgewählte Person
    */
-  async saveWochenMuster() {
-    const select = document.getElementById('arbeitszeitenPersonSelect');
-    const selectedValue = select?.value;
-
-    if (!selectedValue) {
-      this.showToast('Bitte wählen Sie eine Person aus', 'warning');
-      return;
-    }
-
-    const [personType, personId] = selectedValue.split('_');
-    
-    // Lade globale Werkstatt-Einstellungen für Pausenzeit
-    let globalePausenzeit = 30; // Standard
-    try {
-      const einstellungen = await EinstellungenService.getWerkstatt();
-      globalePausenzeit = einstellungen?.mittagspause_minuten || 30;
-    } catch (error) {
-      console.warn('Konnte Werkstatt-Einstellungen nicht laden, verwende Standard-Pausenzeit 30 Min');
-    }
-    
-    const updates = [];
-
-    // Sammle alle Wochentag-Einträge
-    for (let wochentag = 1; wochentag <= 7; wochentag++) {
-      const stunden = parseFloat(document.getElementById(`wochentag_${wochentag}_stunden`).value) || 0;
-      const start = document.getElementById(`wochentag_${wochentag}_start`).value;
-      const ende = document.getElementById(`wochentag_${wochentag}_ende`).value;
-      const istFrei = document.getElementById(`wochentag_${wochentag}_frei`).checked;
-
-      updates.push({
-        [personType === 'mitarbeiter' ? 'mitarbeiter_id' : 'lehrling_id']: parseInt(personId),
-        wochentag,
-        arbeitsstunden: istFrei ? 0 : stunden,
-        pausenzeit_minuten: istFrei ? 0 : globalePausenzeit,
-        arbeitszeit_start: start || '08:00',
-        arbeitszeit_ende: ende || '16:30',
-        ist_frei: istFrei ? 1 : 0
-      });
-    }
-
-    try {
-      // Speichere alle Wochenmuster
-      const promises = updates.map(data => 
-        fetch(`${CONFIG.API_URL}/arbeitszeiten-plan/wochentag`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(data)
-        }).then(res => res.json())
-      );
-
-      await Promise.all(promises);
-      this.showToast('✅ Wochenmuster erfolgreich gespeichert!', 'success');
-      
-      // Refresh Timeline wenn geöffnet
-      if (this.currentView === 'timeline') {
-        this.loadPersonenWocheOverview();
-      }
-    } catch (error) {
-      console.error('Fehler beim Speichern des Wochenmusters:', error);
-      this.showToast('Fehler beim Speichern', 'error');
-    }
-  }
 
   /**
    * Speichert Datum-spezifischen Zeitraum
    */
-  async saveArbeitszeitenDateRange(event) {
-    event.preventDefault();
-
-    const select = document.getElementById('arbeitszeitenPersonSelect');
-    const selectedValue = select?.value;
-
-    if (!selectedValue) {
-      this.showToast('Bitte wählen Sie eine Person aus', 'warning');
-      return;
-    }
-
-    const [personType, personId] = selectedValue.split('_');
-    
-    const datumVon = document.getElementById('arbeitszeitenDatumVon').value;
-    const datumBis = document.getElementById('arbeitszeitenDatumBis').value;
-    const stunden = parseFloat(document.getElementById('arbeitszeitenDateStunden').value) || 0;
-    const istFrei = document.getElementById('arbeitszeitenDateFrei').checked;
-    const beschreibung = document.getElementById('arbeitszeitenDateBeschreibung').value.trim();
-    
-    // Lade globale Werkstatt-Einstellungen für Pausenzeit
-    let globalePausenzeit = 30; // Standard
-    try {
-      const einstellungen = await EinstellungenService.getWerkstatt();
-      globalePausenzeit = einstellungen?.mittagspause_minuten || 30;
-    } catch (error) {
-      console.warn('Konnte Werkstatt-Einstellungen nicht laden, verwende Standard-Pausenzeit 30 Min');
-    }
-
-    if (!datumVon || !datumBis) {
-      this.showToast('Bitte füllen Sie beide Datumsfelder aus', 'warning');
-      return;
-    }
-
-    if (new Date(datumBis) < new Date(datumVon)) {
-      this.showToast('End-Datum muss nach Start-Datum liegen', 'warning');
-      return;
-    }
-
-    const data = {
-      [personType === 'mitarbeiter' ? 'mitarbeiter_id' : 'lehrling_id']: parseInt(personId),
-      datum_von: datumVon,
-      datum_bis: datumBis,
-      arbeitsstunden: istFrei ? 0 : stunden,
-      pausenzeit_minuten: istFrei ? 0 : globalePausenzeit,
-      ist_frei: istFrei ? 1 : 0,
-      beschreibung: beschreibung || null
-    };
-
-    try {
-      await fetch(`${CONFIG.API_URL}/arbeitszeiten-plan/date`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data)
-      }).then(res => res.json());
-
-      this.showToast('✅ Zeitraum erfolgreich hinzugefügt!', 'success');
-      
-      // Reset Form
-      document.getElementById('arbeitszeitenDateRangeForm').reset();
-      
-      // Reload Liste
-      await this.loadArbeitszeitenDateList(personType, personId);
-      
-      // Refresh Timeline wenn geöffnet
-      if (this.currentView === 'timeline') {
-        this.loadPersonenWocheOverview();
-      }
-    } catch (error) {
-      console.error('Fehler beim Speichern des Zeitraums:', error);
-      this.showToast('Fehler beim Speichern', 'error');
-    }
-  }
 
   /**
    * Löscht einen Arbeitszeiten-Eintrag
    */
-  async deleteArbeitszeitenEntry(id) {
-    if (!confirm('Wollen Sie diesen Zeitraum wirklich löschen?')) {
-      return;
-    }
-
-    try {
-      await fetch(`${CONFIG.API_URL}/arbeitszeiten-plan/${id}`, {
-        method: 'DELETE'
-      }).then(res => res.json());
-
-      this.showToast('✅ Zeitraum gelöscht', 'success');
-      
-      // Reload aktuelle Ansicht
-      await this.loadArbeitszeitenForPerson();
-      
-      // Refresh Timeline wenn geöffnet
-      if (this.currentView === 'timeline') {
-        this.loadPersonenWocheOverview();
-      }
-    } catch (error) {
-      console.error('Fehler beim Löschen:', error);
-      this.showToast('Fehler beim Löschen', 'error');
-    }
-  }
 
   /**
    * Setzt Arbeitszeiten auf Standard (Wochenarbeitszeit) zurück
    */
-  async resetArbeitszeitenToStandard() {
-    const select = document.getElementById('arbeitszeitenPersonSelect');
-    const selectedValue = select?.value;
-
-    if (!selectedValue) {
-      this.showToast('Bitte wählen Sie eine Person aus', 'warning');
-      return;
-    }
-
-    if (!confirm('Wollen Sie die Wochenmuster wirklich auf die Standard-Wochenarbeitszeit zurücksetzen?\n\nAlle individuellen Wochentag-Einstellungen gehen verloren.')) {
-      return;
-    }
-
-    const [personType, personId] = selectedValue.split('_');
-    const queryParam = personType === 'mitarbeiter' 
-      ? `mitarbeiter_id=${personId}` 
-      : `lehrling_id=${personId}`;
-
-    try {
-      await fetch(`${CONFIG.API_URL}/arbeitszeiten-plan/reset?${queryParam}`, {
-        method: 'POST'
-      }).then(res => res.json());
-
-      this.showToast('✅ Auf Standard zurückgesetzt', 'success');
-      
-      // Reload
-      await this.loadArbeitszeitenForPerson();
-      
-      // Refresh Timeline wenn geöffnet
-      if (this.currentView === 'timeline') {
-        this.loadPersonenWocheOverview();
-      }
-    } catch (error) {
-      console.error('Fehler beim Zurücksetzen:', error);
-      this.showToast('Fehler beim Zurücksetzen', 'error');
-    }
-  }
 
   /**
    * Aktualisiert Stunden-Felder wenn "Frei" gecheckt wird
    */
-  updateWochentagStundenStatus(wochentag) {
-    const freiCheckbox = document.getElementById(`wochentag_${wochentag}_frei`);
-    const stundenInput = document.getElementById(`wochentag_${wochentag}_stunden`);
-    const startInput = document.getElementById(`wochentag_${wochentag}_start`);
-    const endeInput = document.getElementById(`wochentag_${wochentag}_ende`);
-    const row = document.querySelector(`[data-wochentag="${wochentag}"]`);
-
-    const istFrei = freiCheckbox.checked;
-
-    stundenInput.disabled = istFrei;
-    startInput.disabled = istFrei;
-    endeInput.disabled = istFrei;
-
-    if (istFrei) {
-      row.classList.add('ist-frei');
-      stundenInput.value = 0;
-    } else {
-      row.classList.remove('ist-frei');
-    }
-  }
 
   /**
    * Berechnet Endzeit basierend auf Start + Stunden + Pause
    */
-  async updateWochentagEndzeit(wochentag) {
-    const startInput = document.getElementById(`wochentag_${wochentag}_start`);
-    const stundenInput = document.getElementById(`wochentag_${wochentag}_stunden`);
-    const endeInput = document.getElementById(`wochentag_${wochentag}_ende`);
-    
-    const start = startInput.value;
-    const stunden = parseFloat(stundenInput.value) || 0;
-    
-    if (!start || stunden === 0) return;
-    
-    // Lade globale Pausenzeit
-    let pause = 30;
-    try {
-      const einstellungen = await EinstellungenService.getWerkstatt();
-      pause = einstellungen?.mittagspause_minuten || 30;
-    } catch (error) {
-      console.warn('Pausenzeit fallback: 30 Min');
-    }
-    
-    // Berechne Endzeit: Start + Stunden + Pause
-    const [startHours, startMinutes] = start.split(':').map(Number);
-    const totalMinutes = startMinutes + (stunden * 60) + pause;
-    const endHours = startHours + Math.floor(totalMinutes / 60);
-    const endMinutes = totalMinutes % 60;
-    
-    endeInput.value = `${String(endHours).padStart(2, '0')}:${String(endMinutes).padStart(2, '0')}`;
-  }
 
   /**
    * Berechnet Arbeitsstunden basierend auf Start/Ende - Pause
    */
-  async updateWochentagStunden(wochentag) {
-    const startInput = document.getElementById(`wochentag_${wochentag}_start`);
-    const endeInput = document.getElementById(`wochentag_${wochentag}_ende`);
-    const stundenInput = document.getElementById(`wochentag_${wochentag}_stunden`);
-    
-    const start = startInput.value;
-    const ende = endeInput.value;
-    
-    if (!start || !ende) return;
-    
-    // Lade globale Pausenzeit
-    let pause = 30;
-    try {
-      const einstellungen = await EinstellungenService.getWerkstatt();
-      pause = einstellungen?.mittagspause_minuten || 30;
-    } catch (error) {
-      console.warn('Pausenzeit fallback: 30 Min');
-    }
-    
-    // Berechne Differenz
-    const [startHours, startMinutes] = start.split(':').map(Number);
-    const [endHours, endMinutes] = ende.split(':').map(Number);
-    
-    const startTotal = startHours * 60 + startMinutes;
-    const endTotal = endHours * 60 + endMinutes;
-    
-    let diffMinutes = endTotal - startTotal;
-    if (diffMinutes < 0) diffMinutes += 24 * 60; // Über Mitternacht
-    
-    // Ziehe Pause ab
-    diffMinutes -= pause;
-    if (diffMinutes < 0) diffMinutes = 0;
-    
-    stundenInput.value = (diffMinutes / 60).toFixed(2);
-  }
 
   /**
    * Uncheckt "Frei" wenn Stunden > 0 eingegeben werden
    */
-  updateWochentagFreiStatus(wochentag) {
-    const stundenInput = document.getElementById(`wochentag_${wochentag}_stunden`);
-    const freiCheckbox = document.getElementById(`wochentag_${wochentag}_frei`);
-
-    if (parseFloat(stundenInput.value) > 0) {
-      freiCheckbox.checked = false;
-      this.updateWochentagStundenStatus(wochentag);
-    }
-  }
 
   /**
    * Lädt Schicht-Templates und zeigt Buttons an
    */
-  async loadSchichtTemplates() {
-    try {
-      const templates = await SchichtTemplateService.getAll();
-      const container = document.getElementById('schichtTemplateButtons');
-      
-      if (templates.length === 0) {
-        container.innerHTML = '<span style="color: #999;">Keine Schicht-Vorlagen vorhanden</span>';
-        return;
-      }
-      
-      container.innerHTML = templates.map(t => `
-        <button class="btn btn-sm" 
-                style="background: ${t.farbe}; color: white; border: none;" 
-                onclick="app.applySchichtTemplate(${t.id}, '${t.name}', '${t.arbeitszeit_start}', '${t.arbeitszeit_ende}')"
-                title="${t.beschreibung || ''}">
-          ${t.name}
-        </button>
-      `).join('');
-    } catch (error) {
-      console.error('Fehler beim Laden der Schicht-Templates:', error);
-      this.showToast('Fehler beim Laden der Schicht-Vorlagen', 'error');
-    }
-  }
 
   /**
    * Wendet Schicht-Template auf Mo-Fr an
    */
-  async applySchichtTemplate(id, name, start, ende) {
-    const select = document.getElementById('arbeitszeitenPersonSelect');
-    if (!select || !select.value) {
-      this.showToast('Bitte wählen Sie zuerst eine Person aus', 'warning');
-      return;
-    }
-    
-    if (!confirm(`Wollen Sie die Schicht "${name}" (${start} - ${ende}) auf Montag bis Freitag anwenden?`)) {
-      return;
-    }
-    
-    // Lade globale Pausenzeit
-    let pause = 30;
-    try {
-      const einstellungen = await EinstellungenService.getWerkstatt();
-      pause = einstellungen?.mittagspause_minuten || 30;
-    } catch (error) {
-      console.warn('Pausenzeit fallback: 30 Min');
-    }
-    
-    // Wende auf Mo-Fr an (Wochentag 1-5)
-    for (let wochentag = 1; wochentag <= 5; wochentag++) {
-      const startInput = document.getElementById(`wochentag_${wochentag}_start`);
-      const endeInput = document.getElementById(`wochentag_${wochentag}_ende`);
-      const stundenInput = document.getElementById(`wochentag_${wochentag}_stunden`);
-      const freiCheckbox = document.getElementById(`wochentag_${wochentag}_frei`);
-      
-      startInput.value = start;
-      endeInput.value = ende;
-      freiCheckbox.checked = false;
-      
-      // Berechne Stunden
-      const [startHours, startMinutes] = start.split(':').map(Number);
-      const [endHours, endMinutes] = ende.split(':').map(Number);
-      
-      const startTotal = startHours * 60 + startMinutes;
-      const endTotal = endHours * 60 + endMinutes;
-      
-      let diffMinutes = endTotal - startTotal;
-      if (diffMinutes < 0) diffMinutes += 24 * 60;
-      
-      diffMinutes -= pause;
-      if (diffMinutes < 0) diffMinutes = 0;
-      
-      stundenInput.value = (diffMinutes / 60).toFixed(2);
-      
-      this.updateWochentagStundenStatus(wochentag);
-    }
-    
-    this.showToast(`✅ Schicht "${name}" auf Mo-Fr angewendet!`, 'success');
-  }
 
   // ==================== SCHICHT-VORLAGEN VERWALTUNG ====================
   
@@ -16899,144 +16120,26 @@ class App {
   /**
    * Lädt Schicht-Templates in die Verwaltungstabelle
    */
-  async loadSchichtTemplatesAdmin() {
-    try {
-      const templates = await SchichtTemplateService.getAll();
-      const tbody = document.getElementById('schichtTemplateTableBody');
-      
-      if (!tbody) return;
-      
-      if (templates.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="8" style="text-align: center; padding: 20px; color: #999;">Keine Schicht-Vorlagen vorhanden</td></tr>';
-        return;
-      }
-      
-      tbody.innerHTML = templates.map(t => `
-        <tr>
-          <td>${t.sortierung}</td>
-          <td><strong>${t.name}</strong></td>
-          <td>${t.beschreibung || '-'}</td>
-          <td>${t.arbeitszeit_start}</td>
-          <td>${t.arbeitszeit_ende}</td>
-          <td>
-            <div style="display: inline-block; width: 40px; height: 25px; background: ${t.farbe}; border-radius: 4px; border: 1px solid #ddd;"></div>
-            <code style="margin-left: 5px; font-size: 0.9em;">${t.farbe}</code>
-          </td>
-          <td>${t.sortierung}</td>
-          <td>
-            <button class="btn btn-sm btn-primary" onclick="app.editSchichtTemplate(${t.id})" title="Bearbeiten">✏️</button>
-            <button class="btn btn-sm btn-danger" onclick="app.deleteSchichtTemplate(${t.id}, '${t.name}')" title="Löschen">🗑️</button>
-          </td>
-        </tr>
-      `).join('');
-    } catch (error) {
-      console.error('Fehler beim Laden der Schicht-Templates:', error);
-      this.showToast('Fehler beim Laden der Schicht-Vorlagen', 'error');
-    }
-  }
 
   /**
    * Formular-Submit für Schicht-Template
    */
-  async handleSchichtTemplateSubmit(e) {
-    e.preventDefault();
-    
-    const name = document.getElementById('schichtName').value.trim();
-    const beschreibung = document.getElementById('schichtBeschreibung').value.trim();
-    const arbeitszeit_start = document.getElementById('schichtStart').value;
-    const arbeitszeit_ende = document.getElementById('schichtEnde').value;
-    const farbe = document.getElementById('schichtFarbe').value;
-    const sortierung = parseInt(document.getElementById('schichtSortierung').value);
-    
-    if (!name || !arbeitszeit_start || !arbeitszeit_ende) {
-      this.showToast('Bitte füllen Sie alle Pflichtfelder aus', 'warning');
-      return;
-    }
-    
-    const data = { name, beschreibung, arbeitszeit_start, arbeitszeit_ende, farbe, sortierung };
-    
-    try {
-      if (this.currentEditSchichtId) {
-        await SchichtTemplateService.update(this.currentEditSchichtId, data);
-        this.showToast(`✅ Schicht "${name}" aktualisiert`, 'success');
-      } else {
-        await SchichtTemplateService.create(data);
-        this.showToast(`✅ Schicht "${name}" erstellt`, 'success');
-      }
-      
-      this.resetSchichtTemplateForm();
-      await this.loadSchichtTemplatesAdmin();
-    } catch (error) {
-      console.error('Fehler beim Speichern:', error);
-      this.showToast('Fehler beim Speichern der Schicht-Vorlage', 'error');
-    }
-  }
 
   /**
    * Schicht-Template bearbeiten
    */
-  async editSchichtTemplate(id) {
-    try {
-      const template = await SchichtTemplateService.getById(id);
-      
-      document.getElementById('schichtName').value = template.name;
-      document.getElementById('schichtBeschreibung').value = template.beschreibung || '';
-      document.getElementById('schichtStart').value = template.arbeitszeit_start;
-      document.getElementById('schichtEnde').value = template.arbeitszeit_ende;
-      document.getElementById('schichtFarbe').value = template.farbe;
-      document.getElementById('schichtSortierung').value = template.sortierung;
-      
-      this.currentEditSchichtId = id;
-      document.getElementById('schichtFormButtonText').textContent = '💾 Aktualisieren';
-      document.getElementById('schichtFormCancel').style.display = 'inline-block';
-      
-      // Scroll zum Formular
-      document.getElementById('schichtTemplateForm').scrollIntoView({ behavior: 'smooth', block: 'start' });
-    } catch (error) {
-      console.error('Fehler beim Laden:', error);
-      this.showToast('Fehler beim Laden der Schicht-Vorlage', 'error');
-    }
-  }
 
   /**
    * Schicht-Template löschen
    */
-  async deleteSchichtTemplate(id, name) {
-    if (!confirm(`Wollen Sie die Schicht-Vorlage "${name}" wirklich löschen?`)) {
-      return;
-    }
-    
-    try {
-      await SchichtTemplateService.delete(id);
-      this.showToast(`🗑️ Schicht "${name}" gelöscht`, 'success');
-      await this.loadSchichtTemplatesAdmin();
-    } catch (error) {
-      console.error('Fehler beim Löschen:', error);
-      this.showToast('Fehler beim Löschen der Schicht-Vorlage', 'error');
-    }
-  }
 
   /**
    * Bearbeitung abbrechen
    */
-  cancelSchichtTemplateEdit() {
-    this.resetSchichtTemplateForm();
-  }
 
   /**
    * Formular zurücksetzen
    */
-  resetSchichtTemplateForm() {
-    document.getElementById('schichtTemplateForm').reset();
-    document.getElementById('schichtStart').value = '08:00';
-    document.getElementById('schichtEnde').value = '16:30';
-    document.getElementById('schichtFarbe').value = '#10b981';
-    document.getElementById('schichtSortierung').value = '1';
-    
-    this.currentEditSchichtId = null;
-    document.getElementById('schichtFormButtonText').textContent = '➕ Erstellen';
-    document.getElementById('schichtFormCancel').style.display = 'none';
-  }
 
   /**
    * =================================================================
@@ -17063,24 +16166,6 @@ class App {
   /**
    * Aktiviert/Deaktiviert Stunden-Felder im Datumsbereichs-Formular
    */
-  toggleDateRangeFreiStatus() {
-    const freiCheckbox = document.getElementById('arbeitszeitenDateFrei');
-    const stundenInput = document.getElementById('arbeitszeitenDateStunden');
-    const pauseInput = document.getElementById('arbeitszeitenDatePause');
-
-    const istFrei = freiCheckbox.checked;
-
-    stundenInput.disabled = istFrei;
-    pauseInput.disabled = istFrei;
-
-    if (istFrei) {
-      stundenInput.value = 0;
-      pauseInput.value = 0;
-    } else {
-      stundenInput.value = 8;
-      pauseInput.value = 30;
-    }
-  }
 
 
   // === ENDE WOCHENARBEITSZEITVERWALTUNG ===
@@ -19238,6 +18323,9 @@ installTerminDetailsFeature(App);
 installTerminFormFeature(App);
 installPlanungFeature(App);
 installDragDropFeature(App);
+installShiftTemplatesFeature(App);
+installStaffFeature(App);
+installWorkSchedulesFeature(App);
 installAbsenceFeature(App);
 installReplacementCarsFeature(App);
 installTodayFeature(App);

@@ -6,9 +6,12 @@ import { installDashboardFeature } from '../../src/features/dashboard/dashboardF
 import { installReplacementCarsFeature } from '../../src/features/replacementCars/replacementCarsFeature.js';
 import { installSearchFeature } from '../../src/features/search/searchFeature.js';
 import { installSettingsKiFeature } from '../../src/features/settings/settingsKiFeature.js';
+import { installShiftTemplatesFeature } from '../../src/features/shiftTemplates/shiftTemplatesFeature.js';
+import { installStaffFeature } from '../../src/features/staff/staffFeature.js';
 import { installTabletFeature } from '../../src/features/tablet/tabletFeature.js';
 import { installTimeTrackingFeature } from '../../src/features/timeTracking/timeTrackingFeature.js';
 import { installTodayFeature } from '../../src/features/today/todayFeature.js';
+import { installWorkSchedulesFeature } from '../../src/features/workSchedules/workSchedulesFeature.js';
 
 describe('feature installers', () => {
   it('registers extracted feature methods', () => {
@@ -21,9 +24,12 @@ describe('feature installers', () => {
     installReplacementCarsFeature(TestApp);
     installSearchFeature(TestApp);
     installSettingsKiFeature(TestApp);
+    installShiftTemplatesFeature(TestApp);
+    installStaffFeature(TestApp);
     installTabletFeature(TestApp);
     installTimeTrackingFeature(TestApp);
     installTodayFeature(TestApp);
+    installWorkSchedulesFeature(TestApp);
 
     expect(TestApp.prototype.loadAbwesenheit).toBeTypeOf('function');
     expect(TestApp.prototype.handleAbwesenheitSubmit).toBeTypeOf('function');
@@ -39,10 +45,16 @@ describe('feature installers', () => {
     expect(TestApp.prototype.setupGlobaleSuche).toBeTypeOf('function');
     expect(TestApp.prototype.loadWerkstattSettings).toBeTypeOf('function');
     expect(TestApp.prototype.checkKIStatus).toBeTypeOf('function');
+    expect(TestApp.prototype.loadSchichtTemplates).toBeTypeOf('function');
+    expect(TestApp.prototype.handleSchichtTemplateSubmit).toBeTypeOf('function');
+    expect(TestApp.prototype.loadMitarbeiter).toBeTypeOf('function');
+    expect(TestApp.prototype.saveMitarbeiter).toBeTypeOf('function');
     expect(TestApp.prototype.loadTabletEinstellungen).toBeTypeOf('function');
     expect(TestApp.prototype.loadZeitstempelung).toBeTypeOf('function');
     expect(TestApp.prototype.navigateZeitverwaltung).toBeTypeOf('function');
     expect(TestApp.prototype.loadHeuteTermine).toBeTypeOf('function');
     expect(TestApp.prototype.renderHeuteTabelle).toBeTypeOf('function');
+    expect(TestApp.prototype.loadArbeitszeitenForPerson).toBeTypeOf('function');
+    expect(TestApp.prototype.saveWochenMuster).toBeTypeOf('function');
   });
 });
