@@ -11673,7 +11673,7 @@ mark.highlight {
 
 .teile-status-tab--offen.active .teile-tab-badge { background: #c62828; color: white; }
 .teile-status-tab--bestellt.active .teile-tab-badge { background: #1565c0; color: white; }
-.teile-status-tab--geliefert.active .teile-tab-badge { background: #2e7d32; color: white; } */
+.teile-status-tab--geliefert.active .teile-tab-badge { background: #2e7d32; color: white; }
 
 /* Statistik-Karten */
 .teile-statistik {
