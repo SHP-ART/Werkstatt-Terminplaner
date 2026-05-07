@@ -5,6 +5,7 @@ import { installCustomersFeature } from '../../src/features/customers/customersF
 import { installPartsFeature } from '../../src/features/parts/partsFeature.js';
 import { installAbsenceFeature } from '../../src/features/absence/absenceFeature.js';
 import { installDashboardFeature } from '../../src/features/dashboard/dashboardFeature.js';
+import { installKiPlanningFeature } from '../../src/features/kiPlanning/kiPlanningFeature.js';
 import { installReplacementCarsFeature } from '../../src/features/replacementCars/replacementCarsFeature.js';
 import { installSearchFeature } from '../../src/features/search/searchFeature.js';
 import { installSettingsKiFeature } from '../../src/features/settings/settingsKiFeature.js';
@@ -25,6 +26,7 @@ describe('feature installers', () => {
     installCustomersFeature(TestApp);
     installPartsFeature(TestApp);
     installDashboardFeature(TestApp);
+    installKiPlanningFeature(TestApp);
     installReplacementCarsFeature(TestApp);
     installSearchFeature(TestApp);
     installSettingsKiFeature(TestApp);
@@ -56,6 +58,13 @@ describe('feature installers', () => {
     expect(TestApp.prototype.arbeitenTeileStatusAufLoesen).toBeTypeOf('function');
     expect(TestApp.prototype.loadDashboard).toBeTypeOf('function');
     expect(TestApp.prototype.loadDashboardKPIs).toBeTypeOf('function');
+    expect(TestApp.prototype.requestKITagesplanung).toBeTypeOf('function');
+    expect(TestApp.prototype.requestKIWochenplanung).toBeTypeOf('function');
+    expect(TestApp.prototype.showKIPlanungModal).toBeTypeOf('function');
+    expect(TestApp.prototype.displayKITagesvorschlag).toBeTypeOf('function');
+    expect(TestApp.prototype.uebernehmeAlleKIVorschlaege).toBeTypeOf('function');
+    expect(TestApp.prototype.calculateTageskapazitaetMinuten).toBeTypeOf('function');
+    expect(TestApp.prototype.findeNaechstenVerfuegbarenTag).toBeTypeOf('function');
     expect(TestApp.prototype.loadErsatzautos).toBeTypeOf('function');
     expect(TestApp.prototype.renderErsatzautoListe).toBeTypeOf('function');
     expect(TestApp.prototype.handleNameSuche).toBeTypeOf('function');
