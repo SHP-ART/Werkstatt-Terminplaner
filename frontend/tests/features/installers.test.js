@@ -13,6 +13,7 @@ import { installShiftTemplatesFeature } from '../../src/features/shiftTemplates/
 import { installStaffFeature } from '../../src/features/staff/staffFeature.js';
 import { installTabletFeature } from '../../src/features/tablet/tabletFeature.js';
 import { installTerminDetailsActionsFeature } from '../../src/features/termine/terminDetailsActionsFeature.js';
+import { installTerminFormActionsFeature } from '../../src/features/termine/terminFormActionsFeature.js';
 import { installTimelineFeature } from '../../src/features/timeline/timelineFeature.js';
 import { installTimeTrackingFeature } from '../../src/features/timeTracking/timeTrackingFeature.js';
 import { installTodayFeature } from '../../src/features/today/todayFeature.js';
@@ -38,6 +39,7 @@ describe('feature installers', () => {
     installStaffFeature(TestApp);
     installTabletFeature(TestApp);
     installTerminDetailsActionsFeature(TestApp);
+    installTerminFormActionsFeature(TestApp);
     installTimelineFeature(TestApp);
     installTimeTrackingFeature(TestApp);
     installTodayFeature(TestApp);
@@ -91,6 +93,12 @@ describe('feature installers', () => {
     expect(TestApp.prototype.executeSplit).toBeTypeOf('function');
     expect(TestApp.prototype.openErweiterungModal).toBeTypeOf('function');
     expect(TestApp.prototype.speichereErweiterung).toBeTypeOf('function');
+    expect(TestApp.prototype.toggleAbholungDetails).toBeTypeOf('function');
+    expect(TestApp.prototype.loadEditTermine).toBeTypeOf('function');
+    expect(TestApp.prototype.fillEditTerminForm).toBeTypeOf('function');
+    expect(TestApp.prototype.getPhasenFromForm).toBeTypeOf('function');
+    expect(TestApp.prototype.showTerminVorschau).toBeTypeOf('function');
+    expect(TestApp.prototype.executeTerminSave).toBeTypeOf('function');
     expect(TestApp.prototype.showSchnellStatusDialog).toBeTypeOf('function');
     expect(TestApp.prototype.speichereSchnellBearbeitung).toBeTypeOf('function');
     expect(TestApp.prototype.renderZeitleiste).toBeTypeOf('function');
