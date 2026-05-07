@@ -12,6 +12,7 @@ import { installSettingsKiFeature } from '../../src/features/settings/settingsKi
 import { installShiftTemplatesFeature } from '../../src/features/shiftTemplates/shiftTemplatesFeature.js';
 import { installStaffFeature } from '../../src/features/staff/staffFeature.js';
 import { installTabletFeature } from '../../src/features/tablet/tabletFeature.js';
+import { installTerminDetailsActionsFeature } from '../../src/features/termine/terminDetailsActionsFeature.js';
 import { installTimelineFeature } from '../../src/features/timeline/timelineFeature.js';
 import { installTimeTrackingFeature } from '../../src/features/timeTracking/timeTrackingFeature.js';
 import { installTodayFeature } from '../../src/features/today/todayFeature.js';
@@ -36,6 +37,7 @@ describe('feature installers', () => {
     installShiftTemplatesFeature(TestApp);
     installStaffFeature(TestApp);
     installTabletFeature(TestApp);
+    installTerminDetailsActionsFeature(TestApp);
     installTimelineFeature(TestApp);
     installTimeTrackingFeature(TestApp);
     installTodayFeature(TestApp);
@@ -82,6 +84,13 @@ describe('feature installers', () => {
     expect(TestApp.prototype.loadMitarbeiter).toBeTypeOf('function');
     expect(TestApp.prototype.saveMitarbeiter).toBeTypeOf('function');
     expect(TestApp.prototype.loadTabletEinstellungen).toBeTypeOf('function');
+    expect(TestApp.prototype.loadTermine).toBeTypeOf('function');
+    expect(TestApp.prototype.showEinplanenDialog).toBeTypeOf('function');
+    expect(TestApp.prototype.confirmEinplanenDatum).toBeTypeOf('function');
+    expect(TestApp.prototype.openSplitModal).toBeTypeOf('function');
+    expect(TestApp.prototype.executeSplit).toBeTypeOf('function');
+    expect(TestApp.prototype.openErweiterungModal).toBeTypeOf('function');
+    expect(TestApp.prototype.speichereErweiterung).toBeTypeOf('function');
     expect(TestApp.prototype.showSchnellStatusDialog).toBeTypeOf('function');
     expect(TestApp.prototype.speichereSchnellBearbeitung).toBeTypeOf('function');
     expect(TestApp.prototype.renderZeitleiste).toBeTypeOf('function');
