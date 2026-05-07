@@ -477,6 +477,12 @@ async function startServer(clientCountCallback, requestLogCallback) {
                 res.set('Expires', '0');
             }
         }));
+
+        // Asset-Dateien duerfen nicht auf index.html fallen, sonst koennen alte
+        // Browser-Bundle-URLs nach einem Build irrefuehrend mit 200 antworten.
+        app.get('/assets/*', (req, res) => {
+            res.status(404).send('Asset not found');
+        });
         
         // Alle anderen Anfragen an index.html weiterleiten (SPA-Support)
         app.get('*', (req, res, next) => {
@@ -537,8 +543,10 @@ async function startServer(clientCountCallback, requestLogCallback) {
 
     wss.on('close', () => clearInterval(heartbeatInterval));
 
-    logStartup(`Starte Server auf Port ${PORT}...`);
-    server.listen(PORT, '0.0.0.0', () => {
+    const HOST = process.env.HOST || '0.0.0.0';
+
+    logStartup(`Starte Server auf ${HOST}:${PORT}...`);
+    server.listen(PORT, HOST, () => {
         logStartup('=== SERVER ERFOLGREICH GESTARTET ===');
         logStartup('Server erfolgreich gestartet');
         console.log(`\n✅ ${APP_NAME} v${VERSION} gestartet!`);
@@ -550,7 +558,7 @@ async function startServer(clientCountCallback, requestLogCallback) {
         console.log(`🌐 Netzwerk:       http://<IP-ADRESSE>:${PORT}`);
         console.log(`\n👉 Zum Stoppen: CTRL+C\n`);
         logStartup(`Server hört auf http://0.0.0.0:${PORT}`);
-        backendDiscoveryService.start(PORT);
+        if (HOST === '0.0.0.0') { backendDiscoveryService.start(PORT); }
     });
     
     server.on('error', (err) => {

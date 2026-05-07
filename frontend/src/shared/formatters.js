@@ -19,7 +19,13 @@ export function formatMinutesToHours(minutes) {
 }
 
 export function getKalenderwoche(date) {
-  const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+  if (!date) return null;
+  const parsed = date instanceof Date
+    ? date
+    : new Date(typeof date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(date) ? `${date}T12:00:00` : date);
+  if (Number.isNaN(parsed.getTime())) return null;
+
+  const d = new Date(Date.UTC(parsed.getFullYear(), parsed.getMonth(), parsed.getDate()));
   const dayNum = d.getUTCDay() || 7;
   d.setUTCDate(d.getUTCDate() + 4 - dayNum);
   const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));

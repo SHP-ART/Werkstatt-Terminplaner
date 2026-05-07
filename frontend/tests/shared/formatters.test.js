@@ -33,6 +33,11 @@ describe('shared formatters', () => {
     expect(getKalenderwoche(new Date(2026, 11, 31))).toBe(53);
   });
 
+  it('calculates ISO calendar weeks from API date strings', () => {
+    expect(getKalenderwoche('2026-01-01')).toBe(1);
+    expect(getKalenderwoche('2026-12-31')).toBe(53);
+  });
+
   it('calculates an end time from start time and duration', () => {
     expect(berechneEndzeit('08:15', 90)).toBe('09:45');
     expect(berechneEndzeit('16:45', 45)).toBe('17:30');
