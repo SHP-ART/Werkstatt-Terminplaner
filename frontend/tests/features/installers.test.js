@@ -12,6 +12,7 @@ import { installSearchFeature } from '../../src/features/search/searchFeature.js
 import { installSettingsKiFeature } from '../../src/features/settings/settingsKiFeature.js';
 import { installShiftTemplatesFeature } from '../../src/features/shiftTemplates/shiftTemplatesFeature.js';
 import { installStaffFeature } from '../../src/features/staff/staffFeature.js';
+import { installStandardTimesFeature } from '../../src/features/standardTimes/standardTimesFeature.js';
 import { installTabletFeature } from '../../src/features/tablet/tabletFeature.js';
 import { installTerminDetailsActionsFeature } from '../../src/features/termine/terminDetailsActionsFeature.js';
 import { installTerminFormActionsFeature } from '../../src/features/termine/terminFormActionsFeature.js';
@@ -39,6 +40,7 @@ describe('feature installers', () => {
     installSettingsKiFeature(TestApp);
     installShiftTemplatesFeature(TestApp);
     installStaffFeature(TestApp);
+    installStandardTimesFeature(TestApp);
     installTabletFeature(TestApp);
     installTerminDetailsActionsFeature(TestApp);
     installTerminFormActionsFeature(TestApp);
@@ -93,6 +95,11 @@ describe('feature installers', () => {
     expect(TestApp.prototype.handleSchichtTemplateSubmit).toBeTypeOf('function');
     expect(TestApp.prototype.loadMitarbeiter).toBeTypeOf('function');
     expect(TestApp.prototype.saveMitarbeiter).toBeTypeOf('function');
+    expect(TestApp.prototype.loadArbeitszeiten).toBeTypeOf('function');
+    expect(TestApp.prototype.editArbeitZeit).toBeTypeOf('function');
+    expect(TestApp.prototype.saveAllArbeitszeiten).toBeTypeOf('function');
+    expect(TestApp.prototype.addArbeitszeit).toBeTypeOf('function');
+    expect(TestApp.prototype.deleteArbeitszeit).toBeTypeOf('function');
     expect(TestApp.prototype.loadTabletEinstellungen).toBeTypeOf('function');
     expect(TestApp.prototype.loadTermine).toBeTypeOf('function');
     expect(TestApp.prototype.showEinplanenDialog).toBeTypeOf('function');
