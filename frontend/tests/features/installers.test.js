@@ -14,6 +14,7 @@ import { installStaffFeature } from '../../src/features/staff/staffFeature.js';
 import { installTabletFeature } from '../../src/features/tablet/tabletFeature.js';
 import { installTimeTrackingFeature } from '../../src/features/timeTracking/timeTrackingFeature.js';
 import { installTodayFeature } from '../../src/features/today/todayFeature.js';
+import { installWaitingActionsFeature } from '../../src/features/waitingActions/waitingActionsFeature.js';
 import { installWorkSchedulesFeature } from '../../src/features/workSchedules/workSchedulesFeature.js';
 
 describe('feature installers', () => {
@@ -35,6 +36,7 @@ describe('feature installers', () => {
     installTabletFeature(TestApp);
     installTimeTrackingFeature(TestApp);
     installTodayFeature(TestApp);
+    installWaitingActionsFeature(TestApp);
     installWorkSchedulesFeature(TestApp);
 
     expect(TestApp.prototype.loadAbwesenheit).toBeTypeOf('function');
@@ -80,6 +82,13 @@ describe('feature installers', () => {
     expect(TestApp.prototype.navigateZeitverwaltung).toBeTypeOf('function');
     expect(TestApp.prototype.loadHeuteTermine).toBeTypeOf('function');
     expect(TestApp.prototype.renderHeuteTabelle).toBeTypeOf('function');
+    expect(TestApp.prototype.setupWartendeAktionenKundensuche).toBeTypeOf('function');
+    expect(TestApp.prototype.handleWartendeAktionSubmit).toBeTypeOf('function');
+    expect(TestApp.prototype.loadWartendeAktionen).toBeTypeOf('function');
+    expect(TestApp.prototype.wartendeAktionEinplanen).toBeTypeOf('function');
+    expect(TestApp.prototype.wartendeAktionErledigt).toBeTypeOf('function');
+    expect(TestApp.prototype.wartendeAktionLoeschen).toBeTypeOf('function');
+    expect(TestApp.prototype.saveTeileStatus).toBeTypeOf('function');
     expect(TestApp.prototype.loadArbeitszeitenForPerson).toBeTypeOf('function');
     expect(TestApp.prototype.saveWochenMuster).toBeTypeOf('function');
   });
