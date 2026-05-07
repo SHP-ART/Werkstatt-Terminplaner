@@ -1,3 +1,9 @@
+import {
+  berechneEndzeit,
+  formatDateGerman,
+  naechsterArbeitstag
+} from '../../shared/formatters.js';
+
 export function installTerminDetailsActionsFeature(AppClass) {
   AppClass.prototype.loadTermine = async function() {
   const filterDatumInput = document.getElementById('filterDatum');

@@ -1,3 +1,5 @@
+import { formatMinutesToHours } from '../../shared/formatters.js';
+
 export function installTimelineFeature(AppClass) {
   AppClass.prototype._renderSchnellStatusPausen = function(pausen, terminId) {
   const id = terminId ? `id="schnell-arbeitspausen-${terminId}"` : '';

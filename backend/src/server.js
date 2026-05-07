@@ -194,7 +194,12 @@ async function startServer(clientCountCallback, requestLogCallback) {
             if (corsOrigin === '*') return callback(null, true);
 
             // Whitelist erstellen
-            const whitelist = ['http://localhost:3000', 'http://127.0.0.1:3000'];
+            const whitelist = [
+                'http://localhost:3000',
+                'http://127.0.0.1:3000',
+                'http://localhost:3001',
+                'http://127.0.0.1:3001'
+            ];
 
             if (corsOrigin) {
                 corsOrigin.split(',').map(o => o.trim()).forEach(o => whitelist.push(o));
