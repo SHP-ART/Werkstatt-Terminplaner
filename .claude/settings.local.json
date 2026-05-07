@@ -34,5 +34,9 @@
       "Bash(scp \"frontend/dist/assets/main-CTeHO_0T.css\" root@100.124.168.108:/opt/werkstatt-terminplaner/frontend/dist/assets/)",
       "Read(//c/Users/Sven/.claude/plugins/cache/claude-plugins-official/superpowers/5.0.7/skills/brainstorming/**)"
     ]
-  }
+  },
+  "enabledMcpjsonServers": [
+    "code-review-graph"
+  ],
+  "enableAllProjectMcpServers": true
 }
