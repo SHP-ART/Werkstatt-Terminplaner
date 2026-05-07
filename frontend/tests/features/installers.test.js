@@ -12,6 +12,7 @@ import { installSettingsKiFeature } from '../../src/features/settings/settingsKi
 import { installShiftTemplatesFeature } from '../../src/features/shiftTemplates/shiftTemplatesFeature.js';
 import { installStaffFeature } from '../../src/features/staff/staffFeature.js';
 import { installTabletFeature } from '../../src/features/tablet/tabletFeature.js';
+import { installTimelineFeature } from '../../src/features/timeline/timelineFeature.js';
 import { installTimeTrackingFeature } from '../../src/features/timeTracking/timeTrackingFeature.js';
 import { installTodayFeature } from '../../src/features/today/todayFeature.js';
 import { installWaitingActionsFeature } from '../../src/features/waitingActions/waitingActionsFeature.js';
@@ -35,6 +36,7 @@ describe('feature installers', () => {
     installShiftTemplatesFeature(TestApp);
     installStaffFeature(TestApp);
     installTabletFeature(TestApp);
+    installTimelineFeature(TestApp);
     installTimeTrackingFeature(TestApp);
     installTodayFeature(TestApp);
     installWaitingActionsFeature(TestApp);
@@ -80,6 +82,11 @@ describe('feature installers', () => {
     expect(TestApp.prototype.loadMitarbeiter).toBeTypeOf('function');
     expect(TestApp.prototype.saveMitarbeiter).toBeTypeOf('function');
     expect(TestApp.prototype.loadTabletEinstellungen).toBeTypeOf('function');
+    expect(TestApp.prototype.showSchnellStatusDialog).toBeTypeOf('function');
+    expect(TestApp.prototype.speichereSchnellBearbeitung).toBeTypeOf('function');
+    expect(TestApp.prototype.renderZeitleiste).toBeTypeOf('function');
+    expect(TestApp.prototype.renderZeitleisteRow).toBeTypeOf('function');
+    expect(TestApp.prototype.zeitleisteKontextSplit).toBeTypeOf('function');
     expect(TestApp.prototype.loadZeitstempelung).toBeTypeOf('function');
     expect(TestApp.prototype.navigateZeitverwaltung).toBeTypeOf('function');
     expect(TestApp.prototype.loadHeuteTermine).toBeTypeOf('function');
