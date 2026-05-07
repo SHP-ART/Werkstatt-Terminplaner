@@ -19,6 +19,7 @@ import { installTerminFormActionsFeature } from '../../src/features/termine/term
 import { installTimelineFeature } from '../../src/features/timeline/timelineFeature.js';
 import { installTimeTrackingFeature } from '../../src/features/timeTracking/timeTrackingFeature.js';
 import { installTodayFeature } from '../../src/features/today/todayFeature.js';
+import { installTerminTrashFeature } from '../../src/features/trash/terminTrashFeature.js';
 import { installWaitingActionsFeature } from '../../src/features/waitingActions/waitingActionsFeature.js';
 import { installWorkTimeModalFeature } from '../../src/features/workTimeModal/workTimeModalFeature.js';
 import { installWorkSchedulesFeature } from '../../src/features/workSchedules/workSchedulesFeature.js';
@@ -47,6 +48,7 @@ describe('feature installers', () => {
     installTimelineFeature(TestApp);
     installTimeTrackingFeature(TestApp);
     installTodayFeature(TestApp);
+    installTerminTrashFeature(TestApp);
     installWaitingActionsFeature(TestApp);
     installWorkTimeModalFeature(TestApp);
     installWorkSchedulesFeature(TestApp);
@@ -123,6 +125,11 @@ describe('feature installers', () => {
     expect(TestApp.prototype.navigateZeitverwaltung).toBeTypeOf('function');
     expect(TestApp.prototype.loadHeuteTermine).toBeTypeOf('function');
     expect(TestApp.prototype.renderHeuteTabelle).toBeTypeOf('function');
+    expect(TestApp.prototype.updateTerminZeit).toBeTypeOf('function');
+    expect(TestApp.prototype.deleteTermin).toBeTypeOf('function');
+    expect(TestApp.prototype.loadPapierkorb).toBeTypeOf('function');
+    expect(TestApp.prototype.restoreTermin).toBeTypeOf('function');
+    expect(TestApp.prototype.permanentDeleteTermin).toBeTypeOf('function');
     expect(TestApp.prototype.setupWartendeAktionenKundensuche).toBeTypeOf('function');
     expect(TestApp.prototype.handleWartendeAktionSubmit).toBeTypeOf('function');
     expect(TestApp.prototype.loadWartendeAktionen).toBeTypeOf('function');
