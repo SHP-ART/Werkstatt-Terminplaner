@@ -15,6 +15,7 @@ import { installTabletFeature } from '../../src/features/tablet/tabletFeature.js
 import { installTimeTrackingFeature } from '../../src/features/timeTracking/timeTrackingFeature.js';
 import { installTodayFeature } from '../../src/features/today/todayFeature.js';
 import { installWaitingActionsFeature } from '../../src/features/waitingActions/waitingActionsFeature.js';
+import { installWorkTimeModalFeature } from '../../src/features/workTimeModal/workTimeModalFeature.js';
 import { installWorkSchedulesFeature } from '../../src/features/workSchedules/workSchedulesFeature.js';
 
 describe('feature installers', () => {
@@ -37,6 +38,7 @@ describe('feature installers', () => {
     installTimeTrackingFeature(TestApp);
     installTodayFeature(TestApp);
     installWaitingActionsFeature(TestApp);
+    installWorkTimeModalFeature(TestApp);
     installWorkSchedulesFeature(TestApp);
 
     expect(TestApp.prototype.loadAbwesenheit).toBeTypeOf('function');
@@ -89,6 +91,12 @@ describe('feature installers', () => {
     expect(TestApp.prototype.wartendeAktionErledigt).toBeTypeOf('function');
     expect(TestApp.prototype.wartendeAktionLoeschen).toBeTypeOf('function');
     expect(TestApp.prototype.saveTeileStatus).toBeTypeOf('function');
+    expect(TestApp.prototype.openArbeitszeitenModal).toBeTypeOf('function');
+    expect(TestApp.prototype.loadModalPhasen).toBeTypeOf('function');
+    expect(TestApp.prototype.openTagesUebersichtModal).toBeTypeOf('function');
+    expect(TestApp.prototype.updateModalGesamtzeit).toBeTypeOf('function');
+    expect(TestApp.prototype.renderModalTeileStatusSection).toBeTypeOf('function');
+    expect(TestApp.prototype.saveArbeitszeitenModal).toBeTypeOf('function');
     expect(TestApp.prototype.loadArbeitszeitenForPerson).toBeTypeOf('function');
     expect(TestApp.prototype.saveWochenMuster).toBeTypeOf('function');
   });
