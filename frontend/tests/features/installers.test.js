@@ -5,6 +5,7 @@ import { installCustomersFeature } from '../../src/features/customers/customersF
 import { installPartsFeature } from '../../src/features/parts/partsFeature.js';
 import { installAbsenceFeature } from '../../src/features/absence/absenceFeature.js';
 import { installDashboardFeature } from '../../src/features/dashboard/dashboardFeature.js';
+import { installFormHelpersFeature } from '../../src/features/formHelpers/formHelpersFeature.js';
 import { installKiPlanningFeature } from '../../src/features/kiPlanning/kiPlanningFeature.js';
 import { installReplacementCarsFeature } from '../../src/features/replacementCars/replacementCarsFeature.js';
 import { installSearchFeature } from '../../src/features/search/searchFeature.js';
@@ -31,6 +32,7 @@ describe('feature installers', () => {
     installCustomersFeature(TestApp);
     installPartsFeature(TestApp);
     installDashboardFeature(TestApp);
+    installFormHelpersFeature(TestApp);
     installKiPlanningFeature(TestApp);
     installReplacementCarsFeature(TestApp);
     installSearchFeature(TestApp);
@@ -68,6 +70,12 @@ describe('feature installers', () => {
     expect(TestApp.prototype.arbeitenTeileStatusAufLoesen).toBeTypeOf('function');
     expect(TestApp.prototype.loadDashboard).toBeTypeOf('function');
     expect(TestApp.prototype.loadDashboardKPIs).toBeTypeOf('function');
+    expect(TestApp.prototype.handleArbeitAutocomplete).toBeTypeOf('function');
+    expect(TestApp.prototype.showAutocomplete).toBeTypeOf('function');
+    expect(TestApp.prototype.setupAuslastungKalender).toBeTypeOf('function');
+    expect(TestApp.prototype.renderAuslastungKalender).toBeTypeOf('function');
+    expect(TestApp.prototype.setupEditAuslastungKalender).toBeTypeOf('function');
+    expect(TestApp.prototype.setupSchnellKalender).toBeTypeOf('function');
     expect(TestApp.prototype.requestKITagesplanung).toBeTypeOf('function');
     expect(TestApp.prototype.requestKIWochenplanung).toBeTypeOf('function');
     expect(TestApp.prototype.showKIPlanungModal).toBeTypeOf('function');
