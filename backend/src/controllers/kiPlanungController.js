@@ -533,10 +533,28 @@ class KIPlanungController {
     if (!candidates.length) return null;
     const withCapacity = candidates.filter(c => c.remaining >= 0);
     const pool = withCapacity.length ? withCapacity : candidates;
+
     pool.sort((a, b) => {
-      if (a.slotStart !== b.slotStart) return a.slotStart - b.slotStart;
-      return b.remaining - a.remaining;
+      // Kompetenz-Bonus (befüllt in Task 5, bis dahin 0)
+      const bonusDiff = (b.kompetenzBonus || 0) - (a.kompetenzBonus || 0);
+      if (Math.abs(bonusDiff) > 0.1) return bonusDiff;
+
+      // Früherer Slot wenn Unterschied > 15 Min
+      if (Math.abs(a.slotStart - b.slotStart) > 15) {
+        return a.slotStart - b.slotStart;
+      }
+
+      // Gleichmäßige Verteilung: niedrigere prozentuale Auslastung bevorzugen
+      const auslastungA = a.entry.usedMin / Math.max(a.entry.person.capacityMin, 1);
+      const auslastungB = b.entry.usedMin / Math.max(b.entry.person.capacityMin, 1);
+      if (Math.abs(auslastungA - auslastungB) > 0.05) {
+        return auslastungA - auslastungB;
+      }
+
+      // Tiebreaker: früherer Slot
+      return a.slotStart - b.slotStart;
     });
+
     return pool[0];
   }
 
