@@ -3543,6 +3543,9 @@
                         <button class="btn btn-ki" id="kiTagesplanungBtn" onclick="app.requestKITagesplanung()" title="KI optimiert die heutige Planung">
                             🤖 KI-Tagesvorschlag
                         </button>
+                        <button id="kiKompetenzBtn" class="btn btn-secondary btn-sm" onclick="app.openKompetenzModal()" title="Kompetenz-Zuordnung konfigurieren">
+                          ⚙️ Kompetenzen
+                        </button>
                         <button class="btn btn-ki-secondary" id="kiWochenplanungBtn" onclick="app.requestKIWochenplanung()" title="KI verteilt schwebende Termine auf die Woche">
                             📅 KI-Wochenverteilung
                         </button>
@@ -4829,6 +4832,25 @@
             </div>
         </div>
     </div>
+
+    <!-- Kompetenz-Konfiguration Modal -->
+<div id="kompetenzModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:1100;align-items:center;justify-content:center;flex-direction:column;">
+  <div style="background:#fff;border-radius:8px;width:90%;max-width:700px;max-height:85vh;overflow-y:auto;padding:24px;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+      <h3 style="margin:0;">⚙️ Kompetenz-Zuordnung</h3>
+      <button onclick="app.closeKompetenzModal()" style="background:none;border:none;font-size:20px;cursor:pointer;">✕</button>
+    </div>
+    <p style="color:#666;font-size:13px;margin-bottom:16px;">
+      Wähle welche Mitarbeiter für welche Arbeits-Kategorien bevorzugt werden sollen.
+      Nicht konfigurierte Kategorien werden gleichmäßig verteilt.
+    </p>
+    <div id="kompetenzMatrix"></div>
+    <div style="margin-top:20px;display:flex;gap:8px;justify-content:flex-end;">
+      <button onclick="app.closeKompetenzModal()" class="btn btn-secondary">Abbrechen</button>
+      <button onclick="app.saveKompetenzMapping()" class="btn btn-primary">💾 Speichern</button>
+    </div>
+  </div>
+</div>
 
     <!-- KI-Planungsvorschlag Modal -->
     <div id="kiPlanungModal" class="modal ki-modal" style="display: none;">
