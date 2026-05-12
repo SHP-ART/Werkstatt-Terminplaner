@@ -238,7 +238,26 @@ export function installKiPlanningFeature(AppClass) {
   } else {
     schwebendeSection.style.display = 'none';
   }
-  
+
+  // Nicht platzierte Termine
+  const nichtPlatziertSection = document.getElementById('kiNichtPlatziertSection');
+  const nichtPlatziertDiv = document.getElementById('kiNichtPlatziert');
+  if (nichtPlatziertSection && nichtPlatziertDiv) {
+    if (vorschlag.nichtPlatziertTermine && vorschlag.nichtPlatziertTermine.length > 0) {
+      nichtPlatziertSection.style.display = 'block';
+      nichtPlatziertDiv.innerHTML = vorschlag.nichtPlatziertTermine.map(t => `
+        <div class="ki-suggestion-item invalid" style="margin-bottom:6px;padding:8px 12px;">
+          <strong>#${t.terminId}: ${t.terminInfo}</strong>
+          <div style="color:#999;font-size:12px;margin-top:2px;">
+            ${t.dauerMin} Min – ${t.grund}
+          </div>
+        </div>
+      `).join('');
+    } else {
+      nichtPlatziertSection.style.display = 'none';
+    }
+  }
+
   // Wochen-Section verstecken
   document.getElementById('kiWochenSection').style.display = 'none';
   
@@ -283,6 +302,8 @@ export function installKiPlanningFeature(AppClass) {
   // Tages- und Schwebend-Sections verstecken
   document.getElementById('kiTagesSection').style.display = 'none';
   document.getElementById('kiSchwebendeSection').style.display = 'none';
+  const npSection = document.getElementById('kiNichtPlatziertSection');
+  if (npSection) npSection.style.display = 'none';
   
   // Wochen-Section anzeigen
   const wochenSection = document.getElementById('kiWochenSection');

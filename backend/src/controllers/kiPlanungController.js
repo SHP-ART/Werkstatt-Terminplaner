@@ -547,6 +547,7 @@ class KIPlanungController {
     const tagesZuordnungen = [];
     const schwebendeVorschlaege = [];
     const warnungen = [];
+    const nichtPlatziertTermine = [];
 
     const offeneTermine = (termine || []).filter(t => !KIPlanungController.isTerminZugeordnet(t));
 
@@ -587,7 +588,15 @@ class KIPlanungController {
 
       const best = KIPlanungController.pickBestCandidate(candidates);
       if (!best) {
-        warnungen.push(`Kein freier Slot für Termin #${termin.id} (${termin.arbeit || 'ohne Arbeit'}).`);
+        const grund = candidates.length === 0
+          ? 'Alle Mitarbeiter voll ausgelastet – keine Kapazität verfügbar'
+          : `Kein freier ${duration}-Min-Slot – Termin passt in keine verbleibende Lücke`;
+        nichtPlatziertTermine.push({
+          terminId: termin.id,
+          terminInfo: `${termin.arbeit || 'Termin'} - ${termin.kunde_name || 'k.A.'}`,
+          dauerMin: duration,
+          grund
+        });
         return;
       }
 
@@ -694,7 +703,8 @@ class KIPlanungController {
       },
       warnungen,
       tagesZuordnungen,
-      schwebendeVorschlaege
+      schwebendeVorschlaege,
+      nichtPlatziertTermine
     };
   }
 
