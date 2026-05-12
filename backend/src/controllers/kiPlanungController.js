@@ -50,7 +50,7 @@ class KIPlanungController {
           KIPlanungController.getAbwesenheitenFuerDatum(datum)
         ]);
 
-        const vorschlag = KIPlanungController.buildLocalTagesVorschlag({
+        const vorschlag = await KIPlanungController.buildLocalTagesVorschlag({
           datum,
           mitarbeiter,
           lehrlinge,
@@ -177,7 +177,7 @@ class KIPlanungController {
           KIPlanungController.getSchwebendeTermine()
         ]);
 
-        const vorschlag = KIPlanungController.buildLocalWochenVorschlag({
+        const vorschlag = await KIPlanungController.buildLocalWochenVorschlag({
           wochentage,
           wochenDaten,
           mitarbeiter,
@@ -393,9 +393,23 @@ class KIPlanungController {
   }
 
   static getTerminDauerMinuten(termin) {
-    const value = termin?.tatsaechliche_zeit || termin?.geschaetzte_zeit || DEFAULT_TERMIN_DAUER_MIN;
-    const minuten = parseInt(value, 10);
-    return Number.isFinite(minuten) && minuten > 0 ? minuten : DEFAULT_TERMIN_DAUER_MIN;
+    const value = termin?.tatsaechliche_zeit || termin?.geschaetzte_zeit;
+    if (value) {
+      const minuten = parseInt(value, 10);
+      if (Number.isFinite(minuten) && minuten > 0) return minuten;
+    }
+    if (termin?._ki_dauer_min) return termin._ki_dauer_min;
+    return DEFAULT_TERMIN_DAUER_MIN;
+  }
+
+  static async enrichTermineWithKIDauer(termine) {
+    await Promise.all((termine || []).map(async termin => {
+      if (termin.tatsaechliche_zeit || termin.geschaetzte_zeit) return;
+      const vorschlag = await localAiService.getZeitVorschlag(termin.arbeit || '');
+      if (vorschlag && vorschlag.minuten > 0) {
+        termin._ki_dauer_min = vorschlag.minuten;
+      }
+    }));
   }
 
   static getTerminStartMinuten(termin) {
@@ -526,7 +540,8 @@ class KIPlanungController {
     return pool[0];
   }
 
-  static buildLocalTagesVorschlag({ datum, mitarbeiter, lehrlinge, termine, schwebendeTermine, einstellungen, abwesenheiten }) {
+  static async buildLocalTagesVorschlag({ datum, mitarbeiter, lehrlinge, termine, schwebendeTermine, einstellungen, abwesenheiten }) {
+    await KIPlanungController.enrichTermineWithKIDauer([...(termine || []), ...(schwebendeTermine || [])]);
     const personen = KIPlanungController.buildPersonList(mitarbeiter, lehrlinge, abwesenheiten, einstellungen);
     const schedule = KIPlanungController.buildExistingSchedules(termine, personen);
     const tagesZuordnungen = [];
@@ -683,7 +698,9 @@ class KIPlanungController {
     };
   }
 
-  static buildLocalWochenVorschlag({ wochentage, wochenDaten, mitarbeiter, lehrlinge, schwebendeTermine, einstellungen }) {
+  static async buildLocalWochenVorschlag({ wochentage, wochenDaten, mitarbeiter, lehrlinge, schwebendeTermine, einstellungen }) {
+    const alleTermine = [...(schwebendeTermine || []), ...(wochenDaten || []).flatMap(d => d.termine || [])];
+    await KIPlanungController.enrichTermineWithKIDauer(alleTermine);
     const dayStats = (wochenDaten || []).map(day => {
       const personen = KIPlanungController.buildPersonList(mitarbeiter, lehrlinge, day.abwesenheiten, einstellungen);
       const schedule = KIPlanungController.buildExistingSchedules(day.termine, personen);
