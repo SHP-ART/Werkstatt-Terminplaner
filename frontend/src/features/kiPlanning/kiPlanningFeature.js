@@ -245,11 +245,12 @@ export function installKiPlanningFeature(AppClass) {
   if (nichtPlatziertSection && nichtPlatziertDiv) {
     if (vorschlag.nichtPlatziertTermine && vorschlag.nichtPlatziertTermine.length > 0) {
       nichtPlatziertSection.style.display = 'block';
+      const esc = s => String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
       nichtPlatziertDiv.innerHTML = vorschlag.nichtPlatziertTermine.map(t => `
         <div class="ki-suggestion-item invalid" style="margin-bottom:6px;padding:8px 12px;">
-          <strong>#${t.terminId}: ${t.terminInfo}</strong>
+          <strong>#${t.terminId}: ${esc(t.terminInfo)}</strong>
           <div style="color:#999;font-size:12px;margin-top:2px;">
-            ${t.dauerMin} Min – ${t.grund}
+            ${t.dauerMin} Min – ${esc(t.grund)}
           </div>
         </div>
       `).join('');
@@ -269,7 +270,7 @@ export function installKiPlanningFeature(AppClass) {
 
 /**
  * KI-Wochenvorschlag anzeigen
- */;
+ */
 
   AppClass.prototype.displayKIWochenvorschlag = function(vorschlag, wochentage) {
   const loading = document.getElementById('kiPlanungLoading');
