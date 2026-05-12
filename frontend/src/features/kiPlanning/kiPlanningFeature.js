@@ -1094,9 +1094,9 @@ export function installKiPlanningFeature(AppClass) {
 
     try {
       const [mitarbeiterRes, lehrlingeRes, settingsRes] = await Promise.all([
-        fetch(`${API_BASE_URL}/api/mitarbeiter`).then(r => r.json()),
-        fetch(`${API_BASE_URL}/api/lehrlinge`).then(r => r.json()),
-        fetch(`${API_BASE_URL}/api/einstellungen/werkstatt`).then(r => r.json())
+        fetch(`${CONFIG.API_URL}/mitarbeiter`).then(r => r.json()),
+        fetch(`${CONFIG.API_URL}/lehrlinge`).then(r => r.json()),
+        fetch(`${CONFIG.API_URL}/einstellungen/werkstatt`).then(r => r.json())
       ]);
 
       const personen = [
@@ -1161,7 +1161,7 @@ export function installKiPlanningFeature(AppClass) {
     });
 
     try {
-      const res = await fetch(`${API_BASE_URL}/api/einstellungen/werkstatt`, {
+      const res = await fetch(`${CONFIG.API_URL}/einstellungen/werkstatt`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ kompetenz_mapping: JSON.stringify(mapping) })
