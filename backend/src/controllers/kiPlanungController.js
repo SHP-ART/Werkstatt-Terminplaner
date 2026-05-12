@@ -326,6 +326,22 @@ class KIPlanungController {
     return settings.chatgpt_api_key ? 'openai' : 'local';
   }
 
+  static parseKompetenzen(einstellungen) {
+    if (!einstellungen?.kompetenz_mapping) return null;
+    try {
+      return JSON.parse(einstellungen.kompetenz_mapping);
+    } catch {
+      return null;
+    }
+  }
+
+  static getKompetenzBonus(person, terminKategorie, kompetenzen) {
+    if (!kompetenzen || !terminKategorie || terminKategorie === 'Sonstiges') return 0;
+    const zugeordnet = kompetenzen[terminKategorie];
+    if (!Array.isArray(zugeordnet) || zugeordnet.length === 0) return 0;
+    return zugeordnet.includes(person.id) ? 1 : -0.5;
+  }
+
   static timeToMinutes(time) {
     if (!time || typeof time !== 'string') return null;
     const match = time.match(/^(\d{1,2}):(\d{2})$/);
@@ -561,6 +577,7 @@ class KIPlanungController {
   static async buildLocalTagesVorschlag({ datum, mitarbeiter, lehrlinge, termine, schwebendeTermine, einstellungen, abwesenheiten }) {
     await KIPlanungController.enrichTermineWithKIDauer([...(termine || []), ...(schwebendeTermine || [])]);
     const personen = KIPlanungController.buildPersonList(mitarbeiter, lehrlinge, abwesenheiten, einstellungen);
+    const kompetenzen = KIPlanungController.parseKompetenzen(einstellungen);
     const schedule = KIPlanungController.buildExistingSchedules(termine, personen);
     const tagesZuordnungen = [];
     const schwebendeVorschlaege = [];
@@ -584,6 +601,7 @@ class KIPlanungController {
     offeneTermine.forEach(termin => {
       const duration = KIPlanungController.getTerminDauerMinuten(termin);
       const preferredStart = KIPlanungController.getTerminStartMinuten(termin) ?? DEFAULT_ARBEITSBEGINN_MIN;
+      const terminKategorie = localAiService.kategorisiereArbeit(termin.arbeit || '');
       const candidates = [];
       schedule.forEach(entry => {
         const adjusted = Math.ceil(duration / (entry.person.effizienz || 1));
@@ -596,11 +614,15 @@ class KIPlanungController {
         );
         if (slotStart === null) return;
         const remaining = entry.person.capacityMin - entry.usedMin - adjusted;
+        const kompetenzBonus = kompetenzen
+          ? KIPlanungController.getKompetenzBonus(entry.person, terminKategorie, kompetenzen)
+          : 0;
         candidates.push({
           entry,
           slotStart,
           remaining,
-          durationAdjusted: adjusted
+          durationAdjusted: adjusted,
+          kompetenzBonus
         });
       });
 
@@ -644,6 +666,7 @@ class KIPlanungController {
     (schwebendeTermine || []).forEach(termin => {
       const duration = KIPlanungController.getTerminDauerMinuten(termin);
       const preferredStart = DEFAULT_ARBEITSBEGINN_MIN;
+      const terminKategorie = localAiService.kategorisiereArbeit(termin.arbeit || '');
       const candidates = [];
       schedule.forEach(entry => {
         const adjusted = Math.ceil(duration / (entry.person.effizienz || 1));
@@ -656,11 +679,15 @@ class KIPlanungController {
         );
         if (slotStart === null) return;
         const remaining = entry.person.capacityMin - entry.usedMin - adjusted;
+        const kompetenzBonus = kompetenzen
+          ? KIPlanungController.getKompetenzBonus(entry.person, terminKategorie, kompetenzen)
+          : 0;
         candidates.push({
           entry,
           slotStart,
           remaining,
-          durationAdjusted: adjusted
+          durationAdjusted: adjusted,
+          kompetenzBonus
         });
       });
 

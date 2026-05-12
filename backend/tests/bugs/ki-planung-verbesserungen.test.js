@@ -114,3 +114,35 @@ describe('KIPlanungController – pickBestCandidate (Balancing)', () => {
     expect(best.entry.person.id).toBe(1);
   });
 });
+
+describe('KIPlanungController – getKompetenzBonus', () => {
+  test('gibt 1 wenn Person für Kategorie eingetragen', () => {
+    const person = { id: 1, type: 'mitarbeiter' };
+    expect(KIPlanungController.getKompetenzBonus(person, 'Motor', { Motor: [1, 3] })).toBe(1);
+  });
+
+  test('gibt -0.5 wenn andere Person für Kategorie eingetragen', () => {
+    const person = { id: 2, type: 'mitarbeiter' };
+    expect(KIPlanungController.getKompetenzBonus(person, 'Motor', { Motor: [1, 3] })).toBe(-0.5);
+  });
+
+  test('gibt 0 wenn keine Konfiguration für diese Kategorie', () => {
+    const person = { id: 1, type: 'mitarbeiter' };
+    expect(KIPlanungController.getKompetenzBonus(person, 'Bremsen', { Motor: [1] })).toBe(0);
+  });
+
+  test('gibt 0 für Sonstiges (immer alle)', () => {
+    const person = { id: 5, type: 'mitarbeiter' };
+    expect(KIPlanungController.getKompetenzBonus(person, 'Sonstiges', { Sonstiges: [1, 2] })).toBe(0);
+  });
+
+  test('gibt 0 wenn kompetenzen null', () => {
+    const person = { id: 1, type: 'mitarbeiter' };
+    expect(KIPlanungController.getKompetenzBonus(person, 'Motor', null)).toBe(0);
+  });
+
+  test('gibt 0 wenn kompetenzen leeres Objekt', () => {
+    const person = { id: 1, type: 'mitarbeiter' };
+    expect(KIPlanungController.getKompetenzBonus(person, 'Motor', {})).toBe(0);
+  });
+});
