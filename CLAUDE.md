@@ -154,7 +154,7 @@ Die Datenbank läuft im WAL-Modus. Das bedeutet:
 - Restore = WAL/SHM-Dateien löschen + neue DB einspielen
 
 ### Migrations-Nummerierung
-Migration-Dateien müssen eindeutige Nummern haben. Lücken sind OK, aber **doppelte Nummern** führen zu Konflikten. Immer den höchsten vorhandenen Stand prüfen (aktuell: 034).
+Migration-Dateien müssen eindeutige Nummern haben. Lücken sind OK, aber **doppelte Nummern** führen zu Konflikten. Immer den höchsten vorhandenen Stand prüfen (aktuell: 044).
 
 ### KI-Verfügbarkeit
 `externalAiService.js` gibt `null` zurück wenn kein KI-Dienst verfügbar ist – alle Aufrufer müssen das abfangen. KI-Features sind immer optional, nie für den Kernbetrieb erforderlich.

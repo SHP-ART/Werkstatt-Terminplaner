@@ -238,7 +238,27 @@ export function installKiPlanningFeature(AppClass) {
   } else {
     schwebendeSection.style.display = 'none';
   }
-  
+
+  // Nicht platzierte Termine
+  const nichtPlatziertSection = document.getElementById('kiNichtPlatziertSection');
+  const nichtPlatziertDiv = document.getElementById('kiNichtPlatziert');
+  if (nichtPlatziertSection && nichtPlatziertDiv) {
+    if (vorschlag.nichtPlatziertTermine && vorschlag.nichtPlatziertTermine.length > 0) {
+      nichtPlatziertSection.style.display = 'block';
+      const esc = s => String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+      nichtPlatziertDiv.innerHTML = vorschlag.nichtPlatziertTermine.map(t => `
+        <div class="ki-suggestion-item invalid" style="margin-bottom:6px;padding:8px 12px;">
+          <strong>#${t.terminId}: ${esc(t.terminInfo)}</strong>
+          <div style="color:#999;font-size:12px;margin-top:2px;">
+            ${t.dauerMin} Min – ${esc(t.grund)}
+          </div>
+        </div>
+      `).join('');
+    } else {
+      nichtPlatziertSection.style.display = 'none';
+    }
+  }
+
   // Wochen-Section verstecken
   document.getElementById('kiWochenSection').style.display = 'none';
   
@@ -250,7 +270,7 @@ export function installKiPlanningFeature(AppClass) {
 
 /**
  * KI-Wochenvorschlag anzeigen
- */;
+ */
 
   AppClass.prototype.displayKIWochenvorschlag = function(vorschlag, wochentage) {
   const loading = document.getElementById('kiPlanungLoading');
@@ -283,6 +303,8 @@ export function installKiPlanningFeature(AppClass) {
   // Tages- und Schwebend-Sections verstecken
   document.getElementById('kiTagesSection').style.display = 'none';
   document.getElementById('kiSchwebendeSection').style.display = 'none';
+  const npSection = document.getElementById('kiNichtPlatziertSection');
+  if (npSection) npSection.style.display = 'none';
   
   // Wochen-Section anzeigen
   const wochenSection = document.getElementById('kiWochenSection');
@@ -1063,5 +1085,97 @@ export function installKiPlanningFeature(AppClass) {
 
   return null; // Kein passender Tag gefunden
 };
+
+  AppClass.prototype.openKompetenzModal = async function() {
+    const modal = document.getElementById('kompetenzModal');
+    const matrix = document.getElementById('kompetenzMatrix');
+    modal.style.display = 'flex';
+    matrix.innerHTML = '<p>Lade…</p>';
+
+    try {
+      const [mitarbeiterRes, lehrlingeRes, settingsRes] = await Promise.all([
+        fetch(`${CONFIG.API_URL}/mitarbeiter`).then(r => r.json()),
+        fetch(`${CONFIG.API_URL}/lehrlinge`).then(r => r.json()),
+        fetch(`${CONFIG.API_URL}/einstellungen/werkstatt`).then(r => r.json())
+      ]);
+
+      const personen = [
+        ...(Array.isArray(mitarbeiterRes) ? mitarbeiterRes : (mitarbeiterRes.data || [])).filter(m => m.aktiv).map(m => ({ ...m, typ: 'mitarbeiter' })),
+        ...(Array.isArray(lehrlingeRes) ? lehrlingeRes : (lehrlingeRes.data || [])).filter(l => l.aktiv).map(l => ({ ...l, typ: 'lehrling' }))
+      ];
+
+      let mapping = {};
+      try {
+        if (settingsRes.kompetenz_mapping) {
+          mapping = JSON.parse(settingsRes.kompetenz_mapping);
+        }
+      } catch {}
+
+      const kategorien = ['Inspektion', 'Bremsen', 'Motor', 'Elektrik', 'Klima', 'Reifen', 'Karosserie'];
+      const esc = s => String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+
+      matrix.innerHTML = `
+        <table style="width:100%;border-collapse:collapse;font-size:13px;">
+          <thead>
+            <tr>
+              <th style="text-align:left;padding:6px 8px;border-bottom:2px solid #eee;">Kategorie</th>
+              ${personen.map(p => `<th style="text-align:center;padding:6px 4px;border-bottom:2px solid #eee;font-weight:normal;">
+                <div style="font-weight:600;">${esc(p.name)}</div>
+                <div style="color:#999;font-size:11px;">${p.typ === 'lehrling' ? 'Lehrling' : 'MA'}</div>
+              </th>`).join('')}
+            </tr>
+          </thead>
+          <tbody>
+            ${kategorien.map(kat => `
+              <tr>
+                <td style="padding:6px 8px;border-bottom:1px solid #f0f0f0;font-weight:500;">${esc(kat)}</td>
+                ${personen.map(p => {
+                  const checked = Array.isArray(mapping[kat]) && mapping[kat].includes(p.id) ? 'checked' : '';
+                  return `<td style="text-align:center;padding:6px 4px;border-bottom:1px solid #f0f0f0;">
+                    <input type="checkbox" data-kat="${esc(kat)}" data-person-id="${p.id}" ${checked}>
+                  </td>`;
+                }).join('')}
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      `;
+    } catch (err) {
+      matrix.innerHTML = `<p style="color:red;">Fehler beim Laden: ${String(err.message || err).replace(/</g,'&lt;')}</p>`;
+    }
+  };
+
+  AppClass.prototype.closeKompetenzModal = function() {
+    document.getElementById('kompetenzModal').style.display = 'none';
+  };
+
+  AppClass.prototype.saveKompetenzMapping = async function() {
+    const checkboxes = document.querySelectorAll('#kompetenzMatrix input[type=checkbox]');
+    const mapping = {};
+    checkboxes.forEach(cb => {
+      if (!cb.checked) return;
+      const kat = cb.dataset.kat;
+      const id = parseInt(cb.dataset.personId, 10);
+      if (!mapping[kat]) mapping[kat] = [];
+      mapping[kat].push(id);
+    });
+
+    try {
+      const res = await fetch(`${CONFIG.API_URL}/einstellungen/werkstatt`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ kompetenz_mapping: JSON.stringify(mapping) })
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      this.closeKompetenzModal();
+      if (typeof this.showToast === 'function') {
+        this.showToast('✅ Kompetenz-Zuordnung gespeichert', 'success');
+      }
+    } catch (err) {
+      if (typeof this.showToast === 'function') {
+        this.showToast(`Fehler beim Speichern: ${String(err.message || err)}`, 'error');
+      }
+    }
+  };
 }
 
