@@ -210,6 +210,22 @@ class StempelzeitenController {
         ? `OR (t.status = 'in_arbeit' AND t.datum = date(?, '-1 day'))`
         : '';
       const tagesUebergreifendParams = istHeute ? [datum] : [];
+      const heutigeImporteWhere = istHeute
+        ? `OR (
+             COALESCE(t.ist_schwebend, 0) = 1
+             AND t.datum = '9999-12-31'
+             AND EXISTS (
+               SELECT 1
+                 FROM auftragsimporte ai
+                WHERE ai.termin_id = t.id
+                  AND (
+                    date(ai.erstellt_am, 'localtime') = date(?, 'localtime')
+                    OR date(ai.verarbeitet_am, 'localtime') = date(?, 'localtime')
+                  )
+             )
+           )`
+        : '';
+      const heutigeImporteParams = istHeute ? [datum, datum] : [];
 
       const alleTermine = await allAsync(`
         SELECT
@@ -237,11 +253,11 @@ class StempelzeitenController {
         FROM termine t
         LEFT JOIN kunden k ON t.kunde_id = k.id
         LEFT JOIN termine p ON t.parent_termin_id = p.id AND p.geloescht_am IS NULL
-        WHERE (t.datum = ? ${tagesUebergreifendWhere})
+        WHERE (t.datum = ? ${tagesUebergreifendWhere} ${heutigeImporteWhere})
           AND t.geloescht_am IS NULL
           AND t.status NOT IN ('storniert')
         ORDER BY t.id
-      `, [datum, ...tagesUebergreifendParams]);
+      `, [datum, ...tagesUebergreifendParams, ...heutigeImporteParams]);
 
       // Split-Partner für unterbrochene Termine (split_teil=1) laden
       const unterbrocheneIds = alleTermine
@@ -278,10 +294,10 @@ class StempelzeitenController {
         JOIN termine t ON ta.termin_id = t.id
         LEFT JOIN mitarbeiter m ON ta.mitarbeiter_id = m.id
         LEFT JOIN lehrlinge l  ON ta.lehrling_id  = l.id
-        WHERE (t.datum = ? ${tagesUebergreifendWhere})
+        WHERE (t.datum = ? ${tagesUebergreifendWhere} ${heutigeImporteWhere})
           AND t.geloescht_am IS NULL
         ORDER BY person_name, ta.termin_id, ta.reihenfolge
-      `, [datum, ...tagesUebergreifendParams]);
+      `, [datum, ...tagesUebergreifendParams, ...heutigeImporteParams]);
 
       // Pausen + Unterbrechungen für diesen Tag pro Person laden — wird vom IST abgezogen
       const pauseRangesProPerson = await StempelzeitenController._ladePauseRangesProPerson(datum);
@@ -494,6 +510,11 @@ class StempelzeitenController {
         }
         gruppenMap.get(grupKey).arbeiten.push(arbeitData);
       };
+      const alleAuftraegePerson = {
+        person_typ: 'alle',
+        person_id: 0,
+        person_name: 'Alle Auftraege (noch nicht gestempelt)'
+      };
 
       // 1. Termine MIT Stempel in termine_arbeiten
       const gestempelteTerminIds = new Set();
@@ -507,7 +528,7 @@ class StempelzeitenController {
           const p = personId ? _getPerson(personTyp, personId) : null;
           personName = p ? p.person_name : '—';
         }
-        const grupKey = personId ? `${personTyp}_${personId}` : `unbekannt_${s.termin_id}`;
+        const grupKey = personId ? `${personTyp}_${personId}` : 'alle_auftraege';
         const t = alleTermine.find(x => x.termin_id === s.termin_id) || {};
         // Fallback aus arbeitszeiten_details/fertigstellung_zeit falls stempel_* leer
         const fb = _fallbackFromTermin(t, s.arbeit);
@@ -529,7 +550,7 @@ class StempelzeitenController {
           ? StempelzeitenController._pauseDetailsFuerBereich(effStart, effEnde, pauseRanges, s.termin_id)
           : [];
         const istNetto = rawIst != null ? Math.max(0, rawIst - pauseAbzug) : null;
-        _addArbeit(grupKey, { person_typ: personTyp, person_id: personId, person_name: personName }, t, {
+        _addArbeit(grupKey, personId ? { person_typ: personTyp, person_id: personId, person_name: personName } : alleAuftraegePerson, t, {
           arbeit_id: s.arbeit_id, termin_id: s.termin_id,
           termin_nr: t.termin_nr || '', interne_auftragsnummer: t.interne_auftragsnummer || '', kennzeichen: t.kennzeichen || '', kunde_name: t.kunde_name || '',
           termin_datum: t.termin_datum || null,
@@ -597,10 +618,13 @@ class StempelzeitenController {
       // 3. Termine ohne Person und ohne Stempel → Sammelgruppe
       const ohnePersonOhneStempel = ohneStempel.filter(t => !terminPersonMap[t.termin_id]);
       if (ohnePersonOhneStempel.length > 0) {
+        const bestehendeAlleAuftraege = gruppenMap.get('alle_auftraege');
         gruppenMap.set('alle_auftraege', {
           person_typ: 'alle', person_id: 0,
           person_name: '📋 Alle Aufträge (noch nicht gestempelt)',
-          arbeiten: ohnePersonOhneStempel.map(t => {
+          arbeiten: [
+            ...(bestehendeAlleAuftraege ? bestehendeAlleAuftraege.arbeiten : []),
+            ...ohnePersonOhneStempel.map(t => {
             const rw = _getRichtwert(t.termin_arbeit);
             const planP = _planZeiten(t, rw);
             const fb = _fallbackFromTermin(t, t.termin_arbeit);
@@ -618,7 +642,8 @@ class StempelzeitenController {
               stempel_start: fbStempelStart, stempel_ende: fbStempelEnde, ist_min: fb.ist_min,
               split_partner: t._split_partner || null
             };
-          })
+            })
+          ]
         });
       }
 
