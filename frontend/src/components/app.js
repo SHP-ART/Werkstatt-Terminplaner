@@ -3391,12 +3391,15 @@ App.prototype.loadAuftragsimporte = async function() {
 
   list.innerHTML = '<div class="loading">Wird geladen...</div>';
   try {
-    const data = await AuftragsimportService.getAll({ offen: 1 });
+    const data = await AuftragsimportService.getAll({ eingang: 1 });
     this.auftragsimporte = data.imports || [];
     if (pathInfo) pathInfo.textContent = data.importDir ? `Ordner: ${data.importDir}` : '';
     if (status) {
       const offen = this.auftragsimporte.filter(i => ['neu', 'erkannt', 'fehler'].includes(i.status)).length;
-      status.textContent = `${offen} offene PDF-Importe`;
+      const heuteVerarbeitet = this.auftragsimporte.filter(i => (
+        ['verarbeitet', 'locosoft_pruefen', 'verworfen'].includes(i.status)
+      )).length;
+      status.textContent = `${offen} offen, ${heuteVerarbeitet} heute erledigt`;
     }
     this.renderAuftragsimporte();
   } catch (error) {
@@ -3411,7 +3414,7 @@ App.prototype.renderAuftragsimporte = function() {
 
   const imports = this.auftragsimporte || [];
   if (imports.length === 0) {
-    list.innerHTML = '<div class="empty-state">Keine offenen PDF-Importe</div>';
+    list.innerHTML = '<div class="empty-state">Keine offenen oder heutigen PDF-Importe</div>';
     const details = document.getElementById('auftragsimportDetails');
     if (details) details.innerHTML = '';
     return;
@@ -3424,7 +3427,9 @@ App.prototype.renderAuftragsimporte = function() {
     const kennzeichen = daten.fahrzeug?.kennzeichen || '-';
     const zeit = daten.geschaetzte_zeit ? `${daten.geschaetzte_zeit} min` : '-';
     const treffer = (item.zuordnungs_treffer || [])[0];
-    const trefferText = treffer ? `${treffer.termin_nr || treffer.id} (${treffer.sicherheit})` : '-';
+    const trefferText = item.termin_nr
+      ? item.termin_nr
+      : (treffer ? `${treffer.termin_nr || treffer.id} (${treffer.sicherheit})` : '-');
 
     return `
       <tr onclick="app.showAuftragsimportDetails(${item.id})" style="cursor:pointer;">
@@ -3472,6 +3477,7 @@ App.prototype.showAuftragsimportDetails = function(id) {
   const daten = item.erkannte_daten || {};
   const arbeiten = daten.arbeit?.items || [];
   const treffer = item.zuordnungs_treffer || [];
+  const isProcessed = ['verarbeitet', 'locosoft_pruefen', 'verworfen'].includes(item.status);
   const arbeitsHtml = arbeiten.length
     ? arbeiten.map(a => `<li>${this.escapeHtml(a.text)}${a.dauer_minuten ? ` (${a.dauer_minuten} min)` : ''}</li>`).join('')
     : '<li>-</li>';
@@ -3480,10 +3486,19 @@ App.prototype.showAuftragsimportDetails = function(id) {
         <div style="padding:8px 0; border-bottom:1px solid #eee;">
           <strong>${this.escapeHtml(t.termin_nr || String(t.id))}</strong>
           ${this.escapeHtml(t.datum || '')} ${this.escapeHtml(t.kunde_name || '')}
-          <button class="btn btn-sm btn-secondary" onclick="event.stopPropagation(); app.zuordnenAuftragsimport(${item.id}, ${t.id})">Zuordnen</button>
+          ${isProcessed ? '' : `<button class="btn btn-sm btn-secondary" onclick="event.stopPropagation(); app.zuordnenAuftragsimport(${item.id}, ${t.id})">Zuordnen</button>`}
         </div>
       `).join('')
     : '<div class="hint">Kein passender Termin gefunden</div>';
+  const actionHtml = isProcessed
+    ? `<div class="hint" style="margin-top:16px;">Bereits erledigt${item.termin_nr ? ` als ${this.escapeHtml(item.termin_nr)}` : ''}</div>`
+    : `
+      <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:16px;">
+        <button class="btn btn-primary" onclick="app.schnellterminAusAuftragsimport(${item.id})">Als Schnelltermin speichern</button>
+        <button class="btn btn-secondary" onclick="app.locosoftPruefenAuftragsimport(${item.id})">Zu Locosoft-Pruefung</button>
+        <button class="btn btn-danger" onclick="app.verwerfenAuftragsimport(${item.id})">Verwerfen</button>
+      </div>
+    `;
 
   details.innerHTML = `
     <div class="form-section" style="margin-top:0;">
@@ -3500,11 +3515,7 @@ App.prototype.showAuftragsimportDetails = function(id) {
       <ul>${arbeitsHtml}</ul>
       <h4>Moegliche Termine</h4>
       ${trefferHtml}
-      <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:16px;">
-        <button class="btn btn-primary" onclick="app.schnellterminAusAuftragsimport(${item.id})">Als Schnelltermin speichern</button>
-        <button class="btn btn-secondary" onclick="app.locosoftPruefenAuftragsimport(${item.id})">Zu Locosoft-Pruefung</button>
-        <button class="btn btn-danger" onclick="app.verwerfenAuftragsimport(${item.id})">Verwerfen</button>
-      </div>
+      ${actionHtml}
     </div>
   `;
 };

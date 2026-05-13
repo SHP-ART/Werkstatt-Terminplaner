@@ -6,7 +6,8 @@ class AuftragsimportController {
   static async getAll(req, res) {
     const items = await AuftragsimportModel.getAll({
       status: req.query.status || null,
-      offen: req.query.offen === '1' || req.query.offen === 'true'
+      offen: req.query.offen === '1' || req.query.offen === 'true',
+      eingang: req.query.eingang === '1' || req.query.eingang === 'true'
     });
 
     res.json({

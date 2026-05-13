@@ -33,6 +33,14 @@ class AuftragsimportModel {
       where.push("ai.status IN ('neu', 'erkannt', 'fehler')");
     }
 
+    if (filters.eingang) {
+      where.push(`(
+        ai.status IN ('neu', 'erkannt', 'fehler')
+        OR date(ai.erstellt_am, 'localtime') = date('now', 'localtime')
+        OR date(ai.verarbeitet_am, 'localtime') = date('now', 'localtime')
+      )`);
+    }
+
     const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
     const rows = await allAsync(
       `SELECT ai.*, t.termin_nr, t.datum AS termin_datum, t.kunde_name AS termin_kunde_name
