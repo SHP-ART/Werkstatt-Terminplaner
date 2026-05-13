@@ -3494,7 +3494,7 @@ App.prototype.showAuftragsimportDetails = function(id) {
     ? `<div class="hint" style="margin-top:16px;">Bereits erledigt${item.termin_nr ? ` als ${this.escapeHtml(item.termin_nr)}` : ''}</div>`
     : `
       <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:16px;">
-        <button class="btn btn-primary" onclick="app.schnellterminAusAuftragsimport(${item.id})">Als Schnelltermin speichern</button>
+        <button class="btn btn-primary" onclick="app.schnellterminAusAuftragsimport(${item.id})">Zu Nicht zugeordnet</button>
         <button class="btn btn-secondary" onclick="app.locosoftPruefenAuftragsimport(${item.id})">Zu Locosoft-Pruefung</button>
         <button class="btn btn-danger" onclick="app.verwerfenAuftragsimport(${item.id})">Verwerfen</button>
       </div>
@@ -3534,7 +3534,7 @@ App.prototype.scanAuftragsimporte = async function() {
 App.prototype.schnellterminAusAuftragsimport = async function(id) {
   try {
     await AuftragsimportService.createSchnelltermin(id);
-    this.showToast('Schnelltermin erstellt', 'success');
+    this.showToast('Auftrag zu Nicht zugeordnet hinzugefuegt', 'success');
     await this.loadAuftragsimporte();
     this.loadTermine();
   } catch (error) {

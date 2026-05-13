@@ -40,7 +40,7 @@ class AuftragsimportController {
     });
     broadcastEvent('termin.created', {
       id: result.termin.id,
-      datum: '9999-12-31'
+      datum: result.termin.datum
     });
     res.status(201).json(result);
   }

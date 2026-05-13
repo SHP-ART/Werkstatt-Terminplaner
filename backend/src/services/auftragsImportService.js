@@ -35,6 +35,15 @@ function toIsoDate(value) {
   return `${year}-${match[2]}-${match[1]}`;
 }
 
+function todayIsoDate() {
+  const now = new Date();
+  return [
+    now.getFullYear(),
+    String(now.getMonth() + 1).padStart(2, '0'),
+    String(now.getDate()).padStart(2, '0')
+  ].join('-');
+}
+
 function cleanKennzeichen(value) {
   return String(value || '').replace(/\s+/g, ' ').trim().toUpperCase();
 }
@@ -264,8 +273,8 @@ async function createSchnelltermin(importId, overrides = {}) {
 
     const terminData = buildTerminData(item, {
       ...overrides,
-      datum: '9999-12-31',
-      ist_schwebend: 1,
+      datum: overrides.datum || todayIsoDate(),
+      ist_schwebend: 0,
       status: 'geplant'
     });
     const termin = await TermineModel.create(terminData);
