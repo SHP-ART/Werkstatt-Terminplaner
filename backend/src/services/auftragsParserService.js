@@ -119,6 +119,7 @@ function shortenWorkText(text) {
   if (/PARTIKELFILTER.*CLEANTECH|GEGENDRUCKMESSUNG/.test(upper)) return 'Partikelfilter reinigen';
   if (/ABGASUNTERSUCHUNG|^A\.U\./.test(upper)) return 'AU';
   if (/HAUPTUNTERSUCHUNG|DEKRA|STVZO/.test(upper)) return 'HU';
+  if (/WARTUNG NACH HERSTELLERVORGABEN/.test(upper)) return 'Wartung';
   if (/SYSTEMATISCHE.*WARTUNG|WARTUNG.*SYSTEMATISCHE|WARTUNGEN: SYSTEMATISCHE/.test(upper)) return 'Wartung';
   if (/POLLENFILTER/.test(upper)) return 'Pollenfilter';
   if (/KRAFTSTOFFILTER|KRAFTSTOFFFILTER/.test(upper)) return 'Kraftstofffilter';
@@ -164,7 +165,11 @@ function isInspectionItem(item) {
 }
 
 function normalizeWorkItemsForTermin(items) {
-  const unique = uniqueItems(items);
+  const normalized = items.map((item) => ({
+    ...item,
+    text: shortenWorkText(item.text)
+  }));
+  const unique = uniqueItems(normalized);
   const hasWartung = unique.some(isWartungItem);
 
   if (!hasWartung) return unique;
@@ -242,11 +247,24 @@ function applySystemArbeitszeiten(daten, arbeitszeiten, options = {}) {
     arbeit: {
       ...daten.arbeit,
       items: matchedItems.map(({ item, match }) => {
+        if (isInspectionItem(item)) {
+          return {
+            ...item,
+            dauer_minuten: 30,
+            zeit_quelle: 'pruefung_max_30',
+            zeit_match: match?.arbeitszeit ? {
+              id: match.arbeitszeit.id,
+              bezeichnung: match.arbeitszeit.bezeichnung,
+              score: match.score
+            } : null
+          };
+        }
+
         if (match?.arbeitszeit?.standard_minuten) {
           const minuten = parseInt(match.arbeitszeit.standard_minuten, 10);
           return {
             ...item,
-            dauer_minuten: isInspectionItem(item) ? Math.min(minuten, 30) : minuten,
+            dauer_minuten: minuten,
             zeit_quelle: 'arbeitszeiten',
             zeit_match: {
               id: match.arbeitszeit.id,

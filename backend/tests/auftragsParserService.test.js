@@ -105,7 +105,11 @@ describe('auftragsParserService', () => {
     expect(result.arbeit.summary).toBe('AU; HU; Wartung');
     expect(result.arbeit.items.map((item) => item.text)).toEqual(['AU', 'HU', 'Wartung']);
     expect(result.arbeit.items.map((item) => item.dauer_minuten)).toEqual([30, 30, 90]);
-    expect(result.arbeit.items.every((item) => item.zeit_quelle === 'arbeitszeiten')).toBe(true);
+    expect(result.arbeit.items.map((item) => item.zeit_quelle)).toEqual([
+      'pruefung_max_30',
+      'pruefung_max_30',
+      'arbeitszeiten'
+    ]);
   });
 
   test('markiert Fallback wenn keine System-Arbeitszeit passt', () => {
@@ -144,6 +148,29 @@ describe('auftragsParserService', () => {
     expect(result.geschaetzte_zeit).toBe(65);
     expect(result.arbeit.items.map((item) => item.dauer_minuten)).toEqual([45, 0, 20]);
     expect(result.arbeit.items[1].zeit_quelle).toBe('ohne_systemzeit');
+  });
+
+  test('zaehlt Wartung nach Herstellervorgaben nicht doppelt zur systematischen Wartung', () => {
+    const daten = {
+      arbeit: {
+        items: [
+          { text: 'AU', originalText: 'A.U. - Abgasuntersuchung' },
+          { text: 'HU', originalText: 'Hauptuntersuchung DEKRA' },
+          { text: 'Wartung nach Herstellervorgaben', originalText: 'Wartung nach Herstellervorgaben' },
+          { text: 'Wartung', originalText: 'WARTUNGEN: SYSTEMATISCHE ARBEITEN' }
+        ],
+        summary: 'AU; HU; Wartung nach Herstellervorgaben; Wartung'
+      }
+    };
+    const arbeitszeiten = [
+      { id: 1, bezeichnung: 'Wartung', standard_minuten: 125, aliase: 'Inspektion,Systematische Wartung' }
+    ];
+
+    const result = applySystemArbeitszeiten(daten, arbeitszeiten);
+
+    expect(result.arbeit.items.map((item) => item.text)).toEqual(['AU', 'HU', 'Wartung']);
+    expect(result.arbeit.items.map((item) => item.dauer_minuten)).toEqual([30, 30, 125]);
+    expect(result.geschaetzte_zeit).toBe(185);
   });
 
 });
