@@ -123,4 +123,27 @@ describe('auftragsParserService', () => {
     expect(result.arbeit.items[0].zeit_quelle).toBe('fallback');
   });
 
+  test('addiert unbekannte Nebenarbeiten nicht als 60-Minuten-Fallback wenn Systemzeiten gefunden wurden', () => {
+    const daten = {
+      arbeit: {
+        items: [
+          { text: 'Reifen erneuern', originalText: 'Reifen erneuert inkl. Auswuchten' },
+          { text: 'Altreifenentsorgung', originalText: 'Altreifenentsorgung' },
+          { text: 'Fahrzeugcheck', originalText: 'Fahrzeugcheck' }
+        ],
+        summary: 'Reifen erneuern; Altreifenentsorgung; Fahrzeugcheck'
+      }
+    };
+    const arbeitszeiten = [
+      { id: 1, bezeichnung: 'Reifen erneuern', standard_minuten: 45, aliase: 'Auswuchten' },
+      { id: 2, bezeichnung: 'Fahrzeugcheck', standard_minuten: 20, aliase: '' }
+    ];
+
+    const result = applySystemArbeitszeiten(daten, arbeitszeiten);
+
+    expect(result.geschaetzte_zeit).toBe(65);
+    expect(result.arbeit.items.map((item) => item.dauer_minuten)).toEqual([45, 0, 20]);
+    expect(result.arbeit.items[1].zeit_quelle).toBe('ohne_systemzeit');
+  });
+
 });

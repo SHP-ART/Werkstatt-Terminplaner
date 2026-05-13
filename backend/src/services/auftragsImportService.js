@@ -3,7 +3,7 @@ const fs = require('fs');
 const path = require('path');
 
 const { dataDir } = require('../config/database');
-const { allAsync } = require('../utils/dbHelper');
+const { allAsync, runAsync } = require('../utils/dbHelper');
 const { withTransaction } = require('../utils/transaction');
 const TermineModel = require('../models/termineModel');
 const AuftragsimportModel = require('../models/auftragsimportModel');
@@ -49,19 +49,7 @@ function buildTerminData(importItem, overrides = {}) {
     ...(overrides.erkannte_daten || {})
   };
   const arbeit = daten.arbeit?.summary || 'Auftrag aus PDF';
-  const arbeitszeitenDetails = daten.arbeit?.items?.length
-    ? {
-        arbeiten: daten.arbeit.items.map((item, index) => ({
-          name: item.text,
-          dauer_minuten: item.dauer_minuten || null,
-          reihenfolge: index + 1,
-          quelle: 'auftragsimport',
-          originalText: item.originalText || item.text
-        })),
-        _dauer_override: daten.geschaetzte_zeit || null,
-        _quelle: 'auftragsimport'
-      }
-    : null;
+  const arbeitszeitenDetails = buildArbeitszeitenDetails(daten);
 
   return {
     kunde_name: daten.kunde?.name || null,
@@ -83,6 +71,72 @@ function buildTerminData(importItem, overrides = {}) {
     mitarbeiter_id: overrides.mitarbeiter_id || null,
     bring_zeit: overrides.bring_zeit || null
   };
+}
+
+function makeUniqueArbeitsKey(details, baseName) {
+  const cleanName = String(baseName || 'Arbeit').trim() || 'Arbeit';
+  if (!Object.prototype.hasOwnProperty.call(details, cleanName)) return cleanName;
+
+  let counter = 2;
+  let key = `${cleanName} ${counter}`;
+  while (Object.prototype.hasOwnProperty.call(details, key)) {
+    counter += 1;
+    key = `${cleanName} ${counter}`;
+  }
+  return key;
+}
+
+function buildArbeitszeitenDetails(daten) {
+  const items = daten.arbeit?.items || [];
+  if (items.length === 0) return null;
+
+  const details = {
+    _dauer_override: daten.geschaetzte_zeit || null,
+    _quelle: 'auftragsimport',
+    _auftragsimport_arbeiten: items.map((item, index) => ({
+      name: item.text,
+      dauer_minuten: item.dauer_minuten || 0,
+      reihenfolge: index + 1,
+      zeit_quelle: item.zeit_quelle || null,
+      originalText: item.originalText || item.text
+    }))
+  };
+
+  items.forEach((item, index) => {
+    const key = makeUniqueArbeitsKey(details, item.text);
+    details[key] = {
+      zeit: Math.max(0, parseInt(item.dauer_minuten, 10) || 0),
+      reihenfolge: index + 1,
+      quelle: 'auftragsimport',
+      originalText: item.originalText || item.text,
+      zeit_quelle: item.zeit_quelle || null
+    };
+  });
+
+  return details;
+}
+
+async function createTerminArbeitenFromImport(terminId, importItem, overrides = {}) {
+  const daten = importItem.erkannte_daten || {};
+  const items = daten.arbeit?.items || [];
+  if (!terminId || items.length === 0) return;
+
+  for (let index = 0; index < items.length; index += 1) {
+    const item = items[index];
+    await runAsync(
+      `INSERT INTO termine_arbeiten
+        (termin_id, arbeit, zeit, mitarbeiter_id, lehrling_id, reihenfolge)
+       VALUES (?, ?, ?, ?, ?, ?)`,
+      [
+        terminId,
+        item.text || item.originalText || 'Arbeit',
+        Math.max(0, parseInt(item.dauer_minuten, 10) || 0),
+        overrides.mitarbeiter_id || null,
+        overrides.lehrling_id || null,
+        index + 1
+      ]
+    );
+  }
 }
 
 async function findTerminMatches(daten) {
@@ -215,6 +269,7 @@ async function createSchnelltermin(importId, overrides = {}) {
       status: 'geplant'
     });
     const termin = await TermineModel.create(terminData);
+    await createTerminArbeitenFromImport(termin.id, item, overrides);
 
     await AuftragsimportModel.update(importId, {
       termin_id: termin.id,
@@ -243,6 +298,9 @@ async function createSoftstart(importId, data = {}) {
       ist_schwebend: 0
     });
     const termin = await TermineModel.create(terminData);
+    await createTerminArbeitenFromImport(termin.id, item, {
+      mitarbeiter_id: data.mitarbeiter_id
+    });
 
     await AuftragsimportModel.update(importId, {
       termin_id: termin.id,

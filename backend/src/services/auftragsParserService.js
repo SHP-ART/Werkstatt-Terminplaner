@@ -224,21 +224,24 @@ function findBestArbeitszeit(text, arbeitszeiten) {
       arbeitszeit,
       score: scoreArbeitszeitMatch(text, arbeitszeit)
     }))
-    .filter((match) => match.score > 0)
+    .filter((match) => match.score >= 30)
     .sort((a, b) => b.score - a.score)[0] || null;
 }
 
 function applySystemArbeitszeiten(daten, arbeitszeiten, options = {}) {
   const fallbackMinuten = options.fallbackMinuten || 60;
   const sourceItems = normalizeWorkItemsForTermin(daten.arbeit?.items || []);
+  const matchedItems = sourceItems.map((item) => ({
+    item,
+    match: findBestArbeitszeit(item.text, arbeitszeiten)
+      || findBestArbeitszeit(item.originalText, arbeitszeiten)
+  }));
+  const hasSystemMatch = matchedItems.some(({ match }) => match?.arbeitszeit?.standard_minuten);
   const result = {
     ...daten,
     arbeit: {
       ...daten.arbeit,
-      items: sourceItems.map((item) => {
-        const match = findBestArbeitszeit(item.text, arbeitszeiten)
-          || findBestArbeitszeit(item.originalText, arbeitszeiten);
-
+      items: matchedItems.map(({ item, match }) => {
         if (match?.arbeitszeit?.standard_minuten) {
           const minuten = parseInt(match.arbeitszeit.standard_minuten, 10);
           return {
@@ -255,8 +258,8 @@ function applySystemArbeitszeiten(daten, arbeitszeiten, options = {}) {
 
         return {
           ...item,
-          dauer_minuten: fallbackMinuten,
-          zeit_quelle: 'fallback',
+          dauer_minuten: hasSystemMatch ? 0 : fallbackMinuten,
+          zeit_quelle: hasSystemMatch ? 'ohne_systemzeit' : 'fallback',
           zeit_match: null
         };
       })
