@@ -1258,6 +1258,33 @@ class SucheService {
 }
 
 // Global verfügbar machen (für Vite-Kompatibilität)
+class AuftragsimportService {
+  static async getAll(params = {}) {
+    const query = new URLSearchParams(params).toString();
+    return ApiService.get(`/auftragsimport${query ? `?${query}` : ''}`);
+  }
+
+  static async scan() {
+    return ApiService.post('/auftragsimport/scan', {});
+  }
+
+  static async createSchnelltermin(id) {
+    return ApiService.post(`/auftragsimport/${id}/schnelltermin`, {});
+  }
+
+  static async verwerfen(id) {
+    return ApiService.post(`/auftragsimport/${id}/verwerfen`, {});
+  }
+
+  static async locosoftPruefen(id) {
+    return ApiService.post(`/auftragsimport/${id}/locosoft-pruefen`, {});
+  }
+
+  static async zuordnen(id, terminId) {
+    return ApiService.post(`/auftragsimport/${id}/zuordnen`, { termin_id: terminId });
+  }
+}
+
 window.ApiService = ApiService;
 window.KundenService = KundenService;
 window.TermineService = TermineService;
@@ -1277,6 +1304,7 @@ window.TabletService = TabletService;
 window.SystemService = SystemService;
 window.ReportingService = ReportingService;
 window.SucheService = SucheService;
+window.AuftragsimportService = AuftragsimportService;
 
 // A6d – Wiederkehrende Termine
 class WiederkehrendeTermineService {

@@ -1149,6 +1149,10 @@ class App {
       this.loadWiederkehrendeTermine();
     }
 
+    if (subTabName === 'auftrageingang') {
+      this.loadAuftragsimporte();
+    }
+
     if (subTabName === 'internerTermin') {
       this.setInternerTerminTodayDate();
       this.loadInternerTerminMitarbeiter();
@@ -3376,6 +3380,189 @@ App.prototype.setTabletDisplayManuell = async function(status) {
   } catch (error) {
     console.error('Fehler beim Setzen des Display-Status:', error);
     this.showToast('Fehler beim Setzen des Status', 'error');
+  }
+};
+
+App.prototype.loadAuftragsimporte = async function() {
+  const list = document.getElementById('auftragsimportListe');
+  const status = document.getElementById('auftragsimportStatus');
+  const pathInfo = document.getElementById('auftragsimportPfad');
+  if (!list) return;
+
+  list.innerHTML = '<div class="loading">Wird geladen...</div>';
+  try {
+    const data = await AuftragsimportService.getAll({ offen: 1 });
+    this.auftragsimporte = data.imports || [];
+    if (pathInfo) pathInfo.textContent = data.importDir ? `Ordner: ${data.importDir}` : '';
+    if (status) {
+      const offen = this.auftragsimporte.filter(i => ['neu', 'erkannt', 'fehler'].includes(i.status)).length;
+      status.textContent = `${offen} offene PDF-Importe`;
+    }
+    this.renderAuftragsimporte();
+  } catch (error) {
+    console.error('Fehler beim Laden der Auftragsimporte:', error);
+    list.innerHTML = '<div class="empty-state">Fehler beim Laden</div>';
+  }
+};
+
+App.prototype.renderAuftragsimporte = function() {
+  const list = document.getElementById('auftragsimportListe');
+  if (!list) return;
+
+  const imports = this.auftragsimporte || [];
+  if (imports.length === 0) {
+    list.innerHTML = '<div class="empty-state">Keine offenen PDF-Importe</div>';
+    const details = document.getElementById('auftragsimportDetails');
+    if (details) details.innerHTML = '';
+    return;
+  }
+
+  const rows = imports.map(item => {
+    const daten = item.erkannte_daten || {};
+    const arbeit = daten.arbeit?.summary || '-';
+    const kunde = daten.kunde?.name || '-';
+    const kennzeichen = daten.fahrzeug?.kennzeichen || '-';
+    const zeit = daten.geschaetzte_zeit ? `${daten.geschaetzte_zeit} min` : '-';
+    const treffer = (item.zuordnungs_treffer || [])[0];
+    const trefferText = treffer ? `${treffer.termin_nr || treffer.id} (${treffer.sicherheit})` : '-';
+
+    return `
+      <tr onclick="app.showAuftragsimportDetails(${item.id})" style="cursor:pointer;">
+        <td>${this.escapeHtml(item.status || '-')}</td>
+        <td>${this.escapeHtml(item.original_dateiname || '-')}</td>
+        <td>${this.escapeHtml(kunde)}</td>
+        <td>${this.escapeHtml(kennzeichen)}</td>
+        <td>${this.escapeHtml(arbeit)}</td>
+        <td>${zeit}</td>
+        <td>${this.escapeHtml(trefferText)}</td>
+      </tr>
+    `;
+  }).join('');
+
+  list.innerHTML = `
+    <table>
+      <thead>
+        <tr>
+          <th>Status</th>
+          <th>Datei</th>
+          <th>Kunde</th>
+          <th>Kennzeichen</th>
+          <th>Arbeit</th>
+          <th>Zeit</th>
+          <th>Treffer</th>
+        </tr>
+      </thead>
+      <tbody>${rows}</tbody>
+    </table>
+  `;
+
+  this.showAuftragsimportDetails(imports[0].id);
+};
+
+App.prototype.showAuftragsimportDetails = function(id) {
+  const details = document.getElementById('auftragsimportDetails');
+  if (!details) return;
+
+  const item = (this.auftragsimporte || []).find(i => Number(i.id) === Number(id));
+  if (!item) {
+    details.innerHTML = '';
+    return;
+  }
+
+  const daten = item.erkannte_daten || {};
+  const arbeiten = daten.arbeit?.items || [];
+  const treffer = item.zuordnungs_treffer || [];
+  const arbeitsHtml = arbeiten.length
+    ? arbeiten.map(a => `<li>${this.escapeHtml(a.text)}${a.dauer_minuten ? ` (${a.dauer_minuten} min)` : ''}</li>`).join('')
+    : '<li>-</li>';
+  const trefferHtml = treffer.length
+    ? treffer.slice(0, 3).map(t => `
+        <div style="padding:8px 0; border-bottom:1px solid #eee;">
+          <strong>${this.escapeHtml(t.termin_nr || String(t.id))}</strong>
+          ${this.escapeHtml(t.datum || '')} ${this.escapeHtml(t.kunde_name || '')}
+          <button class="btn btn-sm btn-secondary" onclick="event.stopPropagation(); app.zuordnenAuftragsimport(${item.id}, ${t.id})">Zuordnen</button>
+        </div>
+      `).join('')
+    : '<div class="hint">Kein passender Termin gefunden</div>';
+
+  details.innerHTML = `
+    <div class="form-section" style="margin-top:0;">
+      <h4>${this.escapeHtml(item.original_dateiname || 'PDF')}</h4>
+      <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:10px;">
+        <div><strong>Kunde</strong><br>${this.escapeHtml(daten.kunde?.name || '-')}</div>
+        <div><strong>Kennzeichen</strong><br>${this.escapeHtml(daten.fahrzeug?.kennzeichen || '-')}</div>
+        <div><strong>Auftrag</strong><br>${this.escapeHtml(daten.auftragsnummer || '-')}</div>
+        <div><strong>Datum</strong><br>${this.escapeHtml(daten.datum || '-')}</div>
+        <div><strong>Abholung</strong><br>${this.escapeHtml(daten.abholung?.zeit || '-')}</div>
+        <div><strong>Zeit</strong><br>${this.escapeHtml(String(daten.geschaetzte_zeit || '-'))} min</div>
+      </div>
+      <h4>Arbeiten</h4>
+      <ul>${arbeitsHtml}</ul>
+      <h4>Moegliche Termine</h4>
+      ${trefferHtml}
+      <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:16px;">
+        <button class="btn btn-primary" onclick="app.schnellterminAusAuftragsimport(${item.id})">Als Schnelltermin speichern</button>
+        <button class="btn btn-secondary" onclick="app.locosoftPruefenAuftragsimport(${item.id})">Zu Locosoft-Pruefung</button>
+        <button class="btn btn-danger" onclick="app.verwerfenAuftragsimport(${item.id})">Verwerfen</button>
+      </div>
+    </div>
+  `;
+};
+
+App.prototype.scanAuftragsimporte = async function() {
+  try {
+    await AuftragsimportService.scan();
+    this.showToast('PDF-Ordner gescannt', 'success');
+    await this.loadAuftragsimporte();
+  } catch (error) {
+    console.error('Fehler beim Scannen:', error);
+    this.showToast('Fehler beim Scannen', 'error');
+  }
+};
+
+App.prototype.schnellterminAusAuftragsimport = async function(id) {
+  try {
+    await AuftragsimportService.createSchnelltermin(id);
+    this.showToast('Schnelltermin erstellt', 'success');
+    await this.loadAuftragsimporte();
+    this.loadTermine();
+  } catch (error) {
+    console.error('Fehler beim Erstellen:', error);
+    this.showToast('Fehler beim Erstellen', 'error');
+  }
+};
+
+App.prototype.zuordnenAuftragsimport = async function(id, terminId) {
+  try {
+    await AuftragsimportService.zuordnen(id, terminId);
+    this.showToast('Auftrag zugeordnet', 'success');
+    await this.loadAuftragsimporte();
+  } catch (error) {
+    console.error('Fehler beim Zuordnen:', error);
+    this.showToast('Fehler beim Zuordnen', 'error');
+  }
+};
+
+App.prototype.locosoftPruefenAuftragsimport = async function(id) {
+  try {
+    await AuftragsimportService.locosoftPruefen(id);
+    this.showToast('In Locosoft-Pruefung verschoben', 'success');
+    await this.loadAuftragsimporte();
+  } catch (error) {
+    console.error('Fehler beim Verschieben:', error);
+    this.showToast('Fehler beim Verschieben', 'error');
+  }
+};
+
+App.prototype.verwerfenAuftragsimport = async function(id) {
+  if (!confirm('Diesen PDF-Import verwerfen?')) return;
+  try {
+    await AuftragsimportService.verwerfen(id);
+    this.showToast('Import verworfen', 'success');
+    await this.loadAuftragsimporte();
+  } catch (error) {
+    console.error('Fehler beim Verwerfen:', error);
+    this.showToast('Fehler beim Verwerfen', 'error');
   }
 };
 

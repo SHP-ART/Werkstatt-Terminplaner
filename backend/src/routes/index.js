@@ -31,6 +31,7 @@ const sucheRoutes = require('./sucheRoutes');
 const wiederkehrendeTermineRoutes = require('./wiederkehrendeTermineRoutes');
 const stempelzeitenRoutes = require('./stempelzeitenRoutes');
 const tagesstempelRoutes = require('./tagesstempelRoutes');
+const auftragsimportRoutes = require('./auftragsimportRoutes');
 const ZeitkontoController = require('../controllers/zeitkontoController');
 
 router.use('/kunden', kundenRoutes);
@@ -69,6 +70,7 @@ router.use('/suche', sucheRoutes);
 router.use('/wiederkehrende-termine', wiederkehrendeTermineRoutes);
 router.use('/stempelzeiten', stempelzeitenRoutes);
 router.use('/tagesstempel', tagesstempelRoutes);
+router.use('/auftragsimport', auftragsimportRoutes);
 router.get('/zeitkonto', ZeitkontoController.get);
 
 router.get('/health', (req, res) => {

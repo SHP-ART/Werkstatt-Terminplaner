@@ -84,6 +84,7 @@ const { errorHandler, notFoundHandler } = require('./middleware/errorHandler');
 logStartup('errorHandler geladen ✓');
 
 let wss;
+let auftragsWatchService = null;
 
 // =============================================================================
 // ENVIRONMENT CHECK
@@ -515,6 +516,14 @@ async function startServer(clientCountCallback, requestLogCallback) {
     logStartup('WebSocket Server erstellt ✓');
     setWebSocketServer(wss);
 
+    try {
+        auftragsWatchService = require('./services/auftragsWatchService');
+        const watcherStarted = auftragsWatchService.start();
+        logStartup(`Auftragsimport-Watcher ${watcherStarted ? 'gestartet' : 'deaktiviert'}`);
+    } catch (watchError) {
+        logStartup(`WARNUNG: Auftragsimport-Watcher konnte nicht gestartet werden: ${watchError.message}`, 'WARN');
+    }
+
     wss.on('connection', (ws) => {
         logStartup('WebSocket Client connected');
         ws.isAlive = true;
@@ -581,6 +590,9 @@ async function startServer(clientCountCallback, requestLogCallback) {
         clearInterval(schedulerInterval);
         clearInterval(pauseCleanupInterval);
         clearInterval(heartbeatInterval);
+        if (auftragsWatchService) {
+            auftragsWatchService.stop();
+        }
 
         // Neue Requests ablehnen
         server.close(async () => {
@@ -640,6 +652,10 @@ async function startServer(clientCountCallback, requestLogCallback) {
                 wss.close(() => {
                     console.log('WebSocket server closed');
                 });
+            }
+
+            if (auftragsWatchService) {
+                auftragsWatchService.stop();
             }
 
             server.close(() => {

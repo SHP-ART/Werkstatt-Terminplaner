@@ -450,6 +450,10 @@
                     <span class="tab-icon">🔁</span>
                     <span class="tab-label">Wiederkehrend</span>
                 </button>
+                <button class="sub-tab-button" data-subtab="auftrageingang" onclick="window.switchSubTab('auftrageingang')">
+                    <span class="tab-icon">PDF</span>
+                    <span class="tab-label">Auftrageingang</span>
+                </button>
             </div>
 
             <div id="neuerTermin" class="sub-tab-content active">
@@ -1425,6 +1429,22 @@
                             </tbody>
                         </table>
                     </div>
+                </div>
+            </div>
+            <div id="auftrageingang" class="sub-tab-content">
+                <div class="form-section">
+                    <div style="display:flex; justify-content:space-between; align-items:center; gap:12px; margin-bottom:16px;">
+                        <div>
+                            <h3 style="margin:0;">Auftrageingang</h3>
+                            <p id="auftragsimportPfad" style="margin:4px 0 0; color:#666; font-size:0.9em;"></p>
+                        </div>
+                        <button class="btn btn-primary" onclick="app.scanAuftragsimporte()">Neu scannen</button>
+                    </div>
+                    <div id="auftragsimportStatus" class="hint" style="margin-bottom:12px;"></div>
+                    <div id="auftragsimportListe" class="table-scroll-container">
+                        <div class="loading">Wird geladen...</div>
+                    </div>
+                    <div id="auftragsimportDetails" style="margin-top:16px;"></div>
                 </div>
             </div>
         </template>

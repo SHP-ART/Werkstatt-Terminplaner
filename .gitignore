@@ -16,6 +16,7 @@ backend/backups/
 
 # Lokale Testdaten (nicht hochladen)
 testdaten/
+beispiel-auftraege/
 
 # Fernwartungs-Zugangsdaten (nur lokal, nie auf GitHub!)
 FERNWARTUNG.md
