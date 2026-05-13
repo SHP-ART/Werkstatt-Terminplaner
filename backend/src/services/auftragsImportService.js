@@ -13,7 +13,7 @@ const {
 } = require('./auftragsParserService');
 
 const MAX_PDF_BYTES = 20 * 1024 * 1024;
-const IMPORT_DIR = path.join(dataDir, 'uploads', 'auftraege');
+const IMPORT_DIR = process.env.AUFTRAGSIMPORT_DIR || path.join(dataDir, 'uploads', 'auftraege');
 const LOCOSOFT_PRUEFEN_DIR = path.join(IMPORT_DIR, 'locosoft-pruefen');
 
 function ensureImportDirs() {
