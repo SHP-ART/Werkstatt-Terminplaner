@@ -53,7 +53,8 @@ class AuftragsimportController {
       action: 'softstart'
     });
     broadcastEvent('termin.created', {
-      id: result.termin.id
+      id: result.termin.id,
+      datum: result.termin.datum
     });
     res.status(201).json(result);
   }

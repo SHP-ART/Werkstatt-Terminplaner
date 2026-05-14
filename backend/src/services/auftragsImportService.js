@@ -163,14 +163,14 @@ async function findTerminMatches(daten) {
         AND (
           (? IS NOT NULL AND datum = ?)
           OR (? IS NOT NULL AND UPPER(REPLACE(kennzeichen, ' ', '')) = UPPER(REPLACE(?, ' ', '')))
-          OR (? IS NOT NULL AND LOWER(kunde_name) LIKE ?)
+          OR (? IS NOT NULL AND LOWER(kunde_name) LIKE ? ESCAPE '\')
         )
       ORDER BY datum DESC, id DESC
       LIMIT 20`,
     [
       datum, datum,
       kennzeichen, kennzeichen,
-      kundeName, kundeName ? `%${kundeName}%` : null
+      kundeName, kundeName ? `%${kundeName.replace(/\\/g, '\\\\').replace(/%/g, '\\%').replace(/_/g, '\\_')}%` : null
     ]
   );
 
@@ -240,22 +240,26 @@ async function scanImportDir() {
     try {
       results.push(await parseAndCreateImport(filePath));
     } catch (error) {
-      const stat = fs.existsSync(filePath) ? fs.statSync(filePath) : { size: null };
-      const hash = fs.existsSync(filePath) ? sha256File(filePath) : null;
-      const existing = hash ? await AuftragsimportModel.findByHash(hash) : null;
-      if (existing) {
-        results.push({ skipped: true, reason: 'duplicate-error', import: existing });
-        continue;
+      try {
+        const stat = fs.existsSync(filePath) ? fs.statSync(filePath) : { size: null };
+        const hash = fs.existsSync(filePath) ? sha256File(filePath) : null;
+        const existing = hash ? await AuftragsimportModel.findByHash(hash) : null;
+        if (existing) {
+          results.push({ skipped: true, reason: 'duplicate-error', import: existing });
+          continue;
+        }
+        const item = await AuftragsimportModel.create({
+          original_dateiname: path.basename(filePath),
+          dateipfad: filePath,
+          status: 'fehler',
+          fehler: error.message,
+          dateigroesse: stat.size,
+          datei_hash: hash
+        });
+        results.push({ skipped: false, error: error.message, import: item });
+      } catch (innerError) {
+        results.push({ skipped: false, error: error.message, logError: innerError.message, import: null });
       }
-      const item = await AuftragsimportModel.create({
-        original_dateiname: path.basename(filePath),
-        dateipfad: filePath,
-        status: 'fehler',
-        fehler: error.message,
-        dateigroesse: stat.size,
-        datei_hash: hash
-      });
-      results.push({ skipped: false, error: error.message, import: item });
     }
   }
 

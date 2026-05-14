@@ -1383,8 +1383,9 @@ async function getKiLernDaten(req, res) {
 
     const where  = [];
     const params = [];
-    if (kat)    { where.push('kategorie LIKE ?');   params.push(`%${kat}%`); }
-    if (arbeit) { where.push('arbeit LIKE ?');       params.push(`%${arbeit}%`); }
+    const escapeLike = (s) => s.replace(/\\/g, '\\\\').replace(/%/g, '\\%').replace(/_/g, '\\_');
+    if (kat)    { where.push("kategorie LIKE ? ESCAPE '\\'");   params.push(`%${escapeLike(kat)}%`); }
+    if (arbeit) { where.push("arbeit LIKE ? ESCAPE '\\'");       params.push(`%${escapeLike(arbeit)}%`); }
     const cond = where.length ? 'WHERE ' + where.join(' AND ') : '';
 
     const rows = await allAsync(
