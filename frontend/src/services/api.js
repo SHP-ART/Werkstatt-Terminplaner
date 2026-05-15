@@ -1268,8 +1268,8 @@ class AuftragsimportService {
     return ApiService.post('/auftragsimport/scan', {});
   }
 
-  static async createSchnelltermin(id) {
-    return ApiService.post(`/auftragsimport/${id}/schnelltermin`, {});
+  static async createSchnelltermin(id, data = {}) {
+    return ApiService.post(`/auftragsimport/${id}/schnelltermin`, data);
   }
 
   static async verwerfen(id) {

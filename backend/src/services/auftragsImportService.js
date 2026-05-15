@@ -290,9 +290,9 @@ async function createSchnelltermin(importId, overrides = {}) {
     if (!item) throw new Error('Auftragsimport nicht gefunden');
 
     const terminData = buildTerminData(item, {
-      ...overrides,
       datum: overrides.datum || todayIsoDate(),
-      ist_schwebend: 0,
+      ...overrides,
+      ist_schwebend: overrides.ist_schwebend ?? 0,
       status: 'geplant'
     });
     const termin = await TermineModel.create(terminData);

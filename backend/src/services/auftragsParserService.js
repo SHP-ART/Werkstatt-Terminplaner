@@ -68,12 +68,24 @@ function removeWorkCode(line) {
 }
 
 function extractAwMinutes(line) {
-  // Locosoft format: "ARBEIT N preis,xx [gesamt,xx]" — N is AW count, 1 AW = 6 min
-  const match = String(line || '').match(/\s(\d{1,3})\s+\d+,\d{2}(?:\s+\d+,\d{2})*$/);
-  if (!match) return null;
-  const aw = parseInt(match[1], 10);
-  if (aw < 1 || aw > 100) return null;
-  return aw * 6;
+  const s = String(line || '');
+
+  // Locosoft no-space format: [Anzahl:1digit][AW:2digits][price:digits,xx]
+  // e.g. "001AUSTAUSCH BATTERIE10327,72" = Anzahl=1, AW=03, EUR=27,72
+  const noSpace = s.match(/\d(\d{2})\d+,\d{2}$/);
+  if (noSpace) {
+    const aw = parseInt(noSpace[1], 10);
+    if (aw >= 1 && aw <= 99) return aw * 6;
+  }
+
+  // Space-separated format: "ARBEIT N price,xx"
+  const spaced = s.match(/\s(\d{1,3})\s+\d+,\d{2}(?:\s+\d+,\d{2})*$/);
+  if (spaced) {
+    const aw = parseInt(spaced[1], 10);
+    if (aw >= 1 && aw <= 100) return aw * 6;
+  }
+
+  return null;
 }
 
 function removeAccountingTail(line) {

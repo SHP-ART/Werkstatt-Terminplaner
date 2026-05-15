@@ -3506,11 +3506,46 @@ App.prototype.showAuftragsimportDetails = function(id) {
         `;
       }).join('')
     : '<div class="hint">Kein passender Termin gefunden</div>';
+  const _parseAbholDatum = (s) => {
+    const m = String(s || '').match(/(\d{2})\.(\d{2})\.(\d{2,4})/);
+    if (!m) return null;
+    const y = m[3].length === 2 ? `20${m[3]}` : m[3];
+    const d = new Date(`${y}-${m[2]}-${m[1]}`);
+    return isNaN(d.getTime()) ? null : d;
+  };
+  const _today = new Date(); _today.setHours(0, 0, 0, 0);
+  const _tomorrow = new Date(_today); _tomorrow.setDate(_today.getDate() + 1);
+  const _abholDatum = _parseAbholDatum(daten.abholung?.datum);
+  const _abholIso = _abholDatum ? _abholDatum.toISOString().slice(0, 10) : null;
+  const _isSoon = _abholDatum && _abholDatum <= _tomorrow;
+  const _abholLabel = !_abholDatum ? '' : _abholDatum.getTime() === _today.getTime() ? 'heute' : _abholDatum.getTime() === _tomorrow.getTime() ? 'morgen' : this.escapeHtml(daten.abholung.datum);
+
+  let _smartHtml = '';
+  if (!isProcessed && _abholIso) {
+    const _bg = _isSoon ? '#e8f5e9' : '#fff3e0';
+    const _br = _isSoon ? '#a5d6a7' : '#ffcc80';
+    const _co = _isSoon ? '#2e7d32' : '#e65100';
+    const _zeit = daten.abholung?.zeit ? ` um ${this.escapeHtml(daten.abholung.zeit)} Uhr` : '';
+    const _p1Label = _isSoon ? `Termin für ${_abholLabel}` : `Schwebend (${_abholLabel})`;
+    const _p1Schwebend = _isSoon ? 0 : 1;
+    const _p2Label = _isSoon ? 'Als Schwebend' : `Termin für ${_abholLabel}`;
+    const _p2Schwebend = _isSoon ? 1 : 0;
+    _smartHtml = `
+      <div style="background:${_bg};border:1px solid ${_br};border-radius:6px;padding:10px;margin-top:12px;margin-bottom:8px;">
+        <div style="font-size:0.85em;color:${_co};margin-bottom:8px;">📅 Abholung: ${this.escapeHtml(daten.abholung.datum)}${_zeit}</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+          <button class="btn btn-primary" onclick="app.schnellterminMitDatum(${item.id},'${_abholIso}',${_p1Schwebend})">${_p1Label}</button>
+          <button class="btn btn-secondary" onclick="app.schnellterminMitDatum(${item.id},'${_abholIso}',${_p2Schwebend})">${_p2Label}</button>
+        </div>
+      </div>`;
+  }
+
   const actionHtml = isProcessed
     ? `<div class="hint" style="margin-top:16px;">Bereits erledigt${item.termin_nr ? ` als ${this.escapeHtml(item.termin_nr)}` : ''}</div>`
     : `
-      <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:16px;">
-        <button class="btn btn-primary" onclick="app.schnellterminAusAuftragsimport(${item.id})">Zu Nicht zugeordnet</button>
+      ${_smartHtml}
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:${_abholIso ? '4px' : '16px'};">
+        <button class="btn ${_abholIso ? 'btn-secondary' : 'btn-primary'}" onclick="app.schnellterminAusAuftragsimport(${item.id})">Zu Nicht zugeordnet</button>
         <button class="btn btn-secondary" onclick="app.locosoftPruefenAuftragsimport(${item.id})">Zu Locosoft-Pruefung</button>
         <button class="btn btn-danger" onclick="app.verwerfenAuftragsimport(${item.id})">Verwerfen</button>
       </div>
@@ -3524,7 +3559,7 @@ App.prototype.showAuftragsimportDetails = function(id) {
         <div><strong>Kennzeichen</strong><br>${this.escapeHtml(daten.fahrzeug?.kennzeichen || '-')}</div>
         <div><strong>Auftrag</strong><br>${this.escapeHtml(daten.auftragsnummer || '-')}</div>
         <div><strong>Datum</strong><br>${this.escapeHtml(daten.datum || '-')}</div>
-        <div><strong>Abholung</strong><br>${this.escapeHtml(daten.abholung?.zeit || '-')}</div>
+        <div><strong>Abholung</strong><br>${this.escapeHtml(daten.abholung?.datum ? `${daten.abholung.datum}${daten.abholung.zeit ? ' ' + daten.abholung.zeit : ''}` : (daten.abholung?.zeit || '-'))}</div>
         <div><strong>Zeit</strong><br>${this.escapeHtml(String(daten.geschaetzte_zeit || '-'))} min</div>
       </div>
       <h4>Arbeiten</h4>
@@ -3551,6 +3586,19 @@ App.prototype.schnellterminAusAuftragsimport = async function(id) {
   try {
     await AuftragsimportService.createSchnelltermin(id);
     this.showToast('Auftrag zu Nicht zugeordnet hinzugefuegt', 'success');
+    await this.loadAuftragsimporte();
+    this.loadTermine();
+  } catch (error) {
+    console.error('Fehler beim Erstellen:', error);
+    this.showToast('Fehler beim Erstellen', 'error');
+  }
+};
+
+App.prototype.schnellterminMitDatum = async function(id, datum, schwebend) {
+  try {
+    await AuftragsimportService.createSchnelltermin(id, { datum, ist_schwebend: schwebend ? 1 : 0 });
+    const msg = schwebend ? 'Als Schwebend angelegt' : 'Als Termin angelegt';
+    this.showToast(msg, 'success');
     await this.loadAuftragsimporte();
     this.loadTermine();
   } catch (error) {
