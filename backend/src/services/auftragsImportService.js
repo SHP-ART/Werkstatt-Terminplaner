@@ -171,7 +171,7 @@ async function findTerminMatches(daten) {
         AND (
           (? IS NOT NULL AND datum = ?)
           OR (? IS NOT NULL AND UPPER(REPLACE(kennzeichen, ' ', '')) = UPPER(REPLACE(?, ' ', '')))
-          OR (? IS NOT NULL AND LOWER(kunde_name) LIKE ? ESCAPE '\')
+          OR (? IS NOT NULL AND LOWER(kunde_name) LIKE ? ESCAPE '\\')
         )
       ORDER BY datum DESC, id DESC
       LIMIT 20`,
@@ -215,7 +215,7 @@ async function parseAndCreateImport(filePath) {
 
   const hash = sha256File(filePath);
   const existing = await AuftragsimportModel.findByHash(hash);
-  if (existing) {
+  if (existing && existing.status !== 'fehler') {
     return { skipped: true, reason: 'duplicate', import: existing };
   }
 
@@ -223,7 +223,7 @@ async function parseAndCreateImport(filePath) {
   const datenMitZeit = await applySystemArbeitszeitenFromDb(parsed.daten);
   const matches = await findTerminMatches(datenMitZeit);
 
-  const item = await AuftragsimportModel.create({
+  const importData = {
     original_dateiname: path.basename(filePath),
     dateipfad: filePath,
     status: 'erkannt',
@@ -232,8 +232,14 @@ async function parseAndCreateImport(filePath) {
     zuordnungs_treffer: matches,
     dateigroesse: stat.size,
     datei_hash: hash
-  });
+  };
 
+  if (existing) {
+    await AuftragsimportModel.update(existing.id, { ...importData, fehler: null });
+    return { skipped: false, import: await AuftragsimportModel.getById(existing.id) };
+  }
+
+  const item = await AuftragsimportModel.create(importData);
   return { skipped: false, import: item };
 }
 
