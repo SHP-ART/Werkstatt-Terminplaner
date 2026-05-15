@@ -3478,34 +3478,50 @@ App.prototype.showAuftragsimportDetails = function(id) {
   const arbeiten = daten.arbeit?.items || [];
   const treffer = item.zuordnungs_treffer || [];
   const isProcessed = ['verarbeitet', 'locosoft_pruefen', 'verworfen'].includes(item.status);
-  const arbeitsHtml = arbeiten.length
-    ? arbeiten.map(a => `<li>${this.escapeHtml(a.text)}${a.dauer_minuten ? ` (${a.dauer_minuten} min)` : ''}</li>`).join('')
-    : '<li>-</li>';
-  const _sicherheitBorder = { hoch: '#4caf50', mittel: '#ff9800', niedrig: '#9e9e9e' };
+  const _lbl = (text) => `<div style="font-size:0.72em;color:#999;text-transform:uppercase;letter-spacing:0.4px;margin-bottom:2px;">${text}</div>`;
   const _statusLabel = { geplant: 'Geplant', in_arbeit: 'In Arbeit', wartend: 'Wartend', abgeschlossen: 'Abgeschlossen', storniert: 'Storniert' };
-  const trefferHtml = treffer.length
-    ? treffer.slice(0, 3).map(t => {
-        const border = _sicherheitBorder[t.sicherheit] || '#ddd';
-        const label = _statusLabel[t.status] || t.status || '';
-        const gruendeHtml = (t.gruende || []).map(g => `<span style="font-size:0.75em;background:#e3f2fd;color:#1565c0;border-radius:3px;padding:1px 5px;margin-right:3px;">${this.escapeHtml(g)}</span>`).join('');
-        const arbeit = t.arbeit ? (t.arbeit.length > 55 ? t.arbeit.slice(0, 55) + '…' : t.arbeit) : '';
-        return `
-          <div style="padding:8px;border-left:3px solid ${border};background:#fafafa;border-radius:0 4px 4px 0;margin-bottom:6px;">
-            <div style="display:flex;justify-content:space-between;align-items:center;">
-              <div>
-                <strong>${this.escapeHtml(t.termin_nr || String(t.id))}</strong>
-                <span style="color:#666;font-size:0.85em;margin-left:6px;">${this.escapeHtml(t.datum || '')}</span>
-                <span style="font-size:0.75em;background:#eee;border-radius:3px;padding:1px 5px;margin-left:4px;">${this.escapeHtml(label)}</span>
-              </div>
-              ${isProcessed ? '' : `<button class="btn btn-sm btn-secondary" onclick="event.stopPropagation();app.zuordnenAuftragsimport(${item.id},${t.id})">Zuordnen</button>`}
-            </div>
-            <div style="font-size:0.85em;color:#555;margin-top:3px;">${this.escapeHtml(t.kunde_name || '-')}${t.kennzeichen ? ` · <span style="font-family:monospace;">${this.escapeHtml(t.kennzeichen)}</span>` : ''}</div>
-            ${arbeit ? `<div style="font-size:0.8em;color:#777;margin-top:2px;">${this.escapeHtml(arbeit)}</div>` : ''}
-            ${gruendeHtml ? `<div style="margin-top:4px;">${gruendeHtml}</div>` : ''}
+  const _statusBg = { geplant: '#e3f2fd', in_arbeit: '#fff3e0', wartend: '#f3e5f5', abgeschlossen: '#e8f5e9', storniert: '#ffebee' };
+  const _statusColor = { geplant: '#1565c0', in_arbeit: '#e65100', wartend: '#6a1b9a', abgeschlossen: '#2e7d32', storniert: '#b71c1c' };
+
+  const guteTreffer = treffer.filter(t => t.sicherheit === 'hoch' || t.sicherheit === 'mittel');
+  const schwacheTreffer = treffer.filter(t => t.sicherheit === 'niedrig');
+
+  const _renderTreffer = (t) => {
+    const sl = _statusLabel[t.status] || t.status || '';
+    const sb = _statusBg[t.status] || '#eee';
+    const sc = _statusColor[t.status] || '#333';
+    const border = t.sicherheit === 'hoch' ? '#4caf50' : t.sicherheit === 'mittel' ? '#ff9800' : '#ccc';
+    const arbeit = t.arbeit ? (t.arbeit.length > 60 ? t.arbeit.slice(0, 60) + '…' : t.arbeit) : '';
+    const gruendeHtml = (t.gruende || []).map(g => `<span style="font-size:0.72em;background:#e3f2fd;color:#1565c0;border-radius:3px;padding:1px 6px;margin-right:3px;">${this.escapeHtml(g)}</span>`).join('');
+    return `
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;padding:8px 10px;border-left:3px solid ${border};background:#fafafa;border-radius:0 6px 6px 0;margin-bottom:5px;">
+        <div style="flex:1;min-width:0;">
+          <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:2px;">
+            <strong style="font-size:0.9em;">${this.escapeHtml(t.termin_nr || String(t.id))}</strong>
+            <span style="font-size:0.8em;color:#666;">${this.escapeHtml(t.datum || '')}</span>
+            <span style="font-size:0.72em;background:${sb};color:${sc};border-radius:3px;padding:1px 6px;">${this.escapeHtml(sl)}</span>
           </div>
-        `;
-      }).join('')
-    : '<div class="hint">Kein passender Termin gefunden</div>';
+          <div style="font-size:0.85em;color:#444;">
+            ${this.escapeHtml(t.kunde_name || '')}
+            ${t.kennzeichen ? `<span style="font-family:monospace;background:#f0f0f0;padding:0 4px;border-radius:2px;margin-left:4px;">${this.escapeHtml(t.kennzeichen)}</span>` : ''}
+          </div>
+          ${arbeit ? `<div style="font-size:0.8em;color:#777;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${this.escapeHtml(arbeit)}</div>` : ''}
+          ${gruendeHtml ? `<div style="margin-top:4px;">${gruendeHtml}</div>` : ''}
+        </div>
+        ${isProcessed ? '' : `<button class="btn btn-sm btn-secondary" style="margin-left:8px;flex-shrink:0;" onclick="event.stopPropagation();app.zuordnenAuftragsimport(${item.id},${t.id})">Zuordnen</button>`}
+      </div>`;
+  };
+
+  const trefferHtml = treffer.length
+    ? `${guteTreffer.length ? guteTreffer.map(t => _renderTreffer(t)).join('') : ''}
+       ${schwacheTreffer.length ? `
+         <details style="margin-top:4px;">
+           <summary style="font-size:0.8em;color:#999;cursor:pointer;padding:2px 0;">
+             ${schwacheTreffer.length} weitere (nur Datum)
+           </summary>
+           <div style="margin-top:4px;">${schwacheTreffer.map(t => _renderTreffer(t)).join('')}</div>
+         </details>` : ''}`
+    : '<div style="color:#999;font-size:0.85em;padding:6px 0;">Kein passender Termin gefunden</div>';
   const _parseAbholDatum = (s) => {
     const m = String(s || '').match(/(\d{2})\.(\d{2})\.(\d{2,4})/);
     if (!m) return null;
@@ -3551,21 +3567,59 @@ App.prototype.showAuftragsimportDetails = function(id) {
       </div>
     `;
 
+  const _kfz = daten.fahrzeug?.raw ? (() => {
+    const raw = daten.fahrzeug.raw;
+    const kmMatch = raw.match(/km-Stand:\s*([\d_]+)/);
+    const km = kmMatch ? kmMatch[1].replace(/_/g, '') : null;
+    const typ = raw.replace(/km-Stand:.*$/, '').replace(/Farbe:.*?(?=\s{2,}|$)/, '').trim().slice(0, 40);
+    return { typ, km };
+  })() : null;
+
   details.innerHTML = `
-    <div class="form-section" style="margin-top:0;">
-      <h4>${this.escapeHtml(item.original_dateiname || 'PDF')}</h4>
-      <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:10px;">
-        <div><strong>Kunde</strong><br>${this.escapeHtml(daten.kunde?.name || '-')}</div>
-        <div><strong>Kennzeichen</strong><br>${this.escapeHtml(daten.fahrzeug?.kennzeichen || '-')}</div>
-        <div><strong>Auftrag</strong><br>${this.escapeHtml(daten.auftragsnummer || '-')}</div>
-        <div><strong>Datum</strong><br>${this.escapeHtml(daten.datum || '-')}</div>
-        <div><strong>Abholung</strong><br>${this.escapeHtml(daten.abholung?.datum ? `${daten.abholung.datum}${daten.abholung.zeit ? ' ' + daten.abholung.zeit : ''}` : (daten.abholung?.zeit || '-'))}</div>
-        <div><strong>Zeit</strong><br>${this.escapeHtml(String(daten.geschaetzte_zeit || '-'))} min</div>
+    <div style="padding:2px 0 0 0;">
+      <!-- Dateiname -->
+      <div style="font-size:0.78em;color:#aaa;margin-bottom:10px;">📄 ${this.escapeHtml(item.original_dateiname || 'PDF')}</div>
+
+      <!-- Hauptinfo: Kunde links, Kennzeichen rechts -->
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;padding-bottom:10px;border-bottom:1px solid #eee;margin-bottom:10px;">
+        <div style="flex:1;min-width:0;">
+          ${_lbl('Kunde')}
+          <div style="font-weight:600;font-size:1.05em;">${this.escapeHtml(daten.kunde?.name || '-')}</div>
+          ${_kfz?.typ ? `<div style="font-size:0.82em;color:#666;margin-top:2px;">${this.escapeHtml(_kfz.typ)}</div>` : ''}
+        </div>
+        <div style="text-align:right;flex-shrink:0;">
+          ${_lbl('Kennzeichen')}
+          <div style="font-family:monospace;font-size:1.05em;font-weight:700;background:#f5f5f5;border:1px solid #ddd;border-radius:4px;padding:2px 8px;display:inline-block;">${this.escapeHtml(daten.fahrzeug?.kennzeichen || '-')}</div>
+          ${_kfz?.km ? `<div style="font-size:0.78em;color:#888;margin-top:2px;">${this.escapeHtml(_kfz.km)} km</div>` : ''}
+        </div>
       </div>
-      <h4>Arbeiten</h4>
-      <ul>${arbeitsHtml}</ul>
-      <h4>Moegliche Termine</h4>
-      ${trefferHtml}
+
+      <!-- Meta-Zeile -->
+      <div style="display:flex;gap:16px;flex-wrap:wrap;font-size:0.85em;margin-bottom:12px;">
+        <div><span style="color:#999;">Datum</span> <strong>${this.escapeHtml(daten.datum || '-')}</strong></div>
+        ${daten.abholung?.datum ? `<div><span style="color:#999;">Abholung</span> <strong>${this.escapeHtml(daten.abholung.datum)}${daten.abholung.zeit ? ' ' + daten.abholung.zeit : ''}</strong></div>` : ''}
+        ${daten.auftragsnummer ? `<div><span style="color:#999;">Auftrag</span> <strong>${this.escapeHtml(daten.auftragsnummer)}</strong></div>` : ''}
+        ${daten.geschaetzte_zeit ? `<div><span style="color:#999;">Zeit</span> <strong>${daten.geschaetzte_zeit} min</strong></div>` : ''}
+        ${daten.berater ? `<div><span style="color:#999;">Berater</span> ${this.escapeHtml(daten.berater)}</div>` : ''}
+      </div>
+
+      <!-- Arbeiten -->
+      ${arbeiten.length ? `
+        <div style="margin-bottom:12px;">
+          ${_lbl('Arbeiten')}
+          ${arbeiten.map(a => `
+            <div style="display:flex;justify-content:space-between;align-items:center;padding:5px 8px;background:#f8f8f8;border-radius:4px;margin-bottom:3px;font-size:0.88em;">
+              <span>${this.escapeHtml(a.text)}</span>
+              ${a.dauer_minuten ? `<span style="color:#888;font-size:0.9em;white-space:nowrap;margin-left:8px;">${a.dauer_minuten} min</span>` : ''}
+            </div>`).join('')}
+        </div>` : ''}
+
+      <!-- Mögliche Termine -->
+      <div style="margin-bottom:4px;">
+        ${_lbl('Mögliche Termine')}
+        ${trefferHtml}
+      </div>
+
       ${actionHtml}
     </div>
   `;
