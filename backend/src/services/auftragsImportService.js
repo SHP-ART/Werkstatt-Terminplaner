@@ -69,6 +69,7 @@ function buildTerminData(importItem, overrides = {}) {
     datum: overrides.datum || toIsoDate(daten.datum) || null,
     abholung_zeit: daten.abholung?.zeit || null,
     abholung_datum: toIsoDate(daten.abholung?.datum) || null,
+    interne_auftragsnummer: daten.auftragsnummer || null,
     vin: daten.fahrzeug?.vin || null,
     fahrzeugtyp: daten.fahrzeug?.raw || null,
     kilometerstand: daten.fahrzeug?.kmStand || null,

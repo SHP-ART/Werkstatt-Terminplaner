@@ -67,6 +67,15 @@ function removeWorkCode(line) {
     .trim();
 }
 
+function extractAwMinutes(line) {
+  // Locosoft format: "ARBEIT N preis,xx [gesamt,xx]" — N is AW count, 1 AW = 6 min
+  const match = String(line || '').match(/\s(\d{1,3})\s+\d+,\d{2}(?:\s+\d+,\d{2})*$/);
+  if (!match) return null;
+  const aw = parseInt(match[1], 10);
+  if (aw < 1 || aw > 100) return null;
+  return aw * 6;
+}
+
 function removeAccountingTail(line) {
   return line
     .replace(/\s*\d{1,3}\s*\d+,\d{2}(?:\s+\d+,\d{2})*$/, '')
@@ -274,6 +283,15 @@ function applySystemArbeitszeiten(daten, arbeitszeiten, options = {}) {
           };
         }
 
+        if (item.dauer_minuten_pdf) {
+          return {
+            ...item,
+            dauer_minuten: item.dauer_minuten_pdf,
+            zeit_quelle: 'pdf_aw',
+            zeit_match: null
+          };
+        }
+
         return {
           ...item,
           dauer_minuten: hasSystemMatch ? 0 : fallbackMinuten,
@@ -305,11 +323,18 @@ async function applySystemArbeitszeitenFromDb(daten, options = {}) {
 
 function addWorkItem(items, text, sourceLines) {
   if (!text) return;
-  items.push({
+  let dauerMinutenPdf = null;
+  for (const sl of sourceLines) {
+    const aw = extractAwMinutes(sl);
+    if (aw !== null) { dauerMinutenPdf = aw; break; }
+  }
+  const entry = {
     text: shortenWorkText(text),
     originalText: text,
     sourceLines: [...sourceLines]
-  });
+  };
+  if (dauerMinutenPdf !== null) entry.dauer_minuten_pdf = dauerMinutenPdf;
+  items.push(entry);
 }
 
 function parseWorkItems(rawLines) {

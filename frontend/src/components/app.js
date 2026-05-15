@@ -3481,14 +3481,30 @@ App.prototype.showAuftragsimportDetails = function(id) {
   const arbeitsHtml = arbeiten.length
     ? arbeiten.map(a => `<li>${this.escapeHtml(a.text)}${a.dauer_minuten ? ` (${a.dauer_minuten} min)` : ''}</li>`).join('')
     : '<li>-</li>';
+  const _sicherheitBorder = { hoch: '#4caf50', mittel: '#ff9800', niedrig: '#9e9e9e' };
+  const _statusLabel = { geplant: 'Geplant', in_arbeit: 'In Arbeit', wartend: 'Wartend', abgeschlossen: 'Abgeschlossen', storniert: 'Storniert' };
   const trefferHtml = treffer.length
-    ? treffer.slice(0, 3).map(t => `
-        <div style="padding:8px 0; border-bottom:1px solid #eee;">
-          <strong>${this.escapeHtml(t.termin_nr || String(t.id))}</strong>
-          ${this.escapeHtml(t.datum || '')} ${this.escapeHtml(t.kunde_name || '')}
-          ${isProcessed ? '' : `<button class="btn btn-sm btn-secondary" onclick="event.stopPropagation(); app.zuordnenAuftragsimport(${item.id}, ${t.id})">Zuordnen</button>`}
-        </div>
-      `).join('')
+    ? treffer.slice(0, 3).map(t => {
+        const border = _sicherheitBorder[t.sicherheit] || '#ddd';
+        const label = _statusLabel[t.status] || t.status || '';
+        const gruendeHtml = (t.gruende || []).map(g => `<span style="font-size:0.75em;background:#e3f2fd;color:#1565c0;border-radius:3px;padding:1px 5px;margin-right:3px;">${this.escapeHtml(g)}</span>`).join('');
+        const arbeit = t.arbeit ? (t.arbeit.length > 55 ? t.arbeit.slice(0, 55) + '…' : t.arbeit) : '';
+        return `
+          <div style="padding:8px;border-left:3px solid ${border};background:#fafafa;border-radius:0 4px 4px 0;margin-bottom:6px;">
+            <div style="display:flex;justify-content:space-between;align-items:center;">
+              <div>
+                <strong>${this.escapeHtml(t.termin_nr || String(t.id))}</strong>
+                <span style="color:#666;font-size:0.85em;margin-left:6px;">${this.escapeHtml(t.datum || '')}</span>
+                <span style="font-size:0.75em;background:#eee;border-radius:3px;padding:1px 5px;margin-left:4px;">${this.escapeHtml(label)}</span>
+              </div>
+              ${isProcessed ? '' : `<button class="btn btn-sm btn-secondary" onclick="event.stopPropagation();app.zuordnenAuftragsimport(${item.id},${t.id})">Zuordnen</button>`}
+            </div>
+            <div style="font-size:0.85em;color:#555;margin-top:3px;">${this.escapeHtml(t.kunde_name || '-')}${t.kennzeichen ? ` · <span style="font-family:monospace;">${this.escapeHtml(t.kennzeichen)}</span>` : ''}</div>
+            ${arbeit ? `<div style="font-size:0.8em;color:#777;margin-top:2px;">${this.escapeHtml(arbeit)}</div>` : ''}
+            ${gruendeHtml ? `<div style="margin-top:4px;">${gruendeHtml}</div>` : ''}
+          </div>
+        `;
+      }).join('')
     : '<div class="hint">Kein passender Termin gefunden</div>';
   const actionHtml = isProcessed
     ? `<div class="hint" style="margin-top:16px;">Bereits erledigt${item.termin_nr ? ` als ${this.escapeHtml(item.termin_nr)}` : ''}</div>`
