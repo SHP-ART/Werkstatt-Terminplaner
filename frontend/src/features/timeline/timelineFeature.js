@@ -273,22 +273,21 @@ export function installTimelineFeature(AppClass) {
             const fStr = String(fertigDate.getHours()).padStart(2,'0') + ':' + String(fertigDate.getMinutes()).padStart(2,'0');
             fertigRow = `<div class="detail-row"><span class="detail-label" style="color:#16a34a;">✅</span><span class="detail-value">Fertiggestellt: <strong style="color:#16a34a;">${fStr}</strong></span></div>`;
           }
-          // Tatsächliche Arbeitszeit: DB-Wert bevorzugen (korrekt beim Abschluss gesetzt)
-          // Nur Fallback auf Differenzberechnung wenn tatsaechliche_zeit fehlt
+          // Tatsächliche Arbeitszeit: Uhrzeit-Differenz (Start → Fertigstellung) bevorzugen,
+          // da der DB-Wert oft aus der Einplanungs-Dauer stammt und ungenau sein kann.
           let tatsZeitRow = '';
-          let tatsZeit = (termin.tatsaechliche_zeit && parseInt(termin.tatsaechliche_zeit) > 0)
-            ? parseInt(termin.tatsaechliche_zeit)
-            : null;
-          // Fallback: Differenz aus gestempelter Startzeit → Fertigstellung (nur wenn kein DB-Wert)
-          if (!tatsZeit && fertigDate && !isNaN(fertigDate)) {
-            let startStr = tatsStart;
-            if (startStr) {
-              const [sh, sm] = startStr.split(':').map(Number);
-              const sd = new Date(fertigDate);
-              sd.setHours(sh, sm, 0, 0);
-              const diffMs = fertigDate - sd;
-              if (diffMs > 0) tatsZeit = Math.round(diffMs / 60000);
-            }
+          let tatsZeit = null;
+          // Primär: echte Uhrzeit-Differenz wenn Fertigstellung und Startzeit bekannt
+          if (fertigDate && !isNaN(fertigDate) && tatsStart) {
+            const [sh, sm] = tatsStart.split(':').map(Number);
+            const sd = new Date(fertigDate);
+            sd.setHours(sh, sm, 0, 0);
+            const diffMs = fertigDate - sd;
+            if (diffMs > 0 && diffMs < 12 * 3600000) tatsZeit = Math.round(diffMs / 60000);
+          }
+          // Fallback: DB-Wert wenn keine Uhrzeit-Differenz berechnet werden konnte
+          if (!tatsZeit && termin.tatsaechliche_zeit && parseInt(termin.tatsaechliche_zeit) > 0) {
+            tatsZeit = parseInt(termin.tatsaechliche_zeit);
           }
           if (tatsZeit && tatsZeit > 0) {
             const tatsH = Math.floor(tatsZeit / 60);
