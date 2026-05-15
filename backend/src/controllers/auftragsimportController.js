@@ -1,6 +1,7 @@
 const AuftragsimportModel = require('../models/auftragsimportModel');
 const AuftragsImportService = require('../services/auftragsImportService');
 const { broadcastEvent } = require('../utils/websocket');
+const { invalidateTermineCache } = require('./termineController');
 
 class AuftragsimportController {
   static async getAll(req, res) {
@@ -33,6 +34,7 @@ class AuftragsimportController {
 
   static async createSchnelltermin(req, res) {
     const result = await AuftragsImportService.createSchnelltermin(req.params.id, req.body || {});
+    invalidateTermineCache();
     broadcastEvent('auftragsimport.processed', {
       id: parseInt(req.params.id, 10),
       termin_id: result.termin.id,
@@ -47,6 +49,7 @@ class AuftragsimportController {
 
   static async softstart(req, res) {
     const result = await AuftragsImportService.createSoftstart(req.params.id, req.body || {});
+    invalidateTermineCache();
     broadcastEvent('auftragsimport.processed', {
       id: parseInt(req.params.id, 10),
       termin_id: result.termin.id,

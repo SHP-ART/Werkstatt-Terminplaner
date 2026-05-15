@@ -3546,7 +3546,7 @@ App.prototype.showAuftragsimportDetails = function(id) {
       ${_smartHtml}
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:${_abholIso ? '4px' : '16px'};">
         <button class="btn ${_abholIso ? 'btn-secondary' : 'btn-primary'}" onclick="app.schnellterminAusAuftragsimport(${item.id})">Zu Nicht zugeordnet</button>
-        <button class="btn btn-secondary" onclick="app.locosoftPruefenAuftragsimport(${item.id})">Zu Locosoft-Pruefung</button>
+        <button class="btn btn-secondary" onclick="app.locosoftPruefenAuftragsimport(${item.id})">Sp&auml;ter pr&uuml;fen</button>
         <button class="btn btn-danger" onclick="app.verwerfenAuftragsimport(${item.id})">Verwerfen</button>
       </div>
     `;
@@ -3621,7 +3621,7 @@ App.prototype.zuordnenAuftragsimport = async function(id, terminId) {
 App.prototype.locosoftPruefenAuftragsimport = async function(id) {
   try {
     await AuftragsimportService.locosoftPruefen(id);
-    this.showToast('In Locosoft-Pruefung verschoben', 'success');
+    this.showToast('PDF zur späteren Prüfung zurückgestellt', 'success');
     await this.loadAuftragsimporte();
   } catch (error) {
     console.error('Fehler beim Verschieben:', error);

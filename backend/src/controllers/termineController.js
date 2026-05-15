@@ -3232,3 +3232,4 @@ TermineController.invalidateAuslastungCache = invalidateAuslastungCache;
 TermineController.berechneEndzeitFuerTermin = berechneEndzeitFuerTermin;
 
 module.exports = TermineController;
+module.exports.invalidateTermineCache = invalidateTermineCache;
