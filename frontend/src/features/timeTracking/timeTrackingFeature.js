@@ -1123,6 +1123,9 @@ export function installTimeTrackingFeature(AppClass) {
             m.richtwert_min = (m.richtwert_min || 0) + (a.richtwert_min || 0);
             m.geschaetzte_min = (m.geschaetzte_min || 0) + (a.geschaetzte_min || 0);
             if (a.ist_min !== null) m.ist_min = (m.ist_min || 0) + a.ist_min;
+            if (!m.stempel_start_anzeige && a.stempel_start_anzeige) m.stempel_start_anzeige = a.stempel_start_anzeige;
+            if (!m.stempel_ende_anzeige && a.stempel_ende_anzeige) m.stempel_ende_anzeige = a.stempel_ende_anzeige;
+            m.stempel_ist_fallback = m.stempel_ist_fallback || a.stempel_ist_fallback;
           } else {
             _seenTermin.set(a.termin_id, _groupedArbeiten.length);
             _groupedArbeiten.push({ ...a });
@@ -1175,13 +1178,24 @@ export function installTimeTrackingFeature(AppClass) {
           const planEndeCell = a.plan_ende
             ? `<span style="color:#6c757d;">${a.plan_ende}</span>`
             : '<span class="text-muted">—</span>';
-          const startCell = a.stempel_start
+          const displayStart = a.stempel_start || a.stempel_start_anzeige;
+          const displayEnde = a.stempel_ende || a.stempel_ende_anzeige;
+          const fallbackTitle = a.stempel_ist_fallback ? ' title="Aus Termin-Start und Fertigstellung abgeleitet"' : '';
+          const fallbackMarker = a.stempel_ist_fallback ? ' <span style="font-size:10px;color:#6c757d;">*</span>' : '';
+          let startCell = displayStart
             ? `<span style="color:var(--success,#28a745);font-weight:600;">▶ ${a.stempel_start}</span>`
             : '<span class="text-muted">—</span>';
-          const endeCell = a.stempel_ende
+          let endeCell = displayEnde
             ? `<span style="color:var(--danger,#dc3545);font-weight:600;">■ ${a.stempel_ende}</span>`
             : '<span class="text-muted">—</span>';
     
+          if (displayStart) {
+            startCell = `<span${fallbackTitle} style="color:var(--success,#28a745);font-weight:600;">▶ ${displayStart}${fallbackMarker}</span>`;
+          }
+          if (displayEnde) {
+            endeCell = `<span${fallbackTitle} style="color:var(--danger,#dc3545);font-weight:600;">■ ${displayEnde}${fallbackMarker}</span>`;
+          }
+
           const rowStyle = pausiertAktiv ? ' style="background:#fffbe6;"' : (a.status === 'unterbrochen' ? ' style="background:#fff3e0;"' : '');
           // Tagesübergreifend laufender Termin (z.B. gestern gestartet)?
           const _heuteIso = new Date().toISOString().slice(0,10);

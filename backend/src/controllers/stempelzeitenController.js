@@ -579,6 +579,9 @@ class StempelzeitenController {
           geschaetzte_min: s.geschaetzte_min,
           plan_start: planS.plan_start, plan_ende: planS.plan_ende,
           stempel_start: s.stempel_start, stempel_ende: s.stempel_ende,
+          stempel_start_anzeige: effStart,
+          stempel_ende_anzeige: effEnde,
+          stempel_ist_fallback: (!s.stempel_start || !s.stempel_ende) && (!!effStart || !!effEnde),
           ist_min: istNetto,
           ist_brutto_min: rawIst,
           pause_abzug_min: pauseAbzug,
@@ -622,6 +625,9 @@ class StempelzeitenController {
             geschaetzte_min: t.geschaetzte_zeit,
             plan_start: planP.plan_start, plan_ende: planP.plan_ende,
             stempel_start: fbStempelStart, stempel_ende: fbStempelEnde,
+            stempel_start_anzeige: fbStempelStart,
+            stempel_ende_anzeige: fbStempelEnde,
+            stempel_ist_fallback: (!!fbStempelStart || !!fbStempelEnde) && !gestempelteTerminIds.has(t.termin_id),
             ist_min: istNetto,
             ist_brutto_min: fb.ist_min,
             pause_abzug_min: pauseAbzug,
@@ -655,7 +661,11 @@ class StempelzeitenController {
               arbeit: t.termin_arbeit || '', richtwert_min: rw,
               geschaetzte_min: t.geschaetzte_zeit,
               plan_start: planP.plan_start, plan_ende: planP.plan_ende,
-              stempel_start: fbStempelStart, stempel_ende: fbStempelEnde, ist_min: fb.ist_min,
+              stempel_start: fbStempelStart, stempel_ende: fbStempelEnde,
+              stempel_start_anzeige: fbStempelStart,
+              stempel_ende_anzeige: fbStempelEnde,
+              stempel_ist_fallback: !!fbStempelStart || !!fbStempelEnde,
+              ist_min: fb.ist_min,
               split_partner: t._split_partner || null
             };
             })
