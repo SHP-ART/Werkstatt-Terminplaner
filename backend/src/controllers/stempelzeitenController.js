@@ -396,7 +396,23 @@ class StempelzeitenController {
         if (!fbEnde && termin && termin.fertigstellung_zeit) {
           fbEnde = _isoToHHMM(termin.fertigstellung_zeit);
         }
-        const ist = (fbStart && fbEnde) ? StempelzeitenController._diffMinuten(fbStart, fbEnde) : null;
+        const istTotal = (fbStart && fbEnde) ? StempelzeitenController._diffMinuten(fbStart, fbEnde) : null;
+
+        // Bei mehreren Arbeiten ohne eigene Fertigstellungszeit: anteilig aufteilen
+        let ist = istTotal;
+        if (istTotal != null && det && arbeitName && !det[arbeitName]?.fertigstellung_zeit) {
+          const workKeys = Object.keys(det).filter(k =>
+            !k.startsWith('_') && det[k] !== null && typeof det[k] === 'object' && !Array.isArray(det[k])
+          );
+          if (workKeys.length > 1) {
+            const thisPlan = parseInt(det[arbeitName]?.zeit) || 0;
+            const totalPlan = workKeys.reduce((s, k) => s + (parseInt(det[k]?.zeit) || 0), 0);
+            ist = totalPlan > 0 && thisPlan > 0
+              ? Math.round(istTotal * thisPlan / totalPlan)
+              : Math.round(istTotal / workKeys.length);
+          }
+        }
+
         return { stempel_start: fbStart, stempel_ende: fbEnde, ist_min: ist };
       };
 
