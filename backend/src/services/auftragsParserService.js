@@ -314,7 +314,7 @@ function applySystemArbeitszeiten(daten, arbeitszeiten, options = {}) {
     }
   };
 
-  result.arbeit.summary = result.arbeit.items.map((item) => item.text).join('; ') || null;
+  result.arbeit.summary = result.arbeit.items.map((item) => item.text).join('\n') || null;
 
   const geschaetzteZeit = result.arbeit.items
     .reduce((sum, item) => sum + (parseInt(item.dauer_minuten, 10) || 0), 0);
@@ -409,7 +409,7 @@ function parseWork(lines) {
   return {
     rawLines,
     items,
-    summary: items.map((item) => item.text).join('; ') || null
+    summary: items.map((item) => item.text).join('\n') || null
   };
 }
 
