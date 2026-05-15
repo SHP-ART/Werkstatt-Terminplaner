@@ -21,6 +21,13 @@ function ensureImportDirs() {
   fs.mkdirSync(LOCOSOFT_PRUEFEN_DIR, { recursive: true });
 }
 
+function deleteImportFile(dateipfad) {
+  if (!dateipfad) return;
+  try {
+    if (fs.existsSync(dateipfad)) fs.unlinkSync(dateipfad);
+  } catch (_) { /* non-fatal */ }
+}
+
 function sha256File(filePath) {
   const hash = crypto.createHash('sha256');
   hash.update(fs.readFileSync(filePath));
@@ -272,7 +279,7 @@ async function scanImportDir() {
 }
 
 async function createSchnelltermin(importId, overrides = {}) {
-  return await withTransaction(async () => {
+  const result = await withTransaction(async () => {
     const item = await AuftragsimportModel.getById(importId);
     if (!item) throw new Error('Auftragsimport nicht gefunden');
 
@@ -293,10 +300,12 @@ async function createSchnelltermin(importId, overrides = {}) {
 
     return { termin, import: await AuftragsimportModel.getById(importId) };
   });
+  deleteImportFile(result.import?.dateipfad);
+  return result;
 }
 
 async function createSoftstart(importId, data = {}) {
-  return await withTransaction(async () => {
+  const result = await withTransaction(async () => {
     const item = await AuftragsimportModel.getById(importId);
     if (!item) throw new Error('Auftragsimport nicht gefunden');
     if (!data.mitarbeiter_id) throw new Error('mitarbeiter_id ist erforderlich');
@@ -324,10 +333,12 @@ async function createSoftstart(importId, data = {}) {
 
     return { termin, import: await AuftragsimportModel.getById(importId) };
   });
+  deleteImportFile(result.import?.dateipfad);
+  return result;
 }
 
 async function assignToTermin(importId, terminId) {
-  return await withTransaction(async () => {
+  const result = await withTransaction(async () => {
     const item = await AuftragsimportModel.getById(importId);
     if (!item) throw new Error('Auftragsimport nicht gefunden');
 
@@ -339,6 +350,8 @@ async function assignToTermin(importId, terminId) {
 
     return await AuftragsimportModel.getById(importId);
   });
+  deleteImportFile(result?.dateipfad);
+  return result;
 }
 
 async function moveToLocosoftPruefen(importId) {
