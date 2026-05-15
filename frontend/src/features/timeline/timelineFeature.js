@@ -915,14 +915,12 @@ export function installTimelineFeature(AppClass) {
     const interneAuftragsnummer = document.getElementById('schnellInterneAuftragsnummer')?.value?.trim();
     
     // Wenn Fertigstellungszeit geändert wurde, berechne neue Dauer
-    if (fertigstellung && startzeit) {
-      const [startH, startM] = startzeit.split(':').map(Number);
+    // Startzeit aus Formular oder aus gespeichertem Termin (Fallback)
+    const _effStartzeit = startzeit || termin?.startzeit || termin?.bring_zeit;
+    if (fertigstellung && _effStartzeit) {
+      const [startH, startM] = _effStartzeit.split(':').map(Number);
       const [endH, endM] = fertigstellung.split(':').map(Number);
-      const startMinuten = startH * 60 + startM;
-      const endMinuten = endH * 60 + endM;
-      const berechnungsDauer = endMinuten - startMinuten;
-      
-      // Nur übernehmen wenn positiv
+      const berechnungsDauer = (endH * 60 + endM) - (startH * 60 + startM);
       if (berechnungsDauer > 0) {
         dauer = berechnungsDauer;
       }
