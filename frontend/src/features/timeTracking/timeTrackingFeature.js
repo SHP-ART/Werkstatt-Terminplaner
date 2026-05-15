@@ -1112,7 +1112,24 @@ export function installTimeTrackingFeature(AppClass) {
         const midArg = mid !== null ? mid : 'null';
         const lidArg = lid !== null ? lid : 'null';
     
-        const rows = gruppe.arbeiten.map(a => {
+        // Mehrere Einträge ohne eigene Stempelzeit für denselben Termin → eine Zeile
+        const _groupedArbeiten = [];
+        const _seenTermin = new Map();
+        gruppe.arbeiten.forEach(a => {
+          const noStempel = !a.stempel_start && !a.stempel_ende;
+          if (noStempel && _seenTermin.has(a.termin_id)) {
+            const m = _groupedArbeiten[_seenTermin.get(a.termin_id)];
+            m.arbeit = m.arbeit + '\n' + a.arbeit;
+            m.richtwert_min = (m.richtwert_min || 0) + (a.richtwert_min || 0);
+            m.geschaetzte_min = (m.geschaetzte_min || 0) + (a.geschaetzte_min || 0);
+            if (a.ist_min !== null) m.ist_min = (m.ist_min || 0) + a.ist_min;
+          } else {
+            _seenTermin.set(a.termin_id, _groupedArbeiten.length);
+            _groupedArbeiten.push({ ...a });
+          }
+        });
+
+        const rows = _groupedArbeiten.map(a => {
           const vortagsMin = a.vortags_min || 0;
           const istMinHeute = a.ist_min;
           const istMin = istMinHeute !== null ? istMinHeute + vortagsMin : (vortagsMin > 0 ? vortagsMin : null);
