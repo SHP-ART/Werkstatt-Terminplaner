@@ -16256,6 +16256,44 @@ body.intern-tablet-mode-active #intern {
     opacity: 0.5;
 }
 
+.kalender-monat-zelle .mz-verfuegbar {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    margin: 2px 0 4px;
+    padding: 1px 4px;
+    border-radius: 4px;
+    background: #eef6ff;
+    color: #2563eb;
+    font-size: 0.68em;
+    font-weight: 600;
+    line-height: 1.35;
+    white-space: nowrap;
+}
+
+.kalender-monat-zelle .mz-verfuegbar.voll {
+    background: #eaf7ee;
+    color: #166534;
+    border: 1px solid #bbf7d0;
+}
+
+.kalender-monat-zelle .mz-verfuegbar.teilweise {
+    background: #fff7db;
+    color: #92400e;
+    border: 1px solid #fde68a;
+}
+
+.kalender-monat-zelle .mz-verfuegbar.keine {
+    background: #feecec;
+    color: #991b1b;
+    border: 1px solid #fecaca;
+}
+
+.kalender-monat-zelle.ist-vergangen .mz-verfuegbar {
+    opacity: 0.65;
+}
+
 .kalender-monat-zelle .mz-termine {
     font-size: 0.72em;
     line-height: 1.35;
@@ -17008,6 +17046,10 @@ tr.wiederholung-row {
 /* ===== NEUER KUNDE MODAL ===== */
 #neuerKundeModal .modal-content {
   max-width: 520px;
+}
+
+#neuerKundeModal.kalender-modal-top {
+  z-index: 3000;
 }
 
 #nkSpeichernBtn:disabled {

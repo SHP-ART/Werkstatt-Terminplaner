@@ -211,7 +211,7 @@ class KundenService {
   }
 
   static async search(searchTerm) {
-    return ApiService.get(`/kunden/search?search=${encodeURIComponent(searchTerm)}`);
+    return ApiService.get(`/kunden/search?q=${encodeURIComponent(searchTerm)}`);
   }
 
   // Alle Fahrzeuge (Kennzeichen) eines Kunden abrufen

@@ -684,12 +684,15 @@ export function installCustomersFeature(AppClass) {
         this.fahrzeugVerwaltungKundeName = null;
       },
 
-      openNeuerKundeModal() {
+      openNeuerKundeModal(context = 'termin') {
         const modal = document.getElementById('neuerKundeModal');
         if (!modal) return;
+        this.neuerKundeContext = context;
     
         // Nachname aus Suchfeld vorausfüllen
-        const suchtext = document.getElementById('terminNameSuche')?.value.trim() || '';
+        const suchtext = context === 'kalender'
+          ? (document.getElementById('kalTerminKundenSuche')?.value.trim() || '')
+          : (document.getElementById('terminNameSuche')?.value.trim() || '');
         const nkNachname = document.getElementById('nkNachname');
         if (nkNachname) nkNachname.value = suchtext;
     
@@ -704,9 +707,19 @@ export function installCustomersFeature(AppClass) {
         });
     
         // Kennzeichen-Felder leeren und ggf. aus der KZ-Suche vorbelegen
-        const bezirk = document.getElementById('kzSucheBezirk')?.value.trim().toUpperCase() || '';
-        const buchstaben = document.getElementById('kzSucheBuchstaben')?.value.trim().toUpperCase() || '';
-        const nummer = document.getElementById('kzSucheNummer')?.value.trim().toUpperCase() || '';
+        let bezirk = document.getElementById('kzSucheBezirk')?.value.trim().toUpperCase() || '';
+        let buchstaben = document.getElementById('kzSucheBuchstaben')?.value.trim().toUpperCase() || '';
+        let nummer = document.getElementById('kzSucheNummer')?.value.trim().toUpperCase() || '';
+        if (context === 'kalender') {
+          const kalKz = (document.getElementById('kalTerminKennzeichen')?.value.trim().toUpperCase() || '')
+            || (document.getElementById('kalTerminKundenSuche')?.value.trim().toUpperCase() || '');
+          const match = kalKz.match(/^([A-ZÄÖÜ]{1,3})[-\s]?([A-ZÄÖÜ]{1,2})?[-\s]?([0-9]{1,4})?$/);
+          if (match) {
+            bezirk = match[1] || '';
+            buchstaben = match[2] || '';
+            nummer = match[3] || '';
+          }
+        }
         const nkKzBezirk = document.getElementById('nkKzBezirk');
         const nkKzBuchstaben = document.getElementById('nkKzBuchstaben');
         const nkKzNummer = document.getElementById('nkKzNummer');
@@ -714,6 +727,7 @@ export function installCustomersFeature(AppClass) {
         if (nkKzBuchstaben) nkKzBuchstaben.value = buchstaben;
         if (nkKzNummer) nkKzNummer.value = nummer;
     
+        modal.classList.toggle('kalender-modal-top', context === 'kalender');
         modal.style.display = 'block';
     
         // Fokus auf Nachname-Feld
@@ -722,7 +736,10 @@ export function installCustomersFeature(AppClass) {
 
       closeNeuerKundeModal() {
         const modal = document.getElementById('neuerKundeModal');
-        if (modal) modal.style.display = 'none';
+        if (modal) {
+          modal.style.display = 'none';
+          modal.classList.remove('kalender-modal-top');
+        }
       },
 
       async saveNeuerKunde() {
@@ -780,6 +797,24 @@ export function installCustomersFeature(AppClass) {
           // Modal schließen
           this.closeNeuerKundeModal();
     
+          if (this.neuerKundeContext === 'kalender') {
+            const setVal = (id, value) => {
+              const el = document.getElementById(id);
+              if (el) el.value = value || '';
+            };
+            setVal('kalTerminKundeId', kundeId);
+            setVal('kalTerminKundenSuche', name);
+            setVal('kalTerminKennzeichen', kennzeichen);
+            setVal('kalTerminFahrzeugtyp', fahrzeugtyp);
+            setVal('kalTerminKilometerstand', kilometerstand);
+            const ergebnisse = document.getElementById('kalTerminKundenSucheErgebnisse');
+            if (ergebnisse) ergebnisse.style.display = 'none';
+            this.showToast?.('Kunde angelegt und in den Kalendertermin uebernommen', 'success');
+            this.neuerKundeContext = null;
+            this.loadKunden();
+            return;
+          }
+
           // Terminformular: Kunden-ID setzen
           const kundeIdInput = document.getElementById('kunde_id');
           if (kundeIdInput) kundeIdInput.value = kundeId;

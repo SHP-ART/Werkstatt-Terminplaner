@@ -84,6 +84,13 @@ class App {
     this.planungRaster = 15; // Standard-Raster: 15 Minuten (muss mit HTML-Select übereinstimmen)
     this.weitereTermineFilter = 7; // Filter für "Weitere" Termine (1, 2, 3 oder 7 Tage)
 
+    this.kalenderState = {
+      datum: this.getToday(),
+      activeSubTab: 'kalenderWoche',
+      ansicht: 'zeitleiste',
+      initialized: false
+    };
+
     // === Performance-Optimierung: Tab-Element-Caching ===
     // Cache für häufig verwendete DOM-Elemente
     this.tabCache = {

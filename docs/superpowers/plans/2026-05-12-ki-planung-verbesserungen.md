@@ -12,15 +12,15 @@
 
 | Task | Status |
 |---|---|
-| Task 1: KI-Dauer-Fallback | ✅ ERLEDIGT (reviewed + committed) |
-| Task 2: Nicht platzierte Termine mit Grund | ⏳ offen |
-| Task 3: Balanciertes Verteilen | ⏳ offen |
-| Task 4: DB-Migration 044 | ⏳ offen |
-| Task 5: Backend Kompetenz-Bonus | ⏳ offen |
-| Task 6: Frontend Kompetenz-Konfiguration | ⏳ offen |
-| Task 7: CLAUDE.md aktualisieren | ⏳ offen |
+| Task 1: KI-Dauer-Fallback | ✅ ERLEDIGT |
+| Task 2: Nicht platzierte Termine mit Grund | ✅ ERLEDIGT |
+| Task 3: Balanciertes Verteilen | ✅ ERLEDIGT |
+| Task 4: DB-Migration 044 | ✅ ERLEDIGT |
+| Task 5: Backend Kompetenz-Bonus | ✅ ERLEDIGT |
+| Task 6: Frontend Kompetenz-Konfiguration | ✅ ERLEDIGT |
+| Task 7: CLAUDE.md aktualisieren | ✅ ERLEDIGT |
 
-**Zum Fortfahren:** Worktree wechseln mit `git worktree list`, dann `/start` und diesen Plan öffnen.
+**🎉 ABGESCHLOSSEN — gemergt in master, gepusht (Commit `85dc6a7`), Worktree aufgeräumt.**
 
 ---
 

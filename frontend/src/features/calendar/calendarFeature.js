@@ -1,5 +1,13 @@
 export function installCalendarFeature(AppClass) {
   AppClass.prototype.loadKalender = function() {
+  if (!this.kalenderState) {
+    this.kalenderState = {
+      datum: this.getToday(),
+      activeSubTab: 'kalenderWoche',
+      ansicht: 'zeitleiste',
+      initialized: false
+    };
+  }
   if (!this.kalenderState.datum) {
     this.kalenderState.datum = this.getToday();
   }
@@ -29,13 +37,20 @@ export function installCalendarFeature(AppClass) {
   if (nextBtn) nextBtn.addEventListener('click', () => this.kalenderNavigate(1));
   if (heuteBtn) heuteBtn.addEventListener('click', () => this.kalenderGoToToday());
 
-  // Ansichts-Toggle (Zeitleiste / Liste)
-  kalenderContainer.querySelectorAll('.kalender-ansicht-btn').forEach(btn => {
-    btn.addEventListener('click', (e) => {
-      const ansicht = e.currentTarget.dataset.ansicht;
-      this.toggleKalenderAnsicht(ansicht);
+  // Ansichts-Toggle (Zeitleiste / Liste / Mitarbeiter)
+  if (!kalenderContainer.dataset.ansichtToggleBound) {
+    kalenderContainer.dataset.ansichtToggleBound = 'true';
+    kalenderContainer.addEventListener('click', (e) => {
+      const btn = e.target.closest('.kalender-ansicht-btn');
+      if (!btn || !kalenderContainer.contains(btn)) return;
+
+      e.preventDefault();
+      const ansicht = btn.dataset.ansicht;
+      if (ansicht) {
+        this.toggleKalenderAnsicht(ansicht);
+      }
     });
-  });
+  }
 
   // Sub-Tab-Wechsel: Ansicht laden und auf heute springen
   kalenderContainer.querySelectorAll('.kalender-sub-tabs .sub-tab-button').forEach(btn => {
@@ -136,6 +151,15 @@ export function installCalendarFeature(AppClass) {
  */;
 
   AppClass.prototype.toggleKalenderAnsicht = function(ansicht) {
+  if (!this.kalenderState) {
+    this.kalenderState = {
+      datum: this.getToday(),
+      activeSubTab: 'kalenderTag',
+      ansicht: 'zeitleiste',
+      initialized: false
+    };
+  }
+
   this.kalenderState.ansicht = ansicht;
   // Toggle-Buttons aktualisieren
   const container = document.getElementById('kalender');
@@ -1024,11 +1048,23 @@ export function installCalendarFeature(AppClass) {
 
   const datumVon = this.kalenderFormatDatum(startGrid);
   const datumBis = this.kalenderFormatDatum(endGrid);
+  const gridTage = [];
+  const gridCursor = new Date(startGrid);
+  while (gridCursor <= endGrid) {
+    gridTage.push(new Date(gridCursor));
+    gridCursor.setDate(gridCursor.getDate() + 1);
+  }
 
-  const [termine, abwesenheiten] = await Promise.all([
+  const [termine, abwesenheiten, ...auslastungen] = await Promise.all([
     this.kalenderLadeTermine(datumVon, datumBis),
-    this.kalenderLadeAbwesenheiten(datumVon, datumBis)
+    this.kalenderLadeAbwesenheiten(datumVon, datumBis),
+    ...gridTage.map(tag => AuslastungService.getByDatum(this.kalenderFormatDatum(tag)).catch(() => null))
   ]);
+
+  const auslastungProTag = {};
+  gridTage.forEach((tag, index) => {
+    auslastungProTag[this.kalenderFormatDatum(tag)] = auslastungen[index];
+  });
 
   // Abwesenheiten nach Datum gruppieren
   const abwProTag = {};
@@ -1055,10 +1091,25 @@ export function installCalendarFeature(AppClass) {
     const istHeute = this.kalenderIstHeute(cursor);
     const tageTermine = terminePropTag[datumStr] || [];
     
-    // Auslastung berechnen (vereinfacht: Minuten / 480 * 100)
-    const gesamtMinuten = tageTermine.reduce((sum, t) => sum + (t.geschaetzte_zeit || 0), 0);
-    const auslastungProzent = Math.min(Math.round((gesamtMinuten / 480) * 100), 100);
+    const tageAuslastung = auslastungProTag[datumStr];
+    const auslastungProzent = tageAuslastung?.auslastung_prozent || 0;
     const auslastungFarbe = auslastungProzent < 50 ? '#4caf50' : auslastungProzent < 75 ? '#ffc107' : auslastungProzent < 90 ? '#ff9800' : '#f44336';
+    const mitarbeiterAuslastung = tageAuslastung?.mitarbeiter_auslastung || [];
+    const lehrlingeAuslastung = tageAuslastung?.lehrlinge_auslastung || [];
+    const mitarbeiterGesamt = mitarbeiterAuslastung.length;
+    const mitarbeiterVerfuegbar = mitarbeiterAuslastung.filter(ma => !ma.ist_abwesend && (ma.verfuegbar_minuten || 0) > 0).length;
+    const lehrlingeGesamt = lehrlingeAuslastung.length;
+    const lehrlingeVerfuegbar = lehrlingeAuslastung.filter(la => !la.ist_abwesend && (la.verfuegbar_minuten || 0) > 0).length;
+    const personenGesamt = mitarbeiterGesamt + lehrlingeGesamt;
+    const personenVerfuegbar = mitarbeiterVerfuegbar + lehrlingeVerfuegbar;
+    const verfuegbarKlasse = personenGesamt > 0 && personenVerfuegbar === personenGesamt
+      ? ' voll'
+      : personenVerfuegbar > 0
+        ? ' teilweise'
+        : ' keine';
+    const verfuegbarHtml = mitarbeiterGesamt > 0 || lehrlingeGesamt > 0
+      ? `<div class="mz-verfuegbar${verfuegbarKlasse}" title="${mitarbeiterVerfuegbar} von ${mitarbeiterGesamt} Mitarbeitern und ${lehrlingeVerfuegbar} von ${lehrlingeGesamt} Lehrlingen verfuegbar">${mitarbeiterVerfuegbar}/${mitarbeiterGesamt} MA · ${lehrlingeVerfuegbar}/${lehrlingeGesamt} L</div>`
+      : '';
 
     const istVergangen = datumStr < new Date().toISOString().split('T')[0] && !istHeute;
 
@@ -1085,6 +1136,7 @@ export function installCalendarFeature(AppClass) {
           <button class="mz-neu-btn" data-datum="${datumStr}" title="Neuer Termin">+</button>
         </div>
         ${abwHtml}
+        ${verfuegbarHtml}
         ${tageTermine.length > 0 ? `<div class="mz-auslastung"><div class="mz-auslastung-bar" style="width:${auslastungProzent}%;background:${auslastungFarbe}"></div></div>` : ''}
         ${terminInfo}
       </div>
@@ -1352,6 +1404,13 @@ export function installCalendarFeature(AppClass) {
           return;
         }
 
+        const neuerKundeBtn = e.target.closest('[data-kal-neuer-kunde]');
+        if (neuerKundeBtn) {
+          ergebnisseContainer.style.display = 'none';
+          this.openNeuerKundeModal?.('kalender');
+          return;
+        }
+
         // Kundenauswahl (1. Ebene)
         const kundeItem = e.target.closest('[data-kunde-id]');
         if (!kundeItem) return;
@@ -1382,6 +1441,16 @@ export function installCalendarFeature(AppClass) {
               })
               .map(t => ({ kennzeichen: t.kennzeichen, fahrzeugtyp: t.fahrzeugtyp || '', vin: t.vin || '' }));
           }
+        }
+
+        const normalizeKz = (value) => String(value || '').replace(/[\s\-]/g, '').toUpperCase();
+        const exaktesFahrzeug = kzFallback
+          ? fahrzeuge.find(fz => normalizeKz(fz.kennzeichen) === normalizeKz(kzFallback))
+          : null;
+        if (exaktesFahrzeug) {
+          this.applyFahrzeugZuKalenderModal(exaktesFahrzeug);
+          ergebnisseContainer.style.display = 'none';
+          return;
         }
 
         if (fahrzeuge.length === 1) {
@@ -1486,6 +1555,80 @@ export function installCalendarFeature(AppClass) {
 /**
  * Fahrzeugdaten in das Kalender-Modal-Formular übernehmen
  */
+
+  AppClass.prototype.kalenderKundenSuche = async function(suchtext) {
+  const ergebnisseEl = document.getElementById('kalTerminKundenSucheErgebnisse');
+  if (!ergebnisseEl) return;
+
+  if (!suchtext || suchtext.trim().length < 2) {
+    ergebnisseEl.style.display = 'none';
+    return;
+  }
+
+  const norm = (value) => String(value || '').replace(/[\s\-]/g, '').toUpperCase();
+  const sucheNorm = norm(suchtext);
+
+  try {
+    const response = await KundenService.search(suchtext.trim());
+    const kunden = response.kunden || response || [];
+
+    if (kunden.length === 0) {
+      ergebnisseEl.innerHTML = `
+        <div class="autocomplete-item" style="color:#999;">Kein Kunde gefunden</div>
+        <button type="button" class="btn btn-primary" data-kal-neuer-kunde style="width:100%;margin:6px 0 2px;padding:8px 10px;">
+          Neuen Kunden anlegen
+        </button>
+      `;
+      ergebnisseEl.style.display = 'block';
+      return;
+    }
+
+    ergebnisseEl.innerHTML = kunden.slice(0, 8).map(k => {
+      const fahrzeugeMap = new Map();
+      if (k.kennzeichen) {
+        fahrzeugeMap.set(norm(k.kennzeichen), {
+          kennzeichen: k.kennzeichen,
+          fahrzeugtyp: k.fahrzeugtyp || '',
+          vin: k.vin || ''
+        });
+      }
+      (k.termine || []).forEach(t => {
+        if (!t.kennzeichen) return;
+        const key = norm(t.kennzeichen);
+        if (!fahrzeugeMap.has(key)) {
+          fahrzeugeMap.set(key, {
+            kennzeichen: t.kennzeichen,
+            fahrzeugtyp: t.fahrzeugtyp || '',
+            vin: t.vin || ''
+          });
+        }
+      });
+      const fahrzeuge = Array.from(fahrzeugeMap.values());
+      const treffendesFahrzeug = fahrzeuge.find(fz => norm(fz.kennzeichen).includes(sucheNorm)) || fahrzeuge[0] || null;
+      const fahrzeugText = treffendesFahrzeug
+        ? ` - ${treffendesFahrzeug.kennzeichen}${treffendesFahrzeug.fahrzeugtyp ? ' - ' + treffendesFahrzeug.fahrzeugtyp : ''}`
+        : '';
+      const weitere = fahrzeuge.length > 1 ? ` <span style="color:#999;font-size:0.85em;">(+${fahrzeuge.length - 1})</span>` : '';
+      return `
+        <div class="autocomplete-item" data-kunde-id="${k.id}" data-name="${this.escapeHtml(k.name || '')}" data-kennzeichen="${treffendesFahrzeug ? this.escapeHtml(treffendesFahrzeug.kennzeichen || '') : ''}">
+          <strong>${this.escapeHtml(k.name || 'Unbekannt')}</strong>
+          ${this.escapeHtml(fahrzeugText)}${weitere}
+          ${k.telefon ? ` - ${this.escapeHtml(k.telefon)}` : ''}
+        </div>
+      `;
+    }).join('');
+    ergebnisseEl.style.display = 'block';
+  } catch (err) {
+    console.error('Kalender: Kundensuche Fehler:', err);
+    ergebnisseEl.innerHTML = `
+      <div class="autocomplete-item" style="color:#c62828;">Suche fehlgeschlagen</div>
+      <button type="button" class="btn btn-primary" data-kal-neuer-kunde style="width:100%;margin:6px 0 2px;padding:8px 10px;">
+        Neuen Kunden anlegen
+      </button>
+    `;
+    ergebnisseEl.style.display = 'block';
+  }
+};
 
 /**
  * Termin-Erstellung aus dem Kalender-Modal
