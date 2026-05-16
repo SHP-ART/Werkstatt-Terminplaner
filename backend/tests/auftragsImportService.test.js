@@ -1,0 +1,186 @@
+jest.mock('../src/config/database', () => ({
+  dataDir: '/tmp/werkstatt-test'
+}));
+
+jest.mock('../src/utils/dbHelper', () => ({
+  getAsync: jest.fn(),
+  allAsync: jest.fn(),
+  runAsync: jest.fn()
+}));
+
+jest.mock('../src/utils/transaction', () => ({
+  withTransaction: jest.fn(async (callback) => callback())
+}));
+
+jest.mock('../src/models/termineModel', () => ({
+  create: jest.fn()
+}));
+
+jest.mock('../src/models/auftragsimportModel', () => ({
+  getById: jest.fn(),
+  update: jest.fn(),
+  findByHash: jest.fn(),
+  create: jest.fn()
+}));
+
+jest.mock('../src/services/auftragsParserService', () => ({
+  parseAuftragsPdf: jest.fn(),
+  applySystemArbeitszeitenFromDb: jest.fn()
+}));
+
+const { getAsync, runAsync } = require('../src/utils/dbHelper');
+const TermineModel = require('../src/models/termineModel');
+const AuftragsimportModel = require('../src/models/auftragsimportModel');
+const AuftragsImportService = require('../src/services/auftragsImportService');
+
+function makeImportItem(overrides = {}) {
+  const { erkannte_daten: datenOverrides = {}, ...itemOverrides } = overrides;
+  return {
+    id: 10,
+    dateipfad: null,
+    erkannte_daten: {
+      kunde: { name: 'Laura Scholz' },
+      kundennummer: '28243',
+      datum: '13.05.2026',
+      auftragsnummer: '1140',
+      fahrzeug: {
+        kennzeichen: 'SFB-LQ 99',
+        vin: 'VR7BAHNSANE044250',
+        raw: 'Citroen C4 PureTech 130 EAT8',
+        kmStand: 53175
+      },
+      arbeit: {
+        summary: 'AU',
+        items: [{ text: 'AU', originalText: 'A.U. - Abgasuntersuchung', dauer_minuten: 30 }]
+      },
+      geschaetzte_zeit: 30,
+      ...datenOverrides
+    },
+    ...itemOverrides
+  };
+}
+
+describe('auftragsImportService Stammdatenanlage', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    AuftragsimportModel.update.mockResolvedValue({ changes: 1 });
+  });
+
+  test('legt unbekannten PDF-Kunden mit Hauptfahrzeug an und verknuepft den Termin', async () => {
+    const importItem = makeImportItem();
+    const createdKunde = {
+      id: 77,
+      name: 'Laura Scholz',
+      telefon: null,
+      locosoft_id: '28243',
+      kennzeichen: 'SFB-LQ 99'
+    };
+
+    AuftragsimportModel.getById
+      .mockResolvedValueOnce(importItem)
+      .mockResolvedValueOnce({ ...importItem, status: 'verarbeitet', termin_id: 123 });
+    TermineModel.create.mockResolvedValue({ id: 123, datum: '2026-05-16' });
+    runAsync.mockImplementation(async (sql) => {
+      if (sql.includes('INSERT INTO kunden')) return { lastID: 77, changes: 1 };
+      return { lastID: 1, changes: 1 };
+    });
+    getAsync.mockImplementation(async (sql) => {
+      if (sql.includes('SELECT * FROM kunden WHERE id = ?')) return createdKunde;
+      return null;
+    });
+
+    await AuftragsImportService.createSchnelltermin(10, { datum: '2026-05-16' });
+
+    expect(runAsync).toHaveBeenCalledWith(
+      expect.stringContaining('INSERT INTO kunden'),
+      [
+        'Laura Scholz',
+        null,
+        null,
+        null,
+        '28243',
+        'SFB-LQ 99',
+        'VR7BAHNSANE044250',
+        'Citroen C4 PureTech 130 EAT8'
+      ]
+    );
+    expect(TermineModel.create).toHaveBeenCalledWith(expect.objectContaining({
+      kunde_id: 77,
+      kunde_name: 'Laura Scholz',
+      kennzeichen: 'SFB-LQ 99'
+    }));
+  });
+
+  test('verknuepft bestehenden Kunden und nutzt das neue Kennzeichen als Kundenfahrzeug am Termin', async () => {
+    const importItem = makeImportItem({
+      erkannte_daten: {
+        kundennummer: null,
+        fahrzeug: {
+          kennzeichen: 'SFB-NEU 123',
+          raw: 'Citroen Berlingo',
+          vin: null,
+          kmStand: 88000
+        }
+      }
+    });
+    const existingKunde = {
+      id: 5,
+      name: 'Laura Scholz',
+      telefon: '03573',
+      kennzeichen: 'SFB-ALT 1',
+      fahrzeugtyp: 'Citroen C3',
+      vin: null,
+      locosoft_id: null
+    };
+
+    AuftragsimportModel.getById
+      .mockResolvedValueOnce(importItem)
+      .mockResolvedValueOnce({ ...importItem, status: 'verarbeitet', termin_id: 456 });
+    TermineModel.create.mockResolvedValue({ id: 456, datum: '2026-05-16' });
+    getAsync.mockImplementation(async (sql) => {
+      if (sql.includes('LOWER(TRIM(name))')) return existingKunde;
+      return null;
+    });
+    runAsync.mockResolvedValue({ lastID: 1, changes: 1 });
+
+    await AuftragsImportService.createSchnelltermin(10, { datum: '2026-05-16' });
+
+    expect(runAsync).not.toHaveBeenCalledWith(expect.stringContaining('INSERT INTO kunden'), expect.any(Array));
+    expect(TermineModel.create).toHaveBeenCalledWith(expect.objectContaining({
+      kunde_id: 5,
+      kunde_name: 'Laura Scholz',
+      kunde_telefon: '03573',
+      kennzeichen: 'SFB-NEU 123',
+      fahrzeugtyp: 'Citroen Berlingo'
+    }));
+  });
+
+  test('erkennt Kunden ueber Kennzeichen aus frueheren Terminen statt einen Neukunden anzulegen', async () => {
+    const existingKunde = {
+      id: 9,
+      name: 'Bestandskunde',
+      telefon: null,
+      kennzeichen: null,
+      fahrzeugtyp: null,
+      vin: null,
+      locosoft_id: null
+    };
+    getAsync.mockImplementation(async (sql) => {
+      if (sql.includes('JOIN kunden k ON k.id = t.kunde_id')) return existingKunde;
+      if (sql.includes('SELECT * FROM kunden WHERE id = ?')) {
+        return { ...existingKunde, kennzeichen: 'SFB-LQ 99' };
+      }
+      return null;
+    });
+    runAsync.mockResolvedValue({ lastID: 1, changes: 1 });
+
+    const result = await AuftragsImportService.ensureKundeForImport(makeImportItem().erkannte_daten);
+
+    expect(result.kunde.id).toBe(9);
+    expect(runAsync).toHaveBeenCalledWith(
+      expect.stringContaining('UPDATE kunden'),
+      ['SFB-LQ 99', 'Citroen C4 PureTech 130 EAT8', 'VR7BAHNSANE044250', '28243', 9]
+    );
+    expect(runAsync).not.toHaveBeenCalledWith(expect.stringContaining('INSERT INTO kunden'), expect.any(Array));
+  });
+});

@@ -3,7 +3,7 @@ const fs = require('fs');
 const path = require('path');
 
 const { dataDir } = require('../config/database');
-const { allAsync, runAsync } = require('../utils/dbHelper');
+const { getAsync, allAsync, runAsync } = require('../utils/dbHelper');
 const { withTransaction } = require('../utils/transaction');
 const TermineModel = require('../models/termineModel');
 const AuftragsimportModel = require('../models/auftragsimportModel');
@@ -55,8 +55,16 @@ function cleanKennzeichen(value) {
   return String(value || '').replace(/\s+/g, ' ').trim().toUpperCase();
 }
 
+function normalizeKennzeichen(value) {
+  return cleanKennzeichen(value).replace(/[\s-]/g, '');
+}
+
 function normalizeName(value) {
   return String(value || '').toLowerCase().replace(/\s+/g, ' ').trim();
+}
+
+function escapeLike(value) {
+  return String(value || '').replace(/\\/g, '\\\\').replace(/%/g, '\\%').replace(/_/g, '\\_');
 }
 
 function buildTerminData(importItem, overrides = {}) {
@@ -88,6 +96,129 @@ function buildTerminData(importItem, overrides = {}) {
     mitarbeiter_id: overrides.mitarbeiter_id || null,
     bring_zeit: overrides.bring_zeit || null
   };
+}
+
+async function findKundeForImport(daten) {
+  const kundennummer = String(daten.kundennummer || '').trim();
+  const kennzeichenNorm = normalizeKennzeichen(daten.fahrzeug?.kennzeichen);
+  const kundeName = normalizeName(daten.kunde?.name);
+
+  if (kundennummer) {
+    const kunde = await getAsync('SELECT * FROM kunden WHERE locosoft_id = ? LIMIT 1', [kundennummer]);
+    if (kunde) return kunde;
+  }
+
+  if (kennzeichenNorm) {
+    const kundeByKennzeichen = await getAsync(
+      `SELECT *
+         FROM kunden
+        WHERE kennzeichen IS NOT NULL
+          AND UPPER(REPLACE(REPLACE(kennzeichen, ' ', ''), '-', '')) = ?
+        LIMIT 1`,
+      [kennzeichenNorm]
+    );
+    if (kundeByKennzeichen) return kundeByKennzeichen;
+
+    const kundeByTerminKennzeichen = await getAsync(
+      `SELECT k.*
+         FROM termine t
+         JOIN kunden k ON k.id = t.kunde_id
+        WHERE t.kunde_id IS NOT NULL
+          AND t.kennzeichen IS NOT NULL
+          AND UPPER(REPLACE(REPLACE(t.kennzeichen, ' ', ''), '-', '')) = ?
+        ORDER BY t.datum DESC, t.id DESC
+        LIMIT 1`,
+      [kennzeichenNorm]
+    );
+    if (kundeByTerminKennzeichen) return kundeByTerminKennzeichen;
+  }
+
+  if (kundeName) {
+    return await getAsync(
+      `SELECT *
+         FROM kunden
+        WHERE LOWER(TRIM(name)) = ?
+        LIMIT 1`,
+      [kundeName]
+    );
+  }
+
+  return null;
+}
+
+async function updateKundeFahrzeugIfMissing(kunde, daten) {
+  const kennzeichen = cleanKennzeichen(daten.fahrzeug?.kennzeichen);
+  const fahrzeugtyp = daten.fahrzeug?.raw || null;
+  const vin = daten.fahrzeug?.vin || null;
+  const updates = {};
+
+  if (kennzeichen && !kunde.kennzeichen) updates.kennzeichen = kennzeichen;
+  if (fahrzeugtyp && !kunde.fahrzeugtyp) updates.fahrzeugtyp = fahrzeugtyp;
+  if (vin && !kunde.vin) updates.vin = vin;
+  if (daten.kundennummer && !kunde.locosoft_id) updates.locosoft_id = String(daten.kundennummer).trim();
+
+  const fields = Object.keys(updates);
+  if (fields.length === 0) return kunde;
+
+  await runAsync(
+    `UPDATE kunden
+        SET ${fields.map(field => `${field} = ?`).join(', ')}
+      WHERE id = ?`,
+    [...fields.map(field => updates[field]), kunde.id]
+  );
+
+  return await getAsync('SELECT * FROM kunden WHERE id = ?', [kunde.id]);
+}
+
+async function ensureKundeForImport(daten) {
+  const name = String(daten.kunde?.name || '').replace(/\s+/g, ' ').trim();
+  const kennzeichen = cleanKennzeichen(daten.fahrzeug?.kennzeichen);
+  const kundennummer = String(daten.kundennummer || '').trim() || null;
+
+  if (!name && !kennzeichen && !kundennummer) {
+    return { kunde: null, created: false };
+  }
+
+  const existingKunde = await findKundeForImport(daten);
+  if (existingKunde) {
+    const kunde = await updateKundeFahrzeugIfMissing(existingKunde, daten);
+    return { kunde, created: false };
+  }
+
+  if (!name) {
+    return { kunde: null, created: false };
+  }
+
+  const result = await runAsync(
+    `INSERT INTO kunden (name, telefon, email, adresse, locosoft_id, kennzeichen, vin, fahrzeugtyp)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+    [
+      name,
+      null,
+      null,
+      null,
+      kundennummer,
+      kennzeichen || null,
+      daten.fahrzeug?.vin || null,
+      daten.fahrzeug?.raw || null
+    ]
+  );
+
+  return {
+    kunde: await getAsync('SELECT * FROM kunden WHERE id = ?', [result.lastID]),
+    created: true
+  };
+}
+
+async function prepareTerminDataWithStammdaten(item, overrides = {}) {
+  const terminData = buildTerminData(item, overrides);
+  const stammdaten = await ensureKundeForImport(item.erkannte_daten || {});
+  if (stammdaten.kunde) {
+    terminData.kunde_id = stammdaten.kunde.id;
+    terminData.kunde_name = stammdaten.kunde.name || terminData.kunde_name;
+    terminData.kunde_telefon = stammdaten.kunde.telefon || null;
+  }
+  return { terminData, stammdaten };
 }
 
 function makeUniqueArbeitsKey(details, baseName) {
@@ -178,7 +309,7 @@ async function findTerminMatches(daten) {
     [
       datum, datum,
       kennzeichen, kennzeichen,
-      kundeName, kundeName ? `%${kundeName.replace(/\\/g, '\\\\').replace(/%/g, '\\%').replace(/_/g, '\\_')}%` : null
+      kundeName, kundeName ? `%${escapeLike(kundeName)}%` : null
     ]
   );
 
@@ -289,7 +420,7 @@ async function createSchnelltermin(importId, overrides = {}) {
     const item = await AuftragsimportModel.getById(importId);
     if (!item) throw new Error('Auftragsimport nicht gefunden');
 
-    const terminData = buildTerminData(item, {
+    const { terminData } = await prepareTerminDataWithStammdaten(item, {
       datum: overrides.datum || todayIsoDate(),
       ...overrides,
       ist_schwebend: overrides.ist_schwebend ?? 0,
@@ -319,7 +450,7 @@ async function createSoftstart(importId, data = {}) {
     const now = new Date();
     const datum = now.toISOString().slice(0, 10);
     const startzeit = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
-    const terminData = buildTerminData(item, {
+    const { terminData } = await prepareTerminDataWithStammdaten(item, {
       datum,
       mitarbeiter_id: data.mitarbeiter_id,
       bring_zeit: startzeit,
@@ -406,5 +537,6 @@ module.exports = {
   moveToLocosoftPruefen,
   discard,
   findTerminMatches,
-  buildTerminData
+  buildTerminData,
+  ensureKundeForImport
 };
