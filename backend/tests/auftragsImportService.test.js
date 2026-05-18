@@ -203,4 +203,25 @@ describe('auftragsImportService Stammdatenanlage', () => {
       dateipfad: null
     }));
   });
+
+  test('buildTerminData nutzt bereinigte Arbeitstexte fuer Umfang', () => {
+    const item = makeImportItem({
+      erkannte_daten: {
+        arbeit: {
+          summary: 'AU\nHU\nWartung',
+          items: [
+            { text: 'AU', originalText: 'A.U. - Abgasuntersuchung' },
+            { text: 'HU', originalText: 'Hauptuntersuchung DEKRA' },
+            { text: 'Wartung', originalText: 'AUSTAUSCH ZUENDKERZEN (SATZ) WARTUNG' }
+          ]
+        }
+      }
+    });
+
+    const result = AuftragsImportService.buildTerminData(item);
+
+    expect(result.arbeit).toBe('AU\nHU\nWartung');
+    expect(result.umfang).toBe('AU\nHU\nWartung');
+    expect(result.umfang).not.toContain('ZUENDKERZEN');
+  });
 });

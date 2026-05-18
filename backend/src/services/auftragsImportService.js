@@ -83,7 +83,7 @@ function buildTerminData(importItem, overrides = {}) {
     kunde_name: daten.kunde?.name || null,
     kennzeichen: daten.fahrzeug?.kennzeichen || null,
     arbeit,
-    umfang: daten.arbeit?.items?.map(item => item.originalText || item.text).join('\n') || null,
+    umfang: daten.arbeit?.items?.map(item => item.text).filter(Boolean).join('\n') || null,
     geschaetzte_zeit: daten.geschaetzte_zeit || 60,
     datum: overrides.datum || toIsoDate(daten.datum) || null,
     abholung_zeit: daten.abholung?.zeit || null,
