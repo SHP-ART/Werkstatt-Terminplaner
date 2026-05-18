@@ -61,6 +61,7 @@ const migrations = [
   require('./043_backfill_ki_zeitlern_daten'), // Version 43 - Backfill ki_zeitlern_daten aus abgeschlossenen Terminen
   require('./044_kompetenz_mapping'), // Version 44 - Kompetenz-Mapping
   require('./045_auftragsimporte'), // Version 45 - PDF-Auftragsimporte
+  require('./046_backfill_pdf_auftragsnummern'), // Version 46 - PDF-Auftragsnummern in Termine nachtragen
 ];
 
 /**

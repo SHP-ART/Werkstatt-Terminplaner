@@ -107,7 +107,8 @@ describe('auftragsImportService Stammdatenanlage', () => {
     expect(TermineModel.create).toHaveBeenCalledWith(expect.objectContaining({
       kunde_id: 77,
       kunde_name: 'Laura Scholz',
-      kennzeichen: 'SFB-LQ 99'
+      kennzeichen: 'SFB-LQ 99',
+      interne_auftragsnummer: '1140'
     }));
     expect(AuftragsimportModel.update).toHaveBeenCalledWith(10, expect.objectContaining({
       termin_id: 123,
