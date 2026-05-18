@@ -17,7 +17,7 @@ async function up(db) {
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       termin_id INTEGER NULL,
       original_dateiname TEXT NOT NULL,
-      dateipfad TEXT NOT NULL,
+      dateipfad TEXT,
       status TEXT NOT NULL DEFAULT 'neu',
       text_extract TEXT,
       erkannte_daten TEXT,

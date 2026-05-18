@@ -420,9 +420,11 @@ async function scanImportDir() {
 }
 
 async function createSchnelltermin(importId, overrides = {}) {
+  let importFilePath = null;
   const result = await withTransaction(async () => {
     const item = await AuftragsimportModel.getById(importId);
     if (!item) throw new Error('Auftragsimport nicht gefunden');
+    importFilePath = item.dateipfad || null;
 
     const { terminData } = await prepareTerminDataWithStammdaten(item, {
       datum: overrides.datum || todayIsoDate(),
@@ -442,15 +444,17 @@ async function createSchnelltermin(importId, overrides = {}) {
 
     return { termin, import: await AuftragsimportModel.getById(importId) };
   });
-  deleteImportFileSafely(result.import?.dateipfad);
+  deleteImportFileSafely(importFilePath);
   return result;
 }
 
 async function createSoftstart(importId, data = {}) {
+  let importFilePath = null;
   const result = await withTransaction(async () => {
     const item = await AuftragsimportModel.getById(importId);
     if (!item) throw new Error('Auftragsimport nicht gefunden');
     if (!data.mitarbeiter_id) throw new Error('mitarbeiter_id ist erforderlich');
+    importFilePath = item.dateipfad || null;
 
     const now = new Date();
     const datum = now.toISOString().slice(0, 10);
@@ -476,14 +480,16 @@ async function createSoftstart(importId, data = {}) {
 
     return { termin, import: await AuftragsimportModel.getById(importId) };
   });
-  deleteImportFileSafely(result.import?.dateipfad);
+  deleteImportFileSafely(importFilePath);
   return result;
 }
 
 async function assignToTermin(importId, terminId) {
+  let importFilePath = null;
   const result = await withTransaction(async () => {
     const item = await AuftragsimportModel.getById(importId);
     if (!item) throw new Error('Auftragsimport nicht gefunden');
+    importFilePath = item.dateipfad || null;
 
     await AuftragsimportModel.update(importId, {
       termin_id: terminId,
@@ -494,7 +500,7 @@ async function assignToTermin(importId, terminId) {
 
     return await AuftragsimportModel.getById(importId);
   });
-  deleteImportFileSafely(result?.dateipfad);
+  deleteImportFileSafely(importFilePath);
   return result;
 }
 
