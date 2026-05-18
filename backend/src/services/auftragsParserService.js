@@ -176,7 +176,7 @@ function isWartungSubItem(item) {
   const combined = `${text} ${original}`;
 
   return (
-    /pollenfilter|kraftstofffilter|kraftstoffilter|bremsfluessigkeit|bremskreis|innenraumfilter|oelfilter|luftfilter|filter wartung/.test(combined)
+    /pollenfilter|kraftstofffilter|kraftstoffilter|bremsfluessigkeit|bremskreis|innenraumfilter|oelfilter|luftfilter|zuendkerzen|zahnriemen|filter wartung|austausch .* wartung/.test(combined)
   );
 }
 

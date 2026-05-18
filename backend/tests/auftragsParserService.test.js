@@ -36,7 +36,8 @@ describe('auftragsParserService', () => {
       {
         text: 'AU',
         originalText: 'A.U. - Abgasuntersuchung durchfuehren 2J.',
-        sourceLines: ['1. 202 A.U. - Abgasuntersuchung durchfuehren 2J. 10 46,64']
+        sourceLines: ['1. 202 A.U. - Abgasuntersuchung durchfuehren 2J. 10 46,64'],
+        dauer_minuten_pdf: 60
       }
     ]);
   });
@@ -102,7 +103,7 @@ describe('auftragsParserService', () => {
 
     expect(result.geschaetzte_zeit).toBe(150);
     expect(result.zeit_quelle).toBe('arbeitszeiten');
-    expect(result.arbeit.summary).toBe('AU; HU; Wartung');
+    expect(result.arbeit.summary).toBe(['AU', 'HU', 'Wartung'].join('\n'));
     expect(result.arbeit.items.map((item) => item.text)).toEqual(['AU', 'HU', 'Wartung']);
     expect(result.arbeit.items.map((item) => item.dauer_minuten)).toEqual([30, 30, 90]);
     expect(result.arbeit.items.map((item) => item.zeit_quelle)).toEqual([
@@ -160,6 +161,32 @@ describe('auftragsParserService', () => {
           { text: 'Wartung', originalText: 'WARTUNGEN: SYSTEMATISCHE ARBEITEN' }
         ],
         summary: 'AU; HU; Wartung nach Herstellervorgaben; Wartung'
+      }
+    };
+    const arbeitszeiten = [
+      { id: 1, bezeichnung: 'Wartung', standard_minuten: 125, aliase: 'Inspektion,Systematische Wartung' }
+    ];
+
+    const result = applySystemArbeitszeiten(daten, arbeitszeiten);
+
+    expect(result.arbeit.items.map((item) => item.text)).toEqual(['AU', 'HU', 'Wartung']);
+    expect(result.arbeit.items.map((item) => item.dauer_minuten)).toEqual([30, 30, 125]);
+    expect(result.geschaetzte_zeit).toBe(185);
+  });
+
+  test('zaehlt Zuendkerzen-Austausch mit Wartung nicht doppelt', () => {
+    const daten = {
+      arbeit: {
+        items: [
+          { text: 'AU', originalText: 'A.U. - Abgasuntersuchung' },
+          { text: 'HU', originalText: 'Hauptuntersuchung DEKRA' },
+          { text: 'Wartung', originalText: 'WARTUNG NACH HERSTELLERVORGABEN' },
+          {
+            text: 'AUSTAUSCH ZUENDKERZEN (SATZ) WARTUNG',
+            originalText: 'AUSTAUSCH ZUENDKERZEN (SATZ) WARTUNG'
+          }
+        ],
+        summary: 'AU\nHU\nWartung\nAUSTAUSCH ZUENDKERZEN (SATZ) WARTUNG'
       }
     };
     const arbeitszeiten = [

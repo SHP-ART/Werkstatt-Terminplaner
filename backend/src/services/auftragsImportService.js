@@ -28,6 +28,15 @@ function deleteImportFile(dateipfad) {
   } catch (_) { /* non-fatal */ }
 }
 
+async function deleteImportFileAndClearPath(importId, dateipfad) {
+  deleteImportFile(dateipfad);
+  if (!importId || !dateipfad) return;
+
+  await AuftragsimportModel.update(importId, {
+    dateipfad: null
+  });
+}
+
 function sha256File(filePath) {
   const hash = crypto.createHash('sha256');
   hash.update(fs.readFileSync(filePath));
@@ -437,7 +446,7 @@ async function createSchnelltermin(importId, overrides = {}) {
 
     return { termin, import: await AuftragsimportModel.getById(importId) };
   });
-  deleteImportFile(result.import?.dateipfad);
+  await deleteImportFileAndClearPath(importId, result.import?.dateipfad);
   return result;
 }
 
@@ -470,7 +479,7 @@ async function createSoftstart(importId, data = {}) {
 
     return { termin, import: await AuftragsimportModel.getById(importId) };
   });
-  deleteImportFile(result.import?.dateipfad);
+  await deleteImportFileAndClearPath(importId, result.import?.dateipfad);
   return result;
 }
 
@@ -487,7 +496,7 @@ async function assignToTermin(importId, terminId) {
 
     return await AuftragsimportModel.getById(importId);
   });
-  deleteImportFile(result?.dateipfad);
+  await deleteImportFileAndClearPath(importId, result?.dateipfad);
   return result;
 }
 
@@ -522,6 +531,7 @@ async function discard(importId) {
     verarbeitet_am: new Date().toISOString()
   });
 
+  await deleteImportFileAndClearPath(importId, item.dateipfad);
   return await AuftragsimportModel.getById(importId);
 }
 

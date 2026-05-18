@@ -183,4 +183,20 @@ describe('auftragsImportService Stammdatenanlage', () => {
     );
     expect(runAsync).not.toHaveBeenCalledWith(expect.stringContaining('INSERT INTO kunden'), expect.any(Array));
   });
+
+  test('verwerfen markiert Import und leert den Dateipfad nach dem Loeschversuch', async () => {
+    const importItem = makeImportItem({ dateipfad: 'C:/tmp/nicht-vorhanden.pdf' });
+    AuftragsimportModel.getById
+      .mockResolvedValueOnce(importItem)
+      .mockResolvedValueOnce({ ...importItem, status: 'verworfen', dateipfad: null });
+
+    await AuftragsImportService.discard(10);
+
+    expect(AuftragsimportModel.update).toHaveBeenCalledWith(10, expect.objectContaining({
+      status: 'verworfen'
+    }));
+    expect(AuftragsimportModel.update).toHaveBeenCalledWith(10, {
+      dateipfad: null
+    });
+  });
 });
