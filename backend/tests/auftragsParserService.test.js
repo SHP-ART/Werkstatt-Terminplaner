@@ -103,11 +103,10 @@ describe('auftragsParserService', () => {
 
     expect(result.geschaetzte_zeit).toBe(150);
     expect(result.zeit_quelle).toBe('arbeitszeiten');
-    expect(result.arbeit.summary).toBe(['AU', 'HU', 'Wartung'].join('\n'));
-    expect(result.arbeit.items.map((item) => item.text)).toEqual(['AU', 'HU', 'Wartung']);
-    expect(result.arbeit.items.map((item) => item.dauer_minuten)).toEqual([30, 30, 90]);
+    expect(result.arbeit.summary).toBe(['AU/HU', 'Wartung'].join('\n'));
+    expect(result.arbeit.items.map((item) => item.text)).toEqual(['AU/HU', 'Wartung']);
+    expect(result.arbeit.items.map((item) => item.dauer_minuten)).toEqual([60, 90]);
     expect(result.arbeit.items.map((item) => item.zeit_quelle)).toEqual([
-      'pruefung_max_30',
       'pruefung_max_30',
       'arbeitszeiten'
     ]);
@@ -169,8 +168,8 @@ describe('auftragsParserService', () => {
 
     const result = applySystemArbeitszeiten(daten, arbeitszeiten);
 
-    expect(result.arbeit.items.map((item) => item.text)).toEqual(['AU', 'HU', 'Wartung']);
-    expect(result.arbeit.items.map((item) => item.dauer_minuten)).toEqual([30, 30, 125]);
+    expect(result.arbeit.items.map((item) => item.text)).toEqual(['AU/HU', 'Wartung']);
+    expect(result.arbeit.items.map((item) => item.dauer_minuten)).toEqual([60, 125]);
     expect(result.geschaetzte_zeit).toBe(185);
   });
 
@@ -195,8 +194,8 @@ describe('auftragsParserService', () => {
 
     const result = applySystemArbeitszeiten(daten, arbeitszeiten);
 
-    expect(result.arbeit.items.map((item) => item.text)).toEqual(['AU', 'HU', 'Wartung']);
-    expect(result.arbeit.items.map((item) => item.dauer_minuten)).toEqual([30, 30, 125]);
+    expect(result.arbeit.items.map((item) => item.text)).toEqual(['AU/HU', 'Wartung']);
+    expect(result.arbeit.items.map((item) => item.dauer_minuten)).toEqual([60, 125]);
     expect(result.geschaetzte_zeit).toBe(185);
   });
 

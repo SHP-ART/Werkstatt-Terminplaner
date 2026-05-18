@@ -208,10 +208,9 @@ describe('auftragsImportService Stammdatenanlage', () => {
     const item = makeImportItem({
       erkannte_daten: {
         arbeit: {
-          summary: 'AU\nHU\nWartung',
+          summary: 'AU/HU\nWartung',
           items: [
-            { text: 'AU', originalText: 'A.U. - Abgasuntersuchung' },
-            { text: 'HU', originalText: 'Hauptuntersuchung DEKRA' },
+            { text: 'AU/HU', originalText: 'AU/HU' },
             { text: 'Wartung', originalText: 'AUSTAUSCH ZUENDKERZEN (SATZ) WARTUNG' }
           ]
         }
@@ -220,8 +219,8 @@ describe('auftragsImportService Stammdatenanlage', () => {
 
     const result = AuftragsImportService.buildTerminData(item);
 
-    expect(result.arbeit).toBe('AU\nHU\nWartung');
-    expect(result.umfang).toBe('AU\nHU\nWartung');
+    expect(result.arbeit).toBe('AU/HU\nWartung');
+    expect(result.umfang).toBe('AU/HU\nWartung');
     expect(result.umfang).not.toContain('ZUENDKERZEN');
   });
 });

@@ -185,6 +185,39 @@ function isInspectionItem(item) {
   return text === 'au' || text === 'hu' || text === 'ha';
 }
 
+function combineAuHuItems(items) {
+  const auIndex = items.findIndex((item) => normalizeForMatch(item?.text) === 'au');
+  const huIndex = items.findIndex((item) => normalizeForMatch(item?.text) === 'hu');
+
+  if (auIndex < 0 || huIndex < 0) return items;
+
+  const firstIndex = Math.min(auIndex, huIndex);
+  const au = items[auIndex];
+  const hu = items[huIndex];
+  const combined = {
+    ...au,
+    text: 'AU/HU',
+    originalText: 'AU/HU',
+    sourceLines: [
+      ...(au.sourceLines || []),
+      ...(hu.sourceLines || [])
+    ],
+    dauer_minuten: (parseInt(au.dauer_minuten, 10) || 0) + (parseInt(hu.dauer_minuten, 10) || 0),
+    zeit_quelle: au.zeit_quelle === hu.zeit_quelle ? au.zeit_quelle : 'kombiniert',
+    zeit_match: null
+  };
+
+  return items.reduce((result, item, index) => {
+    if (index === firstIndex) {
+      result.push(combined);
+      return result;
+    }
+    if (index === auIndex || index === huIndex) return result;
+    result.push(item);
+    return result;
+  }, []);
+}
+
 function normalizeWorkItemsForTermin(items) {
   const normalized = items.map((item) => ({
     ...item,
@@ -267,7 +300,7 @@ function applySystemArbeitszeiten(daten, arbeitszeiten, options = {}) {
     ...daten,
     arbeit: {
       ...daten.arbeit,
-      items: matchedItems.map(({ item, match }) => {
+      items: combineAuHuItems(matchedItems.map(({ item, match }) => {
         if (isInspectionItem(item)) {
           return {
             ...item,
@@ -310,7 +343,7 @@ function applySystemArbeitszeiten(daten, arbeitszeiten, options = {}) {
           zeit_quelle: hasSystemMatch ? 'ohne_systemzeit' : 'fallback',
           zeit_match: null
         };
-      })
+      }))
     }
   };
 

@@ -62,6 +62,7 @@ const migrations = [
   require('./044_kompetenz_mapping'), // Version 44 - Kompetenz-Mapping
   require('./045_auftragsimporte'), // Version 45 - PDF-Auftragsimporte
   require('./046_backfill_pdf_auftragsnummern'), // Version 46 - PDF-Auftragsnummern in Termine nachtragen
+  require('./047_combine_pdf_au_hu'), // Version 47 - PDF AU/HU als gemeinsame Aufgabe darstellen
 ];
 
 /**
