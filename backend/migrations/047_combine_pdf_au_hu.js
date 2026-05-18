@@ -42,6 +42,12 @@ function combineAuHuText(value) {
   return combined.join('\n');
 }
 
+function hasSeparateAuHu(value) {
+  if (!value) return false;
+  const lines = String(value).split(/\r?\n/).map(line => normalizeLine(line)).filter(Boolean);
+  return lines.includes('AU') && lines.includes('HU');
+}
+
 function combineAuHuDetails(value) {
   if (!value) return value;
 
@@ -55,11 +61,9 @@ function combineAuHuDetails(value) {
   const au = details.AU;
   const hu = details.HU;
   if (au && hu && !details['AU/HU']) {
-    const auZeit = typeof au === 'object' ? (parseInt(au.zeit, 10) || 0) : (parseInt(au, 10) || 0);
-    const huZeit = typeof hu === 'object' ? (parseInt(hu.zeit, 10) || 0) : (parseInt(hu, 10) || 0);
     details['AU/HU'] = {
       ...(typeof au === 'object' ? au : {}),
-      zeit: auZeit + huZeit,
+      zeit: 30,
       reihenfolge: Math.min(
         typeof au === 'object' ? (parseInt(au.reihenfolge, 10) || 1) : 1,
         typeof hu === 'object' ? (parseInt(hu.reihenfolge, 10) || 2) : 2
@@ -84,7 +88,7 @@ function combineAuHuDetails(value) {
           result.push({
             ...auItem,
             name: 'AU/HU',
-            dauer_minuten: (parseInt(auItem.dauer_minuten, 10) || 0) + (parseInt(huItem.dauer_minuten, 10) || 0),
+            dauer_minuten: 30,
             originalText: 'AU/HU'
           });
           return result;
@@ -103,7 +107,7 @@ async function up(db) {
   console.log('Migration 047: PDF AU/HU als gemeinsame Aufgabe darstellen...');
 
   const rows = await all(db, `
-    SELECT t.id, t.arbeit, t.umfang, t.arbeitszeiten_details
+    SELECT t.id, t.arbeit, t.umfang, t.geschaetzte_zeit, t.arbeitszeiten_details
       FROM termine t
       JOIN auftragsimporte ai ON ai.termin_id = t.id
   `);
@@ -113,15 +117,18 @@ async function up(db) {
     const arbeit = combineAuHuText(row.arbeit);
     const umfang = combineAuHuText(row.umfang);
     const details = combineAuHuDetails(row.arbeitszeiten_details);
+    const geschaetzteZeit = hasSeparateAuHu(row.arbeit) || hasSeparateAuHu(row.umfang)
+      ? Math.max(0, (parseInt(row.geschaetzte_zeit, 10) || 0) - 30)
+      : row.geschaetzte_zeit;
 
-    if (arbeit === row.arbeit && umfang === row.umfang && details === row.arbeitszeiten_details) {
+    if (arbeit === row.arbeit && umfang === row.umfang && details === row.arbeitszeiten_details && geschaetzteZeit === row.geschaetzte_zeit) {
       continue;
     }
 
     await run(
       db,
-      'UPDATE termine SET arbeit = ?, umfang = ?, arbeitszeiten_details = ? WHERE id = ?',
-      [arbeit, umfang, details, row.id]
+      'UPDATE termine SET arbeit = ?, umfang = ?, geschaetzte_zeit = ?, arbeitszeiten_details = ? WHERE id = ?',
+      [arbeit, umfang, geschaetzteZeit, details, row.id]
     );
     updated += 1;
   }

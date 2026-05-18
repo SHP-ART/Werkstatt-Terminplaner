@@ -63,6 +63,7 @@ const migrations = [
   require('./045_auftragsimporte'), // Version 45 - PDF-Auftragsimporte
   require('./046_backfill_pdf_auftragsnummern'), // Version 46 - PDF-Auftragsnummern in Termine nachtragen
   require('./047_combine_pdf_au_hu'), // Version 47 - PDF AU/HU als gemeinsame Aufgabe darstellen
+  require('./048_fix_pdf_au_hu_duration'), // Version 48 - PDF AU/HU Dauer auf 30 Minuten korrigieren
 ];
 
 /**

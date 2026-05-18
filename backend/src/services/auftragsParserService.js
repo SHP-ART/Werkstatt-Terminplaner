@@ -202,7 +202,7 @@ function combineAuHuItems(items) {
       ...(au.sourceLines || []),
       ...(hu.sourceLines || [])
     ],
-    dauer_minuten: (parseInt(au.dauer_minuten, 10) || 0) + (parseInt(hu.dauer_minuten, 10) || 0),
+    dauer_minuten: 30,
     zeit_quelle: au.zeit_quelle === hu.zeit_quelle ? au.zeit_quelle : 'kombiniert',
     zeit_match: null
   };
