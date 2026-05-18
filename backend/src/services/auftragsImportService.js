@@ -28,13 +28,8 @@ function deleteImportFile(dateipfad) {
   } catch (_) { /* non-fatal */ }
 }
 
-async function deleteImportFileAndClearPath(importId, dateipfad) {
+function deleteImportFileSafely(dateipfad) {
   deleteImportFile(dateipfad);
-  if (!importId || !dateipfad) return;
-
-  await AuftragsimportModel.update(importId, {
-    dateipfad: null
-  });
 }
 
 function sha256File(filePath) {
@@ -441,12 +436,13 @@ async function createSchnelltermin(importId, overrides = {}) {
     await AuftragsimportModel.update(importId, {
       termin_id: termin.id,
       status: 'verarbeitet',
+      dateipfad: null,
       verarbeitet_am: new Date().toISOString()
     });
 
     return { termin, import: await AuftragsimportModel.getById(importId) };
   });
-  await deleteImportFileAndClearPath(importId, result.import?.dateipfad);
+  deleteImportFileSafely(result.import?.dateipfad);
   return result;
 }
 
@@ -474,12 +470,13 @@ async function createSoftstart(importId, data = {}) {
     await AuftragsimportModel.update(importId, {
       termin_id: termin.id,
       status: 'verarbeitet',
+      dateipfad: null,
       verarbeitet_am: new Date().toISOString()
     });
 
     return { termin, import: await AuftragsimportModel.getById(importId) };
   });
-  await deleteImportFileAndClearPath(importId, result.import?.dateipfad);
+  deleteImportFileSafely(result.import?.dateipfad);
   return result;
 }
 
@@ -491,12 +488,13 @@ async function assignToTermin(importId, terminId) {
     await AuftragsimportModel.update(importId, {
       termin_id: terminId,
       status: 'verarbeitet',
+      dateipfad: null,
       verarbeitet_am: new Date().toISOString()
     });
 
     return await AuftragsimportModel.getById(importId);
   });
-  await deleteImportFileAndClearPath(importId, result?.dateipfad);
+  deleteImportFileSafely(result?.dateipfad);
   return result;
 }
 
@@ -528,10 +526,11 @@ async function discard(importId) {
 
   await AuftragsimportModel.update(importId, {
     status: 'verworfen',
+    dateipfad: null,
     verarbeitet_am: new Date().toISOString()
   });
 
-  await deleteImportFileAndClearPath(importId, item.dateipfad);
+  deleteImportFileSafely(item.dateipfad);
   return await AuftragsimportModel.getById(importId);
 }
 

@@ -109,6 +109,11 @@ describe('auftragsImportService Stammdatenanlage', () => {
       kunde_name: 'Laura Scholz',
       kennzeichen: 'SFB-LQ 99'
     }));
+    expect(AuftragsimportModel.update).toHaveBeenCalledWith(10, expect.objectContaining({
+      termin_id: 123,
+      status: 'verarbeitet',
+      dateipfad: null
+    }));
   });
 
   test('verknuepft bestehenden Kunden und nutzt das neue Kennzeichen als Kundenfahrzeug am Termin', async () => {
@@ -193,10 +198,8 @@ describe('auftragsImportService Stammdatenanlage', () => {
     await AuftragsImportService.discard(10);
 
     expect(AuftragsimportModel.update).toHaveBeenCalledWith(10, expect.objectContaining({
-      status: 'verworfen'
-    }));
-    expect(AuftragsimportModel.update).toHaveBeenCalledWith(10, {
+      status: 'verworfen',
       dateipfad: null
-    });
+    }));
   });
 });
