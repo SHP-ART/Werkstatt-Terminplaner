@@ -80,6 +80,34 @@ describe('auftragsParserService', () => {
     expect(result.arbeit.summary).not.toContain('SOMMERREIFEN');
   });
 
+  test('erkennt ausgeschriebene AWs als 6-Minuten-Arbeitswerte', () => {
+    const text = [
+      'Herr',
+      'Frank Bartsch',
+      'Musterstrasse 1',
+      '01968 Senftenberg',
+      'Datum: 19.05.2026',
+      'Berater: Sven Hube',
+      'Auftragsbestaetigung Nr. 1200',
+      'Kd.Nr.: 12345 Seite: 1',
+      'Citroen C5 Farbe: Grau km-Stand: 100000',
+      'OSL-DM 844 Fg-Nr: VF7ABCDEFG1234567 Erstzul.: 01.01.2020',
+      'Arb.Nr. durchzufuehrende Arbeiten BA Anzahl AW EUR',
+      '001AUSTAUSCH GENERATOR 19AWs 123,45',
+      'Auftragssumme netto EUR 123,45'
+    ].join('\n');
+
+    const result = parseAuftragsText(text);
+
+    expect(result.arbeit.items).toEqual([
+      expect.objectContaining({
+        text: 'AUSTAUSCH GENERATOR',
+        originalText: 'AUSTAUSCH GENERATOR',
+        dauer_minuten_pdf: 114
+      })
+    ]);
+  });
+
   test('nutzt System-Arbeitszeiten fuer geschaetzte Zeit wenn PDF keine Zeit liefert', () => {
     const daten = {
       arbeit: {

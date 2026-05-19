@@ -70,6 +70,13 @@ function removeWorkCode(line) {
 function extractAwMinutes(line) {
   const s = String(line || '');
 
+  // Explicit AW notation: "19AWs", "19 Aws", "19 AW".
+  const explicitAw = s.match(/(?:^|[^A-Z0-9])(\d{1,3})\s*A\.?\s*W\.?S?(?=[^A-Z]|$)/i);
+  if (explicitAw) {
+    const aw = parseInt(explicitAw[1], 10);
+    if (aw >= 1 && aw <= 100) return aw * 6;
+  }
+
   // Locosoft no-space format: [Anzahl:1digit][AW:2digits][price:digits,xx]
   // e.g. "001AUSTAUSCH BATTERIE10327,72" = Anzahl=1, AW=03, EUR=27,72
   const noSpace = s.match(/\d(\d{2})\d+,\d{2}$/);
@@ -90,6 +97,7 @@ function extractAwMinutes(line) {
 
 function removeAccountingTail(line) {
   return line
+    .replace(/\s*\d{1,3}\s*A\.?\s*W\.?S?(?=[^A-Z]|$)\s*(?:\d+,\d{2}(?:\s+\d+,\d{2})*)?$/i, '')
     .replace(/\s*\d{1,3}\s*\d+,\d{2}(?:\s+\d+,\d{2})*$/, '')
     .replace(/\s*\d+,\d{2}(?:\s+\d+,\d{2})*$/, '')
     .replace(/\d{2,}$/, '')
