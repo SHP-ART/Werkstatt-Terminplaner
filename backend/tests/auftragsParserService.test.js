@@ -108,6 +108,44 @@ describe('auftragsParserService', () => {
     ]);
   });
 
+  test('trennt Wartung nach Reifenarbeit ohne Positionsnummer', () => {
+    const text = [
+      'Herr',
+      'Stephane Trullard',
+      'Musterstrasse 1',
+      '01968 Senftenberg',
+      'Datum: 19.05.2026',
+      'Berater: Sven Hube',
+      'Auftragsbestaetigung Nr. 1264',
+      'Kd.Nr.: 12346 Seite: 1',
+      'Citroen C3 Farbe: Grau km-Stand: 100000',
+      'OSL-TS 11 Fg-Nr: VF7ABCDEFG7654321 Erstzul.: 01.01.2020',
+      'Arb.Nr. durchzufuehrende Arbeiten BA Anzahl AW EUR',
+      'MONTREIFEN ERNEUERT INKL. VENTIL UND',
+      'AUSWUCHTEN1012110,88',
+      'ALTREIFENALTREIFENENTSORGUNG104x2,10 8,40',
+      'BEIFAHRER SITZHEITUNG OHNE FUNKTION 10',
+      'WARTUNG NACH HERSTELLERVORGABEN10123,45',
+      'Auftragssumme netto EUR 135,79'
+    ].join('\n');
+
+    const result = parseAuftragsText(text);
+
+    expect(result.arbeit.items.map((item) => item.text)).toEqual([
+      'Reifen erneuern',
+      'Altreifenentsorgung',
+      'BEIFAHRER SITZHEITUNG OHNE FUNKTION',
+      'Wartung'
+    ]);
+    expect(result.arbeit.items[0].dauer_minuten_pdf).toBe(72);
+    expect(result.arbeit.summary).toBe([
+      'Reifen erneuern',
+      'Altreifenentsorgung',
+      'BEIFAHRER SITZHEITUNG OHNE FUNKTION',
+      'Wartung'
+    ].join('\n'));
+  });
+
   test('nutzt System-Arbeitszeiten fuer geschaetzte Zeit wenn PDF keine Zeit liefert', () => {
     const daten = {
       arbeit: {

@@ -77,7 +77,17 @@ function extractAwMinutes(line) {
     if (aw >= 1 && aw <= 100) return aw * 6;
   }
 
-  // Locosoft no-space format: [Anzahl:1digit][AW:2digits][price:digits,xx]
+  // Locosoft no-space format: [BA:10][AW:1-2digits][price:digits,xx]
+  // e.g. "AUSWUCHTEN1012110,88" = BA=10, AW=12, EUR=110,88
+  const locosoftTail = s.match(/10(\d{3,6}),\d{2}(?:\s|$)/);
+  if (locosoftTail) {
+    const tail = locosoftTail[1];
+    const awDigits = tail.length >= 5 ? tail.slice(0, 2) : tail.slice(0, 1);
+    const aw = parseInt(awDigits, 10);
+    if (aw >= 1 && aw <= 99) return aw * 6;
+  }
+
+  // Older no-space format: [Anzahl:1digit][AW:2digits][price:digits,xx]
   // e.g. "001AUSTAUSCH BATTERIE10327,72" = Anzahl=1, AW=03, EUR=27,72
   const noSpace = s.match(/\d(\d{2})\d+,\d{2}$/);
   if (noSpace) {
@@ -125,10 +135,15 @@ function startsNewWorkItem(line) {
     /^\d+\.\s*\S+/.test(line)
     || /^MONT(?=REIFEN)/i.test(line)
     || /^ALTRE(?=ALTREIFEN)/i.test(line)
+    || /^ALTREIFEN/i.test(line)
     || /^CHECK(?=FAHRZEUGCHECK)/i.test(line)
     || /^WISO(?=WINTERR)/i.test(line)
     || /^EINL(?=EINLAGERUNG)/i.test(line)
     || /^FAB(?=REINIGUNG)/i.test(line)
+    || /^WARTUNG\b/i.test(line)
+    || /^SYSTEMATISCHE\b/i.test(line)
+    || /^WARTUNGEN:\s*SYSTEMATISCHE\b/i.test(line)
+    || /^[A-ZÃ„Ã–Ãœ][A-ZÃ„Ã–Ãœ ]+\s+\d{1,3}$/.test(line)
     || /^[0-9]{3,10}[A-ZÄÖÜa-zäöü.]/.test(line)
     || /^[A-ZÄÖÜ][A-ZÄÖÜ -]+:/.test(line)
   );
@@ -148,6 +163,7 @@ function shortenWorkText(text) {
   if (/PARTIKELFILTER.*CLEANTECH|GEGENDRUCKMESSUNG/.test(upper)) return 'Partikelfilter reinigen';
   if (/ABGASUNTERSUCHUNG|^A\.U\./.test(upper)) return 'AU';
   if (/HAUPTUNTERSUCHUNG|DEKRA|STVZO/.test(upper)) return 'HU';
+  if (/^WARTUNG\b/.test(upper)) return 'Wartung';
   if (/WARTUNG NACH HERSTELLERVORGABEN/.test(upper)) return 'Wartung';
   if (/SYSTEMATISCHE.*WARTUNG|WARTUNG.*SYSTEMATISCHE|WARTUNGEN: SYSTEMATISCHE/.test(upper)) return 'Wartung';
   if (/POLLENFILTER/.test(upper)) return 'Pollenfilter';
