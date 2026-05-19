@@ -3415,6 +3415,16 @@ App.prototype.loadAuftragsimporte = async function() {
   }
 };
 
+App.prototype.formatMinutenMitStunden = function(minuten) {
+  const value = parseInt(minuten, 10);
+  if (!Number.isFinite(value) || value <= 0) return '-';
+  const stunden = value / 60;
+  const stundenText = Number.isInteger(stunden)
+    ? String(stunden)
+    : stunden.toFixed(1).replace('.', ',');
+  return `${value} min (${stundenText} h)`;
+};
+
 App.prototype.renderAuftragsimporte = function() {
   const list = document.getElementById('auftragsimportListe');
   if (!list) return;
@@ -3432,7 +3442,7 @@ App.prototype.renderAuftragsimporte = function() {
     const arbeit = daten.arbeit?.summary || '-';
     const kunde = daten.kunde?.name || '-';
     const kennzeichen = daten.fahrzeug?.kennzeichen || '-';
-    const zeit = daten.geschaetzte_zeit ? `${daten.geschaetzte_zeit} min` : '-';
+    const zeit = this.formatMinutenMitStunden(daten.geschaetzte_zeit);
     const treffer = (item.zuordnungs_treffer || [])[0];
     const trefferText = item.termin_nr
       ? item.termin_nr
@@ -3606,7 +3616,7 @@ App.prototype.showAuftragsimportDetails = function(id) {
         <div><span style="color:#999;">Datum</span> <strong>${this.escapeHtml(daten.datum || '-')}</strong></div>
         ${daten.abholung?.datum ? `<div><span style="color:#999;">Abholung</span> <strong>${this.escapeHtml(daten.abholung.datum)}${daten.abholung.zeit ? ' ' + daten.abholung.zeit : ''}</strong></div>` : ''}
         ${daten.auftragsnummer ? `<div><span style="color:#999;">Auftrag</span> <strong>${this.escapeHtml(daten.auftragsnummer)}</strong></div>` : ''}
-        ${daten.geschaetzte_zeit ? `<div><span style="color:#999;">Zeit</span> <strong>${daten.geschaetzte_zeit} min</strong></div>` : ''}
+        ${daten.geschaetzte_zeit ? `<div><span style="color:#999;">Zeit</span> <strong>${this.escapeHtml(this.formatMinutenMitStunden(daten.geschaetzte_zeit))}</strong></div>` : ''}
         ${daten.berater ? `<div><span style="color:#999;">Berater</span> ${this.escapeHtml(daten.berater)}</div>` : ''}
       </div>
 
@@ -3617,7 +3627,7 @@ App.prototype.showAuftragsimportDetails = function(id) {
           ${arbeiten.map(a => `
             <div style="display:flex;justify-content:space-between;align-items:center;padding:5px 8px;background:#f8f8f8;border-radius:4px;margin-bottom:3px;font-size:0.88em;">
               <span>${this.escapeHtml(a.text)}</span>
-              ${a.dauer_minuten ? `<span style="color:#888;font-size:0.9em;white-space:nowrap;margin-left:8px;">${a.dauer_minuten} min</span>` : ''}
+              ${a.dauer_minuten ? `<span style="color:#888;font-size:0.9em;white-space:nowrap;margin-left:8px;">${this.escapeHtml(this.formatMinutenMitStunden(a.dauer_minuten))}</span>` : ''}
             </div>`).join('')}
         </div>` : ''}
 
