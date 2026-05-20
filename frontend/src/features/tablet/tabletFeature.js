@@ -427,9 +427,15 @@ export function installTabletFeature(AppClass) {
         // Finde nächsten Auftrag (noch nicht gestartet).
         // Für geplante Termine mit vergangener Startzeit gilt: Die dynamisch vorgerückte
         // Startzeit (nächste halbe Stunde) wird für die Anzeige verwendet.
+        const aktivePausen = kontext.aktiveArbeitspausen || [];
+        const pauseTerminIds = new Set(aktivePausen.map(p => Number(p.termin_id)));
+
         const naechsterAuftragRoh = personTermine.find(t => {
           if (t === aktuellerAuftrag) return false;
+          if (pauseTerminIds.has(Number(t.id))) return false;
           if (t.status === 'storniert') return false;
+          if (t.status === 'unterbrochen' || t.status === 'in_arbeit') return false;
+          if (!['geplant', 'offen', 'wartend'].includes(t.status)) return false;
           if (t.status === 'abgeschlossen') {
             let hatAbgeschlossene = false;
             let hatOffene = false;
@@ -476,11 +482,25 @@ export function installTabletFeature(AppClass) {
         const inPause = this.istPersonAktuellInPause(person, jetztZeit);
     
         // Prüfe ob Person eine aktive Arbeitspause hat (für aktuellen Auftrag)
-        const aktivePausen = kontext.aktiveArbeitspausen || [];
         const aktiveArbeitspause = aktuellerAuftrag
           ? aktivePausen.find(p => p.termin_id === aktuellerAuftrag.id)
           : null;
-        const istArbeitPausiert = !!aktiveArbeitspause;
+        const pausierteAuftraege = aktivePausen
+          .map(p => ({
+            ...p,
+            id: p.termin_id,
+            mitarbeiter_id: p.termin_mitarbeiter_id || p.mitarbeiter_id,
+            lehrling_id: p.termin_lehrling_id || p.lehrling_id,
+            startzeit: p.startzeit || p.bring_zeit
+          }))
+          .filter(p => {
+            const direktZugeordnet = isLehrling
+              ? Number(p.lehrling_id) === Number(personId)
+              : Number(p.mitarbeiter_id) === Number(personId);
+            return direktZugeordnet || this.isTerminFuerPerson(p, personId, isLehrling);
+          });
+        const zeigtPausierteArbeit = !aktuellerAuftrag && pausierteAuftraege.length > 0;
+        const istArbeitPausiert = !!aktiveArbeitspause || zeigtPausierteArbeit;
         const manuellePauseAktiv = !!person.pause_tracking_aktiv;
     
         // Prüfe ob Person heute abwesend ist (Urlaub/Krank/Lehrgang)
@@ -512,12 +532,12 @@ export function installTabletFeature(AppClass) {
         } else if (istArbeitPausiert) {
           badgeClass = 'arbeit-pausiert';
           const grundLabels = {
+            'teil_fehlt': 'Teil fehlt',
+            'rueckfrage_kunde': 'Rückfrage',
+            'vorrang': 'Vorrang',
             'sonstiges': 'Pause',
-            'krank': 'Krank',
-            'urlaub': 'Urlaub',
-            'berufsschule': 'Berufsschule',
           };
-          const pauseGrund = aktiveArbeitspause?.grund || 'sonstiges';
+          const pauseGrund = aktiveArbeitspause?.grund || pausierteAuftraege[0]?.grund || 'sonstiges';
           badgeText = `⏸️ ${grundLabels[pauseGrund] || 'Pause'}`;
         } else if (aktuellerAuftrag) {
           badgeClass = 'in-arbeit';
@@ -682,16 +702,48 @@ export function installTabletFeature(AppClass) {
               ${pauseButton}
             </div>
           `;
-        } else if (naechsterAuftrag) {
+        } else if (pausierteAuftraege.length > 0 || naechsterAuftrag) {
           // Kein aktueller Auftrag, aber nächster geplant
-          const naechsterFertigCa = this.berechneEndzeitMitFaktoren(naechsterAuftrag, person, isLehrling, kontext);
+          const naechsterFertigCa = naechsterAuftrag
+            ? this.berechneEndzeitMitFaktoren(naechsterAuftrag, person, isLehrling, kontext)
+            : null;
+          const pauseGrundLabels = {
+            teil_fehlt: 'Teil fehlt',
+            rueckfrage_kunde: 'Rückfrage Kunde',
+            vorrang: 'Vorrang',
+            sonstiges: 'Pause'
+          };
+          const pausierteHtml = pausierteAuftraege.length > 0 ? `
+            <div class="intern-person-pausiert-liste">
+              <div class="naechster-label">⏸️ Pausiert</div>
+              ${pausierteAuftraege.map(p => {
+                const pauseSeit = p.gestartet_am ? (() => {
+                  const d = new Date(p.gestartet_am);
+                  return `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')} Uhr`;
+                })() : '';
+                const interneNr = p.interne_auftragsnummer && p.interne_auftragsnummer.trim()
+                  ? ` · <span class="auftrag-interne-nr">${this.escapeHtml(p.interne_auftragsnummer.trim())}</span>` : '';
+                return `
+                  <div class="intern-person-auftrag intern-person-auftrag-pausiert">
+                    <div class="auftrag-label">${this.escapeHtml(pauseGrundLabels[p.grund] || 'Pause')}${pauseSeit ? ` seit ${pauseSeit}` : ''}</div>
+                    <div class="auftrag-nr">${p.termin_nr || '-'}${interneNr}</div>
+                    <div class="auftrag-kunde">${this.escapeHtml(p.kunde_name || '-')}</div>
+                    <div class="auftrag-kennzeichen">${this.escapeHtml(p.kennzeichen || '-')}</div>
+                    <div class="auftrag-arbeit">${this.escapeHtml(p.arbeit || '-')}</div>
+                    <button class="intern-btn-arbeit-fortsetzen" onclick="app.interneArbeitFortsetzen(${p.termin_id}, this)">▶️ Weiterführen</button>
+                  </div>
+                `;
+              }).join('')}
+            </div>
+          ` : '';
           bodyContent = `
             <div class="intern-person-leer">
               <div class="leer-icon">☕</div>
               <div class="leer-text">Aktuell kein Auftrag</div>
             </div>
-            
-            <div class="intern-person-naechster">
+            ${pausierteHtml}
+
+            ${naechsterAuftrag ? `<div class="intern-person-naechster">
               <div class="naechster-label">⏰ Nächster Auftrag:${naechsterIstVerzoegert ? ' <span style="color:#fd7e14;font-size:0.8em;">⚠ nachrückt</span>' : ''}</div>
               <div class="intern-person-auftrag" style="border-left-color: #28a745;">
                 <div class="auftrag-nr">${naechsterAuftrag.termin_nr || '-'}</div>
@@ -713,7 +765,7 @@ export function installTabletFeature(AppClass) {
                   <div class="zeit-value">${this.berechneWartezeitBis(naechsterAuftrag)}</div>
                 </div>
               </div>
-            </div>
+            </div>` : ''}
           `;
         } else {
           // Keine Aufträge heute
@@ -882,6 +934,7 @@ export function installTabletFeature(AppClass) {
           rueckfrage_kunde: '❓ Rückfrage beim Kunden',
           vorrang: '🔀 Vorrang dringenderer Auftrag'
         };
+        grundLabels.sonstiges = 'Sonstige Unterbrechung';
     
         modal.innerHTML = `
           <div style="background:white;border-radius:12px;padding:24px;width:340px;box-shadow:0 8px 32px rgba(0,0,0,0.3);">

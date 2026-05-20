@@ -8452,6 +8452,7 @@ mark.highlight {
 /* Status Colors for Mini Cards */
 .termin-mini-card.status-offen { border-left-color: #ffc107; }
 .termin-mini-card.status-in-bearbeitung { border-left-color: #17a2b8; }
+.termin-mini-card.status-unterbrochen { border-left-color: #fdcb6e; background: #fffaf0; }
 .termin-mini-card.status-abgeschlossen { border-left-color: #28a745; }
 .termin-mini-card.status-storniert { border-left-color: #dc3545; }
 
@@ -10659,6 +10660,16 @@ mark.highlight {
 .timeline-termin.status-in-arbeit {
     background: linear-gradient(135deg, #f59e0b 0%, #fbbf24 100%);
     border-left: 4px solid #b45309;
+}
+
+.timeline-termin.status-unterbrochen {
+    background: linear-gradient(135deg, #64748b 0%, #94a3b8 100%);
+    border-left: 4px solid #f59e0b;
+}
+
+.timeline-termin.status-unterbrochen .termin-title::before {
+    content: 'Pausiert ';
+    font-weight: 700;
 }
 
 .timeline-termin.status-abgeschlossen {
@@ -13856,6 +13867,21 @@ mark.highlight {
     font-size: 0.8rem;
     color: #636e72;
     margin-top: 4px;
+}
+
+.intern-person-pausiert-liste {
+    margin-top: 12px;
+}
+
+.intern-person-auftrag-pausiert {
+    border-left-color: #fdcb6e;
+    background: #fffaf0;
+    border-radius: 8px;
+    padding: 12px 12px 12px 15px;
+}
+
+.intern-person-auftrag-pausiert .intern-btn-arbeit-fortsetzen {
+    margin-top: 10px;
 }
 
 .intern-person-fortschritt-fill.eingefroren {

@@ -66,6 +66,7 @@ const migrations = [
   require('./048_fix_pdf_au_hu_duration'), // Version 48 - PDF AU/HU Dauer auf 30 Minuten korrigieren
   require('./049_relax_auftragsimporte_dateipfad_nullable'), // Version 49 - PDF-Dateipfad nach Verarbeitung leeren duerfen
   require('./050_fix_pdf_reifen_wartung_aw'), // Version 50 - PDF Reifen/Wartung AW-Zeit korrigieren
+  require('./051_relax_arbeitspausen_grund'), // Version 51 - Arbeitspausen-Grund sonstiges erlauben
 ];
 
 /**
