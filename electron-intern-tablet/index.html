@@ -430,6 +430,19 @@
       font-weight: 500;
     }
 
+    .intern-person-pausiert-liste {
+      margin-top: 12px;
+    }
+
+    .auftrag-info-pausiert {
+      border-left-color: #fdcb6e;
+      background: #fffaf0;
+    }
+
+    .auftrag-info-pausiert .intern-btn-arbeit-fortsetzen {
+      margin-top: 10px;
+    }
+
     .fortschritt-text {
       display: flex;
       justify-content: space-between;
@@ -2283,15 +2296,34 @@
       const aktuellerAuftrag = personTermine.find(t => t.status === 'in_arbeit');
 
       // Arbeitspause prüfen
+      const pauseTerminIds = new Set((aktiveArbeitspausen || []).map(p => Number(p.termin_id)));
       const aktiveArbeitspause = aktuellerAuftrag
         ? aktiveArbeitspausen.find(p => p.termin_id === aktuellerAuftrag.id)
         : null;
-      const istArbeitPausiert = !!aktiveArbeitspause;
+      const pausierteAuftraege = (aktiveArbeitspausen || [])
+        .map(p => ({
+          ...p,
+          id: p.termin_id,
+          mitarbeiter_id: p.termin_mitarbeiter_id || p.mitarbeiter_id,
+          lehrling_id: p.termin_lehrling_id || p.lehrling_id,
+          startzeit: p.startzeit || p.bring_zeit
+        }))
+        .filter(p => {
+          const direktZugeordnet = isLehrling
+            ? Number(p.lehrling_id) === Number(personId)
+            : Number(p.mitarbeiter_id) === Number(personId);
+          return direktZugeordnet || isTerminFuerPerson(p, personId, isLehrling);
+        });
+      const zeigtPausierteArbeit = !aktuellerAuftrag && pausierteAuftraege.length > 0;
+      const istArbeitPausiert = !!aktiveArbeitspause || zeigtPausierteArbeit;
 
       // Finde nächsten Auftrag (auch überfällige offene Termine berücksichtigen!)
       const naechsterAuftrag = personTermine.find(t => {
         if (t === aktuellerAuftrag) return false;
+        if (pauseTerminIds.has(Number(t.id))) return false;
+        if (t.status === 'unterbrochen' || t.status === 'in_arbeit') return false;
         if (t.status === 'abgeschlossen' || t.status === 'storniert') return false;
+        if (!['geplant', 'offen', 'wartend'].includes(t.status)) return false;
         // Alle offenen/geplanten Termine als "nächsten" zählen
         return true;
       });
@@ -2334,7 +2366,8 @@
       } else if (istArbeitPausiert) {
         badgeClass = 'arbeit-pausiert';
         const grundLabels = { teil_fehlt: 'Teil fehlt', rueckfrage_kunde: 'Rückfrage Kunde', vorrang: 'Vorrang' };
-        const grundText = grundLabels[aktiveArbeitspause.grund] || escapeHtml(aktiveArbeitspause.grund || '');
+        const pauseGrund = aktiveArbeitspause?.grund || pausierteAuftraege[0]?.grund || 'sonstiges';
+        const grundText = grundLabels[pauseGrund] || (pauseGrund === 'sonstiges' ? 'Pause' : escapeHtml(pauseGrund || ''));
         badgeText = grundText ? `⏸️ Pausiert – ${grundText}` : '⏸️ Pausiert';
       } else if (aktuellerAuftrag) {
         badgeClass = 'in-arbeit';
@@ -2494,10 +2527,34 @@
             </div>
           ` : ''}
         `;
-      } else if (naechsterAuftrag) {
+      } else if (pausierteAuftraege.length > 0 || naechsterAuftrag) {
         // Interne Auftragsnummer priorisieren, wenn verfügbar
-        const interneNrNaechster = naechsterAuftrag.interne_auftragsnummer && naechsterAuftrag.interne_auftragsnummer.trim()
+        const interneNrNaechster = naechsterAuftrag && naechsterAuftrag.interne_auftragsnummer && naechsterAuftrag.interne_auftragsnummer.trim()
           ? escapeHtml(naechsterAuftrag.interne_auftragsnummer.trim()) : null;
+        const pauseGrundLabels = { teil_fehlt: 'Teil fehlt', rueckfrage_kunde: 'Rueckfrage Kunde', vorrang: 'Vorrang', sonstiges: 'Pause' };
+        const pausierteHtml = pausierteAuftraege.length > 0 ? `
+          <div class="intern-person-pausiert-liste">
+            <div class="naechster-label">Pausiert</div>
+            ${pausierteAuftraege.map(p => {
+              const pauseSeit = p.gestartet_am ? (() => {
+                const d = new Date(p.gestartet_am);
+                return `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')} Uhr`;
+              })() : '';
+              const interneNr = p.interne_auftragsnummer && p.interne_auftragsnummer.trim()
+                ? ` <span class="auftrag-interne-nr">- ${escapeHtml(p.interne_auftragsnummer.trim())}</span>` : '';
+              return `
+                <div class="auftrag-info auftrag-info-pausiert">
+                  <div class="auftrag-label">${escapeHtml(pauseGrundLabels[p.grund] || 'Pause')}${pauseSeit ? ` seit ${pauseSeit}` : ''}</div>
+                  <div class="auftrag-nr">${escapeHtml(p.termin_nr) || '-'}${interneNr}</div>
+                  <div class="auftrag-kunde">${escapeHtml(p.kunde_name) || '-'}</div>
+                  <div class="auftrag-kennzeichen">${escapeHtml(p.kennzeichen) || '-'}</div>
+                  <div class="auftrag-arbeit">${escapeHtml(p.arbeit) || '-'}</div>
+                  <button class="intern-btn-arbeit-fortsetzen" onclick="interneArbeitFortsetzenTablet(${p.termin_id}, this)">Weiterfuehren</button>
+                </div>
+              `;
+            }).join('')}
+          </div>
+        ` : '';
         
         bodyContent = `
           <div class="leer-zustand">
@@ -2505,7 +2562,9 @@
             <div class="leer-text">Aktuell kein Auftrag</div>
           </div>
 
-          <div class="naechster-auftrag">
+          ${pausierteHtml}
+
+          ${naechsterAuftrag ? `<div class="naechster-auftrag">
             <div class="naechster-label">⏰ Nächster Auftrag:</div>
             <div class="auftrag-info" style="border-left-color: var(--success);">
               <div class="auftrag-nr">${escapeHtml(naechsterAuftrag.termin_nr) || '-'}${interneNrNaechster ? ` <span class="auftrag-interne-nr">· ${interneNrNaechster}</span>` : ''}</div>
@@ -2523,7 +2582,7 @@
                 <div class="zeit-value">${formatMinutesToHours(getEffektiveArbeitszeitMitFaktoren(naechsterAuftrag, person, isLehrling, globaleNebenzeit))}</div>
               </div>
             </div>
-          </div>
+          </div>` : ''}
         `;
       } else {
         const leerIcon = isLehrling ? '🧹' : '🎉';
@@ -3086,8 +3145,8 @@
             <span id="tabletPauseClose" style="cursor:pointer;color:#999;font-size:20px;">✕</span>
           </div>
 
-          <p style="font-size:13px;color:#666;margin-bottom:10px;">Was soll danach passieren?</p>
-          <div style="display:flex;flex-direction:column;gap:6px;margin-bottom:16px;">
+          <input type="hidden" name="tabletPauseTyp" value="kurz">
+          <div style="display:none;">
             <label style="display:flex;align-items:flex-start;gap:10px;padding:10px;border:2px solid #1976d2;border-radius:8px;cursor:pointer;font-size:13px;background:#e3f2fd;">
               <input type="radio" name="tabletPauseTyp" value="kurz" checked style="accent-color:#1976d2;margin-top:2px;">
               <div>
@@ -3126,7 +3185,7 @@
       modal.onclick = (e) => { if (e.target === modal) schliesseModal(); };
       modal.querySelector('#tabletPauseBestaetigen').onclick = async () => {
         const selectedGrund = modal.querySelector('input[name="tabletPauseGrund"]:checked');
-        const selectedTyp = modal.querySelector('input[name="tabletPauseTyp"]:checked');
+        const selectedTyp = { value: 'kurz' };
         if (!selectedGrund) { alert('Bitte einen Grund auswählen.'); return; }
         const bestaetigenBtn = modal.querySelector('#tabletPauseBestaetigen');
         bestaetigenBtn.disabled = true;
