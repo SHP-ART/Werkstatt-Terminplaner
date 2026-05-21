@@ -32,6 +32,16 @@ class AuftragsimportController {
     res.json(result);
   }
 
+  static async updateErkannteArbeiten(req, res) {
+    const item = await AuftragsImportService.updateErkannteArbeiten(req.params.id, req.body?.arbeiten);
+    broadcastEvent('auftragsimport.updated', {
+      id: parseInt(req.params.id, 10),
+      status: item.status,
+      action: 'arbeiten'
+    });
+    res.json(item);
+  }
+
   static async createSchnelltermin(req, res) {
     const result = await AuftragsImportService.createSchnelltermin(req.params.id, req.body || {});
     invalidateTermineCache();

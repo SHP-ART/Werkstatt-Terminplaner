@@ -366,6 +366,7 @@ Vollständige Beschreibungen in [.claude/PROJEKT.md](.claude/PROJEKT.md) Abschni
 | `einstellungenRoutes.js` | App-Einstellungen |
 | `tabletRoutes.js` | Tablet-spezifische Endpunkte |
 | `tabletUpdateRoutes.js` | Auto-Update-System für Tablet-App |
+| `auftragsimportRoutes.js` | PDF-Auftragsimport aus Watch-Ordner, Korrektur erkannter Arbeiten, Schnelltermin/Zuordnung |
 | `tagesstempelRoutes.js` | Arbeitsbeginn/Arbeitsende/Unterbrechungen je Person (→ tagesstempelController) |
 | `GET /api/zeitkonto` | Zeitkonto pro Person (kein eigenes Route-File, direkt in index.js → zeitkontoController) |
 | `sucheRoutes.js` | Globale Suche |
@@ -383,6 +384,7 @@ Vollständige Beschreibungen in [.claude/PROJEKT.md](.claude/PROJEKT.md) Abschni
 | `externalAiService.js` | Abstraktionsschicht für alle KI-Backends |
 | `kiDiscoveryService.js` | Erkennung verfügbarer KI-Dienste via mDNS |
 | `backendDiscoveryService.js` | Backend-Discovery für Electron |
+| `auftragsImportService.js` / `auftragsParserService.js` / `auftragsWatchService.js` | PDF-Auftragsimport aus `/opt/werkstatt-upload/Auftraege`, Parsing, Watcher, Termin-Anlage |
 
 ---
 

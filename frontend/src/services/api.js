@@ -1272,6 +1272,10 @@ class AuftragsimportService {
     return ApiService.post(`/auftragsimport/${id}/schnelltermin`, data);
   }
 
+  static async updateErkannteArbeiten(id, arbeiten) {
+    return ApiService.patch(`/auftragsimport/${id}/erkannte-arbeiten`, { arbeiten });
+  }
+
   static async verwerfen(id) {
     return ApiService.post(`/auftragsimport/${id}/verwerfen`, {});
   }

@@ -135,6 +135,7 @@ Enthält Geschäftslogik zwischen Route und Model. Jeder Controller ist verantwo
 | `einstellungenController.js` | App-Einstellungen lesen/schreiben |
 | `tabletController.js` | Tablet-spezifische Datenaggregation |
 | `tabletUpdateController.js` | Auto-Update-Registrierung und -Auslieferung |
+| `auftragsimportController.js` | PDF-Auftragsimport aus Watch-Ordner, Korrektur erkannter Arbeiten, Schnelltermin/Zuordnung |
 | `reportingController.js` | Berichte und Auswertungen |
 | `sucheController.js` | Globale Volltextsuche |
 | `systemController.js` | Health-Check, System-Info |
@@ -151,6 +152,7 @@ Reine Datenbankschicht. Keine Geschäftslogik. Nutzen `dbHelper.js` für Promise
 Wichtige Models:
 - `termineModel.js` – Termin-Abfragen inkl. JOIN auf Kunden und Mitarbeiter; soft-delete via `geloescht_am`; Termin-Nr-Generator (`T-YYYY-NNN`)
 - `kundenModel.js` – inkl. `importMultiple()` für Locosoft-Import mit Duplikat-Erkennung via normiertes Kennzeichen
+- `auftragsimportModel.js` – PDF-Auftragsimporte, erkannte JSON-Daten und Zuordnungstreffer
 - `einstellungenModel.js` – Schlüssel-Wert-Store für App-Einstellungen
 - `tabletUpdateModel.js` – Speichert registrierte Tablet-App-Versionen
 
@@ -164,6 +166,7 @@ Wichtige Models:
 | `openaiService.js` | OpenAI SDK Wrapper für Zeitschätzungen |
 | `localAiService.js` | **Lokales ML-Modell** (kein externer Dienst): trainiert sich täglich aus abgeschlossenen Terminen. Verwendet IQR-Ausreißerfilterung, Kategorie-Klassifikation (Inspektion/Bremsen/Motor etc.), Token-Matching auf Arbeitsbezeichnungen und `ki_zeitlern_daten`-Tabelle als dedizierte Lernquelle. Liefert Durchschnittswerte in Minuten je Arbeitstyp. |
 | `backendDiscoveryService.js` | mDNS-Discovery des Backends für Electron |
+| `auftragsImportService.js` / `auftragsParserService.js` / `auftragsWatchService.js` | PDF-Auftragsimport aus dem Watch-Ordner, Parsing, Trefferermittlung, Korrektur erkannter Arbeiten und Termin-Anlage |
 
 #### Utils (`utils/`)
 

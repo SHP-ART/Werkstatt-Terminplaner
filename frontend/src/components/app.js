@@ -3481,6 +3481,44 @@ App.prototype.renderAuftragsimporte = function() {
   this.showAuftragsimportDetails(imports[0].id);
 };
 
+App.prototype.renderAuftragsimportArbeitenEditor = function(item, isProcessed) {
+  const daten = item.erkannte_daten || {};
+  const arbeiten = daten.arbeit?.items || [];
+
+  if (isProcessed) {
+    return arbeiten.length ? `
+      <div style="margin-bottom:12px;">
+        <div style="font-size:0.72em;color:#999;text-transform:uppercase;letter-spacing:0.4px;margin-bottom:2px;">Arbeiten</div>
+        ${arbeiten.map(a => `
+          <div style="display:flex;justify-content:space-between;align-items:center;padding:5px 8px;background:#f8f8f8;border-radius:4px;margin-bottom:3px;font-size:0.88em;">
+            <span>${this.escapeHtml(a.text)}</span>
+            ${a.dauer_minuten ? `<span style="color:#888;font-size:0.9em;white-space:nowrap;margin-left:8px;">${this.escapeHtml(this.formatMinutenMitStunden(a.dauer_minuten))}</span>` : ''}
+          </div>`).join('')}
+      </div>` : '';
+  }
+
+  const rows = (arbeiten.length ? arbeiten : [{ text: '', dauer_minuten: 0 }]).map(a => `
+    <div class="auftragsimport-arbeit-row" data-original-text="${this.escapeHtml(a.originalText || a.text || '')}" style="display:grid;grid-template-columns:minmax(180px,1fr) 92px 32px;gap:6px;align-items:center;margin-bottom:5px;">
+      <input type="text" class="auftragsimport-arbeit-text" value="${this.escapeHtml(a.text || '')}" placeholder="Arbeitsbeschreibung" style="width:100%;padding:7px 8px;border:1px solid #ddd;border-radius:4px;font-size:0.9em;">
+      <input type="number" class="auftragsimport-arbeit-dauer" value="${parseInt(a.dauer_minuten, 10) || ''}" min="0" step="5" title="Minuten" style="width:100%;padding:7px 6px;border:1px solid #ddd;border-radius:4px;font-size:0.9em;">
+      <button type="button" class="btn btn-sm btn-secondary" onclick="event.stopPropagation();app.removeAuftragsimportArbeitRow(this)" title="Zeile entfernen" style="padding:6px 8px;">x</button>
+    </div>
+  `).join('');
+
+  return `
+    <div id="auftragsimportArbeitenEditor-${item.id}" style="margin-bottom:12px;padding:8px;background:#fafafa;border:1px solid #eee;border-radius:6px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:6px;">
+        <div style="font-size:0.72em;color:#999;text-transform:uppercase;letter-spacing:0.4px;">Arbeiten bearbeiten</div>
+        <button type="button" class="btn btn-sm btn-secondary" onclick="event.stopPropagation();app.addAuftragsimportArbeitRow(${item.id})">+ Zeile</button>
+      </div>
+      <div class="auftragsimport-arbeit-rows">${rows}</div>
+      <div style="display:flex;justify-content:flex-end;margin-top:8px;">
+        <button type="button" class="btn btn-sm btn-primary" onclick="event.stopPropagation();app.speichereAuftragsimportArbeiten(${item.id})">Aenderungen speichern</button>
+      </div>
+    </div>
+  `;
+};
+
 App.prototype.showAuftragsimportDetails = function(id) {
   const details = document.getElementById('auftragsimportDetails');
   if (!details) return;
@@ -3492,7 +3530,6 @@ App.prototype.showAuftragsimportDetails = function(id) {
   }
 
   const daten = item.erkannte_daten || {};
-  const arbeiten = daten.arbeit?.items || [];
   const treffer = item.zuordnungs_treffer || [];
   const isProcessed = ['verarbeitet', 'locosoft_pruefen', 'verworfen'].includes(item.status);
   const _lbl = (text) => `<div style="font-size:0.72em;color:#999;text-transform:uppercase;letter-spacing:0.4px;margin-bottom:2px;">${text}</div>`;
@@ -3621,15 +3658,7 @@ App.prototype.showAuftragsimportDetails = function(id) {
       </div>
 
       <!-- Arbeiten -->
-      ${arbeiten.length ? `
-        <div style="margin-bottom:12px;">
-          ${_lbl('Arbeiten')}
-          ${arbeiten.map(a => `
-            <div style="display:flex;justify-content:space-between;align-items:center;padding:5px 8px;background:#f8f8f8;border-radius:4px;margin-bottom:3px;font-size:0.88em;">
-              <span>${this.escapeHtml(a.text)}</span>
-              ${a.dauer_minuten ? `<span style="color:#888;font-size:0.9em;white-space:nowrap;margin-left:8px;">${this.escapeHtml(this.formatMinutenMitStunden(a.dauer_minuten))}</span>` : ''}
-            </div>`).join('')}
-        </div>` : ''}
+      ${this.renderAuftragsimportArbeitenEditor(item, isProcessed)}
 
       <!-- Mögliche Termine -->
       <div style="margin-bottom:4px;">
@@ -3640,6 +3669,74 @@ App.prototype.showAuftragsimportDetails = function(id) {
       ${actionHtml}
     </div>
   `;
+};
+
+App.prototype.addAuftragsimportArbeitRow = function(id) {
+  const editor = document.getElementById(`auftragsimportArbeitenEditor-${id}`);
+  const container = editor?.querySelector('.auftragsimport-arbeit-rows');
+  if (!container) return;
+
+  container.insertAdjacentHTML('beforeend', `
+    <div class="auftragsimport-arbeit-row" data-original-text="" style="display:grid;grid-template-columns:minmax(180px,1fr) 92px 32px;gap:6px;align-items:center;margin-bottom:5px;">
+      <input type="text" class="auftragsimport-arbeit-text" value="" placeholder="Arbeitsbeschreibung" style="width:100%;padding:7px 8px;border:1px solid #ddd;border-radius:4px;font-size:0.9em;">
+      <input type="number" class="auftragsimport-arbeit-dauer" value="" min="0" step="5" title="Minuten" style="width:100%;padding:7px 6px;border:1px solid #ddd;border-radius:4px;font-size:0.9em;">
+      <button type="button" class="btn btn-sm btn-secondary" onclick="event.stopPropagation();app.removeAuftragsimportArbeitRow(this)" title="Zeile entfernen" style="padding:6px 8px;">x</button>
+    </div>
+  `);
+};
+
+App.prototype.removeAuftragsimportArbeitRow = function(button) {
+  const row = button?.closest('.auftragsimport-arbeit-row');
+  const container = row?.parentElement;
+  if (!row || !container) return;
+
+  if (container.querySelectorAll('.auftragsimport-arbeit-row').length <= 1) {
+    const textInput = row.querySelector('.auftragsimport-arbeit-text');
+    const dauerInput = row.querySelector('.auftragsimport-arbeit-dauer');
+    if (textInput) textInput.value = '';
+    if (dauerInput) dauerInput.value = '';
+    return;
+  }
+
+  row.remove();
+};
+
+App.prototype.collectAuftragsimportArbeiten = function(id) {
+  const editor = document.getElementById(`auftragsimportArbeitenEditor-${id}`);
+  if (!editor) return [];
+
+  return Array.from(editor.querySelectorAll('.auftragsimport-arbeit-row'))
+    .map(row => {
+      const text = row.querySelector('.auftragsimport-arbeit-text')?.value.trim() || '';
+      const dauerValue = parseInt(row.querySelector('.auftragsimport-arbeit-dauer')?.value, 10);
+      return {
+        text,
+        originalText: row.dataset.originalText || text,
+        dauer_minuten: Number.isFinite(dauerValue) && dauerValue > 0 ? dauerValue : 0,
+        zeit_quelle: 'manuell'
+      };
+    })
+    .filter(arbeit => arbeit.text);
+};
+
+App.prototype.speichereAuftragsimportArbeiten = async function(id) {
+  const arbeiten = this.collectAuftragsimportArbeiten(id);
+  if (arbeiten.length === 0) {
+    this.showToast('Bitte mindestens eine Arbeitsbeschreibung eintragen', 'error');
+    return;
+  }
+
+  try {
+    const updated = await AuftragsimportService.updateErkannteArbeiten(id, arbeiten);
+    const index = (this.auftragsimporte || []).findIndex(item => Number(item.id) === Number(id));
+    if (index >= 0) this.auftragsimporte[index] = updated;
+    this.renderAuftragsimporte();
+    this.showAuftragsimportDetails(id);
+    this.showToast('Arbeitsbeschreibung gespeichert', 'success');
+  } catch (error) {
+    console.error('Fehler beim Speichern der Arbeitsbeschreibung:', error);
+    this.showToast(error.message || 'Fehler beim Speichern', 'error');
+  }
 };
 
 App.prototype.scanAuftragsimporte = async function() {

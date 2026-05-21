@@ -268,6 +268,54 @@ function buildArbeitszeitenDetails(daten) {
   return details;
 }
 
+function normalizeArbeitsItems(items) {
+  if (!Array.isArray(items)) {
+    throw new Error('arbeiten muss ein Array sein');
+  }
+
+  const normalized = items.map((item) => {
+    const text = String(item?.text || '').replace(/\s+/g, ' ').trim();
+    if (!text) return null;
+
+    const dauer = parseInt(item?.dauer_minuten, 10);
+    return {
+      text,
+      originalText: item?.originalText || item?.text || text,
+      dauer_minuten: Number.isFinite(dauer) && dauer > 0 ? dauer : 0,
+      zeit_quelle: item?.zeit_quelle || 'manuell'
+    };
+  }).filter(Boolean);
+
+  if (normalized.length === 0) {
+    throw new Error('Mindestens eine Arbeitsbeschreibung ist erforderlich');
+  }
+
+  return normalized;
+}
+
+async function updateErkannteArbeiten(importId, items) {
+  const item = await AuftragsimportModel.getById(importId);
+  if (!item) throw new Error('Auftragsimport nicht gefunden');
+  if (!['neu', 'erkannt', 'fehler'].includes(item.status)) {
+    throw new Error('Nur offene Auftragsimporte koennen bearbeitet werden');
+  }
+
+  const arbeitItems = normalizeArbeitsItems(items);
+  const geschaetzteZeit = arbeitItems.reduce((sum, arbeit) => sum + (parseInt(arbeit.dauer_minuten, 10) || 0), 0);
+  const daten = {
+    ...(item.erkannte_daten || {}),
+    arbeit: {
+      ...(item.erkannte_daten?.arbeit || {}),
+      summary: arbeitItems.map(arbeit => arbeit.text).join('\n'),
+      items: arbeitItems
+    },
+    geschaetzte_zeit: geschaetzteZeit > 0 ? geschaetzteZeit : (item.erkannte_daten?.geschaetzte_zeit || null)
+  };
+
+  await AuftragsimportModel.update(importId, { erkannte_daten: daten });
+  return await AuftragsimportModel.getById(importId);
+}
+
 async function createTerminArbeitenFromImport(terminId, importItem, overrides = {}) {
   const daten = importItem.erkannte_daten || {};
   const items = daten.arbeit?.items || [];
@@ -553,5 +601,6 @@ module.exports = {
   discard,
   findTerminMatches,
   buildTerminData,
-  ensureKundeForImport
+  ensureKundeForImport,
+  updateErkannteArbeiten
 };

@@ -38,6 +38,7 @@ function makeImportItem(overrides = {}) {
   return {
     id: 10,
     dateipfad: null,
+    status: 'erkannt',
     erkannte_daten: {
       kunde: { name: 'Laura Scholz' },
       kundennummer: '28243',
@@ -202,6 +203,55 @@ describe('auftragsImportService Stammdatenanlage', () => {
       status: 'verworfen',
       dateipfad: null
     }));
+  });
+
+  test('updateErkannteArbeiten speichert korrigierte Arbeitstexte vor dem Import', async () => {
+    const importItem = makeImportItem();
+    AuftragsimportModel.getById
+      .mockResolvedValueOnce(importItem)
+      .mockResolvedValueOnce({
+        ...importItem,
+        erkannte_daten: {
+          ...importItem.erkannte_daten,
+          arbeit: {
+            summary: 'Inspektion\nBremsen pruefen',
+            items: [
+              { text: 'Inspektion', originalText: 'AU', dauer_minuten: 90, zeit_quelle: 'manuell' },
+              { text: 'Bremsen pruefen', originalText: 'Bremsen pruefen', dauer_minuten: 30, zeit_quelle: 'manuell' }
+            ]
+          },
+          geschaetzte_zeit: 120
+        }
+      });
+
+    await AuftragsImportService.updateErkannteArbeiten(10, [
+      { text: '  Inspektion  ', originalText: 'AU', dauer_minuten: '90' },
+      { text: 'Bremsen pruefen', dauer_minuten: 30 },
+      { text: '   ', dauer_minuten: 15 }
+    ]);
+
+    expect(AuftragsimportModel.update).toHaveBeenCalledWith(10, {
+      erkannte_daten: expect.objectContaining({
+        geschaetzte_zeit: 120,
+        arbeit: {
+          summary: 'Inspektion\nBremsen pruefen',
+          items: [
+            { text: 'Inspektion', originalText: 'AU', dauer_minuten: 90, zeit_quelle: 'manuell' },
+            { text: 'Bremsen pruefen', originalText: 'Bremsen pruefen', dauer_minuten: 30, zeit_quelle: 'manuell' }
+          ]
+        }
+      })
+    });
+  });
+
+  test('updateErkannteArbeiten blockiert bereits verarbeitete Importe', async () => {
+    AuftragsimportModel.getById.mockResolvedValueOnce(makeImportItem({ status: 'verarbeitet' }));
+
+    await expect(AuftragsImportService.updateErkannteArbeiten(10, [
+      { text: 'Inspektion', dauer_minuten: 90 }
+    ])).rejects.toThrow('Nur offene Auftragsimporte');
+
+    expect(AuftragsimportModel.update).not.toHaveBeenCalled();
   });
 
   test('buildTerminData nutzt bereinigte Arbeitstexte fuer Umfang', () => {
