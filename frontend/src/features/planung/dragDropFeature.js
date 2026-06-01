@@ -1302,8 +1302,14 @@ export function installDragDropFeature(AppClass) {
               <button class="btn btn-einplanen" onclick="app.neuEinplanenUeberfaelligenTermin(${termin.id})" title="Einplanen">
                 📅 Einplanen
               </button>
+              <button class="btn btn-abschliessen" onclick="app.abschliessenUnterbrochenenAuftrag(${termin.id})" title="Als abgeschlossen markieren">
+                ✅ Abschließen
+              </button>
               <button class="btn btn-sm" onclick="app.unterbrocheneRichtzeitAnpassen(${termin.id}, ${termin.geschaetzte_zeit || 30})" title="Richtzeit anpassen" style="background:#f0f0f0;border:none;cursor:pointer;padding:4px 8px;border-radius:4px;">
                 ✏️ Richtzeit
+              </button>
+              <button class="btn btn-loeschen" onclick="app.loeschenUnterbrochenenAuftrag(${termin.id})" title="In den Papierkorb verschieben" style="background:#fdecea;color:#c0392b;border:none;cursor:pointer;padding:4px 8px;border-radius:4px;">
+                🗑️ Löschen
               </button>
               <button class="btn btn-details" onclick="app.showTerminDetails(${termin.id})" title="Details">
                 🔍
@@ -1327,6 +1333,32 @@ export function installDragDropFeature(AppClass) {
         await this.loadUnterbrocheneAuftraege();
       } catch (e) {
         alert('Fehler beim Aktualisieren der Richtzeit.');
+      }
+    },
+
+    async abschliessenUnterbrochenenAuftrag(terminId) {
+      if (!confirm('Unterbrochenen Auftrag als abgeschlossen markieren?')) return;
+      try {
+        await ApiService.put(`/termine/${terminId}`, { status: 'abgeschlossen' });
+        this.showToast('✅ Auftrag abgeschlossen', 'success');
+        await this.loadUnterbrocheneAuftraege();
+        this.loadTermine();
+      } catch (error) {
+        console.error('Fehler beim Abschließen des unterbrochenen Auftrags:', error);
+        this.showToast('Fehler beim Abschließen: ' + (error.message || 'Unbekannt'), 'error');
+      }
+    },
+
+    async loeschenUnterbrochenenAuftrag(terminId) {
+      if (!confirm('Unterbrochenen Auftrag wirklich löschen (in den Papierkorb verschieben)?')) return;
+      try {
+        await ApiService.delete(`/termine/${terminId}`);
+        this.showToast('🗑️ Auftrag in den Papierkorb verschoben', 'success');
+        await this.loadUnterbrocheneAuftraege();
+        this.loadTermine();
+      } catch (error) {
+        console.error('Fehler beim Löschen des unterbrochenen Auftrags:', error);
+        this.showToast('Fehler beim Löschen: ' + (error.message || 'Unbekannt'), 'error');
       }
     },
 

@@ -262,31 +262,10 @@ export function installTerminFormFeature(AppClass) {
       const zeitStunden = parseFloat(document.getElementById('intern_zeit').value) || 1;
       const geschaetzteZeit = Math.round(zeitStunden * 60); // Konvertiere zu Minuten
 
-      // Mitarbeiterzuordnung verarbeiten
-      const selectedValue = document.getElementById('intern_mitarbeiter').value;
-      console.log('Ausgewählter Wert:', selectedValue);
-      let mitarbeiterIdValue = null;
-      let arbeitszeitenDetails = null;
-
-      if (selectedValue && selectedValue !== '') {
-        const [type, id] = selectedValue.split('_');
-        const numId = parseInt(id, 10);
-        console.log('Type:', type, 'ID:', numId);
-
-        if (type === 'ma') {
-          mitarbeiterIdValue = numId;
-          arbeitszeitenDetails = {
-            _gesamt_mitarbeiter_id: { type: 'mitarbeiter', id: numId }
-          };
-        } else if (type === 'l') {
-          mitarbeiterIdValue = null;
-          arbeitszeitenDetails = {
-            _gesamt_mitarbeiter_id: { type: 'lehrling', id: numId }
-          };
-        }
-      }
-
-      console.log('Termin-Objekt:', { mitarbeiter_id: mitarbeiterIdValue, arbeitszeiten_details: arbeitszeitenDetails });
+      // Interne Termine werden bewusst NICHT zugeordnet, sondern landen in "Nicht zugeordnet".
+      // Die Mitarbeiter-/Lehrling-Auswahl im Formular wird daher beim Erstellen ignoriert,
+      // damit der Termin in der Planung manuell (z.B. per Drag&Drop) verteilt werden kann.
+      const mitarbeiterIdValue = null;
 
       // Dringlichkeit auslesen
       const dringlichkeitValue = document.getElementById('intern_dringlichkeit')?.value || null;
@@ -314,11 +293,6 @@ export function installTerminFormFeature(AppClass) {
         mitarbeiter_id: mitarbeiterIdValue,
         dringlichkeit: dringlichkeitValue
       };
-
-      // Füge arbeitszeiten_details hinzu, wenn Mitarbeiter/Lehrling zugeordnet
-      if (arbeitszeitenDetails) {
-        termin.arbeitszeiten_details = JSON.stringify(arbeitszeitenDetails);
-      }
 
       console.log('=== FINALES TERMIN-OBJEKT ===', termin);
 
