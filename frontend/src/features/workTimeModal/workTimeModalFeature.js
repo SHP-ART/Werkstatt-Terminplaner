@@ -1057,7 +1057,9 @@ export function installWorkTimeModalFeature(AppClass) {
     gesamtzeitMinuten = Math.round(gesamtStunden * 60);
   }
 
-  let status = document.getElementById('modalTerminStatus').value;
+  // Fallback auf den echten Termin-Status, wenn das Dropdown den Status nicht abbilden kann
+  // (z.B. 'wartend'/'storniert' sind keine Optionen → Select-Wert wäre "" → Validierung schlägt fehl).
+  let status = document.getElementById('modalTerminStatus').value || termin.status || 'geplant';
 
   // Bestimme Mitarbeiter für Termin (Gesamt-Zuordnung hat Vorrang, sonst Termin-Mitarbeiter)
   // Nur Mitarbeiter können dem Termin direkt zugeordnet werden, nicht Lehrlinge
