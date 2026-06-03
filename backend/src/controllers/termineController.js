@@ -1546,8 +1546,9 @@ class TermineController {
         return res.status(400).json({ error: 'Datum ist erforderlich' });
       }
 
-      const TAG_START = 8 * 60;   // 08:00
-      const TAG_ENDE = 18 * 60;   // 18:00
+      const ArbeitszeitenPlanModel = require('../models/arbeitszeitenPlanModel');
+      const DEFAULT_START = 8 * 60;   // 08:00 – nur Fallback
+      const DEFAULT_ENDE = 18 * 60;   // 18:00 – nur Fallback
       const mindestSlot = req.query.min_dauer ? parseInt(req.query.min_dauer, 10) : 15;
 
       const einstellungen = await EinstellungenModel.getWerkstatt();
@@ -1572,11 +1573,35 @@ class TermineController {
 
       const { intervalle, flexibel } = belegung.baueIntervalle(termineDesTages);
 
-      const baueRessource = (person, typ, abwesend) => {
+      // Kandidaten (Mitarbeiter ohne nur_service + Lehrlinge)
+      const kandidaten = [
+        ...(mitarbeiter || []).filter(m => !m.nur_service).map(m => ({ person: m, typ: 'mitarbeiter', abwesend: abwesendMA.has(m.id) })),
+        ...(lehrlinge || []).map(l => ({ person: l, typ: 'lehrling', abwesend: abwesendL.has(l.id) }))
+      ];
+
+      // Echte Arbeitszeiten (Start/Ende/Feierabend, ist_frei) je Person für das Datum laden
+      const plaene = await Promise.all(kandidaten.map(k =>
+        ArbeitszeitenPlanModel.getForDate(
+          k.typ === 'mitarbeiter' ? k.person.id : null,
+          k.typ === 'lehrling' ? k.person.id : null,
+          datum
+        ).catch(() => null)
+      ));
+
+      const ressourcen = kandidaten.map((k, idx) => {
+        const person = k.person;
+        const plan = plaene[idx];
+        const istFrei = !!(plan && (plan.ist_frei === 1 || plan.ist_frei === true));
+        const abwesend = k.abwesend || istFrei;
+
+        const tagStart = belegung.zeitTextZuMinuten(plan && plan.arbeitszeit_start) ?? DEFAULT_START;
+        const tagEnde = belegung.zeitTextZuMinuten(plan && plan.arbeitszeit_ende) ?? DEFAULT_ENDE;
         const pauseStartMin = belegung.zeitTextZuMinuten(person.mittagspause_start || '12:00') ?? (12 * 60);
-        const pauseDauer = person.pausenzeit_minuten || globalePause;
+        const pauseDauer = (plan && plan.pausenzeit_minuten) || person.pausenzeit_minuten || globalePause;
+        const pauseImFenster = pauseStartMin >= tagStart && pauseStartMin < tagEnde;
+
         const eigeneIntervalle = intervalle
-          .filter(iv => iv.ressourceTyp === typ && iv.ressourceId === person.id)
+          .filter(iv => iv.ressourceTyp === k.typ && iv.ressourceId === person.id)
           .map(iv => ({
             termin_id: iv.terminId, termin_nr: iv.terminNr,
             von: belegung.minutenZuZeitText(iv.start), bis: belegung.minutenZuZeitText(iv.ende),
@@ -1584,24 +1609,23 @@ class TermineController {
             kunde_name: iv.kundeName, kennzeichen: iv.kennzeichen
           }));
         const freieSlots = abwesend ? [] : belegung.findeFreieSlots(intervalle, {
-          ressourceTyp: typ, ressourceId: person.id,
-          tagStart: TAG_START, tagEnde: TAG_ENDE,
-          pause: { start: pauseStartMin, ende: pauseStartMin + pauseDauer }
+          ressourceTyp: k.typ, ressourceId: person.id,
+          tagStart, tagEnde,
+          pause: pauseImFenster ? { start: pauseStartMin, ende: pauseStartMin + pauseDauer } : null
         }, mindestSlot).map(s => ({
           von: belegung.minutenZuZeitText(s.start), bis: belegung.minutenZuZeitText(s.ende), dauer: s.dauer
         }));
+
         return {
-          typ, id: person.id, name: person.name,
+          typ: k.typ, id: person.id, name: person.name,
           abwesend,
+          ist_frei: istFrei,
+          arbeitszeit_start: belegung.minutenZuZeitText(tagStart),
+          arbeitszeit_ende: belegung.minutenZuZeitText(tagEnde),
           belegt_intervalle: eigeneIntervalle,
           freie_slots: freieSlots
         };
-      };
-
-      const ressourcen = [
-        ...(mitarbeiter || []).filter(m => !m.nur_service).map(m => baueRessource(m, 'mitarbeiter', abwesendMA.has(m.id))),
-        ...(lehrlinge || []).map(l => baueRessource(l, 'lehrling', abwesendL.has(l.id)))
-      ];
+      });
 
       const warteKunden = intervalle
         .filter(iv => iv.istWarten)
@@ -1612,10 +1636,19 @@ class TermineController {
         }))
         .sort((a, b) => a.von.localeCompare(b.von));
 
+      // Anzeige-Spanne: früheste Start- und späteste Endzeit über alle anwesenden Ressourcen
+      const aktiveFenster = ressourcen.filter(r => !r.abwesend);
+      const tagStartGesamt = aktiveFenster.length
+        ? aktiveFenster.reduce((min, r) => Math.min(min, belegung.zeitTextZuMinuten(r.arbeitszeit_start)), 24 * 60)
+        : DEFAULT_START;
+      const tagEndeGesamt = aktiveFenster.length
+        ? aktiveFenster.reduce((max, r) => Math.max(max, belegung.zeitTextZuMinuten(r.arbeitszeit_ende)), 0)
+        : DEFAULT_ENDE;
+
       res.json({
         datum,
-        tag_start: belegung.minutenZuZeitText(TAG_START),
-        tag_ende: belegung.minutenZuZeitText(TAG_ENDE),
+        tag_start: belegung.minutenZuZeitText(tagStartGesamt),
+        tag_ende: belegung.minutenZuZeitText(tagEndeGesamt),
         ressourcen,
         warte_kunden: warteKunden,
         flexibel_anzahl: flexibel.length

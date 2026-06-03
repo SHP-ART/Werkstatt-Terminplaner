@@ -1414,17 +1414,21 @@ export function installDragDropFeature(AppClass) {
         };
 
         container.innerHTML = ressourcen.map(r => {
+          const typLabel = r.typ === 'lehrling' ? 'Lehrling' : 'MA';
           if (r.abwesend) {
+            const grund = r.ist_frei ? '🛌 kein Arbeitstag' : '🏥 abwesend';
             return `<div style="display:flex;gap:10px;align-items:center;padding:6px 0;border-bottom:1px solid #e0efe1;">
-              <span style="min-width:140px;font-weight:600;color:#999;">${this.escapeHtml(r.name)} <span style="font-size:0.8em;">(${r.typ === 'lehrling' ? 'Lehrling' : 'MA'})</span></span>
-              <span style="color:#b71c1c;">🏥 abwesend</span></div>`;
+              <span style="min-width:160px;font-weight:600;color:#999;">${this.escapeHtml(r.name)} <span style="font-size:0.8em;">(${typLabel})</span></span>
+              <span style="color:#b71c1c;">${grund}</span></div>`;
           }
           const freiMin = (r.freie_slots || []).reduce((s, x) => s + (x.dauer || 0), 0);
+          const fenster = (r.arbeitszeit_start && r.arbeitszeit_ende) ? `${r.arbeitszeit_start}–${r.arbeitszeit_ende}` : '';
           const slotsHtml = (r.freie_slots || []).length
             ? r.freie_slots.map(s => `<span style="display:inline-block;background:#c8e6c9;color:#1b5e20;border-radius:4px;padding:1px 7px;margin:2px 3px 2px 0;font-size:0.85em;">${s.von}–${s.bis}</span>`).join('')
             : '<span style="color:#c0392b;">ausgebucht</span>';
           return `<div style="display:flex;gap:10px;align-items:flex-start;padding:6px 0;border-bottom:1px solid #e0efe1;">
-            <span style="min-width:140px;font-weight:600;">${this.escapeHtml(r.name)} <span style="font-size:0.8em;color:#777;">(${r.typ === 'lehrling' ? 'Lehrling' : 'MA'})</span><br><span style="font-size:0.8em;color:#2e7d32;">frei: ${fmtDauer(freiMin)}</span></span>
+            <span style="min-width:160px;font-weight:600;">${this.escapeHtml(r.name)} <span style="font-size:0.8em;color:#777;">(${typLabel})</span><br>
+              <span style="font-size:0.78em;color:#555;">🕗 ${fenster}</span> <span style="font-size:0.8em;color:#2e7d32;">· frei: ${fmtDauer(freiMin)}</span></span>
             <span style="flex:1;">${slotsHtml}</span></div>`;
         }).join('');
       } catch (error) {
