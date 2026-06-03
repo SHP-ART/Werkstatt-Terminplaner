@@ -12,6 +12,9 @@ export function installDragDropFeature(AppClass) {
       console.log('[DEBUG] loadAuslastungDragDrop - Datum:', datum);
       if (!datum) return;
 
+      // Freie Kapazität parallel laden (unabhängig vom Timeline-Rendering)
+      this.loadFreieKapazitaet(datum);
+
       // Prüfe auf ungespeicherte Änderungen beim Datumswechsel
       if (this.planungAenderungen.size > 0 && this._lastPlanungDatum && this._lastPlanungDatum !== datum) {
         if (!confirm(`Es gibt ${this.planungAenderungen.size} ungespeicherte Änderung(en). Datum trotzdem wechseln?\n\nÄnderungen werden verworfen.`)) {
@@ -1360,6 +1363,85 @@ export function installDragDropFeature(AppClass) {
         console.error('Fehler beim Löschen des unterbrochenen Auftrags:', error);
         this.showToast('Fehler beim Löschen: ' + (error.message || 'Unbekannt'), 'error');
       }
+    },
+
+    /**
+     * Lädt und zeigt die zeitslot-genaue freie Kapazität je Mitarbeiter/Lehrling
+     * sowie einen Warte-Kunden-Hinweis (aus dem Backend-Endpoint /termine/belegung).
+     */
+    async loadFreieKapazitaet(datum) {
+      const container = document.getElementById('freieKapazitaetContainer');
+      const warteHinweis = document.getElementById('warteKundenHinweis');
+      if (!container) return;
+
+      if (!datum) {
+        const di = document.getElementById('auslastungDragDropDatum');
+        datum = di ? di.value : null;
+      }
+      if (!datum) return;
+
+      try {
+        const data = await ApiService.get(`/termine/belegung?datum=${datum}`);
+        const ressourcen = (data && data.ressourcen) || [];
+
+        // Warte-Kunden-Hinweis: gleichzeitig Wartende vs. verfügbare Mitarbeiter
+        if (warteHinweis) {
+          const warte = (data && data.warte_kunden) || [];
+          if (warte.length > 0) {
+            const maxGleichzeitig = this._maxGleichzeitigeWarte(warte);
+            const verfuegbar = ressourcen.filter(r => r.typ === 'mitarbeiter' && !r.abwesend).length;
+            const eng = maxGleichzeitig > verfuegbar;
+            const liste = warte.map(w => `${w.von}–${w.bis} ${this.escapeHtml(w.kunde_name)}`).join(' · ');
+            warteHinweis.innerHTML = `
+              <div style="margin-bottom:8px;padding:8px;border-radius:6px;${eng ? 'background:#fdecea;border:1px solid #f5c6cb;color:#c0392b;' : 'background:#fff8e1;border:1px solid #ffe082;color:#8a6d00;'}">
+                ⏳ <strong>${warte.length} Warte-Kunde${warte.length !== 1 ? 'n' : ''}</strong> · max. ${maxGleichzeitig} gleichzeitig bei ${verfuegbar} Mitarbeiter${eng ? ' — <strong>Engpass!</strong>' : ''}<br>
+                <span style="font-size:0.85em;opacity:0.85;">${liste}</span>
+              </div>`;
+          } else {
+            warteHinweis.innerHTML = '';
+          }
+        }
+
+        if (!ressourcen.length) {
+          container.innerHTML = '<div class="empty-state">Keine Mitarbeiter/Lehrlinge aktiv</div>';
+          return;
+        }
+
+        const fmtDauer = (min) => {
+          const h = Math.floor(min / 60);
+          const m = min % 60;
+          return h > 0 ? `${h}h${m > 0 ? ' ' + m + 'min' : ''}` : `${m}min`;
+        };
+
+        container.innerHTML = ressourcen.map(r => {
+          if (r.abwesend) {
+            return `<div style="display:flex;gap:10px;align-items:center;padding:6px 0;border-bottom:1px solid #e0efe1;">
+              <span style="min-width:140px;font-weight:600;color:#999;">${this.escapeHtml(r.name)} <span style="font-size:0.8em;">(${r.typ === 'lehrling' ? 'Lehrling' : 'MA'})</span></span>
+              <span style="color:#b71c1c;">🏥 abwesend</span></div>`;
+          }
+          const freiMin = (r.freie_slots || []).reduce((s, x) => s + (x.dauer || 0), 0);
+          const slotsHtml = (r.freie_slots || []).length
+            ? r.freie_slots.map(s => `<span style="display:inline-block;background:#c8e6c9;color:#1b5e20;border-radius:4px;padding:1px 7px;margin:2px 3px 2px 0;font-size:0.85em;">${s.von}–${s.bis}</span>`).join('')
+            : '<span style="color:#c0392b;">ausgebucht</span>';
+          return `<div style="display:flex;gap:10px;align-items:flex-start;padding:6px 0;border-bottom:1px solid #e0efe1;">
+            <span style="min-width:140px;font-weight:600;">${this.escapeHtml(r.name)} <span style="font-size:0.8em;color:#777;">(${r.typ === 'lehrling' ? 'Lehrling' : 'MA'})</span><br><span style="font-size:0.8em;color:#2e7d32;">frei: ${fmtDauer(freiMin)}</span></span>
+            <span style="flex:1;">${slotsHtml}</span></div>`;
+        }).join('');
+      } catch (error) {
+        console.error('Fehler beim Laden der freien Kapazität:', error);
+        container.innerHTML = '<div class="empty-state">Fehler beim Laden der freien Kapazität</div>';
+      }
+    },
+
+    /** Maximale Anzahl gleichzeitig anwesender Warte-Kunden (Intervall-Überlappung). */
+    _maxGleichzeitigeWarte(warte) {
+      const zuMin = (t) => { const [h, m] = String(t).split(':').map(Number); return h * 60 + m; };
+      const punkte = [];
+      warte.forEach(w => { punkte.push([zuMin(w.von), 1]); punkte.push([zuMin(w.bis), -1]); });
+      punkte.sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+      let aktuell = 0, max = 0;
+      punkte.forEach(([, delta]) => { aktuell += delta; if (aktuell > max) max = aktuell; });
+      return max;
     },
 
     async zeitkorrekturPauseSplit(terminId, aktuelleMin) {
