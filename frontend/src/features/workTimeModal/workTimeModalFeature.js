@@ -882,6 +882,25 @@ export function installWorkTimeModalFeature(AppClass) {
   }
 };
 
+  // Baut aus der Slot-Prüfung (Backend: slot_pruefung) eine Warnmeldung.
+  // Gibt null zurück, wenn kein Konflikt vorliegt.
+  AppClass.prototype.baueSlotWarnung = function(sp) {
+  if (!sp) return null;
+  const zeilen = [];
+  if (sp.hat_doppelbuchung && Array.isArray(sp.konflikte) && sp.konflikte.length) {
+    zeilen.push('⚠️ Doppelbuchung – Mitarbeiter ist im Zeitfenster bereits belegt:');
+    sp.konflikte.forEach(k => {
+      const kz = k.kennzeichen ? ` (${k.kennzeichen})` : '';
+      zeilen.push(`   • ${k.von}–${k.bis}: ${k.kunde_name}${kz} [${k.termin_nr || k.termin_id}]`);
+    });
+  }
+  if (sp.warte_konflikt && sp.warte_konflikt.konflikt) {
+    const wk = sp.warte_konflikt;
+    zeilen.push(`⏳ Warte-Kunden-Engpass: ${wk.gleichzeitig} gleichzeitig wartend, aber nur ${wk.verfuegbare_mitarbeiter} Mitarbeiter verfügbar.`);
+  }
+  return zeilen.length ? zeilen.join('\n') : null;
+};
+
   AppClass.prototype.saveArbeitszeitenModal = async function() {
   if (!this.currentTerminId) {
     alert('Kein Termin ausgewählt');
@@ -1139,6 +1158,36 @@ export function installWorkTimeModalFeature(AppClass) {
     arbeitszeitenDetails: JSON.parse(JSON.stringify(arbeitszeitenDetails)), // Deep copy für Log
     status
   });
+
+  // Doppelbuchungs-/Warte-Kunden-Prüfung (warnen, aber erlauben)
+  if (fruehesteStartzeit && gesamtzeitMinuten > 0) {
+    let pruefMitarbeiterId = null;
+    let pruefLehrlingId = null;
+    if (gesamtMitarbeiterValue && gesamtMitarbeiterValue.startsWith('l_')) {
+      pruefLehrlingId = parseInt(gesamtMitarbeiterValue.replace('l_', ''), 10);
+    } else if (terminMitarbeiterId) {
+      pruefMitarbeiterId = terminMitarbeiterId;
+    }
+    if (pruefMitarbeiterId || pruefLehrlingId) {
+      try {
+        const slot = await TermineService.checkSlot({
+          datum: termin.datum,
+          dauer: gesamtzeitMinuten,
+          startzeit: fruehesteStartzeit,
+          mitarbeiterId: pruefMitarbeiterId,
+          lehrlingId: pruefLehrlingId,
+          excludeTerminId: this.currentTerminId,
+          abholungTyp: termin.abholung_typ
+        });
+        const meldung = this.baueSlotWarnung(slot && slot.slot_pruefung);
+        if (meldung && !confirm(meldung + '\n\nTrotzdem speichern?')) {
+          return; // Vom Benutzer abgebrochen
+        }
+      } catch (e) {
+        console.warn('Slot-Prüfung fehlgeschlagen – speichere ohne Prüfung:', e);
+      }
+    }
+  }
 
   try {
     await TermineService.update(this.currentTerminId, {

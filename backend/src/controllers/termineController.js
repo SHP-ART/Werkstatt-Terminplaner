@@ -10,6 +10,7 @@ const { parsePagination } = require('../utils/pagination');
 const { SimpleCache } = require('../utils/cache');
 const { broadcastEvent } = require('../utils/websocket');
 const { db } = require('../config/database');
+const belegung = require('../utils/belegung');
 
 // Cache für Mitarbeiter und Lehrlinge (Performance-Optimierung)
 let mitarbeiterCache = { data: null, timestamp: 0 };
@@ -1453,6 +1454,63 @@ class TermineController {
         warnung = 'Warnung: Hohe Auslastung erwartet (>80%).';
       }
 
+      // Slot-genaue Prüfung (optional): nur wenn eine Startzeit übergeben wird.
+      // Erkennt Doppelbuchungen pro Mitarbeiter/Lehrling und gleichzeitige Warte-Kunden.
+      // Hinweis: rein informativ – blockiert NICHT (Warnen-aber-erlauben).
+      let slotPruefung = null;
+      const startMin = belegung.zeitTextZuMinuten(req.query.startzeit);
+      if (startMin !== null) {
+        const excludeTerminId = req.query.exclude_termin_id ? parseInt(req.query.exclude_termin_id, 10) : null;
+        const istWarten = req.query.abholung_typ === 'warten';
+        const ressourceTyp = req.query.lehrling_id ? 'lehrling' : (req.query.mitarbeiter_id ? 'mitarbeiter' : null);
+        const ressourceId = req.query.lehrling_id
+          ? parseInt(req.query.lehrling_id, 10)
+          : (req.query.mitarbeiter_id ? parseInt(req.query.mitarbeiter_id, 10) : null);
+
+        const termineDesTages = await TermineModel.getByDatum(datum);
+        const { intervalle } = belegung.baueIntervalle(termineDesTages);
+        const neuesEnde = startMin + geschaetzteZeit;
+
+        let konflikte = [];
+        if (ressourceTyp && ressourceId) {
+          konflikte = belegung.findeUeberschneidungen(intervalle, {
+            ressourceTyp, ressourceId, start: startMin, ende: neuesEnde, excludeTerminId
+          }).map(iv => ({
+            termin_id: iv.terminId,
+            termin_nr: iv.terminNr,
+            von: belegung.minutenZuZeitText(iv.start),
+            bis: belegung.minutenZuZeitText(iv.ende),
+            kunde_name: iv.kundeName,
+            kennzeichen: iv.kennzeichen
+          }));
+        }
+
+        let warteKonflikt = null;
+        if (istWarten) {
+          const wk = belegung.pruefeWarteKonflikt(intervalle, { start: startMin, ende: neuesEnde, excludeTerminId }, verfuegbareMitarbeiter);
+          warteKonflikt = {
+            gleichzeitig: wk.gleichzeitig,
+            verfuegbare_mitarbeiter: wk.verfuegbareMitarbeiter,
+            konflikt: wk.konflikt,
+            ueberlappende: wk.ueberlappende.map(iv => ({
+              termin_id: iv.terminId, termin_nr: iv.terminNr,
+              von: belegung.minutenZuZeitText(iv.start), bis: belegung.minutenZuZeitText(iv.ende),
+              kunde_name: iv.kundeName
+            }))
+          };
+        }
+
+        slotPruefung = {
+          startzeit: belegung.minutenZuZeitText(startMin),
+          endzeit: belegung.minutenZuZeitText(neuesEnde),
+          ressource_typ: ressourceTyp,
+          ressource_id: ressourceId,
+          hat_doppelbuchung: konflikte.length > 0,
+          konflikte,
+          warte_konflikt: warteKonflikt
+        };
+      }
+
       res.json({
         verfuegbar: !blockiert,
         blockiert: blockiert,
@@ -1463,12 +1521,104 @@ class TermineController {
         neue_belegung_minuten: neueBelegung,
         verfuegbar_minuten: verfuegbarNachService,
         geschaetzte_zeit: geschaetzteZeit,
+        slot_pruefung: slotPruefung,
         einstellungen: {
           mitarbeiter_anzahl: mitarbeiterAnzahl,
           pufferzeit_minuten: pufferzeit,
           servicezeit_minuten: servicezeit,
           verfuegbare_mitarbeiter: verfuegbareMitarbeiter
         }
+      });
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  }
+
+  /**
+   * Zeitslot-genaue Belegung eines Tages pro Ressource (Mitarbeiter/Lehrling):
+   * belegte Intervalle, freie Slots und gleichzeitige Warte-Kunden.
+   * Grundlage für die Visualisierung freier Kapazität (Zeitleiste/Kalender).
+   */
+  static async getBelegung(req, res) {
+    try {
+      const datum = req.query.datum || req.params.datum;
+      if (!datum) {
+        return res.status(400).json({ error: 'Datum ist erforderlich' });
+      }
+
+      const TAG_START = 8 * 60;   // 08:00
+      const TAG_ENDE = 18 * 60;   // 18:00
+      const mindestSlot = req.query.min_dauer ? parseInt(req.query.min_dauer, 10) : 15;
+
+      const einstellungen = await EinstellungenModel.getWerkstatt();
+      const globalePause = (einstellungen && einstellungen.mittagspause_minuten) || 30;
+
+      const [mitarbeiter, lehrlinge, termineDesTages] = await Promise.all([
+        MitarbeiterModel.getAktive(),
+        LehrlingeModel.getAktive(),
+        TermineModel.getByDatum(datum)
+      ]);
+
+      // Abwesenheiten (Mitarbeiter + Lehrlinge)
+      const abwesenheitenRows = await new Promise((resolve) => {
+        db.all(
+          `SELECT mitarbeiter_id, lehrling_id FROM abwesenheiten WHERE datum_von <= ? AND datum_bis >= ?`,
+          [datum, datum],
+          (err, rows) => resolve(err ? [] : (rows || []))
+        );
+      });
+      const abwesendMA = new Set(abwesenheitenRows.filter(a => a.mitarbeiter_id).map(a => a.mitarbeiter_id));
+      const abwesendL = new Set(abwesenheitenRows.filter(a => a.lehrling_id).map(a => a.lehrling_id));
+
+      const { intervalle, flexibel } = belegung.baueIntervalle(termineDesTages);
+
+      const baueRessource = (person, typ, abwesend) => {
+        const pauseStartMin = belegung.zeitTextZuMinuten(person.mittagspause_start || '12:00') ?? (12 * 60);
+        const pauseDauer = person.pausenzeit_minuten || globalePause;
+        const eigeneIntervalle = intervalle
+          .filter(iv => iv.ressourceTyp === typ && iv.ressourceId === person.id)
+          .map(iv => ({
+            termin_id: iv.terminId, termin_nr: iv.terminNr,
+            von: belegung.minutenZuZeitText(iv.start), bis: belegung.minutenZuZeitText(iv.ende),
+            dauer: iv.dauer, ist_warten: iv.istWarten,
+            kunde_name: iv.kundeName, kennzeichen: iv.kennzeichen
+          }));
+        const freieSlots = abwesend ? [] : belegung.findeFreieSlots(intervalle, {
+          ressourceTyp: typ, ressourceId: person.id,
+          tagStart: TAG_START, tagEnde: TAG_ENDE,
+          pause: { start: pauseStartMin, ende: pauseStartMin + pauseDauer }
+        }, mindestSlot).map(s => ({
+          von: belegung.minutenZuZeitText(s.start), bis: belegung.minutenZuZeitText(s.ende), dauer: s.dauer
+        }));
+        return {
+          typ, id: person.id, name: person.name,
+          abwesend,
+          belegt_intervalle: eigeneIntervalle,
+          freie_slots: freieSlots
+        };
+      };
+
+      const ressourcen = [
+        ...(mitarbeiter || []).filter(m => !m.nur_service).map(m => baueRessource(m, 'mitarbeiter', abwesendMA.has(m.id))),
+        ...(lehrlinge || []).map(l => baueRessource(l, 'lehrling', abwesendL.has(l.id)))
+      ];
+
+      const warteKunden = intervalle
+        .filter(iv => iv.istWarten)
+        .map(iv => ({
+          termin_id: iv.terminId, termin_nr: iv.terminNr,
+          von: belegung.minutenZuZeitText(iv.start), bis: belegung.minutenZuZeitText(iv.ende),
+          kunde_name: iv.kundeName, kennzeichen: iv.kennzeichen
+        }))
+        .sort((a, b) => a.von.localeCompare(b.von));
+
+      res.json({
+        datum,
+        tag_start: belegung.minutenZuZeitText(TAG_START),
+        tag_ende: belegung.minutenZuZeitText(TAG_ENDE),
+        ressourcen,
+        warte_kunden: warteKunden,
+        flexibel_anzahl: flexibel.length
       });
     } catch (err) {
       res.status(500).json({ error: err.message });

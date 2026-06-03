@@ -307,6 +307,25 @@ class TermineService {
     return ApiService.get(`/termine/verfuegbarkeit?datum=${datum}&dauer=${dauer}`);
   }
 
+  /**
+   * Slot-genaue Verfügbarkeitsprüfung inkl. Doppelbuchung & Warte-Kunden.
+   * @param {object} p - { datum, dauer, startzeit?, mitarbeiterId?, lehrlingId?, excludeTerminId?, abholungTyp? }
+   */
+  static async checkSlot(p) {
+    const params = new URLSearchParams({ datum: p.datum, dauer: p.dauer });
+    if (p.startzeit) params.set('startzeit', p.startzeit);
+    if (p.mitarbeiterId) params.set('mitarbeiter_id', p.mitarbeiterId);
+    if (p.lehrlingId) params.set('lehrling_id', p.lehrlingId);
+    if (p.excludeTerminId) params.set('exclude_termin_id', p.excludeTerminId);
+    if (p.abholungTyp) params.set('abholung_typ', p.abholungTyp);
+    return ApiService.get(`/termine/verfuegbarkeit?${params.toString()}`);
+  }
+
+  /** Zeitslot-genaue Belegung eines Tages (Intervalle + freie Slots pro Ressource). */
+  static async getBelegung(datum) {
+    return ApiService.get(`/termine/belegung?datum=${datum}`);
+  }
+
   static async validate(termin) {
     return ApiService.post('/termine/validate', termin);
   }

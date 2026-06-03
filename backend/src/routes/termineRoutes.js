@@ -34,6 +34,7 @@ router.patch('/batch', asyncHandler(TermineController.batchUpdate));
 router.get('/datum/:datum', asyncHandler(TermineController.getByDatumLegacy));
 router.get('/auslastung/:datum', asyncHandler(TermineController.getAuslastung));
 router.get('/verfuegbarkeit', asyncHandler(TermineController.checkAvailability));
+router.get('/belegung', asyncHandler(TermineController.getBelegung));
 router.post('/validate', asyncHandler(TermineController.validate));
 router.get('/vorschlaege', asyncHandler(TermineController.getVorschlaege));
 router.get('/bringzeit-ueberschneidungen', asyncHandler(TermineController.getBringzeitUeberschneidungen));
