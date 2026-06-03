@@ -3608,18 +3608,6 @@
                     </div>
                 </div>
 
-                <!-- Freie Kapazität (zeitslot-genau) – zeigt freie Slots je Mitarbeiter + Warte-Kunden -->
-                <div class="freie-kapazitaet-panel" style="margin-top:16px;border:1px solid #c8e6c9;border-radius:8px;background:#f1f8f2;padding:12px;">
-                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
-                        <h3 style="margin:0;color:#2e7d32;">🟢 Freie Kapazität</h3>
-                        <button class="btn btn-sm btn-secondary" onclick="app.loadFreieKapazitaet()" title="Aktualisieren">🔄</button>
-                    </div>
-                    <div id="warteKundenHinweis"></div>
-                    <div id="freieKapazitaetContainer">
-                        <div class="empty-state">Wird geladen…</div>
-                    </div>
-                </div>
-
                 <!-- Unter dem Zeitplan: Nicht zugeordnete Termine (zuerst) -->
                 <div class="unassigned-panel">
                     <h3>📋 Nicht zugeordnet</h3>
@@ -3680,6 +3668,18 @@
                     <div id="ueberfaelligeTermineContainer" class="ueberfaellige-container">
                         <!-- Überfällige Termine werden hier eingefügt -->
                         <div class="empty-state">Keine überfälligen Termine</div>
+                    </div>
+                </div>
+
+                <!-- Freie Kapazität (zeitslot-genau) – zeigt freie Slots je Mitarbeiter + Warte-Kunden -->
+                <div class="freie-kapazitaet-panel" style="margin-top:16px;border:1px solid #c8e6c9;border-radius:8px;background:#f1f8f2;padding:12px;">
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+                        <h3 style="margin:0;color:#2e7d32;">🟢 Freie Kapazität</h3>
+                        <button class="btn btn-sm btn-secondary" onclick="app.loadFreieKapazitaet()" title="Aktualisieren">🔄</button>
+                    </div>
+                    <div id="warteKundenHinweis"></div>
+                    <div id="freieKapazitaetContainer">
+                        <div class="empty-state">Wird geladen…</div>
                     </div>
                 </div>
             </div>
