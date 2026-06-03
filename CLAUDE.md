@@ -177,6 +177,13 @@ Underscore-Events (`termin_updated`, `termine_updated`) werden **nicht** verarbe
 - Liefert Durchschnittswerte in Minuten je Arbeitsbezeichnung
 - Separate Lerndaten in `ki_zeitlern_daten`-Tabelle (höhere Qualität)
 
+### Auslastung hat ZWEI Modelle (Tages-Topf vs. Slot-genau)
+Es gibt bewusst zwei Sichten – nicht vermischen:
+- **Tages-Minuten-Topf** (`berechneAuslastungErgebnis`, SQL `SUM(...)` in `termineModel`): Summe belegter Minuten vs. Tageskapazität → Prozent. Für Auslastungsanzeige/Kapazitätswarnung.
+- **Zeitslot-genau** (`utils/belegung.js`): Intervalle pro Mitarbeiter/Lehrling aus `startzeit` + Dauer. Erkennt **Doppelbuchungen** und **gleichzeitige Warte-Kunden** (`abholung_typ='warten'`) und findet **freie Slots**. Endpoints: `/api/termine/verfuegbarkeit` (Feld `slot_pruefung`) und `/api/termine/belegung`.
+- Nur Termine MIT aufgelöster Ressource UND Startzeit ergeben ein hartes Intervall; alles andere ist „flexibel" (zählt nur in den Tages-Topf, kein Slot-Konflikt). Reine Logik in `belegung.js` ist über `tests/belegung.test.js` abgedeckt.
+- Doppelbuchung/Warte-Konflikt **warnen nur** (erlauben nach Bestätigung), sie blockieren nicht.
+
 ### Tablet-App Auto-Update
 Das Update-System funktioniert nur wenn:
 1. Die Version in `package.json` erhöht wurde
@@ -346,7 +353,7 @@ Vollständige Beschreibungen in [.claude/PROJEKT.md](.claude/PROJEKT.md) Abschni
 
 | Datei | Zuständigkeit |
 |---|---|
-| `termineRoutes.js` | Termine CRUD, Split-Termine, Phasen-Zuordnung |
+| `termineRoutes.js` | Termine CRUD, Split-Termine, Phasen-Zuordnung, Verfügbarkeit/Slot-Prüfung (`/verfuegbarkeit`), zeitslot-genaue Belegung (`/belegung`) |
 | `phasenRoutes.js` | Arbeits-Phasen verwalten |
 | `auslastungRoutes.js` | Auslastungsberechnung (→ AuslastungController) |
 | `kundenRoutes.js` | Kunden CRUD, Locosoft-Import |
