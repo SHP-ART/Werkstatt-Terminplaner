@@ -369,7 +369,8 @@ Setzt `DATA_DIR=/var/lib/werkstatt-terminplaner` damit die Datenbank im persiste
 
 ## 8. Bekannte Grenzen & offene Punkte
 
-- **Keine automatisierten Tests für Kernfunktionen** – Jest-Setup vorhanden, aber Coverage gering
+- **Testsuite aktuell nur eingeschränkt nutzbar** – 80 von 166 Tests sind rot, weil die lokale `backend/database/werkstatt.db` beschädigt ist und `testSetup.js` daraufhin auf ein veraltetes Fallback-Schema zurückfällt. Details und Vorgehen in `.claude/ERRORS.md`. Solange das offen ist, taugt die Suite nicht als Regressionsschutz
+- **Coverage gering außerhalb der reinen Utils** – Jest-Setup vorhanden, aber die meisten Controller und Models sind ungetestet
 - **Kein Authentifizierungs-System für Benutzer** – API-Key ist nur für destruktive Endpunkte, kein Login
 - **Single-DB-Writer-Problem** – SQLite WAL erlaubt mehrere Leser, aber bei hoher paralleler Schreiblast könnte es zu Locks kommen
 - **Frontend ist Vanilla JS-Monolith** – `app.js` enthält die gesamte UI-Logik in einer einzelnen Klasse; keine Typsicherheit, keine Komponentenbibliothek
@@ -379,3 +380,37 @@ Setzt `DATA_DIR=/var/lib/werkstatt-terminplaner` damit die Datenbank im persiste
 - **Tablet-App nur für Windows (ia32)** – kein macOS/Linux-Support
 - **Backup-Restore unterbricht laufende Verbindungen** – kein Zero-Downtime-Restore
 - **`auslastungRoutes.js` hat keinen eigenen Controller** – delegiert direkt an `TermineController.getAuslastung()`. Kein eigener `auslastungController.js` vorhanden.
+- **Auslastung: Pufferzeit ignoriert Parallelität** – `getAuslastungMitPuffer` rechnet `(aktiveTermine − 1) × pufferzeit` als globalen Topf, unabhängig von der Zahl gleichzeitig arbeitender Monteure. Überschätzt die Belegung bei vielen kurzen Terminen
+- **Auslastung nutzt nicht den `arbeitszeiten_plan`** – Kapazität kommt aus dem statischen `arbeitsstunden_pro_tag`, während `getBelegung` die echten Tagespläne (Start/Ende/`ist_frei`) liest. Teilzeittage und freie Tage schlagen nur in einer der beiden Sichten durch
+- **Halbe Abwesenheitstage fehlen** – Abwesenheit setzt die Tageskapazität auf 0, halbe Urlaubstage kennt das Modell nicht
+- **`FEATURES.md` fehlt** – vom `projekt-doku`-Skill als Pflichtdatei vorgesehen, im Projekt noch nicht angelegt
+- **`.claude/` steht in `.gitignore`** (Zeile 27) – `RETRO.md` und `ERRORS.md` sind dadurch nur lokal vorhanden. `PROJEKT.md` ist noch aus der Zeit vor dem Eintrag getrackt. Entfernen des Eintrags würde auch `logs/`, `backups/` und `settings.local.json` ins Repo holen, deshalb bewusst nicht eigenmächtig geändert
+
+---
+
+## 9. TDD-Status
+
+| Komponente | Tests | Datei |
+|---|---|---|
+| `utils/auslastung.js` | 21 Fälle – Statusfilter, Zeitverteilung, Kapazität, Restzeit, Verkettung | `tests/auslastung.test.js` |
+| `utils/belegung.js` | 14 Fälle – Intervalle, Überschneidungen, Warte-Konflikte, freie Slots | `tests/belegung.test.js` |
+| Migrations | vorhanden | `tests/migrations.test.js` |
+| Arbeitspausen, Stempelzeiten, Nachstempeln | vorhanden | `tests/*.test.js` |
+| Auftragsimport (Service + Parser) | vorhanden | `tests/auftragsImportService.test.js`, `tests/auftragsParserService.test.js` |
+| Regressionstests | 8 Dateien | `tests/bugs/` |
+| **Controller** | **keine** | – |
+| **Models (außer via bugs/)** | **keine** | – |
+| **Frontend** | **keine** | – |
+
+Muster für neue Rechenlogik: reine Funktion in `utils/`, dort getestet; Models und
+Controller laden nur Daten und rufen sie auf. So entstanden `belegung.js` und
+`auslastung.js` – beide sind ohne DB testbar.
+
+---
+
+## 10. Projektstatus
+
+- **Phase:** Wartung / laufende Weiterentwicklung
+- **Letzter Stand:** 2026-08-05 – Auslastungs-/Restzeit-Berechnung korrigiert und als reines Modul `utils/auslastung.js` herausgelöst (Commit `6c16e38`, auf GitHub gepusht). Vier Rechenfehler behoben: doppelte Lehrlings-Korrektur, stornierte Termine in der Kapazität, Nebenzeit-Mischung beim `nur_service`-Abzug, Doppelzählung von Lehrlingszeiten. `/verfuegbarkeit` und `/auslastung` nutzen jetzt dieselbe Kapazitätsbasis
+- **Nächster Schritt:** Deploy auf den Produktivserver nach dokumentierter Prozedur (DB-Backup → `git pull` → `systemctl restart` → `/api/auslastung/<heute>` gegen echte Daten prüfen). Kein Frontend-Build nötig, das Response-Format ist unverändert
+- **Blockiert durch:** Tailscale SSH verlangt eine interaktive Browser-Anmeldung, die im Agent-Kontext nicht durchführbar ist. Der Server läuft bis dahin auf dem alten Stand
