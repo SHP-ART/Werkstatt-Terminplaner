@@ -1,4 +1,5 @@
 const { getAsync, allAsync, runAsync } = require('../utils/dbHelper');
+const { verteileMitarbeiterZeiten, verteileLehrlingZeiten } = require('../utils/auslastung');
 
 class TermineModel {
   static async generateTerminNr(retryOffset = 0) {
@@ -644,7 +645,8 @@ class TermineModel {
   }
 
   static async getAuslastung(datum) {
-    // Schwebende Termine (ist_schwebend = 1) werden NICHT in der Auslastung gezählt
+    // Schwebende und stornierte Termine werden NICHT in der Auslastung gezählt.
+    // Abgeschlossene zählen weiter mit – die Zeit wurde tatsächlich verbraucht.
     const query = `
       SELECT
         SUM(COALESCE(tatsaechliche_zeit, geschaetzte_zeit)) as gesamt_minuten,
@@ -652,10 +654,10 @@ class TermineModel {
         SUM(CASE WHEN status = 'in_arbeit' THEN COALESCE(tatsaechliche_zeit, geschaetzte_zeit) ELSE 0 END) as in_arbeit_minuten,
         SUM(CASE WHEN status = 'abgeschlossen' THEN COALESCE(tatsaechliche_zeit, geschaetzte_zeit) ELSE 0 END) as abgeschlossen_minuten,
         COUNT(*) as termin_anzahl,
-        SUM(CASE WHEN COALESCE(ist_schwebend, 0) = 1 THEN COALESCE(tatsaechliche_zeit, geschaetzte_zeit) ELSE 0 END) as schwebend_minuten,
-        SUM(CASE WHEN COALESCE(ist_schwebend, 0) = 1 THEN 1 ELSE 0 END) as schwebend_anzahl
+        SUM(CASE WHEN COALESCE(status, 'geplant') != 'abgeschlossen' THEN 1 ELSE 0 END) as aktive_termine
       FROM termine
       WHERE datum = ? AND geloescht_am IS NULL AND COALESCE(ist_schwebend, 0) = 0
+        AND COALESCE(status, 'geplant') != 'storniert'
     `;
     return await getAsync(query, [datum]);
   }
@@ -727,186 +729,22 @@ class TermineModel {
   }
 
   static async getAuslastungProMitarbeiter(datum) {
-    // Berechnet Auslastung pro Mitarbeiter (ohne schwebende Termine)
-    // Berücksichtigt sowohl mitarbeiter_id als auch arbeitszeiten_details
-    
-    // Erst alle aktiven Mitarbeiter laden
-    const mitarbeiterQuery = `
+    // Auslastung pro Mitarbeiter. Die Verteillogik liegt in utils/auslastung.js
+    // (rein und testbar), hier wird nur geladen.
+    const mitarbeiter = await allAsync(`
       SELECT id, name, arbeitsstunden_pro_tag, nebenzeit_prozent, nur_service
       FROM mitarbeiter
       WHERE aktiv = 1
-    `;
-    
-    const mitarbeiter = await allAsync(mitarbeiterQuery, []);
-    
-    // Initialisiere Auslastung für alle Mitarbeiter
-    const auslastungMap = {};
-    (mitarbeiter || []).forEach(m => {
-      auslastungMap[m.id] = {
-        mitarbeiter_id: m.id,
-        mitarbeiter_name: m.name,
-        arbeitsstunden_pro_tag: m.arbeitsstunden_pro_tag || 8,
-        nebenzeit_prozent: m.nebenzeit_prozent || 0,
-        nur_service: m.nur_service,
-        belegt_minuten: 0,
-        geplant_minuten: 0,
-        in_arbeit_minuten: 0,
-        abgeschlossen_minuten: 0,
-        termin_anzahl: 0,
-        nacharbeit_anzahl: 0,
-        nacharbeit_minuten: 0
-      };
-    });
-    
-    // Lade alle Termine für dieses Datum
-    const termineQuery = `
+    `, []);
+
+    const termine = await allAsync(`
       SELECT id, mitarbeiter_id, geschaetzte_zeit, tatsaechliche_zeit, status,
              arbeitszeiten_details, muss_bearbeitet_werden, nacharbeit_start_zeit
       FROM termine
       WHERE datum = ? AND geloescht_am IS NULL AND COALESCE(ist_schwebend, 0) = 0
-    `;
-    
-    const termine = await allAsync(termineQuery, [datum]);
-    
-    // Analysiere Termine und sammle Auslastung pro Mitarbeiter
-    // BUG 8 FIX: Neue Logik - erst einzelne Arbeiten auswerten, dann Fallback für nicht zugeordnete
-    (termine || []).forEach(termin => {
-      const rawStatus = termin.status || 'geplant';
-      const status = rawStatus === 'offen' ? 'geplant' : rawStatus;
-      const gesamtZeit = termin.tatsaechliche_zeit || termin.geschaetzte_zeit || 0;
-      
-      // Track welche Mitarbeiter Zeit von diesem Termin bekommen haben (für termin_anzahl)
-      const mitarbeiterMitZeit = new Set();
-      // Track wie viel Zeit bereits zugeordnet wurde
-      let zugeordneteZeit = 0;
-      
-      // Prüfe arbeitszeiten_details für Detail-Zuordnungen
-      if (termin.arbeitszeiten_details) {
-        try {
-          const details = JSON.parse(termin.arbeitszeiten_details);
-          
-          // Ermittle Fallback-Mitarbeiter (für Arbeiten ohne eigene Zuordnung)
-          let fallbackMitarbeiterId = null;
-          if (details._gesamt_mitarbeiter_id) {
-            const gesamt = details._gesamt_mitarbeiter_id;
-            if (typeof gesamt === 'object' && gesamt.type === 'mitarbeiter' && gesamt.id) {
-              fallbackMitarbeiterId = gesamt.id;
-            }
-          }
-          if (!fallbackMitarbeiterId && termin.mitarbeiter_id) {
-            fallbackMitarbeiterId = termin.mitarbeiter_id;
-          }
-          
-          // SCHRITT 1: Alle Arbeiten durchgehen und Zeit zuordnen
-          for (const [arbeitName, arbeitDetails] of Object.entries(details)) {
-            if (arbeitName.startsWith('_')) continue; // Überspringe Meta-Felder
-            
-            // Zeit dieser Arbeit ermitteln
-            let arbeitZeit = 0;
-            let mitarbeiterId = null;
-            
-            if (typeof arbeitDetails === 'object') {
-              arbeitZeit = arbeitDetails.zeit || 0;
-              
-              // Hat diese Arbeit eine eigene Mitarbeiter-Zuordnung?
-              if (arbeitDetails.type === 'mitarbeiter' && arbeitDetails.mitarbeiter_id) {
-                mitarbeiterId = arbeitDetails.mitarbeiter_id;
-              } else {
-                // Keine eigene Zuordnung → Fallback verwenden
-                mitarbeiterId = fallbackMitarbeiterId;
-              }
-            } else if (typeof arbeitDetails === 'number') {
-              // Alte Format: nur Zeit als Zahl
-              arbeitZeit = arbeitDetails;
-              mitarbeiterId = fallbackMitarbeiterId;
-            }
-            
-            // Zeit dem Mitarbeiter zuweisen
-            if (mitarbeiterId && arbeitZeit > 0 && auslastungMap[mitarbeiterId]) {
-              auslastungMap[mitarbeiterId].belegt_minuten += arbeitZeit;
-              mitarbeiterMitZeit.add(mitarbeiterId);
-              zugeordneteZeit += arbeitZeit;
-              
-              // Status-basierte Zeiten
-              if (status === 'geplant') {
-                auslastungMap[mitarbeiterId].geplant_minuten += arbeitZeit;
-              } else if (status === 'in_arbeit') {
-                auslastungMap[mitarbeiterId].in_arbeit_minuten += arbeitZeit;
-              } else if (status === 'abgeschlossen') {
-                auslastungMap[mitarbeiterId].abgeschlossen_minuten += arbeitZeit;
-              }
-            }
-          }
-          
-          // SCHRITT 2: Falls keine Zeit zugeordnet wurde, verwende gesamtZeit mit Fallback
-          if (zugeordneteZeit === 0 && fallbackMitarbeiterId && auslastungMap[fallbackMitarbeiterId]) {
-            auslastungMap[fallbackMitarbeiterId].belegt_minuten += gesamtZeit;
-            mitarbeiterMitZeit.add(fallbackMitarbeiterId);
-            
-            if (status === 'geplant') {
-              auslastungMap[fallbackMitarbeiterId].geplant_minuten += gesamtZeit;
-            } else if (status === 'in_arbeit') {
-              auslastungMap[fallbackMitarbeiterId].in_arbeit_minuten += gesamtZeit;
-            } else if (status === 'abgeschlossen') {
-              auslastungMap[fallbackMitarbeiterId].abgeschlossen_minuten += gesamtZeit;
-            }
-          }
-          
-        } catch (e) {
-          console.error('Fehler beim Parsen von arbeitszeiten_details:', e);
-        }
-      }
-      
-      // Falls keine arbeitszeiten_details vorhanden, nutze mitarbeiter_id aus Termin-Hauptfeld
-      if (mitarbeiterMitZeit.size === 0 && termin.mitarbeiter_id) {
-        const mitarbeiterId = termin.mitarbeiter_id;
-        if (auslastungMap[mitarbeiterId]) {
-          auslastungMap[mitarbeiterId].belegt_minuten += gesamtZeit;
-          mitarbeiterMitZeit.add(mitarbeiterId);
-          if (status === 'geplant') {
-            auslastungMap[mitarbeiterId].geplant_minuten += gesamtZeit;
-          } else if (status === 'in_arbeit') {
-            auslastungMap[mitarbeiterId].in_arbeit_minuten += gesamtZeit;
-          } else if (status === 'abgeschlossen') {
-            auslastungMap[mitarbeiterId].abgeschlossen_minuten += gesamtZeit;
-          }
-        }
-      }
-      
-      // Termin-Anzahl für alle beteiligten Mitarbeiter erhöhen (max 1 pro Termin)
-      mitarbeiterMitZeit.forEach(mid => {
-        if (auslastungMap[mid]) {
-          auslastungMap[mid].termin_anzahl += 1;
-        }
-      });
+    `, [datum]);
 
-      // Nacharbeit-Tracking: Wenn muss_bearbeitet_werden = 1, Nacharbeit-Zeit erfassen
-      if (termin.muss_bearbeitet_werden === 1 && mitarbeiterMitZeit.size > 0) {
-        // Nacharbeit-Zeit = tatsaechliche_zeit (abgeschlossen) oder geschaetzte_zeit (in Bearbeitung)
-        const nacharbeitZeit = termin.tatsaechliche_zeit || termin.geschaetzte_zeit || 0;
-        mitarbeiterMitZeit.forEach(mid => {
-          if (auslastungMap[mid]) {
-            auslastungMap[mid].nacharbeit_anzahl += 1;
-            auslastungMap[mid].nacharbeit_minuten += nacharbeitZeit;
-            // Nacharbeit-Startzeit merken (für die Auslastungs-Anzeige)
-            if (termin.nacharbeit_start_zeit && !auslastungMap[mid].nacharbeit_start_zeiten) {
-              auslastungMap[mid].nacharbeit_start_zeiten = [];
-            }
-            if (termin.nacharbeit_start_zeit) {
-              auslastungMap[mid].nacharbeit_start_zeiten.push({
-                termin_id: termin.id,
-                start_zeit: termin.nacharbeit_start_zeit,
-                status: status
-              });
-            }
-          }
-        });
-      }
-    });
-    
-    // Konvertiere Map zu Array
-    const result = Object.values(auslastungMap);
-    return result;
+    return Object.values(verteileMitarbeiterZeiten(termine, mitarbeiter));
   }
 
   static async getAuslastungMitPuffer(datum, pufferzeitMinuten) {
@@ -922,6 +760,7 @@ class TermineModel {
         SUM(CASE WHEN COALESCE(status, 'geplant') NOT IN ('abgeschlossen') THEN 1 ELSE 0 END) as aktive_termine
       FROM termine
       WHERE datum = ? AND geloescht_am IS NULL AND COALESCE(ist_schwebend, 0) = 0
+        AND COALESCE(status, 'geplant') != 'storniert'
     `;
     const row = await getAsync(query, [datum]);
 
@@ -1028,146 +867,23 @@ class TermineModel {
   }
 
   static async getAuslastungProLehrling(datum) {
-    // Berechnet Auslastung pro Lehrling basierend auf arbeitszeiten_details
-    // Da Lehrlinge über JSON in arbeitszeiten_details zugeordnet werden, müssen wir
-    // alle Termine laden und die Details analysieren
-    const query = `
-      SELECT id, geschaetzte_zeit, tatsaechliche_zeit, status, arbeitszeiten_details
-      FROM termine
-      WHERE datum = ? AND arbeitszeiten_details IS NOT NULL AND geloescht_am IS NULL
-    `;
-    const termine = await allAsync(query, [datum]);
-
-    // Lade alle aktiven Lehrlinge
-    const lehrlingeQuery = `
+    // Auslastung pro Lehrling. Lehrlinge werden ueber arbeitszeiten_details
+    // zugeordnet; die Verteillogik (inkl. Aufgabenbewaeltigung) liegt in
+    // utils/auslastung.js.
+    const lehrlinge = await allAsync(`
       SELECT id, name, arbeitsstunden_pro_tag, nebenzeit_prozent, aufgabenbewaeltigung_prozent
       FROM lehrlinge
       WHERE aktiv = 1
-    `;
-    const lehrlinge = await allAsync(lehrlingeQuery, []);
+    `, []);
 
-    // Initialisiere Auslastung für alle Lehrlinge
-    const auslastungMap = {};
-    (lehrlinge || []).forEach(l => {
-      auslastungMap[l.id] = {
-        lehrling_id: l.id,
-        lehrling_name: l.name,
-        arbeitsstunden_pro_tag: l.arbeitsstunden_pro_tag || 8,
-        nebenzeit_prozent: l.nebenzeit_prozent || 0,
-        aufgabenbewaeltigung_prozent: l.aufgabenbewaeltigung_prozent || 100,
-        belegt_minuten: 0,
-        geplant_minuten: 0,
-        in_arbeit_minuten: 0,
-        abgeschlossen_minuten: 0,
-        termin_anzahl: 0
-      };
-    });
+    const termine = await allAsync(`
+      SELECT id, geschaetzte_zeit, tatsaechliche_zeit, status, arbeitszeiten_details
+      FROM termine
+      WHERE datum = ? AND arbeitszeiten_details IS NOT NULL AND geloescht_am IS NULL
+        AND COALESCE(ist_schwebend, 0) = 0
+    `, [datum]);
 
-    // Analysiere Termine und sammle Auslastung pro Lehrling
-    (termine || []).forEach(termin => {
-      if (!termin.arbeitszeiten_details) return;
-
-      try {
-        const details = JSON.parse(termin.arbeitszeiten_details);
-        const rawStatus = termin.status || 'geplant';
-        const status = rawStatus === 'offen' ? 'geplant' : rawStatus;
-        const zeit = termin.tatsaechliche_zeit || termin.geschaetzte_zeit || 0;
-
-        // Prüfe Gesamt-Zuordnung
-        if (details._gesamt_mitarbeiter_id) {
-          const gesamt = details._gesamt_mitarbeiter_id;
-          if (typeof gesamt === 'object' && gesamt.type === 'lehrling' && gesamt.id) {
-            const lehrlingId = gesamt.id;
-            if (auslastungMap[lehrlingId]) {
-              auslastungMap[lehrlingId].belegt_minuten += zeit;
-              auslastungMap[lehrlingId].termin_anzahl += 1;
-              if (status === 'geplant') {
-                auslastungMap[lehrlingId].geplant_minuten += zeit;
-              } else if (status === 'in_arbeit') {
-                auslastungMap[lehrlingId].in_arbeit_minuten += zeit;
-              } else if (status === 'abgeschlossen') {
-                auslastungMap[lehrlingId].abgeschlossen_minuten += zeit;
-              }
-            }
-          }
-        }
-
-        // Prüfe individuelle Zuordnungen pro Arbeit
-        Object.keys(details).forEach(arbeit => {
-          if (arbeit === '_gesamt_mitarbeiter_id') return;
-
-          const arbeitDetail = details[arbeit];
-          let zeitMinuten = 0;
-          let zugeordnetId = null;
-          let zugeordnetTyp = null;
-
-          if (typeof arbeitDetail === 'object') {
-            zeitMinuten = arbeitDetail.zeit || 0;
-            if (arbeitDetail.type === 'lehrling' && arbeitDetail.lehrling_id) {
-              zugeordnetId = arbeitDetail.lehrling_id;
-              zugeordnetTyp = 'lehrling';
-            }
-          }
-
-          if (zugeordnetTyp === 'lehrling' && zugeordnetId && auslastungMap[zugeordnetId]) {
-            auslastungMap[zugeordnetId].belegt_minuten += zeitMinuten;
-            if (status === 'geplant') {
-              auslastungMap[zugeordnetId].geplant_minuten += zeitMinuten;
-            } else if (status === 'in_arbeit') {
-              auslastungMap[zugeordnetId].in_arbeit_minuten += zeitMinuten;
-            } else if (status === 'abgeschlossen') {
-              auslastungMap[zugeordnetId].abgeschlossen_minuten += zeitMinuten;
-            }
-          }
-        });
-      } catch (e) {
-        // Ignoriere Parsing-Fehler
-      }
-    });
-
-    // Konvertiere Map zu Array und berechne verfügbare Zeit und Auslastung
-    // WICHTIG: Gib ALLE aktiven Lehrlinge zurück, auch wenn sie keine Termine haben
-    // NEU: Nebenzeit erhöht die belegte Zeit statt die Kapazität zu reduzieren
-    const result = (lehrlinge || []).map(l => {
-      const la = auslastungMap[l.id] || {
-        lehrling_id: l.id,
-        lehrling_name: l.name,
-        arbeitsstunden_pro_tag: l.arbeitsstunden_pro_tag || 8,
-        nebenzeit_prozent: l.nebenzeit_prozent || 0,
-        aufgabenbewaeltigung_prozent: l.aufgabenbewaeltigung_prozent || 100,
-        belegt_minuten: 0,
-        geplant_minuten: 0,
-        in_arbeit_minuten: 0,
-        abgeschlossen_minuten: 0,
-        termin_anzahl: 0
-      };
-      
-      const arbeitszeitMinuten = (la.arbeitsstunden_pro_tag || 8) * 60;
-      // Nebenzeit wird auf die belegte Zeit aufgeschlagen, nicht von der Kapazität abgezogen
-      const nebenzeitFaktor = 1 + ((la.nebenzeit_prozent || 0) / 100);
-      const belegtMitNebenzeit = la.belegt_minuten * nebenzeitFaktor;
-      const verfuegbar = arbeitszeitMinuten; // Volle Arbeitszeit als Kapazität
-      const prozent = verfuegbar > 0 ? (belegtMitNebenzeit / verfuegbar) * 100 : 0;
-
-      return {
-        lehrling_id: la.lehrling_id,
-        lehrling_name: la.lehrling_name,
-        arbeitsstunden_pro_tag: la.arbeitsstunden_pro_tag,
-        nebenzeit_prozent: la.nebenzeit_prozent,
-        aufgabenbewaeltigung_prozent: la.aufgabenbewaeltigung_prozent,
-        verfuegbar_minuten: verfuegbar,
-        belegt_minuten: Math.round(belegtMitNebenzeit), // Belegte Zeit inkl. Nebenzeit-Aufschlag
-        belegt_minuten_roh: la.belegt_minuten, // Originale belegte Zeit ohne Aufschlag
-        servicezeit_minuten: 0, // Lehrlinge haben keine Servicezeit
-        auslastung_prozent: Math.round(prozent),
-        geplant_minuten: la.geplant_minuten,
-        in_arbeit_minuten: la.in_arbeit_minuten,
-        abgeschlossen_minuten: la.abgeschlossen_minuten,
-        termin_anzahl: la.termin_anzahl
-      };
-    });
-
-    return result;
+    return Object.values(verteileLehrlingZeiten(termine, lehrlinge));
   }
 
   // Termin schwebend setzen/aufheben

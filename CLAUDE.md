@@ -179,10 +179,23 @@ Underscore-Events (`termin_updated`, `termine_updated`) werden **nicht** verarbe
 
 ### Auslastung hat ZWEI Modelle (Tages-Topf vs. Slot-genau)
 Es gibt bewusst zwei Sichten – nicht vermischen:
-- **Tages-Minuten-Topf** (`berechneAuslastungErgebnis`, SQL `SUM(...)` in `termineModel`): Summe belegter Minuten vs. Tageskapazität → Prozent. Für Auslastungsanzeige/Kapazitätswarnung.
+- **Tages-Minuten-Topf** (`utils/auslastung.js`, SQL `SUM(...)` in `termineModel`): Summe belegter Minuten vs. Tageskapazität → Prozent. Für Auslastungsanzeige/Kapazitätswarnung.
 - **Zeitslot-genau** (`utils/belegung.js`): Intervalle pro Mitarbeiter/Lehrling aus `startzeit` + Dauer. Erkennt **Doppelbuchungen** und **gleichzeitige Warte-Kunden** (`abholung_typ='warten'`) und findet **freie Slots**. Endpoints: `/api/termine/verfuegbarkeit` (Feld `slot_pruefung`) und `/api/termine/belegung`.
 - Nur Termine MIT aufgelöster Ressource UND Startzeit ergeben ein hartes Intervall; alles andere ist „flexibel" (zählt nur in den Tages-Topf, kein Slot-Konflikt). Reine Logik in `belegung.js` ist über `tests/belegung.test.js` abgedeckt.
 - Doppelbuchung/Warte-Konflikt **warnen nur** (erlauben nach Bestätigung), sie blockieren nicht.
+
+### Regeln der Auslastungsrechnung (nicht aufweichen)
+Die Rechenlogik liegt vollständig in `utils/auslastung.js` (rein, testbar via `tests/auslastung.test.js`).
+Models und Controller laden nur Daten und rufen diese Funktionen auf – **keine Auslastungsrechnung in SQL-Aggregaten oder Controllern nachbauen.**
+
+| Regel | Begründung |
+|---|---|
+| **Storniert, schwebend und gelöscht belegen keine Kapazität** | Sonst blockieren abgesagte Termine den Tag. Filter gehört in jede Auslastungs-Query UND in `istAuslastungsRelevant()` |
+| **Abgeschlossene Termine zählen weiter mit** | Die Zeit wurde tatsächlich verbraucht – die Auslastung zeigt, wie voll der Tag war |
+| **`aufgabenbewaeltigung_prozent` wirkt auf die ZEIT, nie auf die Kapazität** | 150 % heißt: der Lehrling braucht das 1,5-fache. Beides gleichzeitig zu korrigieren rechnet den Faktor quadratisch ein |
+| **Nebenzeit ist ein Aufschlag auf belegte Zeit, nie ein Abzug von der Kapazität** | Wird die Nebenzeit oben aufgeschlagen, muss auch jeder Abzug (z.B. `nur_service`) mit demselben Faktor gerechnet werden – sonst bleiben Phantom-Minuten stehen |
+| **Kapazität immer über `berechneKapazitaet()`** | `/api/auslastung` und `/api/termine/verfuegbarkeit` müssen dieselbe Zahl liefern; getrennte Summierungen sind früher auseinandergelaufen |
+| **Zeit nie doppelt zuordnen** | Die Gesamt-Zuordnung (`_gesamt_mitarbeiter_id`) greift nur, wenn keine einzelne Arbeit Zeit gebucht hat – bei Mitarbeitern wie bei Lehrlingen |
 
 ### Tablet-App Auto-Update
 Das Update-System funktioniert nur wenn:

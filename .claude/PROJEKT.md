@@ -181,6 +181,8 @@ Wichtige Models:
 | `response.js` | Einheitliche Response-Struktur |
 | `zeitBerechnung.js` | Zeit- und Dauerberechnungen |
 | `asyncOperations.js` | Async-Hilfsfunktionen |
+| `belegung.js` | Zeitslot-genaue Belegung: Intervalle je Ressource, Doppelbuchungen, Warte-Konflikte, freie Slots. Rein, ohne DB-Zugriff |
+| `auslastung.js` | Tages-Minuten-Topf: Statusfilter, Zeitverteilung auf Mitarbeiter/Lehrlinge, Kapazität und Restzeit. Rein, ohne DB-Zugriff |
 
 #### Middleware (`middleware/`)
 
