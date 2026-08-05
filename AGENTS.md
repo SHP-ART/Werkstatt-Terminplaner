@@ -7,10 +7,17 @@ This repository is shared between Claude Code and Codex. Keep both assistants al
 At the start of a session, read these files when relevant:
 
 1. `CLAUDE.md` - primary project rules, commands, architecture, pitfalls, build/test/deploy notes.
-2. `.claude/PROJEKT.md` - full project documentation and component map.
-3. `.claude/memory.md` - current project memory and recent state.
-4. `.claude/knowledge-base.md` - durable constraints and lessons.
-5. `Task Board.md` - current tasks and priorities.
+2. `.claude/PROJEKT.md` - full project documentation, component map, TDD status, project status.
+3. `.claude/RETRO.md` - last session state and open points. Read before starting work.
+4. `.claude/ERRORS.md` - known errors, their root causes and fixes. Read when debugging.
+5. `.claude/memory.md` - current project memory and recent state.
+6. `.claude/knowledge-base.md` - durable constraints and lessons.
+7. `FEATURES.md` - existing functionality (regression safety net). Check before and after extending.
+8. `Task Board.md` - current tasks and priorities.
+
+Note: `.claude/` is listed in `.gitignore` (line 27). `PROJEKT.md` predates that
+entry and is tracked; `RETRO.md` and `ERRORS.md` are local-only. Keep that in mind
+when working from a fresh clone - those two files will be missing.
 
 If any instruction here conflicts with `CLAUDE.md`, prefer the stricter/safest rule. Do not duplicate long-lived project facts here; update `CLAUDE.md` or `.claude/PROJEKT.md` so Claude and Codex stay in sync.
 

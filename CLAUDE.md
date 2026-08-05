@@ -203,6 +203,35 @@ Das Update-System funktioniert nur wenn:
 2. Das Update via `POST /api/tablet-update/register` registriert wurde
 3. Der Installer-Pfad auf dem Server korrekt ist
 
+### Testsuite: jede Datei pro Jest-Worker eindeutig halten
+Jest läuft standardmäßig **parallel**. Teilen sich mehrere Suites eine Datei, die im
+Setup oder Teardown gelöscht wird, zerstören sie sich gegenseitig den Zustand mitten
+im Lauf. Genau das war der Fall: alle Suites nutzten `tests/test-werkstatt.db`, und
+sowohl `createTestDb()` als auch `closeTestDb()` rufen `unlinkSync()` darauf – 80 von
+166 Tests waren rot mit einem Fehlerbild quer durch alle Suites (`no such table`,
+`has no column named`, `SQLITE_CANTOPEN`).
+
+`tests/helpers/testSetup.js` trennt die Test-DB deshalb über `JEST_WORKER_ID`. Das
+gilt für **jede** Datei, die eine Suite anlegt oder löscht – DBs, Temp-Verzeichnisse,
+Fixtures, Ports.
+
+**Diagnose-Reflex:** Verhalten sich Tests einzeln anders als im Verbund, ist es
+geteilter Zustand – nicht der Testinhalt und nicht die Daten. Der Vergleich
+`npx jest` gegen `npx jest --runInBand` beantwortet das in einer Minute. Nicht
+mit dem erstbesten plausiblen Befund zufriedengeben (siehe `.claude/ERRORS.md`:
+eine beschädigte Dev-DB sah überzeugend nach der Ursache aus, war es aber nicht).
+
+### `tests/migrations.test.js` ist stillgelegt
+`describe.skip`, 9 Tests. Die Suite mockte `getAllMigrations()`, aber `runMigrations()`
+liest die lokale Konstante `migrations` (`migrations/index.js`, Zeile 18) – der Spy
+griff nie, es liefen jedes Mal die echten 44 Migrationen. Zusätzlich destabilisierte
+sie den parallelen Gesamtlauf. Begründung steht im Dateikopf.
+
+Merksatz fürs nächste Mal: Bei CommonJS greift `jest.spyOn` auf einem Modul-Export nur,
+wenn der Aufrufer wirklich über das Modul-Objekt geht. Ruft die Funktion intern eine
+lokale Referenz auf, läuft der Spy ohne Warnung ins Leere. Ein Test, der mit und ohne
+Mock dasselbe Ergebnis liefert, mockt nichts.
+
 ### Tab-Verlust in index.html (wiederkehrendes Problem!)
 `frontend/index.html` ist sehr groß. Bei umfangreichen Commits werden Tab-Einträge gelegentlich versehentlich entfernt.
 **Pflicht vor jedem Commit der `index.html` enthält:**
