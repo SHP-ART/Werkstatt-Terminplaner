@@ -23,11 +23,34 @@ if (fs.existsSync(testDbPath)) {
 }
 
 // Mock für broadcast (damit Tests ohne WebSocket laufen)
-jest.mock('../src/utils/broadcast', () => ({
+// Das Modul heisst websocket.js – ein Mock auf '../src/utils/broadcast' laesst
+// die gesamte Suite mit "Cannot find module" scheitern.
+jest.mock('../src/utils/websocket', () => ({
   broadcastEvent: jest.fn()
 }));
 
-describe('Migrations System Tests', () => {
+// ===========================================================================
+// STILLGELEGT am 2026-08-05 – diese Suite testet nicht, was sie vorgibt,
+// und destabilisiert zusaetzlich alle anderen Suites.
+//
+// 1. Wirkungslos: Die Tests setzen
+//    `jest.spyOn(migrations, 'getAllMigrations').mockReturnValue(...)`.
+//    `runMigrations()` liest die Liste aber aus der lokalen Konstante
+//    `migrations` (migrations/index.js, Zeile 18) und ruft `getAllMigrations()`
+//    nie auf. Der Spy greift daher nie – es laufen jedes Mal die echten
+//    44 Migrationen gegen eine leere DB. Daher "no such table: mitarbeiter"
+//    und der 5s-Timeout.
+// 2. Schaedlich: Mit dieser Suite schwankt der parallele Gesamtlauf
+//    nichtdeterministisch zwischen 3 und 83 Fehlern; ohne sie sind es
+//    167 von 167 gruen.
+//
+// NICHT stillgelegt, um einen Produktfehler zu verstecken – die Suite hat nie
+// etwas geprueft. Vor dem Reaktivieren muss die Migrationsliste in
+// `runMigrations()` injizierbar gemacht werden (Produktivcode-Aenderung),
+// oder die Tests muessen auf das umgeschrieben werden, was ohne Mock pruefbar
+// ist. Siehe .claude/ERRORS.md und Task Board.
+// ===========================================================================
+describe.skip('Migrations System Tests', () => {
   let db;
 
   beforeEach((done) => {
@@ -102,7 +125,9 @@ describe('Migrations System Tests', () => {
 
       try {
         await runMigrations(db, 0);
-        fail('Migration sollte fehlgeschlagen sein');
+        // fail() ist eine Jasmine-Globale und in Jest 30 nicht mehr verfuegbar –
+        // der Aufruf warf "fail is not defined" und verdeckte die echte Assertion
+        throw new Error('Migration sollte fehlgeschlagen sein');
       } catch (error) {
         expect(error.message).toContain('Simulierter Fehler');
       }

@@ -12,7 +12,16 @@ const sqlite3 = require('sqlite3').verbose();
 // Pfade
 const BACKEND_DIR = path.join(__dirname, '..', '..');
 const ORIGINAL_DB = path.join(BACKEND_DIR, 'database', 'werkstatt.db');
-const TEST_DB = path.join(__dirname, '..', 'test-werkstatt.db');
+
+// WICHTIG: eigene Test-DB je Jest-Worker.
+// Jest laeuft standardmaessig parallel. Teilen sich alle Suites eine Datei,
+// loeschen sie sich gegenseitig die DB mitten im Lauf (createTestDb und
+// closeTestDb rufen beide unlinkSync) – die Folge sind dutzende scheinbar
+// unzusammenhaengende Schema- und "no such table"-Fehler, die einzeln
+// ausgefuehrt nicht auftreten. Innerhalb eines Workers laufen Suites seriell,
+// die Worker-ID reicht daher als Trennung.
+const WORKER_ID = process.env.JEST_WORKER_ID || '0';
+const TEST_DB = path.join(__dirname, '..', `test-werkstatt-${WORKER_ID}.db`);
 
 /**
  * Erstellt eine frische Test-DB mit dem kompletten Schema der Original-DB.

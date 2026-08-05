@@ -164,25 +164,29 @@ describe('Tablet-App - DB-Operationen', () => {
     test('Standard-Einstellungen erstellen und lesen', async () => {
       await dbRun(db, `INSERT OR IGNORE INTO tablet_einstellungen (id) VALUES (1)`);
 
+      // Spaltennamen und Defaults laut echtem Schema (tablet_einstellungen):
+      // display_einschaltzeit '07:30', display_ausschaltzeit '18:10',
+      // manueller_display_status 'auto'
       const settings = await dbGet(db, 'SELECT * FROM tablet_einstellungen WHERE id = 1');
-      expect(settings.display_ein_zeit).toBe('07:00');
-      expect(settings.display_aus_zeit).toBe('18:00');
-      expect(settings.manuell_status).toBe('auto');
+      expect(settings.display_einschaltzeit).toBe('07:30');
+      expect(settings.display_ausschaltzeit).toBe('18:10');
+      expect(settings.manueller_display_status).toBe('auto');
     });
 
     test('Einstellungen aktualisieren', async () => {
       await dbRun(db, `INSERT OR IGNORE INTO tablet_einstellungen (id) VALUES (1)`);
       
       await dbRun(db,
-        `UPDATE tablet_einstellungen 
-         SET display_ein_zeit = '06:00', display_aus_zeit = '20:00', manuell_status = 'an'
+        `UPDATE tablet_einstellungen
+         SET display_einschaltzeit = '06:00', display_ausschaltzeit = '20:00',
+             manueller_display_status = 'an'
          WHERE id = 1`
       );
 
       const settings = await dbGet(db, 'SELECT * FROM tablet_einstellungen WHERE id = 1');
-      expect(settings.display_ein_zeit).toBe('06:00');
-      expect(settings.display_aus_zeit).toBe('20:00');
-      expect(settings.manuell_status).toBe('an');
+      expect(settings.display_einschaltzeit).toBe('06:00');
+      expect(settings.display_ausschaltzeit).toBe('20:00');
+      expect(settings.manueller_display_status).toBe('an');
     });
   });
 

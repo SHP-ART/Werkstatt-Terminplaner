@@ -52,3 +52,6 @@ Task Board.md
 node_modules/**/*.exe
 # Added by code-review-graph
 .code-review-graph/
+
+# Test-Datenbanken (je Jest-Worker eine, siehe tests/helpers/testSetup.js)
+backend/tests/test-werkstatt-*.db
