@@ -412,5 +412,6 @@ Controller laden nur Daten und rufen sie auf. So entstanden `belegung.js` und
 
 - **Phase:** Wartung / laufende Weiterentwicklung
 - **Letzter Stand:** 2026-08-05 – Auslastungs-/Restzeit-Berechnung korrigiert und als reines Modul `utils/auslastung.js` herausgelöst (Commit `6c16e38`, auf GitHub gepusht). Vier Rechenfehler behoben: doppelte Lehrlings-Korrektur, stornierte Termine in der Kapazität, Nebenzeit-Mischung beim `nur_service`-Abzug, Doppelzählung von Lehrlingszeiten. `/verfuegbarkeit` und `/auslastung` nutzen jetzt dieselbe Kapazitätsbasis
-- **Nächster Schritt:** Deploy auf den Produktivserver nach dokumentierter Prozedur (DB-Backup → `git pull` → `systemctl restart` → `/api/auslastung/<heute>` gegen echte Daten prüfen). Kein Frontend-Build nötig, das Response-Format ist unverändert
-- **Blockiert durch:** Tailscale SSH verlangt eine interaktive Browser-Anmeldung, die im Agent-Kontext nicht durchführbar ist. Der Server läuft bis dahin auf dem alten Stand
+- **Deployed:** 2026-08-05 auf `ed25775`. DB-Backup `pre-update_20260805_213542.db` liegt in `/var/lib/werkstatt-terminplaner/backups/`. Dienst läuft, Log sauber. Gegen echte Produktivdaten verifiziert: `Kapazität − Belegt = Restzeit` geht an drei geprüften Tagen auf, alle Lehrlingswerte exakt über `roh × Aufgabenbewältigung × Nebenzeit` reproduzierbar, Detailzeilen und Gesamtsumme stimmen überein
+- **Nächster Schritt:** Dev-DB aus einem Server-Backup neu ziehen, danach das Fallback-Schema in `tests/helpers/testSetup.js` aktualisieren. Bis dahin ist die Testsuite kein Regressionsschutz – weitere Arbeit an der Auslastung (Pufferzeit, `arbeitszeiten_plan`) sollte darauf warten
+- **Blockiert durch:** nichts
