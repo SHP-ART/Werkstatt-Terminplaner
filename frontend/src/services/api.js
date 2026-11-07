@@ -499,11 +499,12 @@ class WarteschlangeService {
     return ApiService.get(`/warteschlange?datum=${encodeURIComponent(datum)}`);
   }
 
-  static async zuweisen(terminId, mitarbeiterId, position = null) {
+  static async zuweisen(terminId, mitarbeiterId, position = null, datum = null) {
     return ApiService.put('/warteschlange/zuweisen', {
       termin_id: terminId,
       mitarbeiter_id: mitarbeiterId,
-      ...(position === null ? {} : { position })
+      ...(position === null ? {} : { position }),
+      ...(datum === null ? {} : { datum })
     });
   }
 

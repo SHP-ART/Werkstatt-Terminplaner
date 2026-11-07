@@ -1,5 +1,10 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { berechneWarteschlangeLast } from '../../src/features/warteschlange/warteschlangeFeature.js';
+import '../../src/services/api.js';
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+});
 
 describe('berechneWarteschlangeLast', () => {
   it('zeigt eine leere Kapazität ohne Überlauf grün und leer an', () => {
@@ -44,6 +49,27 @@ describe('berechneWarteschlangeLast', () => {
       balkenProzent: 100,
       farbe: '#c62828',
       morgen: true
+    });
+  });
+});
+
+describe('WarteschlangeService.zuweisen', () => {
+  it('sendet das ausgewählte Board-Datum im Request-Body', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({})
+    });
+    vi.stubGlobal('CONFIG', { API_URL: 'http://test.local' });
+    vi.stubGlobal('fetch', fetchMock);
+
+    await window.WarteschlangeService.zuweisen(3, 7, 2, '2026-11-09');
+
+    const [, options] = fetchMock.mock.calls[0];
+    expect(JSON.parse(options.body)).toEqual({
+      termin_id: 3,
+      mitarbeiter_id: 7,
+      position: 2,
+      datum: '2026-11-09'
     });
   });
 });

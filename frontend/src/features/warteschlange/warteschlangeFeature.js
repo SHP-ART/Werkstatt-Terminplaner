@@ -213,7 +213,12 @@ export function installWarteschlangeFeature(AppClass) {
           return;
         }
         await this.mutiereWarteschlange(
-          () => WarteschlangeService.zuweisen(terminId, mitarbeiterId),
+          () => WarteschlangeService.zuweisen(
+            terminId,
+            mitarbeiterId,
+            null,
+            document.getElementById('warteschlangeDatum')?.value
+          ),
           'Zettel wurde an den Kollegen übergeben.'
         );
       }
@@ -268,7 +273,12 @@ export function installWarteschlangeFeature(AppClass) {
         ? (spalte.zettel || []).findIndex(termin => Number(termin.id) === zielTerminId) + 1
         : null;
       await this.mutiereWarteschlange(
-        () => WarteschlangeService.zuweisen(drag.terminId, zielMitarbeiterId, position),
+        () => WarteschlangeService.zuweisen(
+          drag.terminId,
+          zielMitarbeiterId,
+          position,
+          document.getElementById('warteschlangeDatum')?.value
+        ),
         'Zettel wurde zugewiesen.'
       );
     }
