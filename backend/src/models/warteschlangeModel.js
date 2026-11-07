@@ -45,6 +45,22 @@ class WarteschlangeModel {
     `, params);
   }
 
+  static async getNaechstePosition(datum, mitarbeiterId, excludeTerminId = null) {
+    const params = [datum, mitarbeiterId];
+    const exclude = excludeTerminId === null ? '' : 'AND id != ?';
+    if (excludeTerminId !== null) params.push(excludeTerminId);
+
+    const row = await getAsync(`
+      SELECT MAX(warteschlange_pos) AS max_position
+        FROM termine
+       WHERE datum = ?
+         AND mitarbeiter_id = ?
+         AND warteschlange_pos IS NOT NULL
+         ${exclude}
+    `, params);
+    return (row?.max_position || 0) + 1;
+  }
+
   static async getNeueTermine() {
     return await allAsync(`
       SELECT t.*,

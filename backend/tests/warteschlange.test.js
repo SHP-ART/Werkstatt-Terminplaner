@@ -277,3 +277,75 @@ describe('Warteschlange — nächster Arbeitstag', () => {
     expect(broadcastEvent).toHaveBeenCalledWith('termin.queue_updated', { mitarbeiter_id: 1 });
   });
 });
+
+describe('Warteschlange — Positionsintegrität', () => {
+  test('Anhängen nutzt bei einer inaktiven Lücke MAX(Position) + 1', async () => {
+    await addTermin({ id: 1, warteschlange_pos: 1 });
+    await addTermin({ id: 2, warteschlange_pos: 2, status: 'abgeschlossen' });
+    await addTermin({ id: 3, warteschlange_pos: 3 });
+    await addTermin({ id: 4 });
+
+    const response = await request(app)
+      .put('/api/warteschlange/zuweisen')
+      .send({ termin_id: 4, mitarbeiter_id: 1 })
+      .expect(200);
+
+    expect(response.body.warteschlange_pos).toBe(4);
+    const rows = await dbAll(db, `
+      SELECT warteschlange_pos FROM termine WHERE mitarbeiter_id = 1
+    `);
+    expect(new Set(rows.map(row => row.warteschlange_pos)).size).toBe(4);
+  });
+
+  test('Tageswechsel nutzt im Ziel ebenfalls MAX(Position) + 1', async () => {
+    await addTermin({ id: 1, warteschlange_pos: 1 });
+    await addTermin({ id: 2, datum: '2026-11-09', warteschlange_pos: 1 });
+    await addTermin({ id: 3, datum: '2026-11-09', warteschlange_pos: 2, status: 'storniert' });
+    await addTermin({ id: 4, datum: '2026-11-09', warteschlange_pos: 3 });
+
+    const response = await request(app)
+      .post('/api/warteschlange/1/naechster-tag')
+      .expect(200);
+
+    expect(response.body.warteschlange_pos).toBe(4);
+    const positions = await dbAll(db, `
+      SELECT warteschlange_pos FROM termine
+      WHERE datum = '2026-11-09' AND mitarbeiter_id = 1
+    `);
+    expect(new Set(positions.map(row => row.warteschlange_pos)).size).toBe(4);
+  });
+
+  test('lehnt eine partielle Reihenfolgeliste ohne Schreibzugriff ab', async () => {
+    await addTermin({ id: 1, warteschlange_pos: 1 });
+    await addTermin({ id: 2, warteschlange_pos: 2 });
+    await addTermin({ id: 3, warteschlange_pos: 3 });
+
+    const response = await request(app)
+      .put('/api/warteschlange/reihenfolge')
+      .send({ mitarbeiter_id: 1, termin_ids: [3, 1] })
+      .expect(400);
+
+    expect(response.body.error).toBe('termin_ids muss die vollständige aktive Warteschlange enthalten');
+    const rows = await dbAll(db, 'SELECT id, warteschlange_pos FROM termine ORDER BY id');
+    expect(rows.map(row => row.warteschlange_pos)).toEqual([1, 2, 3]);
+    expect(broadcastEvent).not.toHaveBeenCalled();
+  });
+
+  test.each([
+    { warteschlange_pos: null, status: 'geplant' },
+    { warteschlange_pos: 3, status: 'abgeschlossen' }
+  ])('lehnt Termine außerhalb der aktiven Zielschlange ab: %o', async termin => {
+    await addTermin({ id: 1, warteschlange_pos: 1 });
+    await addTermin({ id: 2, warteschlange_pos: 2 });
+    await addTermin({ id: 3, ...termin });
+
+    await request(app)
+      .put('/api/warteschlange/reihenfolge')
+      .send({ mitarbeiter_id: 1, termin_ids: [2, 1, 3] })
+      .expect(400);
+
+    const rows = await dbAll(db, 'SELECT id, warteschlange_pos FROM termine ORDER BY id');
+    expect(rows.map(row => row.warteschlange_pos)).toEqual([1, 2, termin.warteschlange_pos]);
+    expect(broadcastEvent).not.toHaveBeenCalled();
+  });
+});

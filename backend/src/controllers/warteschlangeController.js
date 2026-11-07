@@ -116,11 +116,16 @@ class WarteschlangeController {
         mitarbeiterId,
         terminId
       );
-      const position = req.body?.position === undefined || req.body?.position === null
-        ? zielListe.length + 1
-        : parseId(req.body.position, 'position');
+      const hatPosition = req.body?.position !== undefined && req.body?.position !== null;
+      const position = hatPosition
+        ? parseId(req.body.position, 'position')
+        : await WarteschlangeModel.getNaechstePosition(
+          aktuellerTermin.datum,
+          mitarbeiterId,
+          terminId
+        );
 
-      if (position > zielListe.length + 1) {
+      if (hatPosition && position > zielListe.length + 1) {
         throw new ValidationError('position liegt ausserhalb der Warteschlange');
       }
 
@@ -135,8 +140,10 @@ class WarteschlangeController {
         await speichereReihenfolge(alteListe);
       }
 
-      zielListe.splice(position - 1, 0, { id: terminId });
-      await speichereReihenfolge(zielListe);
+      if (hatPosition) {
+        zielListe.splice(position - 1, 0, { id: terminId });
+        await speichereReihenfolge(zielListe);
+      }
       return await WarteschlangeModel.zuweisen(terminId, mitarbeiterId, position);
     });
 
@@ -158,12 +165,21 @@ class WarteschlangeController {
 
     await withTransaction(async () => {
       await getMitarbeiterOder404(mitarbeiterId);
+      let datum;
       for (const id of ids) {
         const termin = await getTerminOder404(id);
         if (termin.mitarbeiter_id !== mitarbeiterId) {
           throw new NotFoundError('Termin in der Warteschlange des Mitarbeiters');
         }
+        if (datum === undefined) datum = termin.datum;
       }
+
+      const aktiveSchlange = await WarteschlangeModel.getWarteschlange(datum, mitarbeiterId);
+      const aktiveIds = new Set(aktiveSchlange.map(termin => termin.id));
+      if (aktiveIds.size !== ids.length || ids.some(id => !aktiveIds.has(id))) {
+        throw new ValidationError('termin_ids muss die vollständige aktive Warteschlange enthalten');
+      }
+
       for (let index = 0; index < ids.length; index++) {
         await WarteschlangeModel.setPositionFuerMitarbeiter(ids[index], mitarbeiterId, index + 1);
       }
@@ -184,13 +200,13 @@ class WarteschlangeController {
       }
 
       const zielDatum = TermineModel.naechsterArbeitstag(aktuellerTermin.datum);
-      const [alteListe, zielListe] = await Promise.all([
+      const [alteListe, naechstePosition] = await Promise.all([
         WarteschlangeModel.getWarteschlange(
           aktuellerTermin.datum,
           aktuellerTermin.mitarbeiter_id,
           terminId
         ),
-        WarteschlangeModel.getWarteschlange(
+        WarteschlangeModel.getNaechstePosition(
           zielDatum,
           aktuellerTermin.mitarbeiter_id,
           terminId
@@ -201,7 +217,7 @@ class WarteschlangeController {
       return await WarteschlangeModel.aufNaechstenTagVerschieben(
         terminId,
         zielDatum,
-        zielListe.length + 1
+        naechstePosition
       );
     });
 
