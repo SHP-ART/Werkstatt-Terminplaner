@@ -349,3 +349,40 @@ describe('Warteschlange — Positionsintegrität', () => {
     expect(broadcastEvent).not.toHaveBeenCalled();
   });
 });
+
+describe('Warteschlange — Ziel-datum beim Zuweisen', () => {
+  test('übernimmt das gewählte Datum und zeigt schwebende Zettel in dieser Queue', async () => {
+    const zielDatum = '2026-11-09';
+    await addTermin({ id: 1, datum: DATUM, ist_schwebend: 1 });
+
+    const response = await request(app)
+      .put('/api/warteschlange/zuweisen')
+      .send({ termin_id: 1, mitarbeiter_id: 1, datum: zielDatum })
+      .expect(200);
+
+    expect(response.body.datum).toBe(zielDatum);
+    const termin = await dbGet(db, 'SELECT datum, ist_schwebend FROM termine WHERE id = 1');
+    expect(termin).toMatchObject({ datum: zielDatum, ist_schwebend: 0 });
+
+    const board = await request(app)
+      .get('/api/warteschlange')
+      .query({ datum: zielDatum })
+      .expect(200);
+    const spalte = board.body.mitarbeiter.find(item => item.mitarbeiter_id === 1);
+    expect(spalte.zettel.map(item => item.id)).toEqual([1]);
+  });
+
+  test('lehnt ein Datum außerhalb des Formats YYYY-MM-DD unverändert ab', async () => {
+    await addTermin({ id: 1, datum: DATUM, ist_schwebend: 1 });
+
+    const response = await request(app)
+      .put('/api/warteschlange/zuweisen')
+      .send({ termin_id: 1, mitarbeiter_id: 1, datum: '09.11.2026' })
+      .expect(400);
+
+    expect(response.body.error).toBe('datum muss im Format YYYY-MM-DD angegeben werden');
+    const termin = await dbGet(db, 'SELECT datum, ist_schwebend FROM termine WHERE id = 1');
+    expect(termin).toMatchObject({ datum: DATUM, ist_schwebend: 1 });
+    expect(broadcastEvent).not.toHaveBeenCalled();
+  });
+});

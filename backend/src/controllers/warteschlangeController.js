@@ -102,17 +102,22 @@ class WarteschlangeController {
   static async zuweisen(req, res) {
     const terminId = parseId(req.body?.termin_id, 'termin_id');
     const mitarbeiterId = parseId(req.body?.mitarbeiter_id, 'mitarbeiter_id');
+    const gewaehltesDatum = req.body?.datum;
+    if (gewaehltesDatum !== undefined && !/^\d{4}-\d{2}-\d{2}$/.test(gewaehltesDatum)) {
+      throw new ValidationError('datum muss im Format YYYY-MM-DD angegeben werden');
+    }
 
     const termin = await withTransaction(async () => {
       const aktuellerTermin = await getTerminOder404(terminId);
       await getMitarbeiterOder404(mitarbeiterId);
+      const zielDatum = gewaehltesDatum ?? aktuellerTermin.datum;
 
-      if (!aktuellerTermin.datum) {
+      if (!zielDatum) {
         throw new ValidationError('Termin hat kein Datum');
       }
 
       const zielListe = await WarteschlangeModel.getWarteschlange(
-        aktuellerTermin.datum,
+        zielDatum,
         mitarbeiterId,
         terminId
       );
@@ -120,7 +125,7 @@ class WarteschlangeController {
       const position = hatPosition
         ? parseId(req.body.position, 'position')
         : await WarteschlangeModel.getNaechstePosition(
-          aktuellerTermin.datum,
+          zielDatum,
           mitarbeiterId,
           terminId
         );
@@ -130,7 +135,7 @@ class WarteschlangeController {
       }
 
       const alteListeGeaendert = aktuellerTermin.warteschlange_pos !== null
-        && aktuellerTermin.mitarbeiter_id !== mitarbeiterId;
+        && (aktuellerTermin.mitarbeiter_id !== mitarbeiterId || aktuellerTermin.datum !== zielDatum);
       if (alteListeGeaendert) {
         const alteListe = await WarteschlangeModel.getWarteschlange(
           aktuellerTermin.datum,
@@ -144,7 +149,7 @@ class WarteschlangeController {
         zielListe.splice(position - 1, 0, { id: terminId });
         await speichereReihenfolge(zielListe);
       }
-      return await WarteschlangeModel.zuweisen(terminId, mitarbeiterId, position);
+      return await WarteschlangeModel.zuweisen(terminId, mitarbeiterId, position, zielDatum);
     });
 
     broadcastEvent('termin.queue_updated', { mitarbeiter_id: mitarbeiterId });

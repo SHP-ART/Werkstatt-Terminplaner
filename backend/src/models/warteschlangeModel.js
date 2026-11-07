@@ -98,14 +98,15 @@ class WarteschlangeModel {
     `, [position, id, mitarbeiterId]);
   }
 
-  static async zuweisen(id, mitarbeiterId, position) {
+  static async zuweisen(id, mitarbeiterId, position, datum) {
     await runAsync(`
       UPDATE termine
          SET mitarbeiter_id = ?,
              warteschlange_pos = ?,
+             datum = ?,
              ist_schwebend = 0
        WHERE id = ?
-    `, [mitarbeiterId, position, id]);
+    `, [mitarbeiterId, position, datum, id]);
     return await this.getTermin(id);
   }
 
