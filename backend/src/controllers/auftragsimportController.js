@@ -3,6 +3,11 @@ const AuftragsImportService = require('../services/auftragsImportService');
 const { broadcastEvent } = require('../utils/websocket');
 const { invalidateTermineCache } = require('./termineController');
 
+// GET-Routen sind ohne API-Key erreichbar (Frontend sendet keinen) - interne Felder nicht ausliefern
+function toPublic({ text_extract, dateipfad, ...rest }) {
+  return rest;
+}
+
 class AuftragsimportController {
   static async getAll(req, res) {
     const items = await AuftragsimportModel.getAll({
@@ -12,7 +17,7 @@ class AuftragsimportController {
     });
 
     res.json({
-      imports: items,
+      imports: items.map(toPublic),
       importDir: AuftragsImportService.IMPORT_DIR,
       locosoftPruefenDir: AuftragsImportService.LOCOSOFT_PRUEFEN_DIR
     });
@@ -21,7 +26,7 @@ class AuftragsimportController {
   static async getById(req, res) {
     const item = await AuftragsimportModel.getById(req.params.id);
     if (!item) return res.status(404).json({ error: 'Auftragsimport nicht gefunden' });
-    res.json(item);
+    res.json(toPublic(item));
   }
 
   static async scan(req, res) {
