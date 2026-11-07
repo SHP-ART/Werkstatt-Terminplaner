@@ -126,6 +126,7 @@ export function installWarteschlangeFeature(AppClass) {
         <article class="warteschlange-zettel${istMorgen ? ' warteschlange-zettel-morgen' : ''}" draggable="true" data-termin-id="${terminId}" data-mitarbeiter-id="${mitarbeiterId ?? ''}">
           <div class="warteschlange-zettel-kopf">
             <strong>${escapeHtml(termin.kunde_name || termin.termin_nr || 'Ohne Kundenname')}</strong>
+            ${termin.status === 'in_arbeit' ? '<span class="warteschlange-laeuft">läuft</span>' : ''}
             ${istMorgen ? '<span class="warteschlange-morgen">morgen</span>' : ''}
           </div>
           <div>${escapeHtml(termin.kennzeichen || 'Ohne Kennzeichen')}</div>

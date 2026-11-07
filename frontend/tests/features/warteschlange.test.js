@@ -171,3 +171,16 @@ describe('Warteschlange-Mutationen', () => {
     );
   });
 });
+
+describe('Warteschlange-Terminstatus', () => {
+  it('markiert einen Zettel mit Status in_arbeit sichtbar als läuft', () => {
+    const app = createWarteschlangeApp();
+    app.warteschlangeData = warteschlangeDaten(1);
+    app.warteschlangeData.mitarbeiter[0].zettel[0].status = 'in_arbeit';
+
+    app.renderWarteschlange();
+
+    const karte = document.querySelector('[data-termin-id="1"]');
+    expect(karte.textContent).toContain('läuft');
+  });
+});
