@@ -79,18 +79,18 @@ Zusatzpaket.
 **Display/Anstempeln:** der Mechaniker sieht oben seinen nächsten Zettel und tippt
 "Anstempeln". Das nutzt den bestehenden Stempel-Weg, keine neue Stempel-Logik.
 
-## Offene Entscheidungen (nur Sven kann sie beantworten)
+## Entscheidungen (Sven, 2026-11-07)
 
-1. **Welches Display ist gemeint?** Annahme: die bestehende Tablet-App
-   (`electron-intern-tablet`, lädt die Server-Oberfläche). Falls es ein Display am
-   Arbeitsplatz je Mechaniker ist, braucht es eine Mechaniker-Auswahl oder feste Zuordnung.
-2. **Wie wird angestempelt?** Annahme: Tippen auf den Zettel stempelt die erste noch nicht
-   gestempelte Arbeit des Auftrags an. Alternative: Mechaniker wählt die Arbeit selbst.
-3. **Woher kommt die Zeitvorgabe bei einem neuen Zettel?** Annahme: `geschaetzte_zeit`
-   aus dem Import (Standard 60 Minuten, siehe `auftragsImportService.js`) oder die lokale
-   KI-Schätzung. Nicht geprüft, wie verlässlich das ist.
-4. **Soll der Import-Zettel beim Ziehen sofort zum Termin werden?** Annahme: ja, über den
-   bestehenden Schnelltermin.
+1. **Display:** die bestehende Tablet-App (`electron-intern-tablet`).
+2. **Anstempeln:** in der Tablet-App, im bestehenden Stempel-Ablauf. Auslegung von Claude:
+   keine neue Stempel-Logik, ob der Zettel die erste offene Arbeit anstempelt oder der
+   Mechaniker die Arbeit wählt, richtet sich nach dem vorhandenen Ablauf (in Phase 3 prüfen).
+3. **Zeitvorgabe:** aus dem Auftrag (Import), nicht aus der KI-Schätzung.
+4. **Import-Zettel wird beim Ziehen NICHT sofort zum Termin, sondern per Knopf am Zettel**
+   ("Termin anlegen", ruft den bestehenden Schnelltermin auf). Folgerung von Claude: Ein
+   Import-Zettel ohne Termin steht in der Spalte NEU und ist nicht ziehbar. Erst der Knopf
+   macht daraus einen schwebenden Termin (`ist_schwebend`), der sich auf einen Mechaniker
+   ziehen lässt. So braucht `warteschlange_pos` keinen zweiten Speicherort neben `termine`.
 
 ## Dem Bauenden überlassen
 

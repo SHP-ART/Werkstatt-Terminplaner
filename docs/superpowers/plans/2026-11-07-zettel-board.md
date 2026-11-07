@@ -10,7 +10,8 @@ zeigt den nächsten Zettel, Anstempeln startet die Zeit, ein zweiter Browser akt
 
 ## Phase 0: Vorbereitung (klein)
 
-1. Offene Entscheidungen 1 bis 4 aus dem Design mit Sven klären.
+1. Entscheidungen 1 bis 4 sind getroffen (siehe Design). Import-Zettel werden per Knopf
+   "Termin anlegen" (bestehender Schnelltermin) zum schwebenden Termin und erst dann ziehbar.
 2. Höchste Migrationsnummer prüfen (`ls backend/src/migrations`, laut `CLAUDE.md` zuletzt 034)
    und die nächste freie verwenden.
 3. Baseline: `cd backend && npm test` (Stand 2026-11-07: 170 grün, 9 übersprungen).
@@ -50,7 +51,8 @@ Einbindung wie die anderen Features.
 2. Tab "Zettel-Board" anlegen: Button in der Navigation, `<div id>` und `<template>`.
    Danach die Tab-Prüfung aus `CLAUDE.md` ausführen (`grep -c "data-tab="`).
 3. Spalte NEU (schwebende Termine plus offene Aufträge aus dem Import), je Mechaniker eine Spalte
-   mit Last-Balken.
+   mit Last-Balken. Import-Zettel tragen den Knopf "Termin anlegen" (`POST /api/auftragsimport/:id/schnelltermin`)
+   und sind erst danach ziehbar.
 4. Drag & Drop (HTML5): auf Mechaniker ziehen ruft `PUT /warteschlange/zuweisen`; Ziehen
    innerhalb der Spalte ruft `reihenfolge`.
 5. "Zu Kollegen"-Knopf am "morgen"-Zettel: Auswahl der Mechaniker mit freier Kapazität.
