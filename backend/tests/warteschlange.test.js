@@ -87,6 +87,9 @@ beforeEach(async () => {
   await dbRun(db, 'DELETE FROM abwesenheiten');
   await dbRun(db, 'DELETE FROM termine');
   await dbRun(db, 'DELETE FROM mitarbeiter');
+  await dbRun(db, `
+    INSERT OR REPLACE INTO werkstatt_einstellungen (id, nebenzeit_prozent) VALUES (1, 0)
+  `);
   await addMitarbeiter(1);
   await addMitarbeiter(2);
   broadcastEvent.mockClear();
@@ -203,6 +206,28 @@ describe('Warteschlange — Tagesansicht', () => {
       [2, false],
       [3, true],
       [4, true]
+    ]);
+  });
+
+  test('verwendet den produktiven Nebenzeitfaktor für Last und morgen-Markierung', async () => {
+    await dbRun(db, `
+      INSERT OR REPLACE INTO werkstatt_einstellungen (id, nebenzeit_prozent) VALUES (1, 10)
+    `);
+    await addTermin({ id: 1, warteschlange_pos: 1, geschaetzte_zeit: 300 });
+    await addTermin({ id: 2, warteschlange_pos: 2, geschaetzte_zeit: 150 });
+
+    const response = await request(app)
+      .get('/api/warteschlange')
+      .query({ datum: DATUM })
+      .expect(200);
+
+    const spalte = response.body.mitarbeiter.find(item => item.mitarbeiter_id === 1);
+    expect(spalte.kapazitaet_minuten).toBe(480);
+    expect(spalte.last_minuten).toBe(495);
+    expect(Math.round(spalte.last_minuten / spalte.kapazitaet_minuten * 100)).toBe(103);
+    expect(spalte.zettel.map(item => [item.id, item.morgen])).toEqual([
+      [1, false],
+      [2, true]
     ]);
   });
 
@@ -467,6 +492,84 @@ describe('Warteschlange — Ziel-datum beim Zuweisen', () => {
       .expect(400);
 
     expect(response.body.error).toBe('datum muss im Format YYYY-MM-DD angegeben werden');
+    const termin = await dbGet(db, 'SELECT datum, ist_schwebend FROM termine WHERE id = 1');
+    expect(termin).toMatchObject({ datum: DATUM, ist_schwebend: 1 });
+    expect(broadcastEvent).not.toHaveBeenCalled();
+  });
+});
+
+describe('Warteschlange — gleichzeitige Mutationen', () => {
+  test('serialisiert zwei parallele HTTP-Zuweisungen mit eindeutiger Endreihenfolge', async () => {
+    await addTermin({ id: 1 });
+    await addTermin({ id: 2 });
+    const model = require('../src/models/warteschlangeModel');
+    const originalGetTermin = model.getTermin.bind(model);
+    let releaseFirstRead;
+    let markFirstRead;
+    const firstReadStarted = new Promise(resolve => { markFirstRead = resolve; });
+    const firstReadPause = new Promise(resolve => { releaseFirstRead = resolve; });
+    let pauseFirstRead = true;
+    const spy = jest.spyOn(model, 'getTermin').mockImplementation(async id => {
+      if (id === 1 && pauseFirstRead) {
+        pauseFirstRead = false;
+        markFirstRead();
+        await firstReadPause;
+      }
+      return originalGetTermin(id);
+    });
+
+    let responses;
+    try {
+      const first = request(app)
+        .put('/api/warteschlange/zuweisen')
+        .send({ termin_id: 1, mitarbeiter_id: 1 })
+        .then(response => response);
+      await firstReadStarted;
+      const second = request(app)
+        .put('/api/warteschlange/zuweisen')
+        .send({ termin_id: 2, mitarbeiter_id: 1 })
+        .then(response => response);
+      await new Promise(resolve => setImmediate(resolve));
+      releaseFirstRead();
+      responses = await Promise.all([first, second]);
+    } finally {
+      releaseFirstRead();
+      spy.mockRestore();
+    }
+
+    expect(responses.map(response => response.status)).toEqual([200, 200]);
+    const rows = await dbAll(db, `
+      SELECT id, warteschlange_pos FROM termine
+      WHERE mitarbeiter_id = 1 AND warteschlange_pos IS NOT NULL
+      ORDER BY warteschlange_pos
+    `);
+    expect(rows.map(row => [row.id, row.warteschlange_pos])).toEqual([
+      [1, 1],
+      [2, 2]
+    ]);
+    expect(broadcastEvent).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('Warteschlange — echte Kalenderdaten', () => {
+  test('GET lehnt einen nicht existierenden Kalendertag mit HTTP 400 ab', async () => {
+    const response = await request(app)
+      .get('/api/warteschlange')
+      .query({ datum: '2026-02-31' })
+      .expect(400);
+
+    expect(response.body.error).toBe('datum muss ein gültiges Datum im Format YYYY-MM-DD sein');
+  });
+
+  test('Zuweisen lehnt einen nicht existierenden Kalendertag ohne Schreibzugriff und Event ab', async () => {
+    await addTermin({ id: 1, datum: DATUM, ist_schwebend: 1 });
+
+    const response = await request(app)
+      .put('/api/warteschlange/zuweisen')
+      .send({ termin_id: 1, mitarbeiter_id: 1, datum: '2026-02-31' })
+      .expect(400);
+
+    expect(response.body.error).toBe('datum muss ein gültiges Datum im Format YYYY-MM-DD sein');
     const termin = await dbGet(db, 'SELECT datum, ist_schwebend FROM termine WHERE id = 1');
     expect(termin).toMatchObject({ datum: DATUM, ist_schwebend: 1 });
     expect(broadcastEvent).not.toHaveBeenCalled();

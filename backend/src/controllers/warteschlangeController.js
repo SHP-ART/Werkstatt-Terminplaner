@@ -2,10 +2,20 @@ const WarteschlangeModel = require('../models/warteschlangeModel');
 const AuftragsimportModel = require('../models/auftragsimportModel');
 const AbwesenheitenModel = require('../models/abwesenheitenModel');
 const TermineModel = require('../models/termineModel');
-const { withTransaction } = require('../utils/transaction');
+const EinstellungenModel = require('../models/einstellungenModel');
+const { withTransaction: withDatabaseTransaction } = require('../utils/transaction');
 const { berechneKapazitaet } = require('../utils/auslastung');
 const { broadcastEvent } = require('../utils/websocket');
 const { NotFoundError, ValidationError } = require('../utils/errors');
+
+let queueMutationTail = Promise.resolve();
+
+function withQueueTransaction(callback) {
+  const run = () => withDatabaseTransaction(callback);
+  const result = queueMutationTail.then(run, run);
+  queueMutationTail = result.catch(() => {});
+  return result;
+}
 
 function parseId(value, field) {
   const id = Number(value);
@@ -13,6 +23,16 @@ function parseId(value, field) {
     throw new ValidationError(`${field} muss eine positive ganze Zahl sein`);
   }
   return id;
+}
+
+function pruefeKalenderdatum(value) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    throw new ValidationError('datum muss im Format YYYY-MM-DD angegeben werden');
+  }
+  const parsed = new Date(`${value}T00:00:00Z`);
+  if (Number.isNaN(parsed.getTime()) || parsed.toISOString().slice(0, 10) !== value) {
+    throw new ValidationError('datum muss ein gültiges Datum im Format YYYY-MM-DD sein');
+  }
 }
 
 async function getTerminOder404(id) {
@@ -33,18 +53,20 @@ async function speichereReihenfolge(termine) {
   }
 }
 
-function markiereUeberlauf(zettel, kapazitaet) {
-  let last = 0;
+function markiereUeberlauf(zettel, kapazitaet, nebenzeitProzent = 0) {
+  let lastRoh = 0;
   let ueberlauf = false;
+  const nebenzeitFaktor = 1 + (nebenzeitProzent / 100);
 
   const markierteZettel = zettel.map(termin => {
     const minuten = Number(termin.geschaetzte_zeit) || 0;
-    if (!ueberlauf && last + minuten > kapazitaet) ueberlauf = true;
-    last += minuten;
+    const naechsteLast = Math.round((lastRoh + minuten) * nebenzeitFaktor);
+    if (!ueberlauf && naechsteLast > kapazitaet) ueberlauf = true;
+    lastRoh += minuten;
     return { ...termin, morgen: ueberlauf };
   });
 
-  return { zettel: markierteZettel, last_minuten: last };
+  return { zettel: markierteZettel, last_minuten: Math.round(lastRoh * nebenzeitFaktor) };
 }
 
 function toPublicImport({ text_extract, dateipfad, ...item }) {
@@ -55,14 +77,17 @@ class WarteschlangeController {
   static async get(req, res) {
     const datum = req.query.datum;
     if (!datum) throw new ValidationError('Datum ist erforderlich');
+    pruefeKalenderdatum(datum);
 
-    const [mitarbeiter, zettel, neueTermine, offeneImporte, abwesenheiten] = await Promise.all([
+    const [mitarbeiter, zettel, neueTermine, offeneImporte, abwesenheiten, einstellungen] = await Promise.all([
       WarteschlangeModel.getAktiveMitarbeiter(),
       WarteschlangeModel.getWarteschlange(datum),
       WarteschlangeModel.getNeueTermine(),
       AuftragsimportModel.getAll({ offen: true }),
-      AbwesenheitenModel.getForDate(datum)
+      AbwesenheitenModel.getForDate(datum),
+      EinstellungenModel.getWerkstatt()
     ]);
+    const nebenzeitProzent = einstellungen?.nebenzeit_prozent || 0;
 
     const abwesendeMitarbeiter = new Set(
       abwesenheiten
@@ -78,7 +103,7 @@ class WarteschlangeController {
         abwesendeLehrlinge: new Set()
       });
       const eigeneZettel = zettel.filter(termin => termin.mitarbeiter_id === person.id);
-      const last = markiereUeberlauf(eigeneZettel, kapazitaet);
+      const last = markiereUeberlauf(eigeneZettel, kapazitaet, nebenzeitProzent);
 
       return {
         mitarbeiter_id: person.id,
@@ -113,11 +138,9 @@ class WarteschlangeController {
     const terminId = parseId(req.body?.termin_id, 'termin_id');
     const mitarbeiterId = parseId(req.body?.mitarbeiter_id, 'mitarbeiter_id');
     const gewaehltesDatum = req.body?.datum;
-    if (gewaehltesDatum !== undefined && !/^\d{4}-\d{2}-\d{2}$/.test(gewaehltesDatum)) {
-      throw new ValidationError('datum muss im Format YYYY-MM-DD angegeben werden');
-    }
+    if (gewaehltesDatum !== undefined) pruefeKalenderdatum(gewaehltesDatum);
 
-    const termin = await withTransaction(async () => {
+    const termin = await withQueueTransaction(async () => {
       const aktuellerTermin = await getTerminOder404(terminId);
       await getMitarbeiterOder404(mitarbeiterId);
       const zielDatum = gewaehltesDatum ?? aktuellerTermin.datum;
@@ -178,7 +201,7 @@ class WarteschlangeController {
       throw new ValidationError('termin_ids darf keine Duplikate enthalten');
     }
 
-    await withTransaction(async () => {
+    await withQueueTransaction(async () => {
       await getMitarbeiterOder404(mitarbeiterId);
       let datum;
       for (const id of ids) {
@@ -207,7 +230,7 @@ class WarteschlangeController {
   static async naechsterTag(req, res) {
     const terminId = parseId(req.params.terminId, 'terminId');
 
-    const termin = await withTransaction(async () => {
+    const termin = await withQueueTransaction(async () => {
       const aktuellerTermin = await getTerminOder404(terminId);
       if (!aktuellerTermin.datum) throw new ValidationError('Termin hat kein Datum');
       if (!aktuellerTermin.mitarbeiter_id) {

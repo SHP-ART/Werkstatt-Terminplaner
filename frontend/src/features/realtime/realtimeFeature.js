@@ -186,7 +186,13 @@ export function installRealtimeFeature(AppClass) {
         }
       }
 
-      if (activeTab === 'warteschlange' && eventName === 'termin.queue_updated') {
+      if (activeTab === 'warteschlange' && [
+        'termin.created',
+        'termin.updated',
+        'termin.deleted',
+        'termin.restored',
+        'termin.queue_updated'
+      ].includes(eventName)) {
         this.loadWarteschlange();
       }
 

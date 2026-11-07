@@ -2082,7 +2082,8 @@
     }
 
     // ========== BUTTON HANDLER ==========
-    async function handleBestaetigen(personId, personTyp, terminId, kundeName) {
+    async function handleBestaetigen(personId, personTyp, terminId, kundeName, optionen = {}) {
+      let statusGeschrieben = false;
       try {
         const heute = formatDateLocal(new Date());
         
@@ -2092,6 +2093,7 @@
         
         // 1. Status auf in_arbeit setzen + tatsächliche Startzeit speichern
         await ApiService.put(`/termine/${terminId}`, { status: 'in_arbeit', startzeit: aktuelleZeit });
+        statusGeschrieben = true;
         
         // 2. Termine neu berechnen
         await ApiService.post('/termine/berechne-zeiten-neu', {
@@ -2109,6 +2111,7 @@
       } catch (error) {
         console.error('Fehler beim Bestätigen:', error);
         showToast(`Fehler: ${error.message}`, 'error');
+        if (optionen.statusFehlerWeitergeben && !statusGeschrieben) throw error;
       }
     }
 
@@ -2126,11 +2129,15 @@
         showToast('Der Auftrag enthält keine anstempelbare Arbeit', 'error');
         return;
       }
+      const vorherigerStempelStart = ersteOffeneArbeit?.stempel_start ?? null;
+      const vorherigerStempelEnde = ersteOffeneArbeit?.stempel_ende ?? null;
 
       if (button) button.disabled = true;
+      let stempelGeschrieben = false;
       try {
         const jetzt = new Date();
-        const stempelStart = `${String(jetzt.getHours()).padStart(2, '0')}:${String(jetzt.getMinutes()).padStart(2, '0')}`;
+        const aktuelleZeit = `${String(jetzt.getHours()).padStart(2, '0')}:${String(jetzt.getMinutes()).padStart(2, '0')}`;
+        const stempelStart = zettel._anstempelStart || aktuelleZeit;
         await ApiService.put('/stempelzeiten/stempel', {
           termin_id: terminId,
           arbeit_name: arbeitName,
@@ -2138,8 +2145,27 @@
           person_id: personId,
           person_typ: 'mitarbeiter'
         });
-        await handleBestaetigen(personId, 'mitarbeiter', terminId, zettel.kunde_name || '');
+        stempelGeschrieben = true;
+        zettel._anstempelStart = stempelStart;
+        await handleBestaetigen(personId, 'mitarbeiter', terminId, zettel.kunde_name || '', {
+          statusFehlerWeitergeben: true
+        });
+        delete zettel._anstempelStart;
       } catch (error) {
+        if (stempelGeschrieben) {
+          try {
+            await ApiService.put('/stempelzeiten/stempel', {
+              termin_id: terminId,
+              arbeit_name: arbeitName,
+              stempel_start: vorherigerStempelStart,
+              stempel_ende: vorherigerStempelEnde,
+              person_id: personId,
+              person_typ: 'mitarbeiter'
+            });
+          } catch (rollbackError) {
+            console.error('Fehler beim Wiederherstellen des Stempels:', rollbackError);
+          }
+        }
         console.error('Fehler beim Anstempeln:', error);
         showToast(`Fehler beim Anstempeln: ${error.message}`, 'error');
       } finally {
@@ -2362,9 +2388,8 @@
         // Alle offenen/geplanten Termine als "nächsten" zählen
         return true;
       });
-      if (!isLehrling && naechsterQueueEintrag && !aktuellerAuftrag) {
-        const queueZettel = naechsterQueueEintrag.zettel;
-        naechsterAuftrag = queueZettel?.status === 'geplant' ? queueZettel : null;
+      if (!isLehrling && naechsterQueueEintrag?.zettel?.status === 'geplant' && !aktuellerAuftrag) {
+        naechsterAuftrag = naechsterQueueEintrag.zettel;
       }
 
       console.log(`[DEBUG] ${personName}: aktuellerAuftrag=`, aktuellerAuftrag, 'naechsterAuftrag=', naechsterAuftrag);
@@ -2660,7 +2685,7 @@
       const alleArbeitenAbgeschlossen = terminArbeiten.length > 0 && terminArbeiten.every(a => a.abgeschlossen);
       const kannBeenden = terminMitButtons && !manuellePauseAktiv && !inBerufsschule && !istAbwesend && 
                          terminMitButtons.status === 'in_arbeit' && !hatMehrereArbeiten;
-      const queueStart = naechsterQueueEintrag && !aktuellerAuftrag;
+      const queueStart = naechsterQueueEintrag?.zettel === naechsterAuftrag && !aktuellerAuftrag;
       const startAktion = queueStart
         ? `handleNaechstenAuftragAnstempeln(${personId}, ${terminMitButtons?.id}, this)`
         : `handleBestaetigen(${personId}, '${typ}', ${terminMitButtons?.id}, '${escapeHtml(terminMitButtons?.kunde_name)}')`;
