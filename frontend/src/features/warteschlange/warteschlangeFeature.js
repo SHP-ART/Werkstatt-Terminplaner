@@ -56,9 +56,7 @@ export function installWarteschlangeFeature(AppClass) {
       const datum = datumInput.value;
       this.setupWarteschlangeEvents();
       this.setWarteschlangeStatus(`Zettel für ${datum} werden geladen …`);
-      if (!this.warteschlangeData) {
-        board.innerHTML = '<div class="loading">Zettel-Board wird geladen …</div>';
-      }
+      board.innerHTML = '<div class="loading">Zettel-Board wird geladen …</div>';
 
       const requestId = (this.warteschlangeRequestId || 0) + 1;
       this.warteschlangeRequestId = requestId;
@@ -71,9 +69,7 @@ export function installWarteschlangeFeature(AppClass) {
       } catch (error) {
         if (requestId !== this.warteschlangeRequestId) return;
         this.setWarteschlangeStatus(`Zettel-Board konnte nicht geladen werden: ${error.message}`, true);
-        if (!this.warteschlangeData) {
-          board.innerHTML = '<div class="error">Die Warteschlange ist derzeit nicht verfügbar.</div>';
-        }
+        board.innerHTML = '<div class="error">Die Warteschlange ist derzeit nicht verfügbar.</div>';
       }
     },
 
@@ -171,11 +167,19 @@ export function installWarteschlangeFeature(AppClass) {
       this.setWarteschlangeStatus('Änderung wird gespeichert …');
       try {
         await mutation();
-        this.showToast(erfolgsmeldung, 'success');
-        await this.loadWarteschlange();
       } catch (error) {
         this.setWarteschlangeStatus(`Änderung fehlgeschlagen: ${error.message}`, true);
         this.showToast('Die Warteschlange wurde nicht geändert.', 'error');
+        this.warteschlangeMutation = false;
+        return;
+      }
+
+      this.showToast(erfolgsmeldung, 'success');
+      try {
+        await this.loadWarteschlange();
+      } catch (error) {
+        this.setWarteschlangeStatus(`Änderung gespeichert, aber das Board konnte nicht aktualisiert werden: ${error.message}`, true);
+        this.showToast('Änderung gespeichert. Bitte das Board aktualisieren.', 'error');
       } finally {
         this.warteschlangeMutation = false;
       }

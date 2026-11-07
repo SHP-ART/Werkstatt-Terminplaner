@@ -1,9 +1,13 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { berechneWarteschlangeLast } from '../../src/features/warteschlange/warteschlangeFeature.js';
+import {
+  berechneWarteschlangeLast,
+  installWarteschlangeFeature
+} from '../../src/features/warteschlange/warteschlangeFeature.js';
 import '../../src/services/api.js';
 
 afterEach(() => {
   vi.unstubAllGlobals();
+  document.body.innerHTML = '';
 });
 
 describe('berechneWarteschlangeLast', () => {
@@ -71,5 +75,99 @@ describe('WarteschlangeService.zuweisen', () => {
       position: 2,
       datum: '2026-11-09'
     });
+  });
+});
+
+function warteschlangeDaten(terminId) {
+  return {
+    datum: '2026-11-09',
+    neu: { termine: [], auftragsimporte: [] },
+    mitarbeiter: [{
+      mitarbeiter_id: 7,
+      mitarbeiter_name: 'Mechaniker',
+      kapazitaet_minuten: 480,
+      last_minuten: 60,
+      zettel: [{
+        id: terminId,
+        kunde_name: 'Kunde',
+        kennzeichen: 'AB-123',
+        arbeit: 'Inspektion',
+        geschaetzte_zeit: 60,
+        morgen: false
+      }]
+    }]
+  };
+}
+
+function createWarteschlangeApp() {
+  class TestApp {}
+  installWarteschlangeFeature(TestApp);
+  const app = new TestApp();
+  app.bindEventListenerOnce = (element, event, handler) => {
+    element?.addEventListener(event, handler);
+  };
+  app.showToast = vi.fn();
+  document.body.innerHTML = `
+    <input id="warteschlangeDatum" value="2026-11-08">
+    <p id="warteschlangeStatus"></p>
+    <div id="warteschlangeBoard"></div>`;
+  return app;
+}
+
+describe('Warteschlange-Ladezustand', () => {
+  it('ersetzt alte Karten während eines Datumswechsels durch den Ladezustand', async () => {
+    const app = createWarteschlangeApp();
+    app.warteschlangeData = warteschlangeDaten(1);
+    app.renderWarteschlange();
+    let resolveLoad;
+    vi.stubGlobal('WarteschlangeService', {
+      getByDatum: vi.fn().mockReturnValue(new Promise(resolve => {
+        resolveLoad = resolve;
+      }))
+    });
+
+    document.getElementById('warteschlangeDatum').value = '2026-11-09';
+    const ladung = app.loadWarteschlange();
+    try {
+      expect(document.querySelector('[data-termin-id="1"]')).toBeNull();
+      expect(document.getElementById('warteschlangeBoard').textContent).toContain('wird geladen');
+    } finally {
+      resolveLoad(warteschlangeDaten(2));
+      await ladung;
+    }
+  });
+
+  it('lässt alte Karten nach einem Ladefehler nicht bedienbar stehen', async () => {
+    const app = createWarteschlangeApp();
+    app.warteschlangeData = warteschlangeDaten(1);
+    app.renderWarteschlange();
+    vi.stubGlobal('WarteschlangeService', {
+      getByDatum: vi.fn().mockRejectedValue(new Error('offline'))
+    });
+
+    document.getElementById('warteschlangeDatum').value = '2026-11-09';
+    await app.loadWarteschlange();
+
+    expect(document.querySelector('[data-termin-id="1"]')).toBeNull();
+    expect(document.getElementById('warteschlangeBoard').textContent).toContain('nicht verfügbar');
+  });
+});
+
+describe('Warteschlange-Mutationen', () => {
+  it('meldet einen Reload-Fehler nicht als fehlgeschlagene Server-Mutation', async () => {
+    const app = createWarteschlangeApp();
+    app.setWarteschlangeStatus = vi.fn();
+    app.loadWarteschlange = vi.fn().mockRejectedValue(new Error('offline'));
+    const mutation = vi.fn().mockResolvedValue({});
+
+    await app.mutiereWarteschlange(mutation, 'Gespeichert');
+
+    expect(mutation).toHaveBeenCalledOnce();
+    expect(app.showToast).toHaveBeenCalledWith('Gespeichert', 'success');
+    expect(app.showToast).not.toHaveBeenCalledWith('Die Warteschlange wurde nicht geändert.', 'error');
+    expect(app.setWarteschlangeStatus).toHaveBeenCalledWith(
+      expect.stringContaining('Änderung gespeichert'),
+      true
+    );
   });
 });
