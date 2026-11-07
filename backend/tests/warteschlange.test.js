@@ -260,6 +260,92 @@ describe('Warteschlange — Tagesansicht', () => {
   });
 });
 
+describe('Warteschlange — nächster Auftrag für Tablet', () => {
+  const heute = () => {
+    const jetzt = new Date();
+    return `${jetzt.getFullYear()}-${String(jetzt.getMonth() + 1).padStart(2, '0')}-${String(jetzt.getDate()).padStart(2, '0')}`;
+  };
+
+  test('liefert den obersten geplanten Zettel des Mechanikers für heute', async () => {
+    await addTermin({ id: 1, datum: heute(), warteschlange_pos: 2 });
+    await addTermin({ id: 2, datum: heute(), warteschlange_pos: 1, geschaetzte_zeit: 45 });
+    await addTermin({ id: 3, datum: '2999-12-31', warteschlange_pos: 1 });
+    await addTermin({ id: 4, datum: heute(), mitarbeiter_id: 2, warteschlange_pos: 1 });
+
+    const response = await request(app)
+      .get('/api/warteschlange/mitarbeiter/1/naechster')
+      .expect(200);
+
+    expect(response.body.datum).toBe(heute());
+    expect(response.body.zettel).toMatchObject({
+      id: 2,
+      mitarbeiter_id: 1,
+      mitarbeiter_name: 'Mechaniker 1',
+      warteschlange_pos: 1,
+      geschaetzte_zeit: 45,
+      status: 'geplant',
+      kunde_name: 'Kunde',
+      kennzeichen: 'AB-123'
+    });
+  });
+
+  test('behält einen laufenden obersten Zettel und lässt Abgeschlossene nachrücken', async () => {
+    await addTermin({ id: 1, datum: heute(), warteschlange_pos: 1, status: 'abgeschlossen' });
+    await addTermin({ id: 2, datum: heute(), warteschlange_pos: 2, status: 'in_arbeit' });
+    await addTermin({ id: 3, datum: heute(), warteschlange_pos: 3 });
+
+    const response = await request(app)
+      .get('/api/warteschlange/mitarbeiter/1/naechster')
+      .expect(200);
+
+    expect(response.body.zettel.id).toBe(2);
+    expect(response.body.zettel.status).toBe('in_arbeit');
+
+    await dbRun(db, "UPDATE termine SET status = 'abgeschlossen' WHERE id = 2");
+    const naechster = await request(app)
+      .get('/api/warteschlange/mitarbeiter/1/naechster')
+      .expect(200);
+    expect(naechster.body.zettel.id).toBe(3);
+  });
+
+  test.each([
+    { status: 'abgeschlossen' },
+    { status: 'storniert' },
+    { status: 'wartend' },
+    { status: 'offen' },
+    { status: 'geplant', geloescht_am: '2026-11-07 12:00:00' },
+    { status: 'geplant', ist_schwebend: 1 }
+  ])('schließt nicht auswählbare Zettel aus: %o', async termin => {
+    await addTermin({ id: 1, datum: heute(), warteschlange_pos: 1, ...termin });
+
+    const response = await request(app)
+      .get('/api/warteschlange/mitarbeiter/1/naechster')
+      .expect(200);
+
+    expect(response.body).toEqual({ datum: heute(), zettel: null });
+  });
+
+  test('liefert bei leerer Schlange einen verständlichen Leerzustand', async () => {
+    const response = await request(app)
+      .get('/api/warteschlange/mitarbeiter/1/naechster')
+      .expect(200);
+
+    expect(response.body).toEqual({ datum: heute(), zettel: null });
+  });
+
+  test('behandelt unbekannte Mechaniker und ungültige IDs wie bestehende Routen', async () => {
+    const unbekannt = await request(app)
+      .get('/api/warteschlange/mitarbeiter/999/naechster')
+      .expect(404);
+    expect(unbekannt.body).toMatchObject({ success: false, error: 'Mitarbeiter nicht gefunden' });
+
+    const ungueltig = await request(app)
+      .get('/api/warteschlange/mitarbeiter/abc/naechster')
+      .expect(400);
+    expect(ungueltig.body).toMatchObject({ success: false, error: 'mitarbeiter_id muss eine positive ganze Zahl sein' });
+  });
+});
+
 describe('Warteschlange — nächster Arbeitstag', () => {
   test('verschiebt auf Montag, hängt dort an und schließt die alte Lücke', async () => {
     await addTermin({ id: 1, warteschlange_pos: 1 });

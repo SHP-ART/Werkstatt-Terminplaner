@@ -26,6 +26,7 @@ CLAUDE.md Abschnitt 6 · `ungetestet` = keine Absicherung
 | Papierkorb: gelöschte Termine ansehen und wiederherstellen | Tab `papierkorb` | manuell |
 | Phasen je Termin (Bringen, Arbeit, Abholung) | `phasenRoutes.js` | ungetestet |
 | Teileerfassung je Termin und Bestellverwaltung | `teileRoutes.js`, `teileBestellung.js` | ungetestet |
+| Nächster Queue-Zettel je Mechaniker und Tablet-Anzeige „Mein nächster Auftrag“ mit Anstempeln | `warteschlangeRoutes.js`, `electron-intern-tablet/index.html` | Backend automatisiert (`tests/warteschlange.test.js`), Tablet manuell |
 
 ## Kapazität und Auslastung
 

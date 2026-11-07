@@ -145,6 +145,7 @@ Enthält Geschäftslogik zwischen Route und Model. Jeder Controller ist verantwo
 | `wiederkehrendeTermineController.js` | Wiederkehrende Terminserien |
 | `fahrzeugeController.js` | Fahrzeuge CRUD |
 | `tagesstempelController.js` | Arbeitsbeginn/Arbeitsende/Unterbrechungen je Person (Tagesstempel + Arbeitsunterbrechungen) |
+| `warteschlangeController.js` | Zettel-Board, Zuweisung/Reihenfolge und nächster aktueller Auftrag je Mechaniker |
 
 #### Models (`models/`)
 Reine Datenbankschicht. Keine Geschäftslogik. Nutzen `dbHelper.js` für Promise-basierte Queries.
@@ -153,6 +154,7 @@ Wichtige Models:
 - `termineModel.js` – Termin-Abfragen inkl. JOIN auf Kunden und Mitarbeiter; soft-delete via `geloescht_am`; Termin-Nr-Generator (`T-YYYY-NNN`)
 - `kundenModel.js` – inkl. `importMultiple()` für Locosoft-Import mit Duplikat-Erkennung via normiertes Kennzeichen
 - `auftragsimportModel.js` – PDF-Auftragsimporte, erkannte JSON-Daten und Zuordnungstreffer
+- `warteschlangeModel.js` – Queue-Abfragen und Positionen, inklusive oberstem aktivem Zettel je Mechaniker und Datum
 - `einstellungenModel.js` – Schlüssel-Wert-Store für App-Einstellungen
 - `tabletUpdateModel.js` – Speichert registrierte Tablet-App-Versionen
 

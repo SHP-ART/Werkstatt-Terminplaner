@@ -99,6 +99,16 @@ class WarteschlangeController {
     });
   }
 
+  static async getNaechster(req, res) {
+    const mitarbeiterId = parseId(req.params.id, 'mitarbeiter_id');
+    await getMitarbeiterOder404(mitarbeiterId);
+
+    const jetzt = new Date();
+    const datum = `${jetzt.getFullYear()}-${String(jetzt.getMonth() + 1).padStart(2, '0')}-${String(jetzt.getDate()).padStart(2, '0')}`;
+    const zettel = await WarteschlangeModel.getNaechster(datum, mitarbeiterId);
+    res.json({ datum, zettel: zettel || null });
+  }
+
   static async zuweisen(req, res) {
     const terminId = parseId(req.body?.termin_id, 'termin_id');
     const mitarbeiterId = parseId(req.body?.mitarbeiter_id, 'mitarbeiter_id');

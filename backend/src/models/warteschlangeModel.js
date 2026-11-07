@@ -45,6 +45,26 @@ class WarteschlangeModel {
     `, params);
   }
 
+  static async getNaechster(datum, mitarbeiterId) {
+    return await getAsync(`
+      SELECT t.*,
+             COALESCE(k.name, t.kunde_name) AS kunde_name,
+             COALESCE(k.telefon, t.kunde_telefon) AS kunde_telefon,
+             m.name AS mitarbeiter_name
+        FROM termine t
+        LEFT JOIN kunden k ON t.kunde_id = k.id
+        LEFT JOIN mitarbeiter m ON t.mitarbeiter_id = m.id
+       WHERE t.datum = ?
+         AND t.mitarbeiter_id = ?
+         AND t.warteschlange_pos IS NOT NULL
+         AND t.geloescht_am IS NULL
+         AND COALESCE(t.ist_schwebend, 0) = 0
+         AND t.status IN ('geplant', 'in_arbeit')
+       ORDER BY t.warteschlange_pos, t.id
+       LIMIT 1
+    `, [datum, mitarbeiterId]);
+  }
+
   static async getNaechstePosition(datum, mitarbeiterId, excludeTerminId = null) {
     const params = [datum, mitarbeiterId];
     const exclude = excludeTerminId === null ? '' : 'AND id != ?';
