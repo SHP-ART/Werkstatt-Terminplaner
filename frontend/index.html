@@ -56,6 +56,7 @@
             <button class="tab-button" data-tab="zeitverwaltung"><span>⏱️ Zeitverwaltung</span></button>
             <button class="tab-button" data-tab="auslastung"><span>📈 Auslastung</span></button>
             <button class="tab-button" data-tab="auslastung-dragdrop"><span>🏗️ Planung (Beta)</span></button>
+            <button class="tab-button" data-tab="warteschlange"><span>Zettel-Board</span></button>
             <button class="tab-button" data-tab="intern"><span>👷 Intern</span></button>
             <button class="tab-button" data-tab="zeitstempelung"><span>⏱️ Stempelzeiten</span></button>
             <button class="tab-button" data-tab="papierkorb"><span>🗑️ Papierkorb</span></button>
@@ -3803,6 +3804,24 @@
                     </button>
                 </div>
             </div>
+        </template>
+
+        <div id="warteschlange" class="tab-content" data-template-id="tab-template-warteschlange"></div>
+
+        <template id="tab-template-warteschlange">
+            <div class="page-header">
+                <h2>Zettel-Board</h2>
+                <p class="page-subtitle">Aufträge ohne feste Uhrzeiten den Mechanikern zuweisen und sortieren</p>
+            </div>
+            <div class="warteschlange-toolbar">
+                <div class="form-group">
+                    <label for="warteschlangeDatum">Datum</label>
+                    <input type="date" id="warteschlangeDatum">
+                </div>
+                <button type="button" id="warteschlangeAktualisieren" class="btn btn-secondary">Aktualisieren</button>
+            </div>
+            <p id="warteschlangeStatus" class="warteschlange-status" role="status" aria-live="polite"></p>
+            <div id="warteschlangeBoard" class="warteschlange-board" aria-label="Zettel-Warteschlangen"></div>
         </template>
 
         <!-- ================================================

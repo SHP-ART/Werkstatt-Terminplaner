@@ -186,6 +186,10 @@ export function installRealtimeFeature(AppClass) {
         }
       }
 
+      if (activeTab === 'warteschlange' && eventName === 'termin.queue_updated') {
+        this.loadWarteschlange();
+      }
+
       if (activeTab === 'papierkorb' && (eventName === 'termin.deleted' || eventName === 'termin.restored')) {
         this.loadPapierkorb();
       }

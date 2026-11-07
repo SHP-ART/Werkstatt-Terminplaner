@@ -494,6 +494,31 @@ class AuslastungService {
   }
 }
 
+class WarteschlangeService {
+  static async getByDatum(datum) {
+    return ApiService.get(`/warteschlange?datum=${encodeURIComponent(datum)}`);
+  }
+
+  static async zuweisen(terminId, mitarbeiterId, position = null) {
+    return ApiService.put('/warteschlange/zuweisen', {
+      termin_id: terminId,
+      mitarbeiter_id: mitarbeiterId,
+      ...(position === null ? {} : { position })
+    });
+  }
+
+  static async reihenfolge(mitarbeiterId, terminIds) {
+    return ApiService.put('/warteschlange/reihenfolge', {
+      mitarbeiter_id: mitarbeiterId,
+      termin_ids: terminIds
+    });
+  }
+
+  static async naechsterTag(terminId) {
+    return ApiService.post(`/warteschlange/${terminId}/naechster-tag`, {});
+  }
+}
+
 class EinstellungenService {
   static async getWerkstatt() {
     return ApiService.get('/einstellungen/werkstatt');
@@ -1313,6 +1338,7 @@ window.KundenService = KundenService;
 window.TermineService = TermineService;
 window.ArbeitszeitenService = ArbeitszeitenService;
 window.AuslastungService = AuslastungService;
+window.WarteschlangeService = WarteschlangeService;
 window.EinstellungenService = EinstellungenService;
 window.MitarbeiterService = MitarbeiterService;
 window.LehrlingeService = LehrlingeService;

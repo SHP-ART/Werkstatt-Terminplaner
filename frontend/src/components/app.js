@@ -46,6 +46,7 @@ import { installCustomersFeature } from '../features/customers/customersFeature.
 import { installBackupFeature } from '../features/backup/backupFeature.js';
 import { installCalendarFeature } from '../features/calendar/calendarFeature.js';
 import { installPartsFeature } from '../features/parts/partsFeature.js';
+import { installWarteschlangeFeature } from '../features/warteschlange/warteschlangeFeature.js';
 
 class App {
   constructor() {
@@ -1022,6 +1023,8 @@ class App {
       }
       this.updatePlanungWocheInfo();
       this.loadAuslastungDragDrop();
+    } else if (tabName === 'warteschlange') {
+      this.loadWarteschlange();
     } else if (tabName === 'zeitstempelung') {
       const datumInput = document.getElementById('zeitstempelungDatum');
       if (datumInput && !datumInput.value) {
@@ -2771,6 +2774,7 @@ installCustomersFeature(App);
 installBackupFeature(App);
 installCalendarFeature(App);
 installPartsFeature(App);
+installWarteschlangeFeature(App);
 
 ApiService.loadClientConfig();
 const app = new App();
