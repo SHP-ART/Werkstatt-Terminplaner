@@ -587,7 +587,7 @@ describe('Warteschlange — gleichzeitige Mutationen', () => {
       [1, 1],
       [2, 2]
     ]);
-    expect(broadcastEvent).toHaveBeenCalledTimes(2);
+    expect(broadcastEvent.mock.calls.filter(([event]) => event === 'termin.queue_updated')).toHaveLength(2);
   });
 });
 

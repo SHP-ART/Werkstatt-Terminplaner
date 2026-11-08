@@ -12,6 +12,7 @@ const { broadcastEvent } = require('../utils/websocket');
 const { db } = require('../config/database');
 const belegung = require('../utils/belegung');
 const { berechneAuslastungErgebnis, berechneKapazitaet } = require('../utils/auslastung');
+const { berechneZeitenFuerPerson, berechneEndzeitFuerTermin } = require('../services/zeitplanungService');
 
 // Cache für Mitarbeiter und Lehrlinge (Performance-Optimierung)
 let mitarbeiterCache = { data: null, timestamp: 0 };
@@ -136,159 +137,6 @@ function isLehrlingInBerufsschule(lehrling, datum) {
     .map(w => parseInt(w.trim(), 10))
     .filter(w => !isNaN(w));
   return schulwochen.includes(kw);
-}
-
-// =====================================================
-// HILFSFUNKTION: Berechnet Endzeit für einen Termin
-// =====================================================
-async function berechneEndzeitFuerTermin(termin, arbeitszeitenDetails) {
-  try {
-    // Lade Einstellungen
-    const einstellungen = await EinstellungenModel.getWerkstatt();
-    const nebenzeitProzent = einstellungen.nebenzeit_prozent || 0;
-    
-    // Lade Mitarbeiter und Lehrlinge für Aufgabenbewältigung (Cached)
-    const mitarbeiter = await getCachedMitarbeiter();
-    const lehrlinge = await getCachedLehrlinge();
-    const mitarbeiterMap = {};
-    const lehrlingeMap = {};
-    mitarbeiter.forEach(m => mitarbeiterMap[m.id] = m);
-    lehrlinge.forEach(l => lehrlingeMap[l.id] = l);
-    
-    let gesamtMinuten = 0;
-    let fruehesteStartzeit = null;
-    
-    // Parse arbeitszeiten_details
-    let details = null;
-    if (arbeitszeitenDetails) {
-      try {
-        details = typeof arbeitszeitenDetails === 'string' 
-          ? JSON.parse(arbeitszeitenDetails) 
-          : arbeitszeitenDetails;
-      } catch (e) {
-        details = null;
-      }
-    }
-    
-    if (details) {
-      for (const [key, value] of Object.entries(details)) {
-        // Überspringe Meta-Felder
-        if (key.startsWith('_')) {
-          if (key === '_startzeit' && value) {
-            fruehesteStartzeit = value;
-          }
-          continue;
-        }
-        
-        let zeitMinuten = typeof value === 'object' ? (value.zeit || 0) : value;
-        
-        // Globale Nebenzeit anwenden
-        if (nebenzeitProzent > 0 && zeitMinuten > 0) {
-          zeitMinuten = zeitMinuten * (1 + nebenzeitProzent / 100);
-        }
-        
-        // Individuelle Faktoren (Lehrling Aufgabenbewältigung)
-        if (typeof value === 'object' && zeitMinuten > 0) {
-          if (value.type === 'lehrling' && value.mitarbeiter_id) {
-            const lehr = lehrlingeMap[value.mitarbeiter_id];
-            if (lehr && lehr.aufgabenbewaeltigung_prozent && lehr.aufgabenbewaeltigung_prozent !== 100) {
-              zeitMinuten = zeitMinuten * (lehr.aufgabenbewaeltigung_prozent / 100);
-            }
-          }
-        }
-        
-        gesamtMinuten += zeitMinuten;
-        
-        // Startzeit aus Arbeit
-        if (typeof value === 'object' && value.startzeit && value.startzeit !== '') {
-          if (!fruehesteStartzeit || value.startzeit < fruehesteStartzeit) {
-            fruehesteStartzeit = value.startzeit;
-          }
-        }
-      }
-    } else if (termin.geschaetzte_zeit) {
-      // Fallback auf geschätzte Zeit
-      gesamtMinuten = termin.geschaetzte_zeit;
-      if (nebenzeitProzent > 0) {
-        gesamtMinuten = gesamtMinuten * (1 + nebenzeitProzent / 100);
-      }
-    }
-
-    // _dauer_override: explizit gesetzte Gesamtdauer überschreibt Einzel-Arbeiten-Summe
-    // (gesetzt z.B. via Schnell-Bearbeitungs-Dialog)
-    if (details && details._dauer_override && parseInt(details._dauer_override) > 0) {
-      gesamtMinuten = parseInt(details._dauer_override);
-    }
-    
-    // Startzeit bestimmen
-    const startzeit = fruehesteStartzeit || termin.startzeit || termin.bring_zeit;
-    
-    if (!startzeit || gesamtMinuten <= 0) {
-      return { startzeit: startzeit || null, endzeit: null };
-    }
-    
-    // Mittagspause berücksichtigen
-    const mittagspauseDauer = einstellungen.mittagspause_minuten || 30;
-    
-    // Endzeit berechnen (MIT Pausenberücksichtigung)
-    const [startH, startM] = startzeit.split(':').map(Number);
-    const startInMinuten = startH * 60 + startM;
-    
-    // Ermittle Pausenzeiten vom zugeordneten Mitarbeiter/Lehrling
-    let pausenStart = null;
-    let pausenEnde = null;
-    
-    if (details && mittagspauseDauer > 0) {
-      // Suche die erste Zuordnung mit Pauseninfo
-      for (const [key, value] of Object.entries(details)) {
-        if (key.startsWith('_')) continue;
-        
-        if (typeof value === 'object') {
-          let pauseStartZeit = null;
-          
-          if (value.type === 'lehrling' && value.mitarbeiter_id) {
-            const lehr = lehrlingeMap[value.mitarbeiter_id];
-            pauseStartZeit = lehr?.mittagspause_start || '12:00';
-          } else if (value.mitarbeiter_id) {
-            const ma = mitarbeiterMap[value.mitarbeiter_id];
-            pauseStartZeit = ma?.mittagspause_start || '12:00';
-          }
-          
-          if (pauseStartZeit) {
-            const [pauseH, pauseM] = pauseStartZeit.split(':').map(Number);
-            pausenStart = pauseH * 60 + pauseM;
-            pausenEnde = pausenStart + mittagspauseDauer;
-            break; // Erste gefundene Zuordnung nutzen
-          }
-        }
-      }
-    }
-    
-    // Berechne Endzeit unter Berücksichtigung der Pause
-    let endInMinuten = startInMinuten + Math.round(gesamtMinuten);
-    
-    // Wenn die Arbeit über die Pause geht, addiere die Pausendauer
-    if (pausenStart !== null && pausenEnde !== null) {
-      // Fall 1: Start vor Pause, Ende nach Pause-Start → Pause überspringen
-      if (startInMinuten < pausenStart && endInMinuten > pausenStart) {
-        endInMinuten += mittagspauseDauer;
-      }
-      // Fall 2: Start während Pause → nach Pause verschieben
-      else if (startInMinuten >= pausenStart && startInMinuten < pausenEnde) {
-        const verschiebung = pausenEnde - startInMinuten;
-        endInMinuten += verschiebung;
-      }
-    }
-    
-    const endH = Math.floor(endInMinuten / 60);
-    const endM = endInMinuten % 60;
-    const endzeit = `${String(endH).padStart(2, '0')}:${String(endM).padStart(2, '0')}`;
-    
-    return { startzeit, endzeit };
-  } catch (e) {
-    console.error('Fehler bei Endzeit-Berechnung:', e);
-    return { startzeit: null, endzeit: null };
-  }
 }
 
 // Einfacher In-Memory-Cache für Auslastungsdaten
@@ -2420,199 +2268,24 @@ class TermineController {
    * Body: { personId, personTyp: 'mitarbeiter'|'lehrling', datum, startTerminId }
    */
   static async berechneZeitenNeu(req, res) {
-    const { runAsync, allAsync } = require('../utils/dbHelper');
-    
+    const { personId, personTyp, datum, startTerminId } = req.body;
+    if (!personId || !personTyp || !datum) {
+      return res.status(400).json({ error: 'personId, personTyp und datum sind erforderlich' });
+    }
     try {
-      const { personId, personTyp, datum, startTerminId } = req.body;
-
-      // Validierung
-      if (!personId || !personTyp || !datum) {
-        return res.status(400).json({ error: 'personId, personTyp und datum sind erforderlich' });
-      }
-
-      // Lade Einstellungen für Arbeitsende-Berechnung
-      const einstellungen = await EinstellungenModel.getWerkstatt();
-      const arbeitsstundenProTag = (personTyp === 'lehrling') 
-        ? (await require('../models/lehrlingeModel').getById(personId))?.arbeitsstunden_pro_tag || 8
-        : (await MitarbeiterModel.getById(personId))?.arbeitsstunden_pro_tag || 8;
-
-      // Lade alle Termine dieser Person an diesem Tag (Status: geplant oder in_arbeit)
-      const alleTermine = await allAsync(`
-        SELECT id, startzeit, bring_zeit, geschaetzte_zeit, tatsaechliche_zeit, arbeitszeiten_details, status, verschoben_von_datum, mitarbeiter_id
-        FROM termine
-        WHERE datum = ? 
-          AND status IN ('geplant', 'in_arbeit')
-          AND geloescht_am IS NULL
-        ORDER BY COALESCE(startzeit, bring_zeit, '23:59') ASC
-      `, [datum]);
-
-      // Hilfsfunktion: prüft ob ein Termin dieser Person gehört
-      function terminGehoertZuPerson(t) {
-        // 1. Direkte mitarbeiter_id (nur für mitarbeiter-Typ)
-        if (personTyp === 'mitarbeiter' && t.mitarbeiter_id === parseInt(personId)) return true;
-
-        // 2. arbeitszeiten_details._gesamt_mitarbeiter_id
-        if (!t.arbeitszeiten_details) return false;
-        try {
-          const details = JSON.parse(t.arbeitszeiten_details);
-          const gesamt = details._gesamt_mitarbeiter_id;
-          if (gesamt && typeof gesamt === 'object' && gesamt.type === personTyp && gesamt.id == personId) {
-            return true;
-          }
-        } catch (e) { /* ignorieren */ }
-        return false;
-      }
-
-      const eigeneTermine = alleTermine.filter(terminGehoertZuPerson);
-
-      if (eigeneTermine.length === 0) {
-        return res.json({ 
-          success: true, 
-          aktualisiert: 0, 
-          verschoben: [],
-          message: 'Keine Termine zum Neuberechnen gefunden'
-        });
-      }
-
-      // Bestimme Startpunkt: letzter abgeschlossener Termin dieser Person heute
-      // gibt den frühesten Zeitpunkt an, ab dem neue Termine beginnen können
-      const letzterAbgeschlossener = await allAsync(`
-        SELECT id, startzeit, bring_zeit, tatsaechliche_zeit, geschaetzte_zeit, mitarbeiter_id, arbeitszeiten_details
-        FROM termine
-        WHERE datum = ?
-          AND status = 'abgeschlossen'
-          AND geloescht_am IS NULL
-        ORDER BY COALESCE(startzeit, bring_zeit, '00:00') DESC
-        LIMIT 10
-      `, [datum]);
-
-      let startpunktNachrücken = null;
-      for (const t of letzterAbgeschlossener) {
-        if (!terminGehoertZuPerson(t)) continue;
-        // Ende = startzeit + tatsaechliche_zeit (oder geschaetzte_zeit falls keine tats. Zeit)
-        const startMin = t.startzeit || t.bring_zeit;
-        const dauerMin = t.tatsaechliche_zeit || t.geschaetzte_zeit || 30;
-        if (startMin) {
-          const endzeit = addMinutes(startMin, dauerMin);
-          if (!startpunktNachrücken || compareTime(endzeit, startpunktNachrücken) > 0) {
-            startpunktNachrücken = endzeit;
-          }
-        }
-        break; // nur den letzten nehmen
-      }
-
-      // Berechne Arbeitsende (arbeitsstundenProTag * 60 Minuten ab 08:00)
-      const arbeitsbeginn = '08:00';
-      const arbeitsende = addMinutes(arbeitsbeginn, arbeitsstundenProTag * 60);
-
-      const aktualisierteTermine = [];
-      const verschobeneTermine = [];
-      // Startpunkt: entweder nach dem letzten abgeschlossenen Termin oder Start des ersten geplanten
-      let laufendeZeit;
-      if (startpunktNachrücken) {
-        // Nachrücken: beginne direkt nach dem letzten abgeschlossenen Termin
-        laufendeZeit = startpunktNachrücken;
-      } else {
-        // Keine abgeschlossenen Termine: behalte ursprünglichen Startpunkt
-        laufendeZeit = eigeneTermine[0].startzeit || eigeneTermine[0].bring_zeit || '08:00';
-      }
-
-      for (const termin of eigeneTermine) {
-        // Für in_arbeit-Termine: tatsächliche Startzeit aus DB verwenden, nicht überschreiben
-        const istInArbeit = termin.status === 'in_arbeit';
-        const verwendeteStartzeit = istInArbeit
-          ? (termin.startzeit || termin.bring_zeit || laufendeZeit)
-          : laufendeZeit;
-
-        // Berechne neue Endzeit mit berechneEndzeitFuerTermin
-        const { startzeit: neueStartzeit, endzeit: neueEndzeit } = await berechneEndzeitFuerTermin(
-          { ...termin, startzeit: verwendeteStartzeit, bring_zeit: verwendeteStartzeit },
-          termin.arbeitszeiten_details
-        );
-
-        // Prüfe ob Endzeit über Arbeitsende hinausgeht
-        if (neueEndzeit && compareTime(neueEndzeit, arbeitsende) > 0) {
-          // Overflow: Verschiebe auf nächsten Arbeitstag (nur für geplante Termine)
-          if (!istInArbeit) {
-            const naechsterTag = TermineModel.naechsterArbeitstag(datum);
-            
-            await runAsync(`
-              UPDATE termine 
-              SET datum = ?, 
-                  startzeit = ?, 
-                  bring_zeit = ?,
-                  endzeit_berechnet = ?,
-                  verschoben_von_datum = ?
-              WHERE id = ?
-            `, [naechsterTag, arbeitsbeginn, arbeitsbeginn, neueEndzeit, datum, termin.id]);
-
-            verschobeneTermine.push({
-              id: termin.id,
-              altesDatum: datum,
-              neuesDatum: naechsterTag,
-              grund: 'Overflow'
-            });
-
-            // Laufende Zeit für nächsten Tag zurücksetzen
-            laufendeZeit = addMinutes(arbeitsbeginn, 0);
-          } else {
-            // in_arbeit Termin kann nicht verschoben werden – nur Endzeit aktualisieren
-            await runAsync(`
-              UPDATE termine SET endzeit_berechnet = ? WHERE id = ?
-            `, [neueEndzeit, termin.id]);
-            aktualisierteTermine.push({ id: termin.id, neueStartzeit: verwendeteStartzeit, neueEndzeit });
-            laufendeZeit = neueEndzeit;
-          }
-        } else {
-          if (istInArbeit) {
-            // in_arbeit: nur Endzeit aktualisieren, Startzeit bleibt wie gespeichert
-            await runAsync(`
-              UPDATE termine SET endzeit_berechnet = ? WHERE id = ?
-            `, [neueEndzeit, termin.id]);
-          } else {
-            // Geplanter Termin: Startzeit und Endzeit aktualisieren
-            await runAsync(`
-              UPDATE termine 
-              SET startzeit = ?, 
-                  bring_zeit = ?,
-                  endzeit_berechnet = ?
-              WHERE id = ?
-            `, [laufendeZeit, laufendeZeit, neueEndzeit, termin.id]);
-          }
-
-          aktualisierteTermine.push({
-            id: termin.id,
-            neueStartzeit: verwendeteStartzeit,
-            neueEndzeit: neueEndzeit
-          });
-
-          // Laufende Zeit = Endzeit dieses Termins
-          laufendeZeit = neueEndzeit;
-        }
-      }
-
-      // Cache invalidieren für aktualisierte Termine
+      const ergebnis = await berechneZeitenFuerPerson({
+        personId, personTyp, datum, startTerminId
+      });
       invalidateTermineCache();
       invalidateAuslastungCache(datum);
-      
-      // Falls Termine verschoben wurden, auch für neue Daten Cache invalidieren
-      verschobeneTermine.forEach(vt => {
-        invalidateAuslastungCache(vt.neuesDatum);
+      ergebnis.verschobeneTermine.forEach(termin => {
+        invalidateAuslastungCache(termin.neuesDatum);
       });
-
-      // WebSocket-Broadcast für Aktualisierungen
       broadcastEvent('termin.updated', { datum });
-
-      res.json({
-        success: true,
-        aktualisiert: aktualisierteTermine.length,
-        verschoben: verschobeneTermine.length,
-        aktualisierteTermine,
-        verschobeneTermine
-      });
+      return res.json(ergebnis);
     } catch (err) {
       console.error('Fehler bei berechneZeitenNeu:', err);
-      res.status(500).json({ error: err.message });
+      return res.status(500).json({ error: err.message });
     }
   }
 
@@ -3006,26 +2679,6 @@ class TermineController {
       res.status(500).json({ error: err.message });
     }
   }
-}
-
-// Hilfsfunktion: Addiert Minuten zu HH:MM
-function addMinutes(time, minutes) {
-  const [h, m] = time.split(':').map(Number);
-  const totalMinutes = h * 60 + m + minutes;
-  const newH = Math.floor(totalMinutes / 60);
-  const newM = totalMinutes % 60;
-  return `${String(newH).padStart(2, '0')}:${String(newM).padStart(2, '0')}`;
-}
-
-// Hilfsfunktion: Vergleicht zwei HH:MM Zeiten (-1: t1 < t2, 0: gleich, 1: t1 > t2)
-function compareTime(time1, time2) {
-  const [h1, m1] = time1.split(':').map(Number);
-  const [h2, m2] = time2.split(':').map(Number);
-  const min1 = h1 * 60 + m1;
-  const min2 = h2 * 60 + m2;
-  if (min1 < min2) return -1;
-  if (min1 > min2) return 1;
-  return 0;
 }
 
 // Exportiere auch die Cache-Invalidierungsfunktion für andere Controller

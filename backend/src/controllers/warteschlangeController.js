@@ -2,6 +2,8 @@ const WarteschlangeModel = require('../models/warteschlangeModel');
 const AuftragsimportModel = require('../models/auftragsimportModel');
 const AbwesenheitenModel = require('../models/abwesenheitenModel');
 const TermineModel = require('../models/termineModel');
+const TermineController = require('./termineController');
+const { berechneZeitenFuerPerson } = require('../services/zeitplanungService');
 const EinstellungenModel = require('../models/einstellungenModel');
 const LehrlingeModel = require('../models/lehrlingeModel');
 const { withTransaction: withDatabaseTransaction } = require('../utils/transaction');
@@ -59,6 +61,21 @@ function queueEventPayload(ressource) {
   return ressource.typ === 'lehrling'
     ? { lehrling_id: ressource.id }
     : { mitarbeiter_id: ressource.id };
+}
+
+async function berechneQueueZeiten(ressource, datum, startTerminId = null) {
+  const ergebnis = await berechneZeitenFuerPerson({
+    personId: ressource.id,
+    personTyp: ressource.typ,
+    datum,
+    startTerminId
+  });
+  TermineController.invalidateTermineCache();
+  TermineController.invalidateAuslastungCache(datum);
+  ergebnis.verschobeneTermine.forEach(termin => {
+    TermineController.invalidateAuslastungCache(termin.neuesDatum);
+  });
+  return ergebnis;
 }
 
 async function getTerminOder404(id) {
@@ -255,6 +272,7 @@ class WarteschlangeController {
           terminId
         );
         await speichereReihenfolge(alteListe);
+        await berechneQueueZeiten(aktuelleRessource, aktuellerTermin.datum, terminId);
       }
 
       if (hatPosition) {
@@ -270,15 +288,18 @@ class WarteschlangeController {
         }
       }
       details._gesamt_mitarbeiter_id = { type: ressource.typ, id: ressource.id };
-      return await WarteschlangeModel.zuweisen(
+      const zugewiesenerTermin = await WarteschlangeModel.zuweisen(
         terminId,
         ressource,
         position,
         zielDatum,
         JSON.stringify(details)
       );
+      await berechneQueueZeiten(ressource, zielDatum, terminId);
+      return zugewiesenerTermin;
     });
 
+    broadcastEvent('termin.updated', { datum: termin.datum });
     broadcastEvent('termin.queue_updated', queueEventPayload(ressource));
     res.json(termin);
   }
@@ -295,9 +316,9 @@ class WarteschlangeController {
       throw new ValidationError('termin_ids darf keine Duplikate enthalten');
     }
 
+    let datum;
     await withQueueTransaction(async () => {
       await getRessourceOder404(ressource);
-      let datum;
       for (const id of ids) {
         const termin = await getTerminOder404(id);
         const terminRessource = ressourceAusTermin(termin);
@@ -318,8 +339,10 @@ class WarteschlangeController {
       for (let index = 0; index < ids.length; index++) {
         await WarteschlangeModel.setPositionFuerRessource(ids[index], ressource, index + 1);
       }
+      await berechneQueueZeiten(ressource, datum);
     });
 
+    broadcastEvent('termin.updated', { datum });
     broadcastEvent('termin.queue_updated', queueEventPayload(ressource));
     res.json({
       person_typ: ressource.typ,
@@ -356,13 +379,17 @@ class WarteschlangeController {
       ]);
 
       await speichereReihenfolge(alteListe);
-      return await WarteschlangeModel.aufNaechstenTagVerschieben(
+      await berechneQueueZeiten(ressource, aktuellerTermin.datum, terminId);
+      const verschobenerTermin = await WarteschlangeModel.aufNaechstenTagVerschieben(
         terminId,
         zielDatum,
         naechstePosition
       );
+      await berechneQueueZeiten(ressource, zielDatum, terminId);
+      return verschobenerTermin;
     });
 
+    broadcastEvent('termin.updated', { datum: termin.datum });
     broadcastEvent('termin.queue_updated', queueEventPayload(ressourceAusTermin(termin)));
     res.json(termin);
   }
