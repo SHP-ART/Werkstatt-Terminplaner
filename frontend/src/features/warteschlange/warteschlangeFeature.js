@@ -155,7 +155,9 @@ export function installWarteschlangeFeature(AppClass) {
     },
 
     getWarteschlangeKollegen(termin, aktuellerMitarbeiterId) {
-      const benoetigt = Math.max(0, Number(termin.geschaetzte_zeit) || 0);
+      const benoetigt = Math.max(0, Number(
+        termin.effektive_zeit_minuten ?? termin.geschaetzte_zeit
+      ) || 0);
       return (this.warteschlangeData?.mitarbeiter || []).filter(person => (
         Number(person.mitarbeiter_id) !== Number(aktuellerMitarbeiterId)
         && Number(person.kapazitaet_minuten) - Number(person.last_minuten) >= benoetigt

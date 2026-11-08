@@ -172,6 +172,25 @@ describe('Warteschlange-Mutationen', () => {
   });
 });
 
+describe('Warteschlange-Kollegenauswahl', () => {
+  it('vergleicht freie Kapazität mit der effektiven Zetteldauer inklusive Nebenzeit', () => {
+    const app = createWarteschlangeApp();
+    app.warteschlangeData = {
+      mitarbeiter: [
+        { mitarbeiter_id: 1, kapazitaet_minuten: 480, last_minuten: 495 },
+        { mitarbeiter_id: 2, kapazitaet_minuten: 480, last_minuten: 330 }
+      ]
+    };
+
+    const kollegen = app.getWarteschlangeKollegen({
+      geschaetzte_zeit: 150,
+      effektive_zeit_minuten: 165
+    }, 1);
+
+    expect(kollegen).toEqual([]);
+  });
+});
+
 describe('Warteschlange-Terminstatus', () => {
   it('markiert einen Zettel mit Status in_arbeit sichtbar als läuft', () => {
     const app = createWarteschlangeApp();

@@ -63,7 +63,11 @@ function markiereUeberlauf(zettel, kapazitaet, nebenzeitProzent = 0) {
     const naechsteLast = Math.round((lastRoh + minuten) * nebenzeitFaktor);
     if (!ueberlauf && naechsteLast > kapazitaet) ueberlauf = true;
     lastRoh += minuten;
-    return { ...termin, morgen: ueberlauf };
+    return {
+      ...termin,
+      effektive_zeit_minuten: Math.round(minuten * nebenzeitFaktor),
+      morgen: ueberlauf
+    };
   });
 
   return { zettel: markierteZettel, last_minuten: Math.round(lastRoh * nebenzeitFaktor) };

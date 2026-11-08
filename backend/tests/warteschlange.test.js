@@ -227,6 +227,8 @@ describe('Warteschlange — Tagesansicht', () => {
     const spalte = response.body.mitarbeiter.find(item => item.mitarbeiter_id === 1);
     expect(spalte.kapazitaet_minuten).toBe(480);
     expect(spalte.last_minuten).toBe(495);
+    expect(spalte.zettel[0].effektive_zeit_minuten).toBe(330);
+    expect(spalte.zettel[1].effektive_zeit_minuten).toBe(165);
     expect(Math.round(spalte.last_minuten / spalte.kapazitaet_minuten * 100)).toBe(103);
     expect(spalte.zettel.map(item => [item.id, item.morgen])).toEqual([
       [1, false],
