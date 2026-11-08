@@ -417,6 +417,7 @@ Vollständige Beschreibungen in [.claude/PROJEKT.md](.claude/PROJEKT.md) Abschni
 | `tabletUpdateRoutes.js` | Auto-Update-System für Tablet-App |
 | `auftragsimportRoutes.js` | PDF-Auftragsimport aus Watch-Ordner, Korrektur erkannter Arbeiten, Schnelltermin/Zuordnung |
 | `tagesstempelRoutes.js` | Arbeitsbeginn/Arbeitsende/Unterbrechungen je Person (→ tagesstempelController) |
+| `warteschlangeRoutes.js` | Zettel-Board, Zuweisung/Reihenfolge und nächster Auftrag je Mechaniker für das Tablet |
 | `GET /api/zeitkonto` | Zeitkonto pro Person (kein eigenes Route-File, direkt in index.js → zeitkontoController) |
 | `sucheRoutes.js` | Globale Suche |
 | `systemRoutes.js` | Systeminfos, Health-Check |

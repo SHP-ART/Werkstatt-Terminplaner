@@ -26,6 +26,11 @@ CLAUDE.md Abschnitt 6 · `ungetestet` = keine Absicherung
 | Papierkorb: gelöschte Termine ansehen und wiederherstellen | Tab `papierkorb` | manuell |
 | Phasen je Termin (Bringen, Arbeit, Abholung) | `phasenRoutes.js` | ungetestet |
 | Teileerfassung je Termin und Bestellverwaltung | `teileRoutes.js`, `teileBestellung.js` | ungetestet |
+| Zettel-Board lädt NEU (schwebende Termine/offene Importe) und Mechaniker-Queues für ein Datum (`GET /api/warteschlange?datum=...`) | `warteschlangeRoutes.js`, `frontend/src/features/warteschlange/warteschlangeFeature.js` | Backend/Frontend automatisiert, Board manuell |
+| Board: Zettel per Drag & Drop oder „Zu Kollegen“ zuweisen (`PUT /api/warteschlange/zuweisen`), Reihenfolge ändern (`PUT /api/warteschlange/reihenfolge`) | `warteschlangeRoutes.js`, `warteschlangeFeature.js` | Backend automatisiert, Browser manuell |
+| Board: Last/Kapazität, „morgen“-Überlauf, „läuft“-Markierung, Import-Schnelltermin und Reload über `termin.queue_updated` | `warteschlangeFeature.js`, `realtimeFeature.js` | automatisiert (`frontend/tests/features/warteschlange.test.js`), Live manuell |
+| Queue-Zettel auf nächsten Arbeitstag verschieben (`POST /api/warteschlange/:terminId/naechster-tag`) | `warteschlangeRoutes.js` | automatisiert (`tests/warteschlange.test.js`) |
+| Nächster Queue-Zettel je Mechaniker (`GET /api/warteschlange/mitarbeiter/:id/naechster`) und Tablet-Anzeige „Mein nächster Auftrag“ mit Anstempeln | `warteschlangeRoutes.js`, `electron-intern-tablet/index.html` | Backend automatisiert (`tests/warteschlange.test.js`), Tablet manuell |
 
 ## Kapazität und Auslastung
 

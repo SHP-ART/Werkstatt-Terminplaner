@@ -145,6 +145,7 @@ Enthält Geschäftslogik zwischen Route und Model. Jeder Controller ist verantwo
 | `wiederkehrendeTermineController.js` | Wiederkehrende Terminserien |
 | `fahrzeugeController.js` | Fahrzeuge CRUD |
 | `tagesstempelController.js` | Arbeitsbeginn/Arbeitsende/Unterbrechungen je Person (Tagesstempel + Arbeitsunterbrechungen) |
+| `warteschlangeController.js` | Zettel-Board, Zuweisung/Reihenfolge und nächster aktueller Auftrag je Mechaniker |
 
 #### Models (`models/`)
 Reine Datenbankschicht. Keine Geschäftslogik. Nutzen `dbHelper.js` für Promise-basierte Queries.
@@ -153,6 +154,7 @@ Wichtige Models:
 - `termineModel.js` – Termin-Abfragen inkl. JOIN auf Kunden und Mitarbeiter; soft-delete via `geloescht_am`; Termin-Nr-Generator (`T-YYYY-NNN`)
 - `kundenModel.js` – inkl. `importMultiple()` für Locosoft-Import mit Duplikat-Erkennung via normiertes Kennzeichen
 - `auftragsimportModel.js` – PDF-Auftragsimporte, erkannte JSON-Daten und Zuordnungstreffer
+- `warteschlangeModel.js` – Queue-Abfragen und Positionen, inklusive oberstem aktivem Zettel je Mechaniker und Datum
 - `einstellungenModel.js` – Schlüssel-Wert-Store für App-Einstellungen
 - `tabletUpdateModel.js` – Speichert registrierte Tablet-App-Versionen
 
@@ -194,7 +196,7 @@ Wichtige Models:
 | `validation.js` | `express-validator`-basierte Eingabevalidierung |
 
 #### Migrations (`migrations/`)
-30 nummerierte Migrations (001–030). Automatisch ausgeführt beim Serverstart. Zustand wird in `schema_migrations`-Tabelle gespeichert.
+Nummerierte Migrationen (derzeit bis 052). Automatisch ausgeführt beim Serverstart. Zustand wird in `schema_migrations`-Tabelle gespeichert.
 
 Wichtige Migrations:
 - `001_initial.js` – Basistabellen
@@ -204,6 +206,7 @@ Wichtige Migrations:
 - `029_wiederholung.js` – Wiederkehrende Termine
 - `030_arbeitspausen.js` – Detaillierte Pausenzeiten
 - `034_tagesstempel.js` – Tagesstempel- und Arbeitsunterbrechungen-Tabellen
+- `052_warteschlange_pos.js` – Nullable `termine.warteschlange_pos` und Index auf `(mitarbeiter_id, warteschlange_pos)` für das Zettel-Board
 
 ---
 
@@ -212,6 +215,7 @@ Wichtige Migrations:
 - **Build-Tool:** Vite 7, erzeugt `dist/` mit Hash-basiertem Asset-Namen
 - **`src/services/api.js`:** Einziger HTTP-Client. Enthält `API_BASE_URL` (aus `CONFIG.API_URL`). Implementiert Health-Check mit Retry-Logik (Exponential Backoff, 3 Versuche, max 4s Delay).
 - **`src/components/app.js`:** Monolithische Haupt-App-Klasse (`class App`). Verwaltet den gesamten Anwendungszustand (Kunden-Cache, Termine-Cache, Tab-Zustand, WebSocket-Verbindung, Fuzzy-Search-Index, Drag&Drop-Puffer). Enthält alle UI-Handler, Tab-Navigation, Formularlogik sowie WebSocket-Message-Handling (`handleWebSocketMessage` → `handleRealtimeTerminEvent` / `handleRealtimeKundenEvent`). Enthält auch Hilfslogik für Lehrlings-Berufsschulwochen-Erkennung (ISOKalenderwoche), Datumsformatierung und Toasts.
+- **`src/features/warteschlange/warteschlangeFeature.js`:** Zettel-Board mit NEU-Spalte, Mechaniker-Queues, Last/„morgen“/„läuft“, Drag & Drop, Kollegen-Auswahl und Import-Schnelltermin; lädt nach Mutationen und bei `termin.queue_updated` neu.
 - **`src/components/migrationMonitor.js`:** Überwacht laufende Migrations und zeigt Status im Frontend an.
 
 ### Electron-Desktop (`backend/electron-main.js`)
@@ -272,7 +276,7 @@ Backend
 
 | Tabelle | Inhalt |
 |---|---|
-| `termine` | Haupt-Termintabelle; FK → `kunden`, `mitarbeiter`; Felder u.a. `datum`, `uhrzeit`, `arbeit`, `status`, `mitarbeiter_id`, `kunde_id`, `kennzeichen`, `geloescht_am` (soft-delete) |
+| `termine` | Haupt-Termintabelle; FK → `kunden`, `mitarbeiter`; Felder u.a. `datum`, `uhrzeit`, `arbeit`, `status`, `mitarbeiter_id`, `kunde_id`, `kennzeichen`, `geloescht_am` (soft-delete), `warteschlange_pos` (nullable Queue-Position seit Migration 052) |
 | `termine_arbeiten` | Relationale Arbeiten je Termin (seit Migration 013); Felder: `stempel_start` TEXT (HH:MM, NULL = nicht gestempelt), `stempel_ende` TEXT (HH:MM, NULL = nicht gestempelt) seit Migration 032 |
 | `kunden` | Kundendaten; `locosoft_id` für Importzuordnung; `kennzeichen`, `vin`, `fahrzeugtyp` |
 | `mitarbeiter` | Mitarbeiter; `aktiv` Flag |
@@ -311,6 +315,7 @@ Alle Events haben Format: `{ event: string, data: any, ts: number }`
 |---|---|---|---|
 | `termin.created` | `termineController` | `{ id, datum }` | Lädt Termine-Cache, Dashboard, aktiven Tab neu |
 | `termin.updated` | `termineController` | `{ id, datum }` | Lädt Termine-Cache, Dashboard, aktiven Tab neu |
+| `termin.queue_updated` | `warteschlangeController` | `{ mitarbeiter_id }` | Lädt das geöffnete Zettel-Board neu |
 | `termin.deleted` | `termineController` | `{ id, datum }` | Lädt Papierkorb neu (wenn aktiv) |
 | `termin.restored` | `termineController` | `{ id, datum }` | Lädt Papierkorb neu |
 | `kunde.created` | `kundenController` | `{ id }` | Lädt Kunden-Liste, Dashboard neu |
@@ -394,13 +399,14 @@ Setzt `DATA_DIR=/var/lib/werkstatt-terminplaner` damit die Datenbank im persiste
 |---|---|---|
 | `utils/auslastung.js` | 21 Fälle – Statusfilter, Zeitverteilung, Kapazität, Restzeit, Verkettung | `tests/auslastung.test.js` |
 | `utils/belegung.js` | 14 Fälle – Intervalle, Überschneidungen, Warte-Konflikte, freie Slots | `tests/belegung.test.js` |
-| Migrations | **stillgelegt** – mockte wirkungslos, destabilisierte den Lauf | `tests/migrations.test.js` |
+| Migrations (Generalsuite) | **stillgelegt** – mockte wirkungslos, destabilisierte den Lauf | `tests/migrations.test.js` |
+| Migration 052 | 2 aktive Fälle – Spalte, Index und Runner-Registrierung | `tests/warteschlangeMigration.test.js` |
+| Warteschlange (Route/Controller/Model) | 27 aktive HTTP-/SQLite-Fälle – Queue, Positionen, Filter, nächster Zettel | `tests/warteschlange.test.js` |
 | Arbeitspausen, Stempelzeiten, Nachstempeln | vorhanden | `tests/*.test.js` |
 | Auftragsimport (Service + Parser) | vorhanden | `tests/auftragsImportService.test.js`, `tests/auftragsParserService.test.js` |
 | Regressionstests | 8 Dateien | `tests/bugs/` |
-| **Controller** | **keine** | – |
-| **Models (außer via bugs/)** | **keine** | – |
-| **Frontend** | **keine** | – |
+| **Controller/Models außer Warteschlange und bugs/** | **keine** | – |
+| **Frontend Warteschlange** | 10 Fälle – Lastberechnung, Request-Datum, Lade-/Fehlerzustände, „läuft“; Installer-Registrierung separat | `frontend/tests/features/warteschlange.test.js`, `frontend/tests/features/installers.test.js` |
 
 Muster für neue Rechenlogik: reine Funktion in `utils/`, dort getestet; Models und
 Controller laden nur Daten und rufen sie auf. So entstanden `belegung.js` und

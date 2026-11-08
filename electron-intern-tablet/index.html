@@ -2082,7 +2082,8 @@
     }
 
     // ========== BUTTON HANDLER ==========
-    async function handleBestaetigen(personId, personTyp, terminId, kundeName) {
+    async function handleBestaetigen(personId, personTyp, terminId, kundeName, optionen = {}) {
+      let statusGeschrieben = false;
       try {
         const heute = formatDateLocal(new Date());
         
@@ -2092,6 +2093,7 @@
         
         // 1. Status auf in_arbeit setzen + tatsächliche Startzeit speichern
         await ApiService.put(`/termine/${terminId}`, { status: 'in_arbeit', startzeit: aktuelleZeit });
+        statusGeschrieben = true;
         
         // 2. Termine neu berechnen
         await ApiService.post('/termine/berechne-zeiten-neu', {
@@ -2109,6 +2111,65 @@
       } catch (error) {
         console.error('Fehler beim Bestätigen:', error);
         showToast(`Fehler: ${error.message}`, 'error');
+        if (optionen.statusFehlerWeitergeben && !statusGeschrieben) throw error;
+      }
+    }
+
+    async function handleNaechstenAuftragAnstempeln(personId, terminId, button) {
+      const zettel = naechsteZettelNachId.get(Number(terminId));
+      if (!zettel) {
+        showToast('Der nächste Auftrag ist nicht mehr verfügbar', 'error');
+        await loadTeamUebersicht();
+        return;
+      }
+
+      const ersteOffeneArbeit = getArbeitenFromTermin(zettel).find(arbeit => !arbeit.abgeschlossen);
+      const arbeitName = ersteOffeneArbeit?.name || zettel.arbeit;
+      if (!arbeitName) {
+        showToast('Der Auftrag enthält keine anstempelbare Arbeit', 'error');
+        return;
+      }
+      const vorherigerStempelStart = ersteOffeneArbeit?.stempel_start ?? null;
+      const vorherigerStempelEnde = ersteOffeneArbeit?.stempel_ende ?? null;
+
+      if (button) button.disabled = true;
+      let stempelGeschrieben = false;
+      try {
+        const jetzt = new Date();
+        const aktuelleZeit = `${String(jetzt.getHours()).padStart(2, '0')}:${String(jetzt.getMinutes()).padStart(2, '0')}`;
+        const stempelStart = zettel._anstempelStart || aktuelleZeit;
+        await ApiService.put('/stempelzeiten/stempel', {
+          termin_id: terminId,
+          arbeit_name: arbeitName,
+          stempel_start: stempelStart,
+          person_id: personId,
+          person_typ: 'mitarbeiter'
+        });
+        stempelGeschrieben = true;
+        zettel._anstempelStart = stempelStart;
+        await handleBestaetigen(personId, 'mitarbeiter', terminId, zettel.kunde_name || '', {
+          statusFehlerWeitergeben: true
+        });
+        delete zettel._anstempelStart;
+      } catch (error) {
+        if (stempelGeschrieben) {
+          try {
+            await ApiService.put('/stempelzeiten/stempel', {
+              termin_id: terminId,
+              arbeit_name: arbeitName,
+              stempel_start: vorherigerStempelStart,
+              stempel_ende: vorherigerStempelEnde,
+              person_id: personId,
+              person_typ: 'mitarbeiter'
+            });
+          } catch (rollbackError) {
+            console.error('Fehler beim Wiederherstellen des Stempels:', rollbackError);
+          }
+        }
+        console.error('Fehler beim Anstempeln:', error);
+        showToast(`Fehler beim Anstempeln: ${error.message}`, 'error');
+      } finally {
+        if (button?.isConnected) button.disabled = false;
       }
     }
 
@@ -2271,7 +2332,7 @@
     }
 
     // ========== KACHEL RENDERN ==========
-    function renderPersonKachel(person, alleTermine, typ, globaleNebenzeit, arbeitszeit, aktiveArbeitspausen = [], tagesstempel = null, unterbrechungen = []) {
+    function renderPersonKachel(person, alleTermine, typ, globaleNebenzeit, arbeitszeit, aktiveArbeitspausen = [], tagesstempel = null, unterbrechungen = [], naechsterQueueEintrag = null) {
       const personId = person.id;
       const personName = person.name;
       const isLehrling = typ === 'lehrling';
@@ -2318,7 +2379,7 @@
       const istArbeitPausiert = !!aktiveArbeitspause || zeigtPausierteArbeit;
 
       // Finde nächsten Auftrag (auch überfällige offene Termine berücksichtigen!)
-      const naechsterAuftrag = personTermine.find(t => {
+      let naechsterAuftrag = personTermine.find(t => {
         if (t === aktuellerAuftrag) return false;
         if (pauseTerminIds.has(Number(t.id))) return false;
         if (t.status === 'unterbrochen' || t.status === 'in_arbeit') return false;
@@ -2327,6 +2388,9 @@
         // Alle offenen/geplanten Termine als "nächsten" zählen
         return true;
       });
+      if (!isLehrling && naechsterQueueEintrag?.zettel?.status === 'geplant' && !aktuellerAuftrag) {
+        naechsterAuftrag = naechsterQueueEintrag.zettel;
+      }
 
       console.log(`[DEBUG] ${personName}: aktuellerAuftrag=`, aktuellerAuftrag, 'naechsterAuftrag=', naechsterAuftrag);
 
@@ -2565,7 +2629,7 @@
           ${pausierteHtml}
 
           ${naechsterAuftrag ? `<div class="naechster-auftrag">
-            <div class="naechster-label">⏰ Nächster Auftrag:</div>
+            <div class="naechster-label">⏰ ${naechsterQueueEintrag ? 'Mein nächster Auftrag' : 'Nächster Auftrag'}:</div>
             <div class="auftrag-info" style="border-left-color: var(--success);">
               <div class="auftrag-nr">${escapeHtml(naechsterAuftrag.termin_nr) || '-'}${interneNrNaechster ? ` <span class="auftrag-interne-nr">· ${interneNrNaechster}</span>` : ''}</div>
               <div class="auftrag-kunde">${escapeHtml(naechsterAuftrag.kunde_name) || '-'}</div>
@@ -2585,12 +2649,16 @@
           </div>` : ''}
         `;
       } else {
-        const leerIcon = isLehrling ? '🧹' : '🎉';
-        const leerText = isLehrling ? 'Werkstatt-Reinigung' : 'Keine Aufträge für heute';
+        const queueFehler = !isLehrling && naechsterQueueEintrag?.fehler;
+        const leerIcon = queueFehler ? '⚠️' : (isLehrling ? '🧹' : '🎉');
+        const leerText = queueFehler
+          ? 'Mein nächster Auftrag konnte nicht geladen werden'
+          : (isLehrling ? 'Werkstatt-Reinigung' : (naechsterQueueEintrag ? 'Mein nächster Auftrag: Kein offener Zettel für heute' : 'Keine Aufträge für heute'));
         bodyContent = `
-          <div class="leer-zustand">
+          <div class="leer-zustand" role="status">
             <div class="leer-icon">${leerIcon}</div>
             <div class="leer-text">${leerText}</div>
+            ${queueFehler ? '<button class="tablet-btn" onclick="loadTeamUebersicht()">Erneut versuchen</button>' : ''}
           </div>
         `;
       }
@@ -2617,13 +2685,15 @@
       const alleArbeitenAbgeschlossen = terminArbeiten.length > 0 && terminArbeiten.every(a => a.abgeschlossen);
       const kannBeenden = terminMitButtons && !manuellePauseAktiv && !inBerufsschule && !istAbwesend && 
                          terminMitButtons.status === 'in_arbeit' && !hatMehrereArbeiten;
+      const queueStart = naechsterQueueEintrag?.zettel === naechsterAuftrag && !aktuellerAuftrag;
+      const startAktion = queueStart
+        ? `handleNaechstenAuftragAnstempeln(${personId}, ${terminMitButtons?.id}, this)`
+        : `handleBestaetigen(${personId}, '${typ}', ${terminMitButtons?.id}, '${escapeHtml(terminMitButtons?.kunde_name)}')`;
       
       if (kannStarten) {
-        // Starten-Button aktiv
         buttonsHtml += `
-          <button class="tablet-btn tablet-btn-confirm" 
-                  onclick="handleBestaetigen(${personId}, '${typ}', ${terminMitButtons.id}, '${escapeHtml(terminMitButtons.kunde_name)}')">
-            <span class="btn-icon">▶️</span> Starten
+          <button class="tablet-btn tablet-btn-confirm" onclick="${startAktion}">
+            <span class="btn-icon">▶️</span> ${queueStart ? 'Anstempeln' : 'Starten'}
           </button>
         `;
       } else if (kannBeenden || (hatMehrereArbeiten && alleArbeitenAbgeschlossen)) {
@@ -2735,6 +2805,12 @@
           </div>
           ` : ''}
           <div class="person-body">
+            ${naechsterQueueEintrag?.fehler && (aktuellerAuftrag || pausierteAuftraege.length > 0) ? `
+              <div class="auftrag-info" role="alert">
+                Mein nächster Auftrag konnte nicht geladen werden.
+                <button class="tablet-btn" onclick="loadTeamUebersicht()">Erneut versuchen</button>
+              </div>
+            ` : ''}
             ${bodyContent}
           </div>
         </div>
@@ -2796,6 +2872,7 @@
 
     // ========== DATEN LADEN ==========
     let _letzterErfolgreicheLadestand = null; // Letzter bekannter guter HTML-Inhalt
+    let naechsteZettelNachId = new Map();
 
     function _zeigeOfflineBanner(sichtbar, zeitpunkt = null) {
       const banner = document.getElementById('offlineBanner');
@@ -2835,6 +2912,20 @@
         const globaleNebenzeit = einstellungen?.nebenzeit_prozent || 0;
         const aktiveMitarbeiter = mitarbeiter.filter(m => m.aktiv === 1);
         const aktiveLehrlinge = lehrlinge.filter(l => l.aktiv === 1);
+        const naechsteQueueErgebnisse = await Promise.all(aktiveMitarbeiter.map(async m => {
+          try {
+            const data = await ApiService.get(`/warteschlange/mitarbeiter/${m.id}/naechster`);
+            return { mitarbeiter_id: m.id, zettel: data.zettel || null, fehler: null };
+          } catch (error) {
+            return { mitarbeiter_id: m.id, zettel: null, fehler: error.message };
+          }
+        }));
+        const naechsteQueueEintraege = Object.fromEntries(
+          naechsteQueueErgebnisse.map(eintrag => [eintrag.mitarbeiter_id, eintrag])
+        );
+        naechsteZettelNachId = new Map(
+          naechsteQueueErgebnisse.filter(eintrag => eintrag.zettel).map(eintrag => [Number(eintrag.zettel.id), eintrag.zettel])
+        );
 
         // Merge Pausen-Daten in Person-Objekte
         const pausenMap = {};
@@ -2965,7 +3056,7 @@
           const arbeitszeit = arbeitszeitenMap[`mitarbeiter_${m.id}`];
           const ts = tagesstempelMap[`mitarbeiter_${m.id}`] || null;
           const ub = unterbrechungenMap[`mitarbeiter_${m.id}`] || [];
-          allKacheln.push(renderPersonKachel(m, relevanteTermine, 'mitarbeiter', globaleNebenzeit, arbeitszeit, normAktiveArbeitspausen, ts, ub));
+          allKacheln.push(renderPersonKachel(m, relevanteTermine, 'mitarbeiter', globaleNebenzeit, arbeitszeit, normAktiveArbeitspausen, ts, ub, naechsteQueueEintraege[m.id]));
         });
 
         // Lehrlinge Kacheln

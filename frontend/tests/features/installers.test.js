@@ -23,6 +23,7 @@ import { installTerminTrashFeature } from '../../src/features/trash/terminTrashF
 import { installWaitingActionsFeature } from '../../src/features/waitingActions/waitingActionsFeature.js';
 import { installWorkTimeModalFeature } from '../../src/features/workTimeModal/workTimeModalFeature.js';
 import { installWorkSchedulesFeature } from '../../src/features/workSchedules/workSchedulesFeature.js';
+import { installWarteschlangeFeature } from '../../src/features/warteschlange/warteschlangeFeature.js';
 
 describe('feature installers', () => {
   it('registers extracted feature methods', () => {
@@ -52,6 +53,7 @@ describe('feature installers', () => {
     installWaitingActionsFeature(TestApp);
     installWorkTimeModalFeature(TestApp);
     installWorkSchedulesFeature(TestApp);
+    installWarteschlangeFeature(TestApp);
 
     expect(TestApp.prototype.loadAbwesenheit).toBeTypeOf('function');
     expect(TestApp.prototype.handleAbwesenheitSubmit).toBeTypeOf('function');
@@ -145,5 +147,7 @@ describe('feature installers', () => {
     expect(TestApp.prototype.saveArbeitszeitenModal).toBeTypeOf('function');
     expect(TestApp.prototype.loadArbeitszeitenForPerson).toBeTypeOf('function');
     expect(TestApp.prototype.saveWochenMuster).toBeTypeOf('function');
+    expect(TestApp.prototype.loadWarteschlange).toBeTypeOf('function');
+    expect(TestApp.prototype.handleWarteschlangeDrop).toBeTypeOf('function');
   });
 });
