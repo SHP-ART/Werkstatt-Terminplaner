@@ -1041,6 +1041,15 @@
       background: #ffebee;
     }
 
+    .tablet-zeit-warnung {
+      margin-top: 8px;
+      padding: 8px;
+      border-left: 3px solid var(--danger);
+      background: #ffebee;
+      color: #9c1c1c;
+      font-weight: 600;
+    }
+
     .badge-verschoben, .badge-verspaetet {
       display: inline-block;
       padding: 2px 8px;
@@ -2035,6 +2044,12 @@
       }
     }
 
+    function renderTerminWarnungenTablet(termin) {
+      return (termin.warnungen || []).map(warnung => (
+        `<div class="tablet-zeit-warnung" role="alert">${escapeHtml(warnung.message)}</div>`
+      )).join('');
+    }
+
     /**
      * Rendert Arbeiten als kompakte Bullet-Liste (ohne Buttons, für Vorschau)
      */
@@ -2144,6 +2159,7 @@
       const vorherigerStempelStart = ersteOffeneArbeit?.stempel_start ?? null;
       const vorherigerStempelEnde = ersteOffeneArbeit?.stempel_ende ?? null;
       const anstempelKey = `anstempel-start:${terminId}:${encodeURIComponent(arbeitName)}`;
+      const personTyp = zettel.lehrling_id ? 'lehrling' : 'mitarbeiter';
 
       if (button) button.disabled = true;
       let stempelGeschrieben = false;
@@ -2157,11 +2173,11 @@
           arbeit_name: arbeitName,
           stempel_start: stempelStart,
           person_id: personId,
-          person_typ: 'mitarbeiter'
+          person_typ: personTyp
         });
         stempelGeschrieben = true;
         zettel._anstempelStart = stempelStart;
-        await handleBestaetigen(personId, 'mitarbeiter', terminId, zettel.kunde_name || '', {
+        await handleBestaetigen(personId, personTyp, terminId, zettel.kunde_name || '', {
           statusFehlerWeitergeben: true
         });
         delete zettel._anstempelStart;
@@ -2403,7 +2419,7 @@
         // Alle offenen/geplanten Termine als "nächsten" zählen
         return true;
       });
-      if (!isLehrling && naechsterQueueEintrag?.zettel?.status === 'geplant' && !aktuellerAuftrag) {
+      if (naechsterQueueEintrag?.zettel?.status === 'geplant' && !aktuellerAuftrag) {
         naechsterAuftrag = naechsterQueueEintrag.zettel;
       }
 
@@ -2567,6 +2583,7 @@
             ${!hatMehrereArbeiten ? `<div class="auftrag-arbeit">${escapeHtml(aktuellerAuftrag.arbeit) || '-'}</div>` : ''}
             ${hatMehrereArbeiten ? renderArbeitenKompakt(aktuellerAuftrag) : ''}
             ${pauseSeitText ? `<div class="intern-arbeit-pause-seit">${pauseSeitText}</div>` : ''}
+            ${renderTerminWarnungenTablet(aktuellerAuftrag)}
           </div>
 
           ${hatMehrereArbeiten ? renderArbeitenListe(aktuellerAuftrag, personId, typ) : ''}
@@ -2650,6 +2667,7 @@
               <div class="auftrag-kunde">${escapeHtml(naechsterAuftrag.kunde_name) || '-'}</div>
               <div class="auftrag-kennzeichen">${escapeHtml(naechsterAuftrag.kennzeichen) || '-'}</div>
               ${renderArbeitenKompakt(naechsterAuftrag) || `<div class="auftrag-arbeit">${escapeHtml(naechsterAuftrag.arbeit) || '-'}</div>`}
+              ${renderTerminWarnungenTablet(naechsterAuftrag)}
             </div>
             <div class="zeit-info" style="margin-top: 10px;">
               <div class="zeit-item">
@@ -2927,16 +2945,20 @@
         const globaleNebenzeit = einstellungen?.nebenzeit_prozent || 0;
         const aktiveMitarbeiter = mitarbeiter.filter(m => m.aktiv === 1);
         const aktiveLehrlinge = lehrlinge.filter(l => l.aktiv === 1);
-        const naechsteQueueErgebnisse = await Promise.all(aktiveMitarbeiter.map(async m => {
+        const queuePersonen = [
+          ...aktiveMitarbeiter.map(person => ({ typ: 'mitarbeiter', id: person.id })),
+          ...aktiveLehrlinge.map(person => ({ typ: 'lehrling', id: person.id }))
+        ];
+        const naechsteQueueErgebnisse = await Promise.all(queuePersonen.map(async person => {
           try {
-            const data = await ApiService.get(`/warteschlange/mitarbeiter/${m.id}/naechster`);
-            return { mitarbeiter_id: m.id, zettel: data.zettel || null, fehler: null };
+            const data = await ApiService.get(`/warteschlange/${person.typ}/${person.id}/naechster`);
+            return { ...person, zettel: data.zettel || null, fehler: null };
           } catch (error) {
-            return { mitarbeiter_id: m.id, zettel: null, fehler: error.message };
+            return { ...person, zettel: null, fehler: error.message };
           }
         }));
         const naechsteQueueEintraege = Object.fromEntries(
-          naechsteQueueErgebnisse.map(eintrag => [eintrag.mitarbeiter_id, eintrag])
+          naechsteQueueErgebnisse.map(eintrag => [`${eintrag.typ}_${eintrag.id}`, eintrag])
         );
         naechsteZettelNachId = new Map(
           naechsteQueueErgebnisse.filter(eintrag => eintrag.zettel).map(eintrag => [Number(eintrag.zettel.id), eintrag.zettel])
@@ -3071,7 +3093,7 @@
           const arbeitszeit = arbeitszeitenMap[`mitarbeiter_${m.id}`];
           const ts = tagesstempelMap[`mitarbeiter_${m.id}`] || null;
           const ub = unterbrechungenMap[`mitarbeiter_${m.id}`] || [];
-          allKacheln.push(renderPersonKachel(m, relevanteTermine, 'mitarbeiter', globaleNebenzeit, arbeitszeit, normAktiveArbeitspausen, ts, ub, naechsteQueueEintraege[m.id]));
+          allKacheln.push(renderPersonKachel(m, relevanteTermine, 'mitarbeiter', globaleNebenzeit, arbeitszeit, normAktiveArbeitspausen, ts, ub, naechsteQueueEintraege[`mitarbeiter_${m.id}`]));
         });
 
         // Lehrlinge Kacheln
@@ -3079,7 +3101,7 @@
           const arbeitszeit = arbeitszeitenMap[`lehrling_${l.id}`];
           const ts = tagesstempelMap[`lehrling_${l.id}`] || null;
           const ub = unterbrechungenMap[`lehrling_${l.id}`] || [];
-          allKacheln.push(renderPersonKachel(l, relevanteTermine, 'lehrling', globaleNebenzeit, arbeitszeit, normAktiveArbeitspausen, ts, ub));
+          allKacheln.push(renderPersonKachel(l, relevanteTermine, 'lehrling', globaleNebenzeit, arbeitszeit, normAktiveArbeitspausen, ts, ub, naechsteQueueEintraege[`lehrling_${l.id}`]));
         });
 
         if (allKacheln.length > 0) {

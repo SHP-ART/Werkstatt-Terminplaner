@@ -1,5 +1,21 @@
+import { escapeHtml } from '../../shared/dom.js';
+
 export function installPlanungFeature(AppClass) {
   Object.assign(AppClass.prototype, {
+    renderTerminWarnungen(termin) {
+      return (termin.warnungen || []).map(warnung => (
+        `<div class="termin-zeit-warnung" role="alert">${escapeHtml(warnung.message)}</div>`
+      )).join('');
+    },
+
+    renderPlanungWarnungsBanner(termine) {
+      const meldungen = (termine || []).flatMap(termin => (
+        (termin.warnungen || []).map(warnung => warnung.message)
+      ));
+      if (meldungen.length === 0) return '';
+      return `<div class="termin-zeit-warnung" role="alert">${meldungen.map(escapeHtml).join('<br>')}</div>`;
+    },
+
     bindPlanungEventListeners() {
       const dragDropDatum = document.getElementById('auslastungDragDropDatum');
       this.bindEventListenerOnce(dragDropDatum, 'change', () => {

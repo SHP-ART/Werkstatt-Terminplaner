@@ -1884,6 +1884,7 @@ export function installDragDropFeature(AppClass) {
         <div class="bar-zeit">⏱️ ${dauerText}</div>
         ${zeitenInfo ? `<div class="bar-zeiten">${zeitenInfo}</div>` : ''}
         ${istUebertrag ? `<div class="bar-abholung-deadline">🏁 Abholung: ${this.formatDatum(termin.abholung_datum)}</div>` : ''}
+        ${this.renderTerminWarnungen(termin)}
         ${termin._nichtZugeordnet
           ? `<button class="btn-einplanen" onclick="event.stopPropagation(); app.showTerminDetails(${termin.id})" title="Termin-Details anzeigen – Mitarbeiter über Ziehen zuweisen">👤 Mitarbeiter zuweisen</button>`
           : `<button class="btn-einplanen" onclick="event.stopPropagation(); app.einplanenSchwebenderTermin(${termin.id})" title="In aktuellen Tag einplanen">📅 Einplanen</button>`
@@ -3042,6 +3043,7 @@ export function installDragDropFeature(AppClass) {
       div.innerHTML = `
         <div class="termin-title">${termin.termin_nr || 'Neu'} - ${termin.kennzeichen || ''}</div>
         <div class="termin-info">${termin.kunde_name || ''} • ${dauerText}</div>
+        ${this.renderTerminWarnungen(termin)}
       `;
       
       div.title = `${termin.termin_nr}\n${termin.kunde_name}\n${termin.arbeit}\n${startzeit} - ${dauerText}${abholzeitInfo}`;
@@ -4992,13 +4994,19 @@ export function installDragDropFeature(AppClass) {
       const liste  = document.getElementById('auslastungWarnungListeZeitleiste');
       if (!banner || !liste) return;
       banner.style.display = 'none';
+      const inhalte = [];
+      const terminWarnungen = this.renderPlanungWarnungsBanner(Object.values(this.termineById || {}));
+      if (terminWarnungen) inhalte.push(terminWarnungen);
       try {
         const res = await KIPlanungService.getAnomalien(datum);
         if (res?.success && res.warnungen?.length > 0) {
-          liste.innerHTML = res.warnungen.map(w => `<li>${w}</li>`).join('');
-          banner.style.display = 'block';
+          inhalte.push(...res.warnungen.map(w => `<li>${w}</li>`));
         }
-      } catch (_) { /* Banner bleibt verborgen bei Fehler */ }
+      } catch (_) { /* Terminwarnungen bleiben bei KI-Fehler sichtbar */ }
+      if (inhalte.length > 0) {
+        liste.innerHTML = inhalte.join('');
+        banner.style.display = 'block';
+      }
     },
 
     async _pruefeSlotNachfuellung() {

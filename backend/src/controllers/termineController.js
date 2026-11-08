@@ -13,6 +13,22 @@ const { db } = require('../config/database');
 const belegung = require('../utils/belegung');
 const { berechneAuslastungErgebnis, berechneKapazitaet } = require('../utils/auslastung');
 const { berechneZeitenFuerPerson, berechneEndzeitFuerTermin } = require('../services/zeitplanungService');
+const { erstelleTerminWarnungen } = require('../utils/terminWarnungen');
+
+function mitTerminWarnungen(termin) {
+  return { ...termin, warnungen: erstelleTerminWarnungen(termin) };
+}
+
+function mitTerminWarnungenInAntwort(payload) {
+  if (Array.isArray(payload)) return payload.map(mitTerminWarnungen);
+  if (Array.isArray(payload.termine)) {
+    return { ...payload, termine: payload.termine.map(mitTerminWarnungen) };
+  }
+  if (Array.isArray(payload.data)) {
+    return { ...payload, data: payload.data.map(mitTerminWarnungen) };
+  }
+  return payload;
+}
 
 // Cache für Mitarbeiter und Lehrlinge (Performance-Optimierung)
 let mitarbeiterCache = { data: null, timestamp: 0 };
@@ -265,7 +281,7 @@ class TermineController {
       if (!termin) {
         return res.status(404).json({ error: 'Termin nicht gefunden' });
       }
-      res.json(termin);
+      res.json(mitTerminWarnungen(termin));
     } catch (err) {
       res.status(500).json({ error: err.message });
     }
@@ -285,27 +301,27 @@ class TermineController {
           if (datum) {
             const aktivePausen = await getAktivePausenFuerDatum(datum);
             const arbeitspausenMap = await getArbeitspausenMapFuerDatum(datum);
-            return res.json({ termine: cached, aktivePausen, arbeitspausenMap });
+            return res.json(mitTerminWarnungenInAntwort({ termine: cached, aktivePausen, arbeitspausenMap }));
           }
-          return res.json(cached);
+          return res.json(mitTerminWarnungenInAntwort(cached));
         }
         if (datum) {
           const rows = await TermineModel.getByDatum(datum, includeLaufende);
           const aktivePausen = await getAktivePausenFuerDatum(datum);
           const arbeitspausenMap = await getArbeitspausenMapFuerDatum(datum);
           termineListCache.set(cacheKey, rows);
-          return res.json({ termine: rows, aktivePausen, arbeitspausenMap });
+          return res.json(mitTerminWarnungenInAntwort({ termine: rows, aktivePausen, arbeitspausenMap }));
         }
         const rows = await TermineModel.getAll();
         termineListCache.set(cacheKey, rows);
-        return res.json(rows);
+        return res.json(mitTerminWarnungenInAntwort(rows));
       }
 
       const { limit, offset, page, pageSize } = pagination;
       const cacheKey = getTermineCacheKey(datum, pagination, includeLaufende);
       const cached = termineListCache.get(cacheKey);
       if (cached) {
-        return res.json(cached);
+        return res.json(mitTerminWarnungenInAntwort(cached));
       }
       if (datum) {
         const [rows, countRow] = await Promise.all([
@@ -321,7 +337,7 @@ class TermineController {
           totalPages: pageSize > 0 ? Math.ceil(total / pageSize) : 0
         };
         termineListCache.set(cacheKey, response);
-        return res.json(response);
+        return res.json(mitTerminWarnungenInAntwort(response));
       }
 
       const [rows, countRow] = await Promise.all([
@@ -337,7 +353,7 @@ class TermineController {
         totalPages: pageSize > 0 ? Math.ceil(total / pageSize) : 0
       };
       termineListCache.set(cacheKey, response);
-      res.json(response);
+      res.json(mitTerminWarnungenInAntwort(response));
     } catch (err) {
       res.status(500).json({ error: err.message });
     }

@@ -43,7 +43,7 @@ function renderKachel(queueEintrag) {
     renderArbeitenKompakt: () => '',
     renderTagesstempelZeile: () => ''
   });
-  vm.runInContext(`${extractFunction('renderPersonKachel')}; this.render = renderPersonKachel;`, context);
+  vm.runInContext(`${extractFunction('renderTerminWarnungenTablet')}; ${extractFunction('renderPersonKachel')}; this.render = renderPersonKachel;`, context);
   return context.render(
     { id: 7, name: 'Mechaniker', aktiv: 1 },
     [klassischerTermin],
@@ -85,6 +85,25 @@ test('ein geplanter Queue-Zettel ersetzt die klassische Auswahl', () => {
   assert.match(output, /Queue Kunde/);
   assert.doesNotMatch(output, /Klassisch Kunde/);
   assert.match(output, /handleNaechstenAuftragAnstempeln\(7, 2,/);
+});
+
+test('Tablet zeigt zentrale Abholzeit-Meldung als Text', () => {
+  const output = renderKachel({
+    zettel: {
+      id: 2,
+      status: 'geplant',
+      termin_nr: 'T-2',
+      kunde_name: 'Queue Kunde',
+      kennzeichen: 'QU-2',
+      arbeit: 'Bremsen',
+      geschaetzte_zeit: 30,
+      warnungen: [{
+        code: 'abholzeit_verpasst',
+        message: 'Abholzeit 16:00 nicht erreichbar – fertig ca. 16:30'
+      }]
+    }
+  });
+  assert.match(output, /Abholzeit 16:00 nicht erreichbar/);
 });
 
 function createAnstempelHarness() {

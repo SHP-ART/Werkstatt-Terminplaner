@@ -10,6 +10,7 @@ const { withTransaction: withDatabaseTransaction } = require('../utils/transacti
 const { berechneKapazitaet } = require('../utils/auslastung');
 const { broadcastEvent } = require('../utils/websocket');
 const { NotFoundError, ValidationError } = require('../utils/errors');
+const { erstelleTerminWarnungen } = require('../utils/terminWarnungen');
 
 let queueMutationTail = Promise.resolve();
 
@@ -119,7 +120,8 @@ function markiereUeberlauf(zettel, kapazitaet, nebenzeitProzent = 0, aufgabenbew
     return {
       ...termin,
       effektive_zeit_minuten: Math.round(minuten * nebenzeitFaktor * aufgabenFaktor),
-      morgen: ueberlauf
+      morgen: ueberlauf,
+      warnungen: erstelleTerminWarnungen(termin)
     };
   });
 
@@ -216,13 +218,29 @@ class WarteschlangeController {
 
   static async getNaechster(req, res) {
     const mitarbeiterId = parseId(req.params.id, 'mitarbeiter_id');
-    const ressource = { typ: 'mitarbeiter', id: mitarbeiterId };
-    await getRessourceOder404(ressource);
+    return await WarteschlangeController.getNaechsterFuerRessource(req, res, {
+      typ: 'mitarbeiter',
+      id: mitarbeiterId
+    });
+  }
 
+  static async getNaechsterLehrling(req, res) {
+    const lehrlingId = parseId(req.params.id, 'lehrling_id');
+    return await WarteschlangeController.getNaechsterFuerRessource(req, res, {
+      typ: 'lehrling',
+      id: lehrlingId
+    });
+  }
+
+  static async getNaechsterFuerRessource(req, res, ressource) {
+    await getRessourceOder404(ressource);
     const jetzt = new Date();
     const datum = `${jetzt.getFullYear()}-${String(jetzt.getMonth() + 1).padStart(2, '0')}-${String(jetzt.getDate()).padStart(2, '0')}`;
     const zettel = await WarteschlangeModel.getNaechster(datum, ressource);
-    if (zettel) zettel.arbeiten = await WarteschlangeModel.getArbeiten(zettel.id);
+    if (zettel) {
+      zettel.arbeiten = await WarteschlangeModel.getArbeiten(zettel.id);
+      zettel.warnungen = erstelleTerminWarnungen(zettel);
+    }
     res.json({ datum, zettel: zettel || null });
   }
 
