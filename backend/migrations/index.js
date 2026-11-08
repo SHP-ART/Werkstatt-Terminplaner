@@ -68,6 +68,7 @@ const migrations = [
   require('./050_fix_pdf_reifen_wartung_aw'), // Version 50 - PDF Reifen/Wartung AW-Zeit korrigieren
   require('./051_relax_arbeitspausen_grund'), // Version 51 - Arbeitspausen-Grund sonstiges erlauben
   require('./052_warteschlange_pos'), // Version 52 - Warteschlangenposition fuer Zettel-Board
+  require('./053_warteschlange_lehrlinge'), // Version 53 - Warteschlangenindex fuer Lehrlinge
 ];
 
 /**

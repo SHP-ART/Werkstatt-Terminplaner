@@ -37,18 +37,21 @@ async function addMitarbeiter(id, arbeitsstunden = 8) {
 async function addTermin({
   id,
   mitarbeiter_id = 1,
+  lehrling_id = null,
   warteschlange_pos = null,
   datum = DATUM,
   geschaetzte_zeit = 60,
   status = 'geplant',
   ist_schwebend = 0,
-  geloescht_am = null
+  geloescht_am = null,
+  arbeitszeiten_details = null
 }) {
   await dbRun(db, `
     INSERT INTO termine (
       id, termin_nr, kunde_name, kennzeichen, datum, geschaetzte_zeit,
-      arbeit, status, mitarbeiter_id, warteschlange_pos, ist_schwebend, geloescht_am
-    ) VALUES (?, ?, 'Kunde', 'AB-123', ?, ?, 'Inspektion', ?, ?, ?, ?, ?)
+      arbeit, status, mitarbeiter_id, lehrling_id, warteschlange_pos,
+      ist_schwebend, geloescht_am, arbeitszeiten_details
+    ) VALUES (?, ?, 'Kunde', 'AB-123', ?, ?, 'Inspektion', ?, ?, ?, ?, ?, ?, ?)
   `, [
     id,
     `T-2026-${String(id).padStart(3, '0')}`,
@@ -56,10 +59,20 @@ async function addTermin({
     geschaetzte_zeit,
     status,
     mitarbeiter_id,
+    lehrling_id,
     warteschlange_pos,
     ist_schwebend,
-    geloescht_am
+    geloescht_am,
+    arbeitszeiten_details
   ]);
+}
+
+async function addLehrling(id, aufgabenbewaeltigung = 100) {
+  await dbRun(db, `
+    INSERT INTO lehrlinge (
+      id, name, aktiv, arbeitsstunden_pro_tag, aufgabenbewaeltigung_prozent
+    ) VALUES (?, ?, 1, 8, ?)
+  `, [id, `Lehrling ${id}`, aufgabenbewaeltigung]);
 }
 
 async function addImport(id, status) {
@@ -90,6 +103,7 @@ beforeEach(async () => {
   await dbRun(db, 'DELETE FROM abwesenheiten');
   await dbRun(db, 'DELETE FROM termine');
   await dbRun(db, 'DELETE FROM mitarbeiter');
+  await dbRun(db, 'DELETE FROM lehrlinge');
   await dbRun(db, `
     INSERT OR REPLACE INTO werkstatt_einstellungen (id, nebenzeit_prozent) VALUES (1, 0)
   `);
@@ -598,6 +612,71 @@ describe('Warteschlange — echte Kalenderdaten', () => {
     expect(response.body.error).toBe('datum muss ein gültiges Datum im Format YYYY-MM-DD sein');
     const termin = await dbGet(db, 'SELECT datum, ist_schwebend FROM termine WHERE id = 1');
     expect(termin).toMatchObject({ datum: DATUM, ist_schwebend: 1 });
+    expect(broadcastEvent).not.toHaveBeenCalled();
+  });
+});
+
+describe('Warteschlange — Lehrlinge', () => {
+  test('Lehrlings-Queue bleibt von Mechaniker mit derselben ID getrennt', async () => {
+    await addLehrling(1);
+    await addTermin({ id: 10, ist_schwebend: 1, datum: null });
+
+    await request(app)
+      .put('/api/warteschlange/zuweisen')
+      .send({ termin_id: 10, person_typ: 'lehrling', person_id: 1, datum: DATUM })
+      .expect(200);
+
+    const zugewiesen = await dbGet(db, 'SELECT * FROM termine WHERE id = 10');
+    expect(zugewiesen.mitarbeiter_id).toBeNull();
+    expect(zugewiesen.lehrling_id).toBe(1);
+    expect(zugewiesen.warteschlange_pos).toBe(1);
+    expect(JSON.parse(zugewiesen.arbeitszeiten_details)._gesamt_mitarbeiter_id)
+      .toEqual({ type: 'lehrling', id: 1 });
+
+    const response = await request(app)
+      .get('/api/warteschlange')
+      .query({ datum: DATUM })
+      .expect(200);
+    expect(response.body.lehrlinge[0].zettel.map(item => item.id)).toEqual([10]);
+    expect(response.body.mitarbeiter[0].zettel.map(item => item.id)).not.toContain(10);
+  });
+
+  test('wendet Nebenzeit und Aufgabenbewältigung auf Lehrlingslast an', async () => {
+    await addLehrling(1, 150);
+    await dbRun(db, 'UPDATE werkstatt_einstellungen SET nebenzeit_prozent = 10 WHERE id = 1');
+    await addTermin({ id: 10, ist_schwebend: 1, datum: null, geschaetzte_zeit: 100 });
+    await request(app)
+      .put('/api/warteschlange/zuweisen')
+      .send({ termin_id: 10, person_typ: 'lehrling', person_id: 1, datum: DATUM })
+      .expect(200);
+
+    const response = await request(app)
+      .get('/api/warteschlange')
+      .query({ datum: DATUM })
+      .expect(200);
+    expect(response.body.lehrlinge[0].last_minuten).toBe(165);
+    expect(response.body.lehrlinge[0].zettel[0].effektive_zeit_minuten).toBe(165);
+  });
+
+  test('lehnt unbekannte Lehrlinge mit 404 ab', async () => {
+    await addTermin({ id: 10, ist_schwebend: 1, datum: null });
+    await request(app)
+      .put('/api/warteschlange/zuweisen')
+      .send({ termin_id: 10, person_typ: 'lehrling', person_id: 999, datum: DATUM })
+      .expect(404);
+  });
+
+  test('lehnt fremde Mechaniker-Termine beim Lehrlings-Sortieren ab', async () => {
+    await addLehrling(1);
+    await addTermin({ id: 10, warteschlange_pos: 1 });
+    const response = await request(app)
+      .put('/api/warteschlange/reihenfolge')
+      .send({ person_typ: 'lehrling', person_id: 1, termin_ids: [10] })
+      .expect(404);
+
+    expect(response.body.error).toContain('Warteschlange');
+    const termin = await dbGet(db, 'SELECT warteschlange_pos FROM termine WHERE id = 10');
+    expect(termin.warteschlange_pos).toBe(1);
     expect(broadcastEvent).not.toHaveBeenCalled();
   });
 });

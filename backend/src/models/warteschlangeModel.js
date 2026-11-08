@@ -1,5 +1,9 @@
 const { getAsync, allAsync, runAsync } = require('../utils/dbHelper');
 
+function resourceColumn(ressource) {
+  return ressource.typ === 'lehrling' ? 'lehrling_id' : 'mitarbeiter_id';
+}
+
 class WarteschlangeModel {
   static async getTermin(id) {
     return await getAsync('SELECT * FROM termine WHERE id = ?', [id]);
@@ -13,19 +17,19 @@ class WarteschlangeModel {
     return await allAsync('SELECT * FROM mitarbeiter WHERE aktiv = 1 ORDER BY name', []);
   }
 
-  static async getWarteschlange(datum, mitarbeiterId = null, excludeTerminId = null) {
+  static async getWarteschlange(datum, ressource = null, excludeTerminId = null) {
     const where = [
       't.datum = ?',
       't.warteschlange_pos IS NOT NULL',
-      't.mitarbeiter_id IS NOT NULL',
+      '(t.mitarbeiter_id IS NOT NULL OR t.lehrling_id IS NOT NULL)',
       't.geloescht_am IS NULL',
       "t.status NOT IN ('abgeschlossen', 'storniert')"
     ];
     const params = [datum];
 
-    if (mitarbeiterId !== null) {
-      where.push('t.mitarbeiter_id = ?');
-      params.push(mitarbeiterId);
+    if (ressource !== null) {
+      where.push(`t.${resourceColumn(ressource)} = ?`);
+      params.push(ressource.id);
     }
     if (excludeTerminId !== null) {
       where.push('t.id != ?');
@@ -36,33 +40,38 @@ class WarteschlangeModel {
       SELECT t.*,
              COALESCE(k.name, t.kunde_name) AS kunde_name,
              COALESCE(k.telefon, t.kunde_telefon) AS kunde_telefon,
-             m.name AS mitarbeiter_name
+             m.name AS mitarbeiter_name,
+             l.name AS lehrling_name
         FROM termine t
         LEFT JOIN kunden k ON t.kunde_id = k.id
         LEFT JOIN mitarbeiter m ON t.mitarbeiter_id = m.id
+        LEFT JOIN lehrlinge l ON t.lehrling_id = l.id
        WHERE ${where.join(' AND ')}
-       ORDER BY t.mitarbeiter_id, t.warteschlange_pos, t.id
+       ORDER BY CASE WHEN t.mitarbeiter_id IS NOT NULL THEN 0 ELSE 1 END,
+                t.mitarbeiter_id, t.lehrling_id, t.warteschlange_pos, t.id
     `, params);
   }
 
-  static async getNaechster(datum, mitarbeiterId) {
+  static async getNaechster(datum, ressource) {
     return await getAsync(`
       SELECT t.*,
              COALESCE(k.name, t.kunde_name) AS kunde_name,
              COALESCE(k.telefon, t.kunde_telefon) AS kunde_telefon,
-             m.name AS mitarbeiter_name
+             m.name AS mitarbeiter_name,
+             l.name AS lehrling_name
         FROM termine t
         LEFT JOIN kunden k ON t.kunde_id = k.id
         LEFT JOIN mitarbeiter m ON t.mitarbeiter_id = m.id
+        LEFT JOIN lehrlinge l ON t.lehrling_id = l.id
        WHERE t.datum = ?
-         AND t.mitarbeiter_id = ?
+         AND t.${resourceColumn(ressource)} = ?
          AND t.warteschlange_pos IS NOT NULL
          AND t.geloescht_am IS NULL
          AND COALESCE(t.ist_schwebend, 0) = 0
          AND t.status IN ('geplant', 'in_arbeit')
        ORDER BY t.warteschlange_pos, t.id
        LIMIT 1
-    `, [datum, mitarbeiterId]);
+    `, [datum, ressource.id]);
   }
 
   static async getArbeiten(terminId) {
@@ -78,8 +87,8 @@ class WarteschlangeModel {
     `, [terminId]);
   }
 
-  static async getNaechstePosition(datum, mitarbeiterId, excludeTerminId = null) {
-    const params = [datum, mitarbeiterId];
+  static async getNaechstePosition(datum, ressource, excludeTerminId = null) {
+    const params = [datum, ressource.id];
     const exclude = excludeTerminId === null ? '' : 'AND id != ?';
     if (excludeTerminId !== null) params.push(excludeTerminId);
 
@@ -87,7 +96,7 @@ class WarteschlangeModel {
       SELECT MAX(warteschlange_pos) AS max_position
         FROM termine
        WHERE datum = ?
-         AND mitarbeiter_id = ?
+         AND ${resourceColumn(ressource)} = ?
          AND warteschlange_pos IS NOT NULL
          ${exclude}
     `, params);
@@ -123,23 +132,27 @@ class WarteschlangeModel {
     `, [position, id]);
   }
 
-  static async setPositionFuerMitarbeiter(id, mitarbeiterId, position) {
+  static async setPositionFuerRessource(id, ressource, position) {
     return await runAsync(`
       UPDATE termine
          SET warteschlange_pos = ?
-       WHERE id = ? AND mitarbeiter_id = ?
-    `, [position, id, mitarbeiterId]);
+       WHERE id = ? AND ${resourceColumn(ressource)} = ?
+    `, [position, id, ressource.id]);
   }
 
-  static async zuweisen(id, mitarbeiterId, position, datum) {
+  static async zuweisen(id, ressource, position, datum, arbeitszeitenDetails) {
+    const mitarbeiterId = ressource.typ === 'mitarbeiter' ? ressource.id : null;
+    const lehrlingId = ressource.typ === 'lehrling' ? ressource.id : null;
     await runAsync(`
       UPDATE termine
          SET mitarbeiter_id = ?,
+             lehrling_id = ?,
              warteschlange_pos = ?,
              datum = ?,
-             ist_schwebend = 0
+             ist_schwebend = 0,
+             arbeitszeiten_details = ?
        WHERE id = ?
-    `, [mitarbeiterId, position, datum, id]);
+    `, [mitarbeiterId, lehrlingId, position, datum, arbeitszeitenDetails, id]);
     return await this.getTermin(id);
   }
 
