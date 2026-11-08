@@ -420,5 +420,5 @@ Controller laden nur Daten und rufen sie auf. So entstanden `belegung.js` und
 - **Letzter Stand:** 2026-11-08 – Zettel-Board mit Warteschlangen-API, Migration 052, Drag & Drop, Auslastungs-/Nebenzeit-Markierung, Realtime-Updates sowie Tablet „Mein nächster Auftrag“ und Anstempeln implementiert und nach Review korrigiert.
 - **Deployed:** 2026-11-08 auf `a4e334b`. Vor dem Update Produktiv-Backup `pre-zettel-board-2026-11-08T06-09-27-511Z.db` mit WAL-Checkpoint erstellt. Migration 51→52 erfolgreich, `_schema_meta.schema_version=52`, Spalte und Index vorhanden. Dienst aktiv, Health-Check, Queue-/Tablet-Lesendpunkte und Frontend-Assets jeweils HTTP 200. Kein Tablet-Installer/Versionsbump.
 - **Testsuite:** 203 Backend-Tests grün, 9 bewusst übersprungen; 33 Frontend-Tests grün; Vite-Build und 5 Tablet-Regressionstests grün (Stand 2026-11-08).
-- **Nächster Schritt:** Die zwei im RETRO dokumentierten Review-Restbefunde zu Tablet-Stempelzustand nach Reload/Retry und Nebenzeit bei der Kollegenauswahl beheben; danach realer Tablet-Hardwaretest.
+- **Nächster Schritt:** Produktivdeployment der Nachbesserungen `8b1cdc9` (reload-fester Tablet-Stempelzustand) und `32bb744` (Nebenzeit bei Kollegenauswahl), danach realer Tablet-Hardwaretest. SOPS-Regeln in `ba2c6df` versioniert und für `.env.example` verifiziert.
 - **Blockiert durch:** nichts
