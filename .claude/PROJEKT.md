@@ -426,8 +426,8 @@ Controller laden nur Daten und rufen sie auf. So entstanden `belegung.js` und
 ## 10. Projektstatus
 
 - **Phase:** Wartung / laufende Weiterentwicklung
-- **Letzter Stand:** 2026-11-08 – Zettel-Board mit getrennten Lehrlings-Queues (Migration 053), gemeinsamer Zeitberechnung und zentralen Bring-/Abholzeit-Warnungen in Board, Planung (Beta) und Tablet produktiv deployt. Die Reviewbefunde zu Tablet-Stempelzustand und Nebenzeit sind behoben. Anschließend wurden die KI-Regressionen inklusive Migration 054 lokal korrigiert; der Produktivstatus bleibt bis zum Deployment auf dem zuvor genannten Stand.
-- **Deployed:** 2026-11-08 per `tools/deploy-production.sh` auf `0b3e865`. Vorher WAL-Checkpoint und Produktiv-Backup `pre-deploy-2026-11-08T09-08-02-558Z.db`; `_schema_meta.schema_version=53` und beide Queue-Indizes vorhanden. Dienst aktiv, Health-/Queue-API und Frontend-Assets erfolgreich geprüft.
+- **Letzter Stand:** 2026-11-08 – KI-Regressionen inklusive Migration 054, idempotenter Lerndaten, realer Slot-Nachfüllung und gekennzeichneter lokaler Ollama-Fallbacks produktiv deployt. Zuvor blieben Zettel-Board, gemeinsame Zeitberechnung und zentrale Warnungen unverändert.
+- **Deployed:** 2026-11-08 per `tools/deploy-production.sh` auf Commit `0235286415c25501c0cfacf90fc0860f92edef30`. Vorher WAL-Checkpoint und Produktiv-Backup `pre-deploy-2026-11-08T19-22-35-743Z.db`; `_schema_meta.schema_version=54`, Unique-Index vorhanden und alle 199 Lernpunkte eindeutig. Dienst, Frontend-Asset, lokale KI-Funktionen und sämtliche Ollama-Fallback-Pfade live geprüft.
 - **Testsuite:** 229 Backend-Tests grün, 9 bewusst übersprungen; 40 Frontend-Tests und zwei Python-KI-Routentests grün; Vite-Build erfolgreich (Stand 2026-11-08). Die neuen KI-Regressionen waren vor ihrer Korrektur nachweislich rot. Keine produktiven Schreibtests.
 - **Nächster Schritt:** Tablet-App ab v1.9.9 versionserhöht als Windows-Installer bauen und registrieren, danach Auto-Update sowie Lehrlings-Queues und Zeitwarnungen auf realer Tablet-Hardware abnehmen. Ein GitHub-Actions-Build ist möglich, aber noch nicht eingerichtet.
 - **Blockiert durch:** nichts
