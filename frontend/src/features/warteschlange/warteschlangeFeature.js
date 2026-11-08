@@ -107,7 +107,7 @@ export function installWarteschlangeFeature(AppClass) {
 
       const neuSpalte = `
         <section class="warteschlange-spalte warteschlange-neu" aria-labelledby="warteschlangeNeuTitel">
-          <h3 id="warteschlangeNeuTitel">NEU</h3>
+          <h3 id="warteschlangeNeuTitel">NEU – Zettel zum Draufziehen</h3>
           <div class="warteschlange-zettel-liste">
             ${neuInhalt || '<p class="empty-state">Keine neuen Zettel</p>'}
           </div>
@@ -132,7 +132,10 @@ export function installWarteschlangeFeature(AppClass) {
           </section>`;
       }).join('');
 
-      board.innerHTML = neuSpalte + (personen || '<p class="empty-state">Keine aktiven Mechaniker oder Lehrlinge vorhanden.</p>');
+      const personenBereich = personen
+        ? `<div class="warteschlange-personen">${personen}</div>`
+        : '<p class="empty-state">Keine aktiven Mechaniker oder Lehrlinge vorhanden.</p>';
+      board.innerHTML = personenBereich + neuSpalte;
     },
 
     renderWarteschlangeTermin(termin, ressource = null) {

@@ -254,3 +254,28 @@ describe('Warteschlange-Lehrlinge und Warnungen', () => {
     });
   });
 });
+
+describe('Warteschlange-Layout', () => {
+  it('zeigt Personen oberhalb des gemeinsamen NEU-Bereichs', () => {
+    const app = createWarteschlangeApp();
+    app.warteschlangeData = warteschlangeDaten(1);
+    app.warteschlangeData.neu.termine = [{
+      id: 2,
+      kunde_name: 'Neuer Kunde',
+      kennzeichen: 'NEU-1',
+      arbeit: 'Bremsen',
+      geschaetzte_zeit: 90
+    }];
+
+    app.renderWarteschlange();
+
+    const board = document.getElementById('warteschlangeBoard');
+    const personen = board.querySelector(':scope > .warteschlange-personen');
+    const neu = board.querySelector(':scope > .warteschlange-neu');
+    expect(personen).not.toBeNull();
+    expect(neu).not.toBeNull();
+    expect(personen.nextElementSibling).toBe(neu);
+    expect(personen.querySelector('[data-termin-id="1"]')).not.toBeNull();
+    expect(neu.querySelector('[data-termin-id="2"]')).not.toBeNull();
+  });
+});

@@ -17102,10 +17102,18 @@ tr.wiederholung-row {
 
 #warteschlange .warteschlange-board {
   display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 16px;
+  padding: 4px;
+}
+
+#warteschlange .warteschlange-personen {
+  display: flex;
   align-items: flex-start;
   gap: 16px;
   overflow-x: auto;
-  padding: 4px 4px 16px;
+  padding-bottom: 12px;
 }
 
 #warteschlange .warteschlange-spalte {
@@ -17117,7 +17125,18 @@ tr.wiederholung-row {
 }
 
 #warteschlange .warteschlange-neu {
+  flex: none;
   border-top: 4px solid var(--accent);
+}
+
+#warteschlange .warteschlange-neu .warteschlange-zettel-liste {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 10px;
+}
+
+#warteschlange .warteschlange-neu .warteschlange-zettel {
+  margin-bottom: 0;
 }
 
 #warteschlange .warteschlange-last-text {
