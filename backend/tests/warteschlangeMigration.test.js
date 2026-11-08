@@ -1,7 +1,8 @@
 const {
   createTestDb,
   closeTestDb,
-  dbAll
+  dbAll,
+  dbRun
 } = require('./helpers/testSetup');
 const migration052 = require('../migrations/052_warteschlange_pos');
 const { getAllMigrations } = require('../migrations');
@@ -18,6 +19,11 @@ describe('Migration 052 — Warteschlangenposition', () => {
   });
 
   test('fügt warteschlange_pos und den zusammengesetzten Index hinzu', async () => {
+    const existingColumns = await dbAll(db, 'PRAGMA table_info(termine)');
+    if (existingColumns.some(column => column.name === 'warteschlange_pos')) {
+      await dbRun(db, 'DROP INDEX IF EXISTS idx_termine_warteschlange');
+      await dbRun(db, 'ALTER TABLE termine DROP COLUMN warteschlange_pos');
+    }
     await migration052.up(db);
 
     const columns = await dbAll(db, 'PRAGMA table_info(termine)');
