@@ -417,8 +417,8 @@ Controller laden nur Daten und rufen sie auf. So entstanden `belegung.js` und
 ## 10. Projektstatus
 
 - **Phase:** Wartung / laufende Weiterentwicklung
-- **Letzter Stand:** 2026-08-05 – Auslastungs-/Restzeit-Berechnung korrigiert und als reines Modul `utils/auslastung.js` herausgelöst (Commit `6c16e38`, auf GitHub gepusht). Vier Rechenfehler behoben: doppelte Lehrlings-Korrektur, stornierte Termine in der Kapazität, Nebenzeit-Mischung beim `nur_service`-Abzug, Doppelzählung von Lehrlingszeiten. `/verfuegbarkeit` und `/auslastung` nutzen jetzt dieselbe Kapazitätsbasis
-- **Deployed:** 2026-08-05 auf `ed25775`. DB-Backup `pre-update_20260805_213542.db` liegt in `/var/lib/werkstatt-terminplaner/backups/`. Dienst läuft, Log sauber. Gegen echte Produktivdaten verifiziert: `Kapazität − Belegt = Restzeit` geht an drei geprüften Tagen auf, alle Lehrlingswerte exakt über `roh × Aufgabenbewältigung × Nebenzeit` reproduzierbar, Detailzeilen und Gesamtsumme stimmen überein
-- **Testsuite:** 167 von 167 grün, stabil über drei Läufe bei voller Parallelität (Stand 2026-08-05). Dev-DB aus Server-Backup ersetzt, Test-DB je Jest-Worker getrennt. 9 Tests in `migrations.test.js` bewusst stillgelegt
-- **Nächster Schritt:** offene Auslastungsthemen – zuerst die Pufferzeit ohne Parallelität, danach die Anbindung der Kapazität an `arbeitszeiten_plan`. Die Suite ist jetzt als Regressionsschutz belastbar
+- **Letzter Stand:** 2026-11-08 – Zettel-Board mit Warteschlangen-API, Migration 052, Drag & Drop, Auslastungs-/Nebenzeit-Markierung, Realtime-Updates sowie Tablet „Mein nächster Auftrag“ und Anstempeln implementiert und nach Review korrigiert.
+- **Deployed:** 2026-11-08 auf `a4e334b`. Vor dem Update Produktiv-Backup `pre-zettel-board-2026-11-08T06-09-27-511Z.db` mit WAL-Checkpoint erstellt. Migration 51→52 erfolgreich, `_schema_meta.schema_version=52`, Spalte und Index vorhanden. Dienst aktiv, Health-Check, Queue-/Tablet-Lesendpunkte und Frontend-Assets jeweils HTTP 200. Kein Tablet-Installer/Versionsbump.
+- **Testsuite:** 203 Backend-Tests grün, 9 bewusst übersprungen; 33 Frontend-Tests grün; Vite-Build und 5 Tablet-Regressionstests grün (Stand 2026-11-08).
+- **Nächster Schritt:** Die zwei im RETRO dokumentierten Review-Restbefunde zu Tablet-Stempelzustand nach Reload/Retry und Nebenzeit bei der Kollegenauswahl beheben; danach realer Tablet-Hardwaretest.
 - **Blockiert durch:** nichts
