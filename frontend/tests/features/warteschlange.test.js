@@ -203,3 +203,54 @@ describe('Warteschlange-Terminstatus', () => {
     expect(karte.textContent).toContain('läuft');
   });
 });
+
+describe('Warteschlange-Lehrlinge und Warnungen', () => {
+  it('zeigt Lehrlings-Spalte und beide Warnungstexte am Zettel', () => {
+    const app = createWarteschlangeApp();
+    app.warteschlangeData = {
+      neu: { termine: [], auftragsimporte: [] },
+      mitarbeiter: [],
+      lehrlinge: [{
+        lehrling_id: 3,
+        lehrling_name: 'Lehrling Lena',
+        kapazitaet_minuten: 480,
+        last_minuten: 165,
+        zettel: [{
+          id: 9,
+          kunde_name: 'Kunde',
+          kennzeichen: 'AB-1',
+          arbeit: 'Inspektion',
+          geschaetzte_zeit: 150,
+          effektive_zeit_minuten: 165,
+          warnungen: [
+            { code: 'bringzeit_verpasst', message: 'Bringzeit 09:00 nicht eingehalten – frühester Start 10:15' },
+            { code: 'abholzeit_verpasst', message: 'Abholzeit 16:00 nicht erreichbar – fertig ca. 16:30' }
+          ]
+        }]
+      }]
+    };
+
+    app.renderWarteschlange();
+
+    const text = document.getElementById('warteschlangeBoard').textContent;
+    expect(text).toContain('Lehrling Lena');
+    expect(text).toContain('Bringzeit 09:00 nicht eingehalten');
+    expect(text).toContain('Abholzeit 16:00 nicht erreichbar');
+  });
+
+  it('sendet die Lehrlings-Ressource beim Zuweisen', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => ({}) });
+    vi.stubGlobal('CONFIG', { API_URL: 'http://test.local' });
+    vi.stubGlobal('fetch', fetchMock);
+
+    await window.WarteschlangeService.zuweisen(9, { typ: 'lehrling', id: 3 }, null, '2026-11-09');
+
+    const [, options] = fetchMock.mock.calls[0];
+    expect(JSON.parse(options.body)).toEqual({
+      termin_id: 9,
+      person_typ: 'lehrling',
+      person_id: 3,
+      datum: '2026-11-09'
+    });
+  });
+});

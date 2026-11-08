@@ -17193,3 +17193,12 @@ tr.wiederholung-row {
   width: 100%;
   margin-bottom: 8px;
 }
+
+#warteschlange .warteschlange-warnung {
+  margin-top: 8px;
+  padding: 6px;
+  border-left: 3px solid #c62828;
+  background: #ffebee;
+  color: #9c1c1c;
+  font-weight: 600;
+}

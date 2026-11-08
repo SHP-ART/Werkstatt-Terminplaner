@@ -494,23 +494,34 @@ class AuslastungService {
   }
 }
 
+function normalizeWarteschlangeRessource(ressource) {
+  if (ressource && typeof ressource === 'object') return ressource;
+  return { typ: 'mitarbeiter', id: ressource };
+}
+
 class WarteschlangeService {
   static async getByDatum(datum) {
     return ApiService.get(`/warteschlange?datum=${encodeURIComponent(datum)}`);
   }
 
-  static async zuweisen(terminId, mitarbeiterId, position = null, datum = null) {
+  static async zuweisen(terminId, ressource, position = null, datum = null) {
+    const person = normalizeWarteschlangeRessource(ressource);
     return ApiService.put('/warteschlange/zuweisen', {
       termin_id: terminId,
-      mitarbeiter_id: mitarbeiterId,
+      ...(person.typ === 'mitarbeiter'
+        ? { mitarbeiter_id: person.id }
+        : { person_typ: person.typ, person_id: person.id }),
       ...(position === null ? {} : { position }),
       ...(datum === null ? {} : { datum })
     });
   }
 
-  static async reihenfolge(mitarbeiterId, terminIds) {
+  static async reihenfolge(ressource, terminIds) {
+    const person = normalizeWarteschlangeRessource(ressource);
     return ApiService.put('/warteschlange/reihenfolge', {
-      mitarbeiter_id: mitarbeiterId,
+      ...(person.typ === 'mitarbeiter'
+        ? { mitarbeiter_id: person.id }
+        : { person_typ: person.typ, person_id: person.id }),
       termin_ids: terminIds
     });
   }

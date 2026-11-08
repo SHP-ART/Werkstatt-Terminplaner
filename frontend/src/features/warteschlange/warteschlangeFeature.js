@@ -17,7 +17,7 @@ export function berechneWarteschlangeLast(lastMinuten, kapazitaetMinuten) {
 }
 
 function formatMinuten(wert) {
-  return `${Math.max(0, Number(wert) || 0)} min`;
+  return `${Math.max(0, Number(wert)) || 0} min`;
 }
 
 export function installWarteschlangeFeature(AppClass) {
@@ -73,6 +73,26 @@ export function installWarteschlangeFeature(AppClass) {
       }
     },
 
+    getWarteschlangeSpalten() {
+      const mechaniker = (this.warteschlangeData?.mitarbeiter || []).map(person => ({
+        typ: 'mitarbeiter',
+        id: person.mitarbeiter_id,
+        name: person.mitarbeiter_name,
+        kapazitaet_minuten: person.kapazitaet_minuten,
+        last_minuten: person.last_minuten,
+        zettel: person.zettel
+      }));
+      const lehrlinge = (this.warteschlangeData?.lehrlinge || []).map(person => ({
+        typ: 'lehrling',
+        id: person.lehrling_id,
+        name: person.lehrling_name,
+        kapazitaet_minuten: person.kapazitaet_minuten,
+        last_minuten: person.last_minuten,
+        zettel: person.zettel
+      }));
+      return [...mechaniker, ...lehrlinge];
+    },
+
     renderWarteschlange() {
       const board = document.getElementById('warteschlangeBoard');
       const data = this.warteschlangeData;
@@ -93,37 +113,44 @@ export function installWarteschlangeFeature(AppClass) {
           </div>
         </section>`;
 
-      const mechaniker = (data.mitarbeiter || []).map(person => {
+      const personen = this.getWarteschlangeSpalten().map(person => {
         const last = berechneWarteschlangeLast(person.last_minuten, person.kapazitaet_minuten);
         const zettel = (person.zettel || []).map(termin => (
-          this.renderWarteschlangeTermin(termin, person.mitarbeiter_id)
+          this.renderWarteschlangeTermin(termin, { typ: person.typ, id: person.id })
         )).join('');
+        const personKey = `${person.typ}-${person.id}`;
         return `
-          <section class="warteschlange-spalte" aria-labelledby="warteschlangeMitarbeiter${person.mitarbeiter_id}">
-            <h3 id="warteschlangeMitarbeiter${person.mitarbeiter_id}">${escapeHtml(person.mitarbeiter_name)}</h3>
+          <section class="warteschlange-spalte" aria-labelledby="warteschlangePerson${personKey}">
+            <h3 id="warteschlangePerson${personKey}">${escapeHtml(person.name)}${person.typ === 'lehrling' ? ' (Lehrling)' : ''}</h3>
             <div class="warteschlange-last-text">${formatMinuten(person.last_minuten)} / ${formatMinuten(person.kapazitaet_minuten)} · ${last.prozent} %</div>
-            <div class="warteschlange-last-balken" role="progressbar" aria-label="Tageslast ${escapeHtml(person.mitarbeiter_name)}" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${last.balkenProzent}">
+            <div class="warteschlange-last-balken" role="progressbar" aria-label="Tageslast ${escapeHtml(person.name)}" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${last.balkenProzent}">
               <div style="width:${last.balkenProzent}%;background:${last.farbe}"></div>
             </div>
-            <div class="warteschlange-zettel-liste" data-mitarbeiter-id="${person.mitarbeiter_id}">
+            <div class="warteschlange-zettel-liste" data-person-typ="${person.typ}" data-person-id="${person.id}"${person.typ === 'mitarbeiter' ? ` data-mitarbeiter-id="${person.id}"` : ''}>
               ${zettel || '<p class="empty-state">Noch keine Zettel</p>'}
             </div>
           </section>`;
       }).join('');
 
-      board.innerHTML = neuSpalte + (mechaniker || '<p class="empty-state">Keine aktiven Mechaniker vorhanden.</p>');
+      board.innerHTML = neuSpalte + (personen || '<p class="empty-state">Keine aktiven Mechaniker oder Lehrlinge vorhanden.</p>');
     },
 
-    renderWarteschlangeTermin(termin, mitarbeiterId = null) {
+    renderWarteschlangeTermin(termin, ressource = null) {
       const terminId = Number(termin.id);
       const istMorgen = termin.morgen === true || termin.morgen === 1;
-      const kollegen = istMorgen ? this.getWarteschlangeKollegen(termin, mitarbeiterId) : [];
+      const kollegen = istMorgen ? this.getWarteschlangeKollegen(termin, ressource) : [];
       const optionen = kollegen.map(person => (
-        `<option value="${person.mitarbeiter_id}">${escapeHtml(person.mitarbeiter_name)} (${formatMinuten(person.kapazitaet_minuten - person.last_minuten)} frei)</option>`
+        `<option value="${person.id}" data-person-typ="${person.typ}">${escapeHtml(person.name)} (${formatMinuten(person.kapazitaet_minuten - person.last_minuten)} frei)</option>`
       )).join('');
+      const warnungen = (termin.warnungen || []).map(warnung => (
+        `<div class="warteschlange-warnung" role="alert">${escapeHtml(warnung.message)}</div>`
+      )).join('');
+      const mitarbeiterAttribut = !ressource || ressource.typ === 'mitarbeiter'
+        ? ` data-mitarbeiter-id="${ressource?.id ?? ''}"`
+        : '';
 
       return `
-        <article class="warteschlange-zettel${istMorgen ? ' warteschlange-zettel-morgen' : ''}" draggable="true" data-termin-id="${terminId}" data-mitarbeiter-id="${mitarbeiterId ?? ''}">
+        <article class="warteschlange-zettel${istMorgen ? ' warteschlange-zettel-morgen' : ''}" draggable="true" data-termin-id="${terminId}"${mitarbeiterAttribut} data-person-typ="${ressource?.typ || ''}" data-person-id="${ressource?.id ?? ''}">
           <div class="warteschlange-zettel-kopf">
             <strong>${escapeHtml(termin.kunde_name || termin.termin_nr || 'Ohne Kundenname')}</strong>
             ${termin.status === 'in_arbeit' ? '<span class="warteschlange-laeuft">läuft</span>' : ''}
@@ -132,13 +159,14 @@ export function installWarteschlangeFeature(AppClass) {
           <div>${escapeHtml(termin.kennzeichen || 'Ohne Kennzeichen')}</div>
           <div>${escapeHtml(termin.arbeit || 'Keine Arbeit angegeben')}</div>
           <div class="warteschlange-zettel-meta">${formatMinuten(termin.geschaetzte_zeit)}</div>
+          ${warnungen}
           ${istMorgen ? `
             <button type="button" class="btn btn-sm btn-secondary" data-action="kollegen-oeffnen" aria-expanded="false" aria-controls="warteschlangeKollegen${terminId}">Zu Kollegen</button>
             <div id="warteschlangeKollegen${terminId}" class="warteschlange-kollegen" hidden>
               ${kollegen.length ? `
-                <label for="warteschlangeKollegenSelect${terminId}">Mechaniker mit freier Kapazität</label>
+                <label for="warteschlangeKollegenSelect${terminId}">Person mit freier Kapazität</label>
                 <select id="warteschlangeKollegenSelect${terminId}" data-kollegen-select>${optionen}</select>
-                <button type="button" class="btn btn-sm btn-primary" data-action="kollegen-verschieben">Verschieben</button>` : '<p>Kein Kollege hat ausreichend freie Kapazität.</p>'}
+                <button type="button" class="btn btn-sm btn-primary" data-action="kollegen-verschieben">Verschieben</button>` : '<p>Keine andere Person hat ausreichend freie Kapazität.</p>'}
             </div>` : ''}
         </article>`;
     },
@@ -154,12 +182,14 @@ export function installWarteschlangeFeature(AppClass) {
         </article>`;
     },
 
-    getWarteschlangeKollegen(termin, aktuellerMitarbeiterId) {
+    getWarteschlangeKollegen(termin, aktuelleRessource) {
       const benoetigt = Math.max(0, Number(
         termin.effektive_zeit_minuten ?? termin.geschaetzte_zeit
       ) || 0);
-      return (this.warteschlangeData?.mitarbeiter || []).filter(person => (
-        Number(person.mitarbeiter_id) !== Number(aktuellerMitarbeiterId)
+      return this.getWarteschlangeSpalten().filter(person => (
+        !(aktuelleRessource
+          && person.typ === aktuelleRessource.typ
+          && Number(person.id) === Number(aktuelleRessource.id))
         && Number(person.kapazitaet_minuten) - Number(person.last_minuten) >= benoetigt
       ));
     },
@@ -214,19 +244,21 @@ export function installWarteschlangeFeature(AppClass) {
       }
 
       if (button.dataset.action === 'kollegen-verschieben') {
-        const mitarbeiterId = Number(karte.querySelector('[data-kollegen-select]')?.value);
-        if (!mitarbeiterId) {
-          this.setWarteschlangeStatus('Bitte einen Mechaniker mit freier Kapazität auswählen.', true);
+        const select = karte.querySelector('[data-kollegen-select]');
+        const option = select?.selectedOptions[0];
+        const personId = Number(select?.value);
+        if (!personId || !option) {
+          this.setWarteschlangeStatus('Bitte eine Person mit freier Kapazität auswählen.', true);
           return;
         }
         await this.mutiereWarteschlange(
           () => WarteschlangeService.zuweisen(
             terminId,
-            mitarbeiterId,
+            { typ: option.dataset.personTyp, id: personId },
             null,
             document.getElementById('warteschlangeDatum')?.value
           ),
-          'Zettel wurde an den Kollegen übergeben.'
+          'Zettel wurde an die andere Person übergeben.'
         );
       }
     },
@@ -235,34 +267,42 @@ export function installWarteschlangeFeature(AppClass) {
       const karte = event.target.closest('.warteschlange-zettel[data-termin-id]');
       if (!karte) return;
       const terminId = Number(karte.dataset.terminId);
-      const mitarbeiterId = Number(karte.dataset.mitarbeiterId) || null;
-      this.warteschlangeDrag = { terminId, mitarbeiterId };
+      const ressource = karte.dataset.personId
+        ? { typ: karte.dataset.personTyp, id: Number(karte.dataset.personId) }
+        : null;
+      this.warteschlangeDrag = { terminId, ressource };
       event.dataTransfer.effectAllowed = 'move';
       event.dataTransfer.setData('text/plain', String(terminId));
     },
 
     handleWarteschlangeDragOver(event) {
-      if (!this.warteschlangeDrag || !event.target.closest('.warteschlange-zettel-liste[data-mitarbeiter-id]')) return;
+      if (!this.warteschlangeDrag || !event.target.closest('.warteschlange-zettel-liste[data-person-id]')) return;
       event.preventDefault();
       event.dataTransfer.dropEffect = 'move';
     },
 
     async handleWarteschlangeDrop(event) {
-      const liste = event.target.closest('.warteschlange-zettel-liste[data-mitarbeiter-id]');
+      const liste = event.target.closest('.warteschlange-zettel-liste[data-person-id]');
       const drag = this.warteschlangeDrag;
       if (!liste || !drag) return;
       event.preventDefault();
       this.warteschlangeDrag = null;
 
-      const zielMitarbeiterId = Number(liste.dataset.mitarbeiterId);
+      const zielRessource = {
+        typ: liste.dataset.personTyp,
+        id: Number(liste.dataset.personId)
+      };
       const zielKarte = event.target.closest('.warteschlange-zettel[data-termin-id]');
       const zielTerminId = zielKarte ? Number(zielKarte.dataset.terminId) : null;
-      const spalte = (this.warteschlangeData?.mitarbeiter || []).find(person => (
-        Number(person.mitarbeiter_id) === zielMitarbeiterId
+      const spalte = this.getWarteschlangeSpalten().find(person => (
+        person.typ === zielRessource.typ && Number(person.id) === zielRessource.id
       ));
       if (!spalte) return;
 
-      if (drag.mitarbeiterId === zielMitarbeiterId) {
+      const gleicheSpalte = drag.ressource
+        && drag.ressource.typ === zielRessource.typ
+        && Number(drag.ressource.id) === zielRessource.id;
+      if (gleicheSpalte) {
         if (drag.terminId === zielTerminId) return;
         const ids = (spalte.zettel || []).map(termin => Number(termin.id));
         const neueIds = ids.filter(id => id !== drag.terminId);
@@ -270,7 +310,7 @@ export function installWarteschlangeFeature(AppClass) {
         neueIds.splice(zielIndex < 0 ? neueIds.length : zielIndex, 0, drag.terminId);
         if (neueIds.every((id, index) => id === ids[index])) return;
         await this.mutiereWarteschlange(
-          () => WarteschlangeService.reihenfolge(zielMitarbeiterId, neueIds),
+          () => WarteschlangeService.reihenfolge(zielRessource, neueIds),
           'Reihenfolge wurde gespeichert.'
         );
         return;
@@ -282,7 +322,7 @@ export function installWarteschlangeFeature(AppClass) {
       await this.mutiereWarteschlange(
         () => WarteschlangeService.zuweisen(
           drag.terminId,
-          zielMitarbeiterId,
+          zielRessource,
           position,
           document.getElementById('warteschlangeDatum')?.value
         ),
