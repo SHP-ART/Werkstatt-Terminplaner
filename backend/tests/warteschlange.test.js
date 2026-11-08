@@ -680,3 +680,54 @@ describe('Warteschlange — Lehrlinge', () => {
     expect(broadcastEvent).not.toHaveBeenCalled();
   });
 });
+
+describe('Warteschlange — zentrale Warnungen', () => {
+  test('Queue und normale Termin-Response liefern dieselben Warnungen', async () => {
+    await addTermin({ id: 10, warteschlange_pos: 1 });
+    await dbRun(db, `UPDATE termine SET
+      startzeit = '10:15', bring_zeit = '09:00',
+      endzeit_berechnet = '16:30', abholung_zeit = '16:00',
+      abholung_datum = datum
+      WHERE id = 10`);
+
+    const response = await request(app)
+      .get('/api/warteschlange')
+      .query({ datum: DATUM })
+      .expect(200);
+    const queueWarnungen = response.body.mitarbeiter[0].zettel[0].warnungen;
+    expect(queueWarnungen.map(warnung => warnung.code)).toEqual([
+      'bringzeit_verpasst', 'abholzeit_verpasst'
+    ]);
+
+    const TermineController = require('../src/controllers/termineController');
+    const res = { json: jest.fn(), status: jest.fn().mockReturnThis() };
+    await TermineController.getById({ params: { id: 10 } }, res);
+    expect(res.json.mock.calls[0][0].warnungen).toEqual(queueWarnungen);
+  });
+
+  test('Lehrlings-naechster liefert Zettel mit Arbeiten und Warnungen', async () => {
+    const heute = new Date();
+    const datum = `${heute.getFullYear()}-${String(heute.getMonth() + 1).padStart(2, '0')}-${String(heute.getDate()).padStart(2, '0')}`;
+    await addLehrling(1);
+    await addTermin({
+      id: 10,
+      datum,
+      mitarbeiter_id: null,
+      lehrling_id: 1,
+      warteschlange_pos: 1
+    });
+    await dbRun(db, `UPDATE termine SET
+      startzeit = '10:15', bring_zeit = '09:00', abholung_datum = datum WHERE id = 10`);
+    await dbRun(db, `INSERT INTO termine_arbeiten (
+      termin_id, arbeit, zeit, lehrling_id, stempel_start
+    ) VALUES (10, 'Inspektion', 60, 1, '08:00')`);
+
+    const response = await request(app)
+      .get('/api/warteschlange/lehrling/1/naechster')
+      .expect(200);
+
+    expect(response.body.zettel.id).toBe(10);
+    expect(response.body.zettel.arbeiten[0].stempel_start).toBe('08:00');
+    expect(response.body.zettel.warnungen[0].code).toBe('bringzeit_verpasst');
+  });
+});

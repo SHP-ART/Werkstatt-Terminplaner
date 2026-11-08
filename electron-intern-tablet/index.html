@@ -2620,6 +2620,7 @@
                 <span>${escapeHtml(naechsterAuftrag.termin_nr) || ''}${naechsterAuftrag.interne_auftragsnummer && naechsterAuftrag.interne_auftragsnummer.trim() ? ` · ${escapeHtml(naechsterAuftrag.interne_auftragsnummer.trim())}` : ''} – ${escapeHtml(naechsterAuftrag.kunde_name) || '-'} • ${escapeHtml(naechsterAuftrag.kennzeichen) || '-'}</span>
                 <span>${getEffektiveStartzeit(naechsterAuftrag) || '--:--'}</span>
               </div>
+              ${renderTerminWarnungenTablet(naechsterAuftrag)}
             </div>
           ` : ''}
         `;

@@ -18,7 +18,7 @@ function extractFunction(name) {
   return html.slice(start, Math.min(...ends));
 }
 
-function renderKachel(queueEintrag) {
+function renderKachel(queueEintrag, aktuellerAuftrag = null) {
   const klassischerTermin = {
     id: 1,
     termin_nr: 'T-1',
@@ -33,6 +33,9 @@ function renderKachel(queueEintrag) {
     console: { log() {}, error() {} },
     Date,
     escapeHtml: value => String(value ?? ''),
+    berechneFortschritt: () => 0,
+    berechneRestzeit: () => '0 min',
+    berechneEndzeit: () => '--:--',
     formatDateLocal: () => '2026-11-07',
     formatMinutesToHours: value => `${value} min`,
     getArbeitenFromTermin: () => [],
@@ -46,7 +49,9 @@ function renderKachel(queueEintrag) {
   vm.runInContext(`${extractFunction('renderTerminWarnungenTablet')}; ${extractFunction('renderPersonKachel')}; this.render = renderPersonKachel;`, context);
   return context.render(
     { id: 7, name: 'Mechaniker', aktiv: 1 },
-    [klassischerTermin],
+    aktuellerAuftrag
+      ? [aktuellerAuftrag, queueEintrag?.zettel].filter(Boolean)
+      : [klassischerTermin],
     'mitarbeiter',
     0,
     null,
@@ -103,6 +108,36 @@ test('Tablet zeigt zentrale Abholzeit-Meldung als Text', () => {
       }]
     }
   });
+  assert.match(output, /Abholzeit 16:00 nicht erreichbar/);
+});
+
+test('Danach-Vorschau zeigt die Warnung neben einem laufenden Auftrag', () => {
+  const output = renderKachel({
+    zettel: {
+      id: 2,
+      status: 'geplant',
+      termin_nr: 'T-2',
+      kunde_name: 'Queue Kunde',
+      kennzeichen: 'QU-2',
+      arbeit: 'Bremsen',
+      geschaetzte_zeit: 30,
+      mitarbeiter_id: 7,
+      warnungen: [{
+        code: 'abholzeit_verpasst',
+        message: 'Abholzeit 16:00 nicht erreichbar – fertig ca. 16:30'
+      }]
+    }
+  }, {
+    id: 1,
+    status: 'in_arbeit',
+    termin_nr: 'T-1',
+    kunde_name: 'Laufender Kunde',
+    kennzeichen: 'RUN-1',
+    arbeit: 'Inspektion',
+    mitarbeiter_id: 7,
+    geschaetzte_zeit: 60
+  });
+  assert.match(output, /Danach:/);
   assert.match(output, /Abholzeit 16:00 nicht erreichbar/);
 });
 

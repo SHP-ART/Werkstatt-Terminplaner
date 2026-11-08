@@ -417,7 +417,7 @@ Vollständige Beschreibungen in [.claude/PROJEKT.md](.claude/PROJEKT.md) Abschni
 | `tabletUpdateRoutes.js` | Auto-Update-System für Tablet-App |
 | `auftragsimportRoutes.js` | PDF-Auftragsimport aus Watch-Ordner, Korrektur erkannter Arbeiten, Schnelltermin/Zuordnung |
 | `tagesstempelRoutes.js` | Arbeitsbeginn/Arbeitsende/Unterbrechungen je Person (→ tagesstempelController) |
-| `warteschlangeRoutes.js` | Zettel-Board, Zuweisung/Reihenfolge und nächster Auftrag je Mechaniker für das Tablet |
+| `warteschlangeRoutes.js` | Zettel-Board, typisierte Zuweisung/Reihenfolge für Mechaniker/Lehrlinge, nächster Auftrag und zentrale Zeitwarnungen |
 | `GET /api/zeitkonto` | Zeitkonto pro Person (kein eigenes Route-File, direkt in index.js → zeitkontoController) |
 | `sucheRoutes.js` | Globale Suche |
 | `systemRoutes.js` | Systeminfos, Health-Check |
@@ -434,6 +434,7 @@ Vollständige Beschreibungen in [.claude/PROJEKT.md](.claude/PROJEKT.md) Abschni
 | `externalAiService.js` | Abstraktionsschicht für alle KI-Backends |
 | `kiDiscoveryService.js` | Erkennung verfügbarer KI-Dienste via mDNS |
 | `backendDiscoveryService.js` | Backend-Discovery für Electron |
+| `zeitplanungService.js` | Gemeinsame sequentielle Neuzeitberechnung für Queue und bisherigen Termin-Endpunkt; erhält `bring_zeit` |
 | `auftragsImportService.js` / `auftragsParserService.js` / `auftragsWatchService.js` | PDF-Auftragsimport aus `/opt/werkstatt-upload/Auftraege`, Parsing, Watcher, Termin-Anlage |
 
 ---

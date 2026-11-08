@@ -26,11 +26,13 @@ CLAUDE.md Abschnitt 6 · `ungetestet` = keine Absicherung
 | Papierkorb: gelöschte Termine ansehen und wiederherstellen | Tab `papierkorb` | manuell |
 | Phasen je Termin (Bringen, Arbeit, Abholung) | `phasenRoutes.js` | ungetestet |
 | Teileerfassung je Termin und Bestellverwaltung | `teileRoutes.js`, `teileBestellung.js` | ungetestet |
-| Zettel-Board lädt NEU (schwebende Termine/offene Importe) und Mechaniker-Queues für ein Datum (`GET /api/warteschlange?datum=...`) | `warteschlangeRoutes.js`, `frontend/src/features/warteschlange/warteschlangeFeature.js` | Backend/Frontend automatisiert, Board manuell |
-| Board: Zettel per Drag & Drop oder „Zu Kollegen“ zuweisen (`PUT /api/warteschlange/zuweisen`), Reihenfolge ändern (`PUT /api/warteschlange/reihenfolge`) | `warteschlangeRoutes.js`, `warteschlangeFeature.js` | Backend automatisiert, Browser manuell |
-| Board: Last/Kapazität inklusive Nebenzeit, „morgen“-Überlauf, „läuft“-Markierung, Import-Schnelltermin und Reload über `termin.*`; Kollegenauswahl nutzt `effektive_zeit_minuten` | `warteschlangeFeature.js`, `realtimeFeature.js` | automatisiert (`frontend/tests/features/warteschlange.test.js`), Live manuell |
+| Zettel-Board lädt NEU sowie Mechaniker- und Lehrlings-Queues für ein Datum (`GET /api/warteschlange?datum=...`) | `warteschlangeRoutes.js`, `frontend/src/features/warteschlange/warteschlangeFeature.js` | Backend/Frontend automatisiert, Board live geprüft |
+| Board: ganze Aufträge per Drag & Drop oder „Zu Kollegen“ typisiert zuweisen (`PUT /api/warteschlange/zuweisen`), Reihenfolge ändern (`PUT /api/warteschlange/reihenfolge`) | `warteschlangeRoutes.js`, `warteschlangeFeature.js` | Backend automatisiert, Browser live geprüft |
+| Board: Last/Kapazität inklusive Nebenzeit/Aufgabenbewältigung, „morgen“/„läuft“, Import-Schnelltermin und Reload über `termin.*`; Kollegenauswahl nutzt `effektive_zeit_minuten` | `warteschlangeFeature.js`, `realtimeFeature.js` | automatisiert (`frontend/tests/features/warteschlange.test.js`), Live manuell |
+| Zentrale Neuzeitberechnung aus Queue-Reihenfolge; Bringzeit bleibt unverändert, Planung (Beta) nutzt dieselben Start-/Endwerte | `zeitplanungService.js`, `termineController.js`, `dragDropFeature.js` | automatisiert (`tests/zeitplanungService.test.js`), Planung live geprüft |
+| Bring-/Abholzeit-Warnungen mit identischen Codes/Meldungen auf Board, Planung und Tablet | `terminWarnungen.js`, `warteschlangeFeature.js`, `electron-intern-tablet/index.html` | automatisiert (`tests/terminWarnungen.test.js`, `frontend/tests/features/zeitWarnungen.test.js`), alle drei Oberflächen live geprüft |
 | Queue-Zettel auf nächsten Arbeitstag verschieben (`POST /api/warteschlange/:terminId/naechster-tag`) | `warteschlangeRoutes.js` | automatisiert (`tests/warteschlange.test.js`) |
-| Nächster Queue-Zettel je Mechaniker (`GET /api/warteschlange/mitarbeiter/:id/naechster`) inklusive relationaler Arbeiten/Stempelwerte; Tablet-Anzeige „Mein nächster Auftrag“ mit reload-festem Anstempeln | `warteschlangeRoutes.js`, `electron-intern-tablet/index.html` | Backend/Tablet automatisiert (`tests/warteschlange.test.js`, `electron-intern-tablet/tests/zettel-board.test.js`), Hardware manuell |
+| Nächster Queue-Zettel je Mechaniker oder Lehrling (`GET /api/warteschlange/mitarbeiter/:id/naechster`, `/lehrling/:id/naechster`) inklusive Arbeiten/Stempelwerten; Tablet mit reload-festem Anstempeln | `warteschlangeRoutes.js`, `electron-intern-tablet/index.html` | Backend/Tablet automatisiert, Browser-Tabletgröße live geprüft |
 
 ## Kapazität und Auslastung
 

@@ -145,7 +145,7 @@ Enthält Geschäftslogik zwischen Route und Model. Jeder Controller ist verantwo
 | `wiederkehrendeTermineController.js` | Wiederkehrende Terminserien |
 | `fahrzeugeController.js` | Fahrzeuge CRUD |
 | `tagesstempelController.js` | Arbeitsbeginn/Arbeitsende/Unterbrechungen je Person (Tagesstempel + Arbeitsunterbrechungen) |
-| `warteschlangeController.js` | Zettel-Board, Zuweisung/Reihenfolge und nächster aktueller Auftrag je Mechaniker |
+| `warteschlangeController.js` | Typisierte Queues für Mechaniker/Lehrlinge, Zuweisung/Reihenfolge, nächster Zettel und zentrale Warnungen |
 
 #### Models (`models/`)
 Reine Datenbankschicht. Keine Geschäftslogik. Nutzen `dbHelper.js` für Promise-basierte Queries.
@@ -154,7 +154,7 @@ Wichtige Models:
 - `termineModel.js` – Termin-Abfragen inkl. JOIN auf Kunden und Mitarbeiter; soft-delete via `geloescht_am`; Termin-Nr-Generator (`T-YYYY-NNN`)
 - `kundenModel.js` – inkl. `importMultiple()` für Locosoft-Import mit Duplikat-Erkennung via normiertes Kennzeichen
 - `auftragsimportModel.js` – PDF-Auftragsimporte, erkannte JSON-Daten und Zuordnungstreffer
-- `warteschlangeModel.js` – Queue-Abfragen und Positionen, inklusive oberstem aktivem Zettel je Mechaniker und Datum
+- `warteschlangeModel.js` – Typisierte Queue-Abfragen/Positionen für Mechaniker und Lehrlinge, oberster Zettel und relationale Arbeits-Stempelwerte je Datum
 - `einstellungenModel.js` – Schlüssel-Wert-Store für App-Einstellungen
 - `tabletUpdateModel.js` – Speichert registrierte Tablet-App-Versionen
 
@@ -168,6 +168,7 @@ Wichtige Models:
 | `openaiService.js` | OpenAI SDK Wrapper für Zeitschätzungen |
 | `localAiService.js` | **Lokales ML-Modell** (kein externer Dienst): trainiert sich täglich aus abgeschlossenen Terminen. Verwendet IQR-Ausreißerfilterung, Kategorie-Klassifikation (Inspektion/Bremsen/Motor etc.), Token-Matching auf Arbeitsbezeichnungen und `ki_zeitlern_daten`-Tabelle als dedizierte Lernquelle. Liefert Durchschnittswerte in Minuten je Arbeitstyp. |
 | `backendDiscoveryService.js` | mDNS-Discovery des Backends für Electron |
+| `zeitplanungService.js` | Zentrale Neuzeitberechnung aus Queue-Reihenfolge und Personenfaktoren für Planung/Board/Tablet; erhält `bring_zeit` |
 | `auftragsImportService.js` / `auftragsParserService.js` / `auftragsWatchService.js` | PDF-Auftragsimport aus dem Watch-Ordner, Parsing, Trefferermittlung, Korrektur erkannter Arbeiten und Termin-Anlage |
 
 #### Utils (`utils/`)
@@ -182,6 +183,7 @@ Wichtige Models:
 | `pagination.js` | Pagination-Parameter parsen |
 | `response.js` | Einheitliche Response-Struktur |
 | `zeitBerechnung.js` | Zeit- und Dauerberechnungen |
+| `terminWarnungen.js` | Reine zentrale Ableitung von Bring-/Abholzeit-Warnungen mit deutschen Meldungen |
 | `asyncOperations.js` | Async-Hilfsfunktionen |
 | `belegung.js` | Zeitslot-genaue Belegung: Intervalle je Ressource, Doppelbuchungen, Warte-Konflikte, freie Slots. Rein, ohne DB-Zugriff |
 | `auslastung.js` | Tages-Minuten-Topf: Statusfilter, Zeitverteilung auf Mitarbeiter/Lehrlinge, Kapazität und Restzeit. Rein, ohne DB-Zugriff |
@@ -196,7 +198,7 @@ Wichtige Models:
 | `validation.js` | `express-validator`-basierte Eingabevalidierung |
 
 #### Migrations (`migrations/`)
-Nummerierte Migrationen (derzeit bis 052). Automatisch ausgeführt beim Serverstart. Zustand wird in `schema_migrations`-Tabelle gespeichert.
+Nummerierte Migrationen (derzeit bis 053). Automatisch ausgeführt beim Serverstart. Zustand wird in `schema_migrations`-Tabelle gespeichert.
 
 Wichtige Migrations:
 - `001_initial.js` – Basistabellen
@@ -207,6 +209,7 @@ Wichtige Migrations:
 - `030_arbeitspausen.js` – Detaillierte Pausenzeiten
 - `034_tagesstempel.js` – Tagesstempel- und Arbeitsunterbrechungen-Tabellen
 - `052_warteschlange_pos.js` – Nullable `termine.warteschlange_pos` und Index auf `(mitarbeiter_id, warteschlange_pos)` für das Zettel-Board
+- `053_warteschlange_lehrlinge.js` – Index auf `(lehrling_id, warteschlange_pos)` für getrennte Lehrlings-Queues
 
 ---
 
@@ -215,7 +218,7 @@ Wichtige Migrations:
 - **Build-Tool:** Vite 7, erzeugt `dist/` mit Hash-basiertem Asset-Namen
 - **`src/services/api.js`:** Einziger HTTP-Client. Enthält `API_BASE_URL` (aus `CONFIG.API_URL`). Implementiert Health-Check mit Retry-Logik (Exponential Backoff, 3 Versuche, max 4s Delay).
 - **`src/components/app.js`:** Monolithische Haupt-App-Klasse (`class App`). Verwaltet den gesamten Anwendungszustand (Kunden-Cache, Termine-Cache, Tab-Zustand, WebSocket-Verbindung, Fuzzy-Search-Index, Drag&Drop-Puffer). Enthält alle UI-Handler, Tab-Navigation, Formularlogik sowie WebSocket-Message-Handling (`handleWebSocketMessage` → `handleRealtimeTerminEvent` / `handleRealtimeKundenEvent`). Enthält auch Hilfslogik für Lehrlings-Berufsschulwochen-Erkennung (ISOKalenderwoche), Datumsformatierung und Toasts.
-- **`src/features/warteschlange/warteschlangeFeature.js`:** Zettel-Board mit NEU-Spalte, Mechaniker-Queues, Last/„morgen“/„läuft“, Drag & Drop, Kollegen-Auswahl und Import-Schnelltermin; lädt nach Mutationen und bei `termin.queue_updated` neu.
+- **`src/features/warteschlange/warteschlangeFeature.js`:** Zettel-Board mit NEU, Mechaniker-/Lehrlings-Queues, Last/Faktoren, „morgen“/„läuft“, zentralen Zeitwarnungen, Drag & Drop, Kollegen-Auswahl und Import-Schnelltermin; lädt nach Mutationen und relevanten `termin.*`-Events neu.
 - **`src/components/migrationMonitor.js`:** Überwacht laufende Migrations und zeigt Status im Frontend an.
 
 ### Electron-Desktop (`backend/electron-main.js`)
@@ -276,7 +279,7 @@ Backend
 
 | Tabelle | Inhalt |
 |---|---|
-| `termine` | Haupt-Termintabelle; FK → `kunden`, `mitarbeiter`; Felder u.a. `datum`, `uhrzeit`, `arbeit`, `status`, `mitarbeiter_id`, `kunde_id`, `kennzeichen`, `geloescht_am` (soft-delete), `warteschlange_pos` (nullable Queue-Position seit Migration 052) |
+| `termine` | Haupt-Termintabelle; FK → `kunden`, `mitarbeiter`, `lehrlinge`; Felder u.a. `datum`, `arbeit`, `status`, `mitarbeiter_id`, `lehrling_id`, `kunde_id`, `kennzeichen`, `bring_zeit`, `abholung_zeit`, `startzeit`, `endzeit_berechnet`, `geloescht_am`, `warteschlange_pos` (Queue-Position für beide Personentypen) |
 | `termine_arbeiten` | Relationale Arbeiten je Termin (seit Migration 013); Felder: `stempel_start` TEXT (HH:MM, NULL = nicht gestempelt), `stempel_ende` TEXT (HH:MM, NULL = nicht gestempelt) seit Migration 032 |
 | `kunden` | Kundendaten; `locosoft_id` für Importzuordnung; `kennzeichen`, `vin`, `fahrzeugtyp` |
 | `mitarbeiter` | Mitarbeiter; `aktiv` Flag |
@@ -315,7 +318,7 @@ Alle Events haben Format: `{ event: string, data: any, ts: number }`
 |---|---|---|---|
 | `termin.created` | `termineController` | `{ id, datum }` | Lädt Termine-Cache, Dashboard, aktiven Tab neu |
 | `termin.updated` | `termineController` | `{ id, datum }` | Lädt Termine-Cache, Dashboard, aktiven Tab neu |
-| `termin.queue_updated` | `warteschlangeController` | `{ mitarbeiter_id }` | Lädt das geöffnete Zettel-Board neu |
+| `termin.queue_updated` | `warteschlangeController` | `{ mitarbeiter_id }` oder `{ lehrling_id }` | Lädt das geöffnete Zettel-Board neu |
 | `termin.deleted` | `termineController` | `{ id, datum }` | Lädt Papierkorb neu (wenn aktiv) |
 | `termin.restored` | `termineController` | `{ id, datum }` | Lädt Papierkorb neu |
 | `kunde.created` | `kundenController` | `{ id }` | Lädt Kunden-Liste, Dashboard neu |
@@ -400,13 +403,14 @@ Setzt `DATA_DIR=/var/lib/werkstatt-terminplaner` damit die Datenbank im persiste
 | `utils/auslastung.js` | 21 Fälle – Statusfilter, Zeitverteilung, Kapazität, Restzeit, Verkettung | `tests/auslastung.test.js` |
 | `utils/belegung.js` | 14 Fälle – Intervalle, Überschneidungen, Warte-Konflikte, freie Slots | `tests/belegung.test.js` |
 | Migrations (Generalsuite) | **stillgelegt** – mockte wirkungslos, destabilisierte den Lauf | `tests/migrations.test.js` |
-| Migration 052 | 2 aktive Fälle – Spalte, Index und Runner-Registrierung | `tests/warteschlangeMigration.test.js` |
-| Warteschlange (Route/Controller/Model) | 27 aktive HTTP-/SQLite-Fälle – Queue, Positionen, Filter, nächster Zettel | `tests/warteschlange.test.js` |
+| Migration 052/053 | aktive Fälle für Spalte, beide Queue-Indizes und Runner-Registrierung | `tests/warteschlangeMigration.test.js`, `tests/warteschlangeLehrlingeMigration.test.js` |
+| Warteschlange (Route/Controller/Model) | 42 aktive HTTP-/SQLite-Fälle – beide Personentypen, Positionen, Faktoren, Filter, nächster Zettel, Warnungen und Parallelität | `tests/warteschlange.test.js` |
+| Zeitplanung und Warnungen | Service-/Grenzfalltests für Queue-Reihenfolge, unveränderte Bringzeit, laufende Starts, Lehrlingsfaktor und Richtzeiten | `tests/zeitplanungService.test.js`, `tests/terminWarnungen.test.js` |
 | Arbeitspausen, Stempelzeiten, Nachstempeln | vorhanden | `tests/*.test.js` |
 | Auftragsimport (Service + Parser) | vorhanden | `tests/auftragsImportService.test.js`, `tests/auftragsParserService.test.js` |
 | Regressionstests | 8 Dateien | `tests/bugs/` |
-| **Controller/Models außer Warteschlange und bugs/** | **keine** | – |
-| **Frontend Warteschlange** | 10 Fälle – Lastberechnung, Request-Datum, Lade-/Fehlerzustände, „läuft“; Installer-Registrierung separat | `frontend/tests/features/warteschlange.test.js`, `frontend/tests/features/installers.test.js` |
+| **Frontend Warteschlange/Planung** | 15 Fälle – Board, Last, Requests, Lehrlinge, Warnungen; Planungs-Warnrendering separat | `frontend/tests/features/warteschlange.test.js`, `frontend/tests/features/zeitWarnungen.test.js` |
+| **Tablet Zettel-Board** | 9 Fälle – Fallbacks, Queue-Auswahl, Warnungen, Reload-/Retry-Stempelzustand | `electron-intern-tablet/tests/zettel-board.test.js` |
 
 Muster für neue Rechenlogik: reine Funktion in `utils/`, dort getestet; Models und
 Controller laden nur Daten und rufen sie auf. So entstanden `belegung.js` und
@@ -417,8 +421,8 @@ Controller laden nur Daten und rufen sie auf. So entstanden `belegung.js` und
 ## 10. Projektstatus
 
 - **Phase:** Wartung / laufende Weiterentwicklung
-- **Letzter Stand:** 2026-11-08 – Zettel-Board mit Warteschlangen-API, Migration 052, Drag & Drop, Auslastungs-/Nebenzeit-Markierung, Realtime-Updates sowie Tablet „Mein nächster Auftrag“ und Anstempeln implementiert und nach Review korrigiert.
+- **Letzter Stand:** 2026-11-08 – Zettel-Board lokal um Lehrlings-Queues (Migration 053), gemeinsame Zeitberechnung und zentrale Bring-/Abholzeit-Warnungen in Board, Planung (Beta) und Tablet erweitert. Der bestehende Produktivstand bleibt `a4e334b`; die neuen Commits sind noch nicht deployt.
 - **Deployed:** 2026-11-08 auf `a4e334b`. Vor dem Update Produktiv-Backup `pre-zettel-board-2026-11-08T06-09-27-511Z.db` mit WAL-Checkpoint erstellt. Migration 51→52 erfolgreich, `_schema_meta.schema_version=52`, Spalte und Index vorhanden. Dienst aktiv, Health-Check, Queue-/Tablet-Lesendpunkte und Frontend-Assets jeweils HTTP 200. Kein Tablet-Installer/Versionsbump.
-- **Testsuite:** 203 Backend-Tests grün, 9 bewusst übersprungen; 33 Frontend-Tests grün; Vite-Build und 5 Tablet-Regressionstests grün (Stand 2026-11-08).
-- **Nächster Schritt:** Produktivdeployment der Nachbesserungen `8b1cdc9` (reload-fester Tablet-Stempelzustand) und `32bb744` (Nebenzeit bei Kollegenauswahl), danach realer Tablet-Hardwaretest. SOPS-Regeln in `ba2c6df` versioniert und für `.env.example` verifiziert.
+- **Testsuite:** 217 Backend-Tests grün, 9 bewusst übersprungen; 38 Frontend-Tests grün; Vite-Build und 9 Tablet-Regressionstests grün (Stand 2026-11-08). Live isoliert: Lehrling-Drop, Zwei-Browser-Update, Zeit-/Warnwerte sowie Planungs-/Tablet-Warnungen verifiziert.
+- **Nächster Schritt:** Produktivdeployment der lokalen Nachbesserungen und Lehrling-/Zeitplanung nach Freigabe, danach realer Tablet-Hardwaretest und Tablet-Release. SOPS-Regeln sind versioniert und für `.env.example` verifiziert.
 - **Blockiert durch:** nichts

@@ -2271,6 +2271,7 @@ export function installDragDropFeature(AppClass) {
           <div class="termin-title">${termin.termin_nr || 'Neu'}${istAbgeschlossen ? ' <span class="arbeit-done-badge">✓</span>' : ''}</div>
           <div class="termin-info arbeit-name">${arbeit.name}</div>
           <div class="termin-info">${teil1DauerText}</div>
+          ${this.renderTerminWarnungen(termin)}
         `;
         div.title = `${termin.termin_nr}\n${termin.kunde_name}\n\n📋 Arbeit: ${arbeit.name}\n⏱️ Dauer: ${teil1DauerText}\n🕐 Start: ${startzeit}${istAbgeschlossen ? '\n✅ Abgeschlossen' : ''}`;
         
@@ -2309,6 +2310,7 @@ export function installDragDropFeature(AppClass) {
         <div class="termin-title">${termin.termin_nr || 'Neu'}${istAbgeschlossen ? ' <span class="arbeit-done-badge">✓</span>' : ''}</div>
         <div class="termin-info arbeit-name">${arbeit.name}</div>
         <div class="termin-info">${dauerText}</div>
+        ${this.renderTerminWarnungen(termin)}
       `;
       div.title = `${termin.termin_nr}\n${termin.kunde_name}\n\n📋 Arbeit: ${arbeit.name}\n⏱️ Dauer: ${dauerText}\n🕐 Start: ${startzeit}${istAbgeschlossen ? '\n✅ Abgeschlossen' : ''}`;
       
@@ -2393,6 +2395,7 @@ export function installDragDropFeature(AppClass) {
         <div class="termin-title">↪ ${termin.termin_nr || 'Neu'}</div>
         <div class="termin-info arbeit-name">${arbeit.name}</div>
         <div class="termin-info">${dauerText}</div>
+        ${this.renderTerminWarnungen(termin)}
       `;
       div.title = `${termin.termin_nr}\n${termin.kunde_name}\n\n📋 Arbeit: ${arbeit.name}\n⏱️ Fortsetzung: ${dauerText}`;
       
@@ -2895,6 +2898,7 @@ export function installDragDropFeature(AppClass) {
         div.innerHTML = `
           <div class="termin-title">↪ ${termin.termin_nr || 'Neu'}${istErweiterungBadgeHtml}</div>
           <div class="termin-info">${displayDauer} min (Forts.)</div>
+          ${this.renderTerminWarnungen(termin)}
         `;
         div.title = `${termin.termin_nr} (Fortsetzung nach Pause)\n${termin.kunde_name}\n${termin.arbeit}${abholzeitInfo}${erweiterungInfo}`;
       } else {
@@ -2902,6 +2906,7 @@ export function installDragDropFeature(AppClass) {
           <button class="timeline-termin-remove-btn" title="Zuweisung entfernen" data-remove-termin-id="${termin.id}">×</button>
           <div class="termin-title">${termin.termin_nr || 'Neu'} - ${termin.kennzeichen || ''}${istErweiterungBadgeHtml}${erweiterungBadgeHtml}</div>
           <div class="termin-info">${termin.kunde_name || ''} • ${dauerText}</div>
+          ${this.renderTerminWarnungen(termin)}
         `;
         div.title = `${termin.termin_nr}\n${termin.kunde_name}\n${termin.arbeit}\n${startzeit} - ${dauerText}${abholzeitInfo}${erweiterungInfo}${hatErweiterungenInfo}`;
 
