@@ -225,9 +225,9 @@ Wichtige Migrations:
 Startet `server.js` als Child-Process, öffnet Browser-Fenster auf `localhost:3001`.
 
 ### Tablet-App (`electron-intern-tablet/`)
-- Eigenständige Electron-App (v1.7.4, ia32)
-- Vollbild-Darstellung der Werkstatt-Übersicht
-- Auto-Update: prüft beim Start `GET /api/tablet-update/latest`, lädt neuen Installer herunter und installiert selbstständig
+- Eigenständige Electron-App (v1.9.9, ia32); lädt die Oberfläche lokal aus `index.html`
+- Vollbild-Darstellung der Werkstatt-Übersicht inklusive Lehrlings-Queues und zentralen Zeitwarnungen
+- Auto-Update: prüft beim Start und alle 15 Minuten `GET /api/tablet-update/check?version=...`, lädt neue registrierte Installer herunter und kann sie im Wartungsfenster installieren
 - Konfiguration via `config.json` (Backend-URL)
 
 ---
@@ -421,8 +421,8 @@ Controller laden nur Daten und rufen sie auf. So entstanden `belegung.js` und
 ## 10. Projektstatus
 
 - **Phase:** Wartung / laufende Weiterentwicklung
-- **Letzter Stand:** 2026-11-08 – Zettel-Board lokal um Lehrlings-Queues (Migration 053), gemeinsame Zeitberechnung und zentrale Bring-/Abholzeit-Warnungen in Board, Planung (Beta) und Tablet erweitert. Der bestehende Produktivstand bleibt `a4e334b`; die neuen Commits sind noch nicht deployt.
-- **Deployed:** 2026-11-08 auf `a4e334b`. Vor dem Update Produktiv-Backup `pre-zettel-board-2026-11-08T06-09-27-511Z.db` mit WAL-Checkpoint erstellt. Migration 51→52 erfolgreich, `_schema_meta.schema_version=52`, Spalte und Index vorhanden. Dienst aktiv, Health-Check, Queue-/Tablet-Lesendpunkte und Frontend-Assets jeweils HTTP 200. Kein Tablet-Installer/Versionsbump.
-- **Testsuite:** 217 Backend-Tests grün, 9 bewusst übersprungen; 38 Frontend-Tests grün; Vite-Build und 9 Tablet-Regressionstests grün (Stand 2026-11-08). Live isoliert: Lehrling-Drop, Zwei-Browser-Update, Zeit-/Warnwerte sowie Planungs-/Tablet-Warnungen verifiziert.
-- **Nächster Schritt:** Produktivdeployment der lokalen Nachbesserungen und Lehrling-/Zeitplanung nach Freigabe, danach realer Tablet-Hardwaretest und Tablet-Release. SOPS-Regeln sind versioniert und für `.env.example` verifiziert.
+- **Letzter Stand:** 2026-11-08 – Zettel-Board mit getrennten Lehrlings-Queues (Migration 053), gemeinsamer Zeitberechnung und zentralen Bring-/Abholzeit-Warnungen in Board, Planung (Beta) und Tablet produktiv deployt. Die Reviewbefunde zu Tablet-Stempelzustand und Nebenzeit sind behoben.
+- **Deployed:** 2026-11-08 per `tools/deploy-production.sh` auf `0b3e865`. Vorher WAL-Checkpoint und Produktiv-Backup `pre-deploy-2026-11-08T09-08-02-558Z.db`; `_schema_meta.schema_version=53` und beide Queue-Indizes vorhanden. Dienst aktiv, Health-/Queue-API und Frontend-Assets erfolgreich geprüft.
+- **Testsuite:** 217 Backend-Tests grün, 9 bewusst übersprungen; 38 Frontend-Tests grün; Vite-Build und 9 Tablet-Regressionstests grün (Stand 2026-11-08). Live isoliert: Lehrling-Drop, Zwei-Browser-Update, Zeit-/Warnwerte sowie Planungs-/Tablet-Warnungen verifiziert. Keine produktiven Schreibtests.
+- **Nächster Schritt:** Tablet-App ab v1.9.9 versionserhöht als Windows-Installer bauen und registrieren, danach Auto-Update sowie Lehrlings-Queues und Zeitwarnungen auf realer Tablet-Hardware abnehmen. Ein GitHub-Actions-Build ist möglich, aber noch nicht eingerichtet.
 - **Blockiert durch:** nichts

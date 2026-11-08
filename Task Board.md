@@ -8,6 +8,7 @@
 
 ## Backlog
 
+- [ ] Tablet-App-Release: Version ab 1.9.9 erhoehen, Windows-Installer bauen und registrieren, Auto-Update sowie Lehrlings-Queues und Zeitwarnungen auf realer Hardware testen
 - [ ] Entscheiden, ob geloeschte Testimporte 670/671 wiederhergestellt oder im Papierkorb gelassen werden (vom 2026-05-16 verschoben, nicht kritisch fuer heutige Kalenderfixes)
 - [ ] Lokale Backend-Testdatenbank/Schema-Probleme untersuchen, damit `npm test` wieder komplett nutzbar wird (vom 2026-05-16 verschoben, groesserer separater Block)
 - [ ] WebSocket-Event-Naming vereinheitlichen (Unterstrich -> Punkt-Notation, alte Events bereinigen)
