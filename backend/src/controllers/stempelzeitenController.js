@@ -767,13 +767,16 @@ class StempelzeitenController {
               const kiAktiv = einst ? (einst.ki_zeitlern_enabled === 0 ? false : true) : true;
               if (kiAktiv) {
                 const { kategorisiereArbeit } = require('../services/localAiService');
-                const { runAsync: dbRun } = require('../config/database');
-                const kat = kategorisiereArbeit(arbeit_name);
-                await dbRun(
-                  `INSERT INTO ki_zeitlern_daten (termin_id, arbeit, kategorie, geschaetzte_min, tatsaechliche_min, mitarbeiter_id, datum)
-                   VALUES (?, ?, ?, ?, ?, ?, ?)`,
-                  [termin_id, arbeit_name, kat, row.geschaetzte_min || istMin, istMin, row.mitarbeiter_id || null, row.datum]
-                );
+                const KiZeitlernModel = require('../models/kiZeitlernModel');
+                await KiZeitlernModel.saveLernpunkt({
+                  terminId: termin_id,
+                  arbeit: arbeit_name,
+                  kategorie: kategorisiereArbeit(arbeit_name),
+                  geschaetztMin: row.geschaetzte_min || istMin,
+                  tatsaechlichMin: istMin,
+                  mitarbeiterId: row.mitarbeiter_id || null,
+                  datum: row.datum
+                });
               }
             } catch (e) {
               console.warn('[Stempel-Lernen] ki_zeitlern_daten insert fehlgeschlagen:', e.message);

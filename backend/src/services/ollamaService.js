@@ -5,10 +5,23 @@
  * Implementiert dasselbe Interface wie openaiService.js und localAiService.js,
  * damit getKIService(mode) transparent zwischen Providern wechseln kann.
  *
- * Kein OpenAI-Fallback — bei Fehler wird eine klare Fehlermeldung zurückgegeben.
+ * Bei Timeout oder ungültigem JSON wird der lokale Service mit fallback-Markierung verwendet.
  *
  * @version 1.0.0
  */
+
+const localAiService = require('./localAiService');
+
+async function localFallback(error, fallback, funktion) {
+  console.warn(`[Ollama] ${funktion} nutzt lokalen Fallback: ${error.message}`);
+  const result = await fallback();
+  if (!result || typeof result !== 'object') return result;
+  return {
+    ...result,
+    fallback: 'local',
+    warnung: `Ollama ${funktion} fehlgeschlagen: ${error.message}`
+  };
+}
 
 // =============================================================================
 // KONFIGURATION
@@ -16,7 +29,8 @@
 
 const OLLAMA_BASE_URL = process.env.OLLAMA_BASE_URL || 'http://localhost:11434';
 let OLLAMA_MODEL = process.env.OLLAMA_MODEL || 'llama3.2';
-const OLLAMA_TIMEOUT_MS = parseInt(process.env.OLLAMA_TIMEOUT_MS) || 15000;
+const OLLAMA_TIMEOUT_MS = parseInt(process.env.OLLAMA_TIMEOUT_MS) || 120000;
+const OLLAMA_NUM_PREDICT = parseInt(process.env.OLLAMA_NUM_PREDICT) || 400;
 const OLLAMA_TEMPERATURE = parseFloat(process.env.OLLAMA_TEMPERATURE) || 0.3;
 
 // Modell zur Laufzeit wechseln (aus DB-Einstellungen)
@@ -115,7 +129,7 @@ async function ollamaChat(systemPrompt, userPrompt) {
         stream: false,
         options: {
           temperature: OLLAMA_TEMPERATURE,
-          num_predict: 1500
+          num_predict: OLLAMA_NUM_PREDICT
         },
         format: 'json'
       })
@@ -256,8 +270,7 @@ Antworte NUR mit einem JSON-Objekt in diesem Format:
     const content = await ollamaChat(CITROEN_SYSTEM_PROMPT, prompt);
     return parseOllamaJSON(content);
   } catch (error) {
-    console.error('Ollama parseTerminFromText Fehler:', error.message);
-    throw new Error(`Ollama KI-Analyse fehlgeschlagen: ${error.message}`);
+    return localFallback(error, () => localAiService.parseTerminFromText(text), 'KI-Analyse');
   }
 }
 
@@ -290,8 +303,7 @@ Schlage passende Werkstatt-Arbeiten vor. Antworte NUR mit JSON:
     const content = await ollamaChat(CITROEN_SYSTEM_PROMPT, prompt);
     return parseOllamaJSON(content);
   } catch (error) {
-    console.error('Ollama suggestArbeiten Fehler:', error.message);
-    throw new Error(`Ollama Arbeitsvorschlag fehlgeschlagen: ${error.message}`);
+    return localFallback(error, () => localAiService.suggestArbeiten(beschreibung, fahrzeug), 'Arbeitsvorschlag');
   }
 }
 
@@ -341,8 +353,7 @@ Antworte NUR mit JSON:
     result.quelle = 'Ollama KI-Schätzung';
     return result;
   } catch (error) {
-    console.error('Ollama estimateZeit Fehler:', error.message);
-    throw new Error(`Ollama Zeitschätzung fehlgeschlagen: ${error.message}`);
+    return localFallback(error, () => localAiService.estimateZeit(arbeiten, fahrzeug), 'Zeitschätzung');
   }
 }
 
@@ -374,8 +385,7 @@ Antworte NUR mit JSON:
     const content = await ollamaChat(CITROEN_SYSTEM_PROMPT, prompt);
     return parseOllamaJSON(content);
   } catch (error) {
-    console.error('Ollama erkenneTeilebedarf Fehler:', error.message);
-    throw new Error(`Ollama Teile-Erkennung fehlgeschlagen: ${error.message}`);
+    return localFallback(error, () => localAiService.erkenneTeilebedarf(beschreibung, fahrzeug), 'Teile-Erkennung');
   }
 }
 
@@ -410,8 +420,7 @@ Antworte NUR mit JSON:
     const content = await ollamaChat(CITROEN_SYSTEM_PROMPT, prompt);
     return parseOllamaJSON(content);
   } catch (error) {
-    console.error('Ollama getWartungsplan Fehler:', error.message);
-    throw new Error(`Ollama Wartungsplan fehlgeschlagen: ${error.message}`);
+    return localFallback(error, () => localAiService.getWartungsplan(fahrzeugtyp, kmStand, fahrzeugalter), 'Wartungsplan');
   }
 }
 

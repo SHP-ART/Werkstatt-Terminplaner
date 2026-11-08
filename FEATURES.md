@@ -99,6 +99,11 @@ Zwei bewusst getrennte Modelle – Details und Regeln in CLAUDE.md Abschnitt 4.
 | Externe KI-Zeitschätzung (Ollama lokal / OpenAI) | `externalAiService.js`, `ollamaService.js`, `openaiService.js` | ungetestet |
 | KI-Dienst-Erkennung via mDNS | `kiDiscoveryService.js` | ungetestet |
 | KI-gestützte Terminoptimierung | `kiPlanungRoutes.js` | teilweise (`tests/bugs/ki-planung-verbesserungen.test.js`) |
+| Lokaler Freitextparser und statischer VIN-Teilecheck | `localAiService.js` | automatisiert (`tests/kiLocalService.test.js`) |
+| Idempotente KI-Lerndaten je Termin/Arbeit inklusive Duplikat-Migration | `kiZeitlernModel.js`, Migration 054 | automatisiert (`tests/kiLernDaten.test.js`) |
+| Slot-Nachfüllung über echte freie Slots der Belegungs-API | `dragDropFeature.js`, `kiPlanungController.js` | automatisiert (`frontend/tests/features/slotNachfuellung.test.js`) |
+| Ollama-CPU-Zeitlimit, Tokenkappe, gekennzeichnete lokale Fallbacks und nicht blockierender Job-Aufräumtimer | `ollamaService.js`, `kiPlanungController.js` | automatisiert (`tests/ollamaService.test.js`, `tests/kiPlanungFallback.test.js`, `tests/kiJobTimer.test.js`) |
+| Externe Python-Routen für Arbeitsvorschläge | `tools/ki-service/app/main.py` | automatisiert (`tools/ki-service/tests/test_main.py`) |
 
 **Regel:** `externalAiService.js` gibt `null` zurück, wenn kein Dienst erreichbar ist –
 jeder Aufrufer muss das abfangen.

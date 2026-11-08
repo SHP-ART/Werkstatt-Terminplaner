@@ -157,6 +157,7 @@ Wichtige Models:
 - `warteschlangeModel.js` – Typisierte Queue-Abfragen/Positionen für Mechaniker und Lehrlinge, oberster Zettel und relationale Arbeits-Stempelwerte je Datum
 - `einstellungenModel.js` – Schlüssel-Wert-Store für App-Einstellungen
 - `tabletUpdateModel.js` – Speichert registrierte Tablet-App-Versionen
+- `kiZeitlernModel.js` – Idempotentes Speichern je Termin und Arbeit über den Unique-Index aus Migration 054
 
 #### Services (`services/`)
 
@@ -198,7 +199,7 @@ Wichtige Models:
 | `validation.js` | `express-validator`-basierte Eingabevalidierung |
 
 #### Migrations (`migrations/`)
-Nummerierte Migrationen (derzeit bis 053). Automatisch ausgeführt beim Serverstart. Zustand wird in `schema_migrations`-Tabelle gespeichert.
+Nummerierte Migrationen (derzeit bis 054). Automatisch ausgeführt beim Serverstart. Zustand wird in `schema_migrations`-Tabelle gespeichert.
 
 Wichtige Migrations:
 - `001_initial.js` – Basistabellen
@@ -210,6 +211,7 @@ Wichtige Migrations:
 - `034_tagesstempel.js` – Tagesstempel- und Arbeitsunterbrechungen-Tabellen
 - `052_warteschlange_pos.js` – Nullable `termine.warteschlange_pos` und Index auf `(mitarbeiter_id, warteschlange_pos)` für das Zettel-Board
 - `053_warteschlange_lehrlinge.js` – Index auf `(lehrling_id, warteschlange_pos)` für getrennte Lehrlings-Queues
+- `054_ki_lern_daten_unique.js` – Führt KI-Lerndaten-Duplikate zusammen und erzwingt Eindeutigkeit je `(termin_id, arbeit)`
 
 ---
 
@@ -358,6 +360,8 @@ Alle Events haben Format: `{ event: string, data: any, ts: number }`
 | `OPENAI_MAX_TOKENS` | `1000` | Max Token pro Anfrage |
 | `OPENAI_TEMPERATURE` | `0.3` | Determinismus der KI-Antworten |
 | `OPENAI_COST_LIMIT` | `50` | Monatliches Kostenlimit in EUR |
+| `OLLAMA_TIMEOUT_MS` | `120000` | Zeitlimit für CPU-Inferenz und Planung über Ollama |
+| `OLLAMA_NUM_PREDICT` | `400` | Maximale Ausgabetokens pro Ollama-Antwort |
 | `KI_EXTERNAL_URL` | – | Fallback-URL für lokalen KI-Dienst |
 | `KI_EXTERNAL_TIMEOUT_MS` | `4000` | Timeout für KI-Anfragen |
 | `RATE_LIMIT_ENABLED` | `false` | Rate-Limiting global aktivieren |
@@ -408,6 +412,7 @@ Setzt `DATA_DIR=/var/lib/werkstatt-terminplaner` damit die Datenbank im persiste
 | Zeitplanung und Warnungen | Service-/Grenzfalltests für Queue-Reihenfolge, unveränderte Bringzeit, laufende Starts, Lehrlingsfaktor und Richtzeiten | `tests/zeitplanungService.test.js`, `tests/terminWarnungen.test.js` |
 | Arbeitspausen, Stempelzeiten, Nachstempeln | vorhanden | `tests/*.test.js` |
 | Auftragsimport (Service + Parser) | vorhanden | `tests/auftragsImportService.test.js`, `tests/auftragsParserService.test.js` |
+| KI-Regressionen | Parser, VIN-Teilecheck, Lerndaten-Upsert/Migration 054, Ollama-Zeitlimit, Job-Timer und Slot-Nachfüllung | `tests/ki*.test.js`, `tests/ollamaService.test.js`, `frontend/tests/features/slotNachfuellung.test.js`, `tools/ki-service/tests/test_main.py` |
 | Regressionstests | 8 Dateien | `tests/bugs/` |
 | **Frontend Warteschlange/Planung** | 15 Fälle – Board, Last, Requests, Lehrlinge, Warnungen; Planungs-Warnrendering separat | `frontend/tests/features/warteschlange.test.js`, `frontend/tests/features/zeitWarnungen.test.js` |
 | **Tablet Zettel-Board** | 9 Fälle – Fallbacks, Queue-Auswahl, Warnungen, Reload-/Retry-Stempelzustand | `electron-intern-tablet/tests/zettel-board.test.js` |
@@ -421,8 +426,8 @@ Controller laden nur Daten und rufen sie auf. So entstanden `belegung.js` und
 ## 10. Projektstatus
 
 - **Phase:** Wartung / laufende Weiterentwicklung
-- **Letzter Stand:** 2026-11-08 – Zettel-Board mit getrennten Lehrlings-Queues (Migration 053), gemeinsamer Zeitberechnung und zentralen Bring-/Abholzeit-Warnungen in Board, Planung (Beta) und Tablet produktiv deployt. Die Reviewbefunde zu Tablet-Stempelzustand und Nebenzeit sind behoben.
+- **Letzter Stand:** 2026-11-08 – Zettel-Board mit getrennten Lehrlings-Queues (Migration 053), gemeinsamer Zeitberechnung und zentralen Bring-/Abholzeit-Warnungen in Board, Planung (Beta) und Tablet produktiv deployt. Die Reviewbefunde zu Tablet-Stempelzustand und Nebenzeit sind behoben. Anschließend wurden die KI-Regressionen inklusive Migration 054 lokal korrigiert; der Produktivstatus bleibt bis zum Deployment auf dem zuvor genannten Stand.
 - **Deployed:** 2026-11-08 per `tools/deploy-production.sh` auf `0b3e865`. Vorher WAL-Checkpoint und Produktiv-Backup `pre-deploy-2026-11-08T09-08-02-558Z.db`; `_schema_meta.schema_version=53` und beide Queue-Indizes vorhanden. Dienst aktiv, Health-/Queue-API und Frontend-Assets erfolgreich geprüft.
-- **Testsuite:** 217 Backend-Tests grün, 9 bewusst übersprungen; 38 Frontend-Tests grün; Vite-Build und 9 Tablet-Regressionstests grün (Stand 2026-11-08). Live isoliert: Lehrling-Drop, Zwei-Browser-Update, Zeit-/Warnwerte sowie Planungs-/Tablet-Warnungen verifiziert. Keine produktiven Schreibtests.
+- **Testsuite:** 229 Backend-Tests grün, 9 bewusst übersprungen; 40 Frontend-Tests und zwei Python-KI-Routentests grün; Vite-Build erfolgreich (Stand 2026-11-08). Die neuen KI-Regressionen waren vor ihrer Korrektur nachweislich rot. Keine produktiven Schreibtests.
 - **Nächster Schritt:** Tablet-App ab v1.9.9 versionserhöht als Windows-Installer bauen und registrieren, danach Auto-Update sowie Lehrlings-Queues und Zeitwarnungen auf realer Tablet-Hardware abnehmen. Ein GitHub-Actions-Build ist möglich, aber noch nicht eingerichtet.
 - **Blockiert durch:** nichts

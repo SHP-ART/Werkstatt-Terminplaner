@@ -10,12 +10,13 @@ const DEFAULT_TERMIN_DAUER_MIN = 60;
 
 // Job-Store für Hintergrundverarbeitung (In-Memory, TTL 15 Min)
 const _kiJobs = new Map();
-setInterval(() => {
+const kiJobCleanupInterval = setInterval(() => {
   const cutoff = Date.now() - 15 * 60 * 1000;
   for (const [id, job] of _kiJobs) {
     if (job.created < cutoff) _kiJobs.delete(id);
   }
 }, 5 * 60 * 1000);
+kiJobCleanupInterval.unref();
 function _newJobId() {
   return `ki_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 }
@@ -76,8 +77,9 @@ class KIPlanungController {
 
         // Hintergrundverarbeitung
         (async () => {
+          let mitarbeiter, lehrlinge, termine, schwebendeTermine, einstellungen, abwesenheiten;
           try {
-            const [mitarbeiter, lehrlinge, termine, schwebendeTermine, einstellungen, abwesenheiten] = await Promise.all([
+            [mitarbeiter, lehrlinge, termine, schwebendeTermine, einstellungen, abwesenheiten] = await Promise.all([
               KIPlanungController.getMitarbeiterMitDetails(),
               KIPlanungController.getLehrlingeMitDetails(),
               KIPlanungController.getTermineFuerDatum(datum),
@@ -91,9 +93,16 @@ class KIPlanungController {
             _kiJobs.set(jobId, { status: 'done', created: Date.now(), result: { success: true, datum, vorschlag, mode: 'ollama' } });
             broadcastEvent('ki.planung.done', { jobId, type: 'tages' });
           } catch (err) {
-            console.error('KI-Planung Hintergrundfehler:', err);
-            _kiJobs.set(jobId, { status: 'error', created: Date.now(), error: err.message });
-            broadcastEvent('ki.planung.done', { jobId, type: 'tages', error: err.message });
+            try {
+              console.warn('KI-Planung nutzt lokalen Fallback:', err.message);
+              const vorschlag = await KIPlanungController.buildLocalTagesVorschlag({ datum, mitarbeiter, lehrlinge, termine, schwebendeTermine, einstellungen, abwesenheiten });
+              _kiJobs.set(jobId, { status: 'done', created: Date.now(), result: { success: true, datum, vorschlag, mode: 'local', fallback: true } });
+              broadcastEvent('ki.planung.done', { jobId, type: 'tages', fallback: 'local' });
+            } catch (localErr) {
+              console.error('KI-Planung und lokaler Fallback fehlgeschlagen:', localErr);
+              _kiJobs.set(jobId, { status: 'error', created: Date.now(), error: localErr.message });
+              broadcastEvent('ki.planung.done', { jobId, type: 'tages', error: localErr.message });
+            }
           }
         })();
         return;
@@ -201,16 +210,17 @@ class KIPlanungController {
         res.json({ success: true, async: true, jobId });
 
         (async () => {
+          let wochentage, wochenDaten, mitarbeiter, lehrlinge, schwebendeTermine, einstellungen;
           try {
-            const wochentage = KIPlanungController.getWochentage(startDatum);
-            const wochenDaten = await Promise.all(wochentage.map(async (tag) => {
+            wochentage = KIPlanungController.getWochentage(startDatum);
+            wochenDaten = await Promise.all(wochentage.map(async (tag) => {
               const [termine, abwesenheiten] = await Promise.all([
                 KIPlanungController.getTermineFuerDatum(tag),
                 KIPlanungController.getAbwesenheitenFuerDatum(tag)
               ]);
               return { datum: tag, termine, abwesenheiten };
             }));
-            const [mitarbeiter, lehrlinge, schwebendeTermine, einstellungen] = await Promise.all([
+            [mitarbeiter, lehrlinge, schwebendeTermine, einstellungen] = await Promise.all([
               KIPlanungController.getMitarbeiterMitDetails(),
               KIPlanungController.getLehrlingeMitDetails(),
               KIPlanungController.getSchwebendeTermine(),
@@ -222,9 +232,16 @@ class KIPlanungController {
             _kiJobs.set(jobId, { status: 'done', created: Date.now(), result: { success: true, wochentage, vorschlag, mode: 'ollama' } });
             broadcastEvent('ki.planung.done', { jobId, type: 'wochen' });
           } catch (err) {
-            console.error('KI-Wochenplanung Hintergrundfehler:', err);
-            _kiJobs.set(jobId, { status: 'error', created: Date.now(), error: err.message });
-            broadcastEvent('ki.planung.done', { jobId, type: 'wochen', error: err.message });
+            try {
+              console.warn('KI-Wochenplanung nutzt lokalen Fallback:', err.message);
+              const vorschlag = await KIPlanungController.buildLocalWochenVorschlag({ wochentage, wochenDaten, mitarbeiter, lehrlinge, schwebendeTermine, einstellungen });
+              _kiJobs.set(jobId, { status: 'done', created: Date.now(), result: { success: true, wochentage, vorschlag, mode: 'local', fallback: true } });
+              broadcastEvent('ki.planung.done', { jobId, type: 'wochen', fallback: 'local' });
+            } catch (localErr) {
+              console.error('KI-Wochenplanung und lokaler Fallback fehlgeschlagen:', localErr);
+              _kiJobs.set(jobId, { status: 'error', created: Date.now(), error: localErr.message });
+              broadcastEvent('ki.planung.done', { jobId, type: 'wochen', error: localErr.message });
+            }
           }
         })();
         return;

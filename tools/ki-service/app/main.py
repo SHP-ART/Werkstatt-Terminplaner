@@ -680,13 +680,7 @@ def configure_lookback(days: int = None) -> dict:
     }
 
 
-@app.get('/api/predict')
-def predict_time(req: ZeitRequest, request: Request) -> dict:
-    detect_backend_from_request(request)
-    
-    beschreibung = req.beschreibung or ''
-    fahrzeug = req.fahrzeug or ''
-
+def build_arbeitsvorschlag(beschreibung: str, fahrzeug: str) -> dict:
     suggestions = suggest_tasks(beschreibung)
     arbeiten = []
     for task in suggestions:
@@ -712,6 +706,17 @@ def predict_time(req: ZeitRequest, request: Request) -> dict:
             'teile_vermutung': [t['name'] for t in teile]
         }
     }
+
+
+@app.post('/api/suggest-arbeiten')
+def suggest_arbeiten(req: ArbeitenRequest, request: Request) -> dict:
+    detect_backend_from_request(request)
+    return build_arbeitsvorschlag(req.beschreibung or '', req.fahrzeug or '')
+
+
+@app.post('/api/predict')
+def predict_time(req: ArbeitenRequest, request: Request) -> dict:
+    return suggest_arbeiten(req, request)
 
 
 @app.post('/api/estimate-zeit')

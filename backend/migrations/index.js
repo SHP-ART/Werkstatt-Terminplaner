@@ -69,6 +69,7 @@ const migrations = [
   require('./051_relax_arbeitspausen_grund'), // Version 51 - Arbeitspausen-Grund sonstiges erlauben
   require('./052_warteschlange_pos'), // Version 52 - Warteschlangenposition fuer Zettel-Board
   require('./053_warteschlange_lehrlinge'), // Version 53 - Warteschlangenindex fuer Lehrlinge
+  require('./054_ki_lern_daten_unique'), // Version 54 - Eindeutige KI-Lerndaten
 ];
 
 /**

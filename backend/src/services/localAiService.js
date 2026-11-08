@@ -553,18 +553,7 @@ function decodeVIN(vin) {
 }
 
 function checkTeileKompatibilitaet(vin, arbeit) {
-  const vinData = decodeVIN(vin);
-  if (!vinData.success) {
-    return vinData;
-  }
-  return {
-    success: true,
-    vin,
-    fahrzeug: `${vinData.hersteller} ${vinData.modell}`,
-    arbeit,
-    warnungen: [],
-    empfehlungen: []
-  };
+  return openaiService.checkTeileKompatibilitaet(vin, arbeit);
 }
 
 function extractDate(text) {
@@ -584,7 +573,8 @@ function extractDate(text) {
 }
 
 function extractTime(text) {
-  const match = text.match(/(?:um|ab|gegen)?\s*(\d{1,2})[:.](\d{2})/i);
+  const textOhneDatum = String(text || '').replace(/\d{1,2}[.\-/]\d{1,2}(?:[.\-/]\d{2,4})?/g, ' ');
+  const match = textOhneDatum.match(/(?:um|ab|gegen)?\s*(\d{1,2})[:.](\d{2})(?!\d)/i);
   if (!match) return null;
   const hh = String(match[1]).padStart(2, '0');
   const mm = String(match[2]).padStart(2, '0');

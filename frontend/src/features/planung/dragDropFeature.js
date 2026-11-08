@@ -5018,11 +5018,27 @@ export function installDragDropFeature(AppClass) {
       // Guard: nur wenn Slot-Nachfüllung aktiviert
       if (!document.getElementById('slotNachfuellungEnabled')?.checked) return;
       // Ermittle aktuelles Planungsdatum aus dem Drag&Drop-State
-      const datumEl = document.getElementById('planungDatumInput') || document.getElementById('auslastungDatum');
+      const datumEl = document.getElementById('auslastungDragDropDatum') || document.getElementById('planungDatumInput') || document.getElementById('auslastungDatum');
       const datum = datumEl?.value || this.formatDateLocal(new Date());
 
       try {
-        const data = await window.KIPlanungService.getLueckenVorschlaege(datum, null, null, null);
+        const belegung = await ApiService.get(`/termine/belegung?datum=${datum}`);
+        const freieSlots = (belegung?.ressourcen || []).flatMap(ressource =>
+          (ressource.abwesend ? [] : (ressource.freie_slots || [])).map(slot => ({
+            ...slot,
+            mitarbeiterId: ressource.id
+          }))
+        ).filter(slot => slot.von && slot.bis)
+          .sort((a, b) => a.von.localeCompare(b.von));
+        const slot = freieSlots[0];
+        if (!slot) return;
+
+        const data = await window.KIPlanungService.getLueckenVorschlaege(
+          datum,
+          slot.mitarbeiterId,
+          slot.von,
+          slot.bis
+        );
         if (data && data.vorschlaege && data.vorschlaege.length > 0) {
           this._zeigeSlotNachfuellungPopup(data.vorschlaege, datum);
         }
