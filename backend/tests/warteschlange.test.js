@@ -317,6 +317,27 @@ describe('Warteschlange — nächster Auftrag für Tablet', () => {
     });
   });
 
+  test('liefert die relationalen Arbeiten mit ihren gespeicherten Stempelwerten', async () => {
+    await addTermin({ id: 1, datum: heute(), warteschlange_pos: 1 });
+    await dbRun(db, `
+      INSERT INTO termine_arbeiten (
+        termin_id, arbeit, zeit, mitarbeiter_id, stempel_start, stempel_ende
+      ) VALUES (1, 'Inspektion', 45, 1, '08:15', NULL)
+    `);
+
+    const response = await request(app)
+      .get('/api/warteschlange/mitarbeiter/1/naechster')
+      .expect(200);
+
+    expect(response.body.zettel.arbeiten).toEqual([
+      expect.objectContaining({
+        name: 'Inspektion',
+        stempel_start: '08:15',
+        stempel_ende: null
+      })
+    ]);
+  });
+
   test('behält einen laufenden obersten Zettel und lässt Abgeschlossene nachrücken', async () => {
     await addTermin({ id: 1, datum: heute(), warteschlange_pos: 1, status: 'abgeschlossen' });
     await addTermin({ id: 2, datum: heute(), warteschlange_pos: 2, status: 'in_arbeit' });

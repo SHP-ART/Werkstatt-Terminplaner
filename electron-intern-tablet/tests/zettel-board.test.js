@@ -103,7 +103,13 @@ function createAnstempelHarness() {
     arbeit: 'Inspektion',
     arbeitszeiten_details: { Inspektion: { zeit: 60 } }
   };
+  const storage = new Map();
   const context = vm.createContext({
+    localStorage: {
+      getItem: key => storage.has(key) ? storage.get(key) : null,
+      setItem: (key, value) => storage.set(key, String(value)),
+      removeItem: key => storage.delete(key)
+    },
     ApiService: {
       put: async (url, body) => {
         calls.push({ url, body: { ...body } });
@@ -133,6 +139,8 @@ function createAnstempelHarness() {
     calls,
     context,
     toasts,
+    zettel,
+    storage,
     advanceClock() { currentDate = '2026-11-07T09:20:00'; }
   };
 }
@@ -159,4 +167,40 @@ test('bestehende Bestätigen-Aufrufer behalten ihre interne Fehleranzeige', asyn
   await harness.context.bestaetigen(7, 'mitarbeiter', 7, 'Queue Kunde');
 
   assert.deepEqual(harness.toasts.at(-1), ['Fehler: Status nicht erreichbar', 'error']);
+});
+
+test('Retry nach Reload verwendet den ursprünglichen Anstempel-Start', async () => {
+  const harness = createAnstempelHarness();
+
+  await harness.context.anstempeln(7, 7, null);
+  harness.advanceClock();
+  harness.context.naechsteZettelNachId = new Map([[7, {
+    id: 7,
+    kunde_name: 'Queue Kunde',
+    arbeit: 'Inspektion',
+    arbeitszeiten_details: { Inspektion: { zeit: 60 } }
+  }]]);
+  await harness.context.anstempeln(7, 7, null);
+
+  const stempelCalls = harness.calls.filter(call => call.url === '/stempelzeiten/stempel');
+  assert.equal(stempelCalls[2].body.stempel_start, '09:15');
+});
+
+test('Rollback verwendet die relational gespeicherten vorherigen Stempelwerte', async () => {
+  const harness = createAnstempelHarness();
+  harness.context.naechsteZettelNachId.get(7).arbeiten = [{
+    name: 'Inspektion',
+    zeit: 60,
+    abgeschlossen: false,
+    stempel_start: '08:00',
+    stempel_ende: '08:30'
+  }];
+
+  await harness.context.anstempeln(7, 7, null);
+
+  const stempelCalls = harness.calls.filter(call => call.url === '/stempelzeiten/stempel');
+  assert.equal(stempelCalls[0].body.stempel_start, '08:00');
+  const rollback = stempelCalls[1];
+  assert.equal(rollback.body.stempel_start, '08:00');
+  assert.equal(rollback.body.stempel_ende, '08:30');
 });

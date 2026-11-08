@@ -1985,6 +1985,14 @@
      * Extrahiert Arbeiten aus arbeitszeiten_details und gibt Array zurück
      */
     function getArbeitenFromTermin(termin) {
+      if (Array.isArray(termin.arbeiten) && termin.arbeiten.length > 0) {
+        return termin.arbeiten.map(arbeit => ({
+          ...arbeit,
+          abgeschlossen: arbeit.abgeschlossen === true || arbeit.abgeschlossen === 1,
+          stempel_start: arbeit.stempel_start ?? null,
+          stempel_ende: arbeit.stempel_ende ?? null
+        }));
+      }
       if (!termin.arbeitszeiten_details) return [];
       
       try {
@@ -2001,7 +2009,9 @@
             zeit: 0,
             abgeschlossen: false,
             tatsaechliche_zeit: null,
-            fertigstellung_zeit: null
+            fertigstellung_zeit: null,
+            stempel_start: null,
+            stempel_ende: null
           };
           
           if (typeof value === 'number') {
@@ -2011,6 +2021,8 @@
             arbeit.abgeschlossen = value.abgeschlossen === true;
             arbeit.tatsaechliche_zeit = value.tatsaechliche_zeit || null;
             arbeit.fertigstellung_zeit = value.fertigstellung_zeit || null;
+            arbeit.stempel_start = value.stempel_start ?? null;
+            arbeit.stempel_ende = value.stempel_ende ?? null;
           }
           
           arbeiten.push(arbeit);
@@ -2131,13 +2143,15 @@
       }
       const vorherigerStempelStart = ersteOffeneArbeit?.stempel_start ?? null;
       const vorherigerStempelEnde = ersteOffeneArbeit?.stempel_ende ?? null;
+      const anstempelKey = `anstempel-start:${terminId}:${encodeURIComponent(arbeitName)}`;
 
       if (button) button.disabled = true;
       let stempelGeschrieben = false;
       try {
         const jetzt = new Date();
         const aktuelleZeit = `${String(jetzt.getHours()).padStart(2, '0')}:${String(jetzt.getMinutes()).padStart(2, '0')}`;
-        const stempelStart = zettel._anstempelStart || aktuelleZeit;
+        const stempelStart = vorherigerStempelStart || zettel._anstempelStart || localStorage.getItem(anstempelKey) || aktuelleZeit;
+        localStorage.setItem(anstempelKey, stempelStart);
         await ApiService.put('/stempelzeiten/stempel', {
           termin_id: terminId,
           arbeit_name: arbeitName,
@@ -2151,6 +2165,7 @@
           statusFehlerWeitergeben: true
         });
         delete zettel._anstempelStart;
+        localStorage.removeItem(anstempelKey);
       } catch (error) {
         if (stempelGeschrieben) {
           try {

@@ -131,6 +131,7 @@ class WarteschlangeController {
     const jetzt = new Date();
     const datum = `${jetzt.getFullYear()}-${String(jetzt.getMonth() + 1).padStart(2, '0')}-${String(jetzt.getDate()).padStart(2, '0')}`;
     const zettel = await WarteschlangeModel.getNaechster(datum, mitarbeiterId);
+    if (zettel) zettel.arbeiten = await WarteschlangeModel.getArbeiten(zettel.id);
     res.json({ datum, zettel: zettel || null });
   }
 

@@ -65,6 +65,19 @@ class WarteschlangeModel {
     `, [datum, mitarbeiterId]);
   }
 
+  static async getArbeiten(terminId) {
+    return await allAsync(`
+      SELECT arbeit AS name,
+             zeit,
+             stempel_start,
+             stempel_ende,
+             CASE WHEN stempel_ende IS NOT NULL THEN 1 ELSE 0 END AS abgeschlossen
+        FROM termine_arbeiten
+       WHERE termin_id = ?
+       ORDER BY reihenfolge, id
+    `, [terminId]);
+  }
+
   static async getNaechstePosition(datum, mitarbeiterId, excludeTerminId = null) {
     const params = [datum, mitarbeiterId];
     const exclude = excludeTerminId === null ? '' : 'AND id != ?';
