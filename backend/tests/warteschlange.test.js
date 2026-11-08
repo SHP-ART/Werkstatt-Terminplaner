@@ -71,7 +71,10 @@ async function addImport(id, status) {
 
 beforeAll(async () => {
   db = await createTestDb();
-  await migration052.up(db);
+  const termineColumns = await dbAll(db, 'PRAGMA table_info(termine)');
+  if (!termineColumns.some(column => column.name === 'warteschlange_pos')) {
+    await migration052.up(db);
+  }
   warteschlangeRoutes = require('../src/routes/warteschlangeRoutes');
   dbWrapper = require('../src/config/database').dbWrapper;
   await dbWrapper.readyPromise;
